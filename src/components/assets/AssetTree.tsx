@@ -25,6 +25,21 @@ interface AssetNode {
   children?: AssetNode[];
   status?: 'active' | 'maintenance' | 'inactive';
   count?: number;
+  // Technical data for assets
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  year?: string;
+  assetType?: string;
+  classification1?: string;
+  classification2?: string;
+  provider?: string;
+  purchaseDate?: string;
+  dailyUsageHours?: string;
+  maintenancePlan?: string;
+  barCode?: string;
+  priority?: string;
+  imageUrl?: string;
 }
 
 const mockAssets: AssetNode[] = [
@@ -70,7 +85,21 @@ const mockAssets: AssetNode[] = [
                 id: '1-4-1-1',
                 name: 'BUS MERCEDES BENZ - 01',
                 type: 'asset',
-                status: 'active'
+                status: 'active',
+                manufacturer: 'MERCEDES BENZ',
+                model: 'M2 106',
+                serialNumber: '0409E05ABB6C81',
+                year: '2010',
+                assetType: 'CAMION 10 TON',
+                classification1: 'BCI LEASING',
+                classification2: '3',
+                provider: 'MORGAN EMPRESAS',
+                purchaseDate: '2017-07-02',
+                dailyUsageHours: '24:00',
+                maintenancePlan: 'PLAN DE MANTENIMIENTO CAMIÓN FREIGHTLINER M102',
+                barCode: '0409E05ABB6C81',
+                priority: '3',
+                imageUrl: '/src/assets/bus-asset.jpg'
               }
             ]
           },

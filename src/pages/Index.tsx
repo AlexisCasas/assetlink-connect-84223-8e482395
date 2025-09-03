@@ -40,7 +40,7 @@ const Index = () => {
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
             <AssetTree onSelectAsset={handleSelectAsset} />
-            <AssetDetail assetId={selectedAsset?.id} />
+            <AssetDetail asset={selectedAsset} />
           </div>
         );
       case 'tickets':

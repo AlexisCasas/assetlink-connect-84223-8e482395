@@ -16,8 +16,29 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+interface AssetNode {
+  id: string;
+  name: string;
+  type: 'society' | 'company' | 'asset_class' | 'asset' | 'sub_asset';
+  status?: 'active' | 'maintenance' | 'inactive';
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  year?: string;
+  assetType?: string;
+  classification1?: string;
+  classification2?: string;
+  provider?: string;
+  purchaseDate?: string;
+  dailyUsageHours?: string;
+  maintenancePlan?: string;
+  barCode?: string;
+  priority?: string;
+  imageUrl?: string;
+}
+
 interface AssetDetailProps {
-  assetId?: string;
+  asset?: AssetNode;
 }
 
 const mockAssetData = {
@@ -44,8 +65,8 @@ const mockAssetData = {
   }
 };
 
-export function AssetDetail({ assetId }: AssetDetailProps) {
-  if (!assetId) {
+export function AssetDetail({ asset }: AssetDetailProps) {
+  if (!asset || (asset.type !== 'asset' && asset.type !== 'sub_asset')) {
     return (
       <Card className="h-full">
         <CardContent className="flex items-center justify-center h-full">
@@ -74,20 +95,20 @@ export function AssetDetail({ assetId }: AssetDetailProps) {
   return (
     <Card className="h-full overflow-auto">
       <CardHeader className="pb-4">
-        <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between">
           <div className="flex items-center space-x-3">
             <Truck className="h-6 w-6 text-primary" />
             <div>
-              <CardTitle className="text-xl">{mockAssetData.name}</CardTitle>
-              <p className="text-sm text-muted-foreground">{mockAssetData.id}</p>
+              <CardTitle className="text-xl">{asset.name}</CardTitle>
+              <p className="text-sm text-muted-foreground">{asset.id}</p>
             </div>
           </div>
           <Badge 
-            className={cn("ml-2", getStatusColor(mockAssetData.status))}
+            className={cn("ml-2", getStatusColor(asset.status || 'active'))}
             variant="outline"
           >
             <CheckCircle className="h-3 w-3 mr-1" />
-            Habilitado
+            {asset.status === 'active' ? 'Habilitado' : asset.status === 'maintenance' ? 'Mantenimiento' : 'Inactivo'}
           </Badge>
         </div>
       </CardHeader>
@@ -97,8 +118,8 @@ export function AssetDetail({ assetId }: AssetDetailProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative">
             <img 
-              src="/src/assets/bus-asset.jpg" 
-              alt="Bus Mercedes Benz Asset"
+              src={asset.imageUrl || "/src/assets/bus-asset.jpg"} 
+              alt={`${asset.name} Asset`}
               className="w-full h-32 object-cover rounded-lg bg-muted border"
             />
             <Button
@@ -122,7 +143,7 @@ export function AssetDetail({ assetId }: AssetDetailProps) {
             Ubicado en &amp; es Parte de
           </div>
           <p className="text-sm bg-muted/30 p-2 rounded border">
-            {mockAssetData.location}
+            EMPRESAS/ EMPRESA SECTOR TRANSPORTE/LOGÍSTICA/ FLOTA DE AUTOBUSES/
           </p>
         </div>
 
@@ -131,38 +152,38 @@ export function AssetDetail({ assetId }: AssetDetailProps) {
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground">Fabricante</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.manufacturer}</p>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.manufacturer || 'No especificado'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Número de Serie</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.serialNumber}</p>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.serialNumber || 'No especificado'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Tipo</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.type}</p>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.assetType || 'No especificado'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Proveedor</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.provider}</p>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.provider || 'No especificado'}</p>
             </div>
           </div>
 
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground">Modelo</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.model}</p>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.model || 'No especificado'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Año</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.year}</p>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.year || 'No especificado'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Clasificación 1</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.classification1}</p>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.classification1 || 'No especificado'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Fecha de Compra</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.purchaseDate}</p>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.purchaseDate || 'No especificado'}</p>
             </div>
           </div>
         </div>
@@ -176,21 +197,21 @@ export function AssetDetail({ assetId }: AssetDetailProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-sm font-medium text-muted-foreground">Código de Barras</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.others.barCode}</p>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.barCode || 'No especificado'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Clasificación 2</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.classification2}</p>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.classification2 || 'No especificado'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Prioridad</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.others.priority}</p>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.priority || 'No especificado'}</p>
             </div>
           </div>
 
           <div>
             <label className="text-sm font-medium text-muted-foreground">Horas de uso promedio diario</label>
-            <p className="text-sm bg-muted/30 p-2 rounded mt-1">{mockAssetData.dailyUsageHours}</p>
+            <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.dailyUsageHours || 'No especificado'}</p>
           </div>
         </div>
 
@@ -203,7 +224,7 @@ export function AssetDetail({ assetId }: AssetDetailProps) {
             Plan de Mantenimiento
           </h3>
           <div className="bg-info/10 border border-info/20 rounded-lg p-4">
-            <p className="text-sm text-info-foreground">{mockAssetData.maintenancePlan}</p>
+            <p className="text-sm text-info-foreground">{asset.maintenancePlan || 'No especificado'}</p>
           </div>
         </div>
 
