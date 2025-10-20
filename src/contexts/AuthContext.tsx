@@ -30,24 +30,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (email: string, password: string, role: UserRole): Promise<boolean> => {
-    // Simulación de login
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const foundUser = users.find(
-      (u: any) => u.email === email && u.password === password && u.role === role
-    );
-
-    if (foundUser) {
-      const userData = {
-        id: foundUser.id,
-        email: foundUser.email,
-        role: foundUser.role,
-        name: foundUser.name,
-      };
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
-      return true;
-    }
-    return false;
+    // Permitir login con cualquier cuenta sin registro previo
+    const userData = {
+      id: crypto.randomUUID(),
+      email,
+      role,
+      name: email.split('@')[0],
+    };
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+    return true;
   };
 
   const register = async (email: string, password: string, name: string, role: UserRole): Promise<boolean> => {

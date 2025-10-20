@@ -6,15 +6,15 @@ import {
   LayoutDashboard,
   Package,
   FileText,
-  ClipboardList,
   ChevronLeft,
   ChevronRight,
-  LogOut
+  LogOut,
+  AlertCircle
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'tickets' | 'requests') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts') => void;
   currentView?: string;
   userRole?: 'cliente' | 'proveedor';
 }
@@ -22,16 +22,6 @@ interface SidebarProps {
 export function Sidebar({ className, onViewChange, currentView = 'dashboard', userRole }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { user, logout } = useAuth();
-
-  const baseNavigation = [
-    { name: 'Dashboard', href: 'dashboard', icon: LayoutDashboard, current: currentView === 'dashboard' },
-    { name: 'Activos', href: 'assets', icon: Package, current: currentView === 'assets' },
-    { name: 'Tickets', href: 'tickets', icon: FileText, current: currentView === 'tickets' },
-  ];
-
-  const navigation = userRole 
-    ? [...baseNavigation, { name: 'Solicitudes', href: 'requests', icon: ClipboardList, current: currentView === 'requests' }]
-    : baseNavigation;
 
   return (
     <div className={cn(
@@ -63,23 +53,86 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-2">
-        {navigation.map((item) => (
+        <Button
+          variant={currentView === 'dashboard' ? "default" : "ghost"}
+          className={cn(
+            "w-full justify-start",
+            collapsed && "justify-center px-2"
+          )}
+          onClick={() => onViewChange?.('dashboard')}
+        >
+          <LayoutDashboard className={cn(
+            "h-4 w-4",
+            !collapsed && "mr-2"
+          )} />
+          {!collapsed && 'Dashboard'}
+        </Button>
+        
+        <Button
+          variant={currentView === 'assets' ? "default" : "ghost"}
+          className={cn(
+            "w-full justify-start",
+            collapsed && "justify-center px-2"
+          )}
+          onClick={() => onViewChange?.('assets')}
+        >
+          <Package className={cn(
+            "h-4 w-4",
+            !collapsed && "mr-2"
+          )} />
+          {!collapsed && 'Activos'}
+        </Button>
+
+        {userRole === 'cliente' && (
+          <>
+            <Button
+              variant={currentView === 'requests' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('requests')}
+            >
+              <FileText className={cn(
+                "h-4 w-4",
+                !collapsed && "mr-2"
+              )} />
+              {!collapsed && 'Mis solicitudes'}
+            </Button>
+            
+            <Button
+              variant={currentView === 'drafts' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('drafts')}
+            >
+              <AlertCircle className={cn(
+                "h-4 w-4",
+                !collapsed && "mr-2"
+              )} />
+              {!collapsed && 'Borradores'}
+            </Button>
+          </>
+        )}
+
+        {userRole === 'proveedor' && (
           <Button
-            key={item.name}
-            variant={item.current ? "default" : "ghost"}
+            variant={currentView === 'requests' ? "default" : "ghost"}
             className={cn(
               "w-full justify-start",
               collapsed && "justify-center px-2"
             )}
-            onClick={() => onViewChange?.(item.href as any)}
+            onClick={() => onViewChange?.('requests')}
           >
-            <item.icon className={cn(
+            <FileText className={cn(
               "h-4 w-4",
               !collapsed && "mr-2"
             )} />
-            {!collapsed && item.name}
+            {!collapsed && 'Nuevas solicitudes'}
           </Button>
-        ))}
+        )}
       </nav>
 
       {/* User Profile */}

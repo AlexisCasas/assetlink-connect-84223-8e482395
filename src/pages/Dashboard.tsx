@@ -3,22 +3,24 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { AssetTree, AssetNode } from '@/components/assets/AssetTree';
 import { AssetDetail } from '@/components/assets/AssetDetail';
-import { TicketList } from '@/components/tickets/TicketList';
+import { RequestList } from '@/components/requests/RequestList';
+import { DraftList } from '@/components/requests/DraftList';
+import { ProviderRequestList } from '@/components/requests/ProviderRequestList';
 import { StatsCards } from '@/components/dashboard/StatsCards';
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'tickets' | 'requests'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts'>('dashboard');
   const [selectedAsset, setSelectedAsset] = useState<AssetNode | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
-    if (hash === 'assets' || hash === 'tickets' || hash === 'requests') {
+    if (hash === 'assets' || hash === 'requests' || hash === 'drafts') {
       setCurrentView(hash as any);
     }
   }, []);
 
-  const handleViewChange = (view: 'dashboard' | 'assets' | 'tickets' | 'requests') => {
+  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts') => {
     setCurrentView(view);
     window.location.hash = view;
   };
@@ -32,23 +34,13 @@ const Dashboard = () => {
             <AssetDetail asset={selectedAsset} />
           </div>
         );
-      case 'tickets':
-        return <TicketList />;
       case 'requests':
         if (user?.role === 'cliente') {
-          return (
-            <div className="p-6">
-              <h2 className="text-2xl font-bold mb-4">Mis Solicitudes</h2>
-              <p className="text-muted-foreground">Panel de solicitudes para clientes - En construcción</p>
-            </div>
-          );
+          return <RequestList />;
         }
-        return (
-          <div className="p-6">
-            <h2 className="text-2xl font-bold mb-4">Solicitudes Recibidas</h2>
-            <p className="text-muted-foreground">Panel de solicitudes para proveedores - En construcción</p>
-          </div>
-        );
+        return <ProviderRequestList />;
+      case 'drafts':
+        return <DraftList />;
       default:
         return <StatsCards />;
     }
