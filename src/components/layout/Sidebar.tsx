@@ -1,32 +1,37 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
-  Building2, 
-  Wrench, 
-  Users, 
-  ClipboardList, 
-  Settings, 
-  Home,
+  LayoutDashboard,
+  Package,
+  FileText,
+  ClipboardList,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  LogOut
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'tickets' | 'requests') => void;
+  currentView?: string;
+  userRole?: 'cliente' | 'proveedor';
 }
 
-const navigation = [
-  { name: 'Dashboard', href: '#', icon: Home, current: true },
-  { name: 'Activos', href: '#assets', icon: Building2, current: false },
-  { name: 'Tickets', href: '#tickets', icon: ClipboardList, current: false },
-  { name: 'Proveedores', href: '#providers', icon: Users, current: false },
-  { name: 'Mantenimiento', href: '#maintenance', icon: Wrench, current: false },
-  { name: 'Configuración', href: '#settings', icon: Settings, current: false },
-];
-
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar({ className, onViewChange, currentView = 'dashboard', userRole }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const { user, logout } = useAuth();
+
+  const baseNavigation = [
+    { name: 'Dashboard', href: 'dashboard', icon: LayoutDashboard, current: currentView === 'dashboard' },
+    { name: 'Activos', href: 'assets', icon: Package, current: currentView === 'assets' },
+    { name: 'Tickets', href: 'tickets', icon: FileText, current: currentView === 'tickets' },
+  ];
+
+  const navigation = userRole 
+    ? [...baseNavigation, { name: 'Solicitudes', href: 'requests', icon: ClipboardList, current: currentView === 'requests' }]
+    : baseNavigation;
 
   return (
     <div className={cn(
@@ -38,8 +43,8 @@ export function Sidebar({ className }: SidebarProps) {
       <div className="flex items-center justify-between p-4 border-b border-border">
         {!collapsed && (
           <div className="flex items-center space-x-2">
-            <Building2 className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold text-foreground">ManagePro</span>
+            <Package className="h-8 w-8 text-primary" />
+            <span className="text-xl font-bold text-foreground">One Facility</span>
           </div>
         )}
         <Button
@@ -66,10 +71,7 @@ export function Sidebar({ className }: SidebarProps) {
               "w-full justify-start",
               collapsed && "justify-center px-2"
             )}
-            onClick={() => {
-              // Handle navigation
-              window.location.hash = item.href;
-            }}
+            onClick={() => onViewChange?.(item.href as any)}
           >
             <item.icon className={cn(
               "h-4 w-4",
@@ -81,21 +83,32 @@ export function Sidebar({ className }: SidebarProps) {
       </nav>
 
       {/* User Profile */}
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border space-y-2">
         <div className={cn(
           "flex items-center space-x-3",
           collapsed && "justify-center"
         )}>
           <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
-            JD
+            {user?.name?.[0]?.toUpperCase() || 'U'}
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground">Juan Perez</p>
-              <p className="text-xs text-muted-foreground">Administrador</p>
+              <p className="text-sm font-medium text-foreground">{user?.name || user?.email}</p>
+              <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
             </div>
           )}
         </div>
+        {!collapsed && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={logout}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Cerrar Sesión
+          </Button>
+        )}
       </div>
     </div>
   );

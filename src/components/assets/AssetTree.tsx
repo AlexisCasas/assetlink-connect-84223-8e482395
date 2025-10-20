@@ -123,11 +123,13 @@ const mockAssets: AssetNode[] = [
   }
 ];
 
+export type { AssetNode };
+
 interface AssetTreeProps {
-  onSelectAsset?: (asset: AssetNode) => void;
+  onAssetSelect?: (asset: AssetNode) => void;
 }
 
-export function AssetTree({ onSelectAsset }: AssetTreeProps) {
+export function AssetTree({ onAssetSelect }: AssetTreeProps) {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['1', '1-4']));
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
   const [assets, setAssets] = useState<AssetNode[]>(mockAssets);
@@ -176,7 +178,7 @@ export function AssetTree({ onSelectAsset }: AssetTreeProps) {
 
   const handleSelectAsset = (asset: AssetNode) => {
     setSelectedAsset(asset.id);
-    onSelectAsset?.(asset);
+    onAssetSelect?.(asset);
   };
 
   const getNextType = (parentType: AssetNode['type']): AssetNode['type'] | null => {

@@ -39,7 +39,7 @@ const Index = () => {
       case 'assets':
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-            <AssetTree onSelectAsset={handleSelectAsset} />
+            <AssetTree onAssetSelect={handleSelectAsset} />
             <AssetDetail asset={selectedAsset} />
           </div>
         );
@@ -56,7 +56,7 @@ const Index = () => {
             </div>
             <StatsCards />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <AssetTree onSelectAsset={handleSelectAsset} />
+              <AssetTree onAssetSelect={handleSelectAsset} />
               <TicketList />
             </div>
           </div>
