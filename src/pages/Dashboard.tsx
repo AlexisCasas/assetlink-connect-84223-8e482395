@@ -6,6 +6,7 @@ import { AssetDetail } from '@/components/assets/AssetDetail';
 import { RequestList } from '@/components/requests/RequestList';
 import { DraftList } from '@/components/requests/DraftList';
 import { ProviderRequestList } from '@/components/requests/ProviderRequestList';
+import { TeamMemberView } from '@/components/requests/TeamMemberView';
 import { StatsCards } from '@/components/dashboard/StatsCards';
 
 const Dashboard = () => {
@@ -37,6 +38,9 @@ const Dashboard = () => {
       case 'requests':
         if (user?.role === 'cliente') {
           return <RequestList />;
+        }
+        if (user?.role === 'team_member') {
+          return <TeamMemberView />;
         }
         return <ProviderRequestList />;
       case 'drafts':

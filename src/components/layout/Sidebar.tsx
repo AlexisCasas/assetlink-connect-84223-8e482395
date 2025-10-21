@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { 
   LayoutDashboard,
   Package,
@@ -16,7 +16,7 @@ interface SidebarProps {
   className?: string;
   onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts') => void;
   currentView?: string;
-  userRole?: 'cliente' | 'proveedor';
+  userRole?: UserRole;
 }
 
 export function Sidebar({ className, onViewChange, currentView = 'dashboard', userRole }: SidebarProps) {
@@ -131,6 +131,23 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               !collapsed && "mr-2"
             )} />
             {!collapsed && 'Nuevas solicitudes'}
+          </Button>
+        )}
+
+        {userRole === 'team_member' && (
+          <Button
+            variant={currentView === 'requests' ? "default" : "ghost"}
+            className={cn(
+              "w-full justify-start",
+              collapsed && "justify-center px-2"
+            )}
+            onClick={() => onViewChange?.('requests')}
+          >
+            <FileText className={cn(
+              "h-4 w-4",
+              !collapsed && "mr-2"
+            )} />
+            {!collapsed && 'Mis Asignaciones'}
           </Button>
         )}
       </nav>

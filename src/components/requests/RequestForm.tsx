@@ -26,6 +26,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [serviceType, setServiceType] = useState<ServiceType>(editingRequest?.serviceType || 'correctivo');
   const [observations, setObservations] = useState(editingRequest?.observations || '');
   const [deadline, setDeadline] = useState(editingRequest?.deadline || '');
+  const [startTime, setStartTime] = useState(editingRequest?.startTime || '');
   const [selectedProviders, setSelectedProviders] = useState<string[]>(editingRequest?.selectedProviders || []);
 
   const handleProviderToggle = (providerId: string) => {
@@ -56,7 +57,50 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       return;
     }
 
+    // Validar tiempo de inicio para correctivo/preventivo (mínimo 48 horas)
+    if (!isDraft && (serviceType === 'correctivo' || serviceType === 'preventivo')) {
+      if (!startTime) {
+        toast({
+          title: "Error",
+          description: "Debes indicar el tiempo de inicio para este tipo de servicio",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      const startDate = new Date(startTime);
+      const minDate = new Date();
+      minDate.setHours(minDate.getHours() + 48);
+      
+      if (startDate < minDate) {
+        toast({
+          title: "Error",
+          description: "El tiempo de inicio debe ser al menos 48 horas desde ahora",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Validar tiempo de inicio para proyecto
+    if (!isDraft && serviceType === 'proyecto' && !startTime) {
+      toast({
+        title: "Error",
+        description: "Debes indicar cuándo deseas iniciar el proyecto",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const requestNumber = editingRequest?.requestNumber || `SOL-${Date.now().toString().slice(-6)}`;
+    
+    // Determinar prioridad: 1=emergencia, 2=correctivo, 3=preventivo, 4=proyecto
+    const priorityMap: { [key in ServiceType]: number } = {
+      emergencia: 1,
+      correctivo: 2,
+      preventivo: 3,
+      proyecto: 4,
+    };
     
     const request: Request = {
       id: editingRequest?.id || crypto.randomUUID(),
@@ -67,10 +111,15 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       serviceType,
       observations,
       deadline,
+      startTime: serviceType !== 'emergencia' ? startTime : undefined,
       selectedProviders,
       status: isDraft ? 'draft' : 'sent',
       createdAt: editingRequest?.createdAt || new Date().toISOString(),
       createdBy: user?.email || '',
+      priority: priorityMap[serviceType],
+      assignments: editingRequest?.assignments || {},
+      technicalVisitRequested: editingRequest?.technicalVisitRequested || {},
+      quotes: editingRequest?.quotes || [],
     };
 
     onSave(request, isDraft);
@@ -178,6 +227,36 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               rows={2}
             />
           </div>
+
+          {serviceType !== 'emergencia' && (
+            <div className="space-y-2">
+              <Label htmlFor="startTime">
+                {serviceType === 'proyecto' 
+                  ? 'Fecha deseada de inicio del proyecto *' 
+                  : 'Fecha de inicio del servicio * (mínimo 48 horas)'}
+              </Label>
+              <Input
+                id="startTime"
+                type="datetime-local"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                required
+              />
+              {(serviceType === 'correctivo' || serviceType === 'preventivo') && (
+                <p className="text-xs text-muted-foreground">
+                  El plazo mínimo es de 48 horas desde ahora
+                </p>
+              )}
+            </div>
+          )}
+
+          {serviceType === 'emergencia' && (
+            <div className="p-4 border border-red-500/20 bg-red-500/10 rounded-lg">
+              <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+                ⚠️ Esta es una solicitud de emergencia. Los proveedores serán notificados inmediatamente.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-4">
             <Label>Seleccionar proveedores (máximo 5) *</Label>

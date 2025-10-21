@@ -1,9 +1,37 @@
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  providerId: string;
+}
+
 export interface Provider {
   id: string;
   name: string;
   email: string;
   specialties: string[];
   rating: number;
+  team?: TeamMember[];
+}
+
+export interface Assignment {
+  teamMemberId: string;
+  teamMemberName: string;
+  assignedAt: string;
+  maxDeadline: string;
+  reason?: string;
+}
+
+export interface Quote {
+  id: string;
+  requestId: string;
+  providerId: string;
+  teamMemberId: string;
+  amount: number;
+  description: string;
+  files?: File[];
+  createdAt: string;
+  status: 'draft' | 'submitted';
 }
 
 export type ServiceType = 'emergencia' | 'correctivo' | 'preventivo' | 'proyecto';
@@ -19,10 +47,15 @@ export interface Request {
   images?: File[];
   documents?: File[];
   deadline: string;
+  startTime?: string; // Para correctivo, preventivo y proyecto
   selectedProviders: string[];
   status: 'draft' | 'sent' | 'quoted' | 'completed';
   createdAt: string;
   createdBy: string;
+  priority: number; // 1 = emergencia (más alta), 4 = proyecto (más baja)
+  assignments?: { [providerId: string]: Assignment };
+  technicalVisitRequested?: { [providerId: string]: boolean };
+  quotes?: Quote[];
 }
 
 export const MOCK_PROVIDERS: Provider[] = [
@@ -32,6 +65,10 @@ export const MOCK_PROVIDERS: Provider[] = [
     email: 'contacto@sti.com',
     specialties: ['Mantenimiento Preventivo', 'Mantenimiento Correctivo'],
     rating: 4.8,
+    team: [
+      { id: 'tm1', name: 'Juan Pérez', email: 'juan@sti.com', providerId: '1' },
+      { id: 'tm2', name: 'María García', email: 'maria@sti.com', providerId: '1' },
+    ],
   },
   {
     id: '2',
@@ -39,6 +76,9 @@ export const MOCK_PROVIDERS: Provider[] = [
     email: 'servicios@reparacionesexpress.com',
     specialties: ['Emergencias', 'Reparaciones Urgentes'],
     rating: 4.5,
+    team: [
+      { id: 'tm3', name: 'Carlos Rodríguez', email: 'carlos@reparaciones.com', providerId: '2' },
+    ],
   },
   {
     id: '3',
@@ -46,6 +86,10 @@ export const MOCK_PROVIDERS: Provider[] = [
     email: 'info@proyectosindustriales.com',
     specialties: ['Proyectos', 'Instalaciones'],
     rating: 4.9,
+    team: [
+      { id: 'tm4', name: 'Ana Martínez', email: 'ana@proyectos.com', providerId: '3' },
+      { id: 'tm5', name: 'Luis Torres', email: 'luis@proyectos.com', providerId: '3' },
+    ],
   },
   {
     id: '4',
@@ -53,6 +97,9 @@ export const MOCK_PROVIDERS: Provider[] = [
     email: 'ventas@mantenimientoglobal.com',
     specialties: ['Mantenimiento Preventivo', 'Mantenimiento Correctivo', 'Proyectos'],
     rating: 4.7,
+    team: [
+      { id: 'tm6', name: 'Pedro Sánchez', email: 'pedro@global.com', providerId: '4' },
+    ],
   },
   {
     id: '5',
@@ -60,6 +107,10 @@ export const MOCK_PROVIDERS: Provider[] = [
     email: 'contacto@solucionesnorte.com',
     specialties: ['Emergencias', 'Mantenimiento Correctivo'],
     rating: 4.6,
+    team: [
+      { id: 'tm7', name: 'Sofia López', email: 'sofia@norte.com', providerId: '5' },
+      { id: 'tm8', name: 'Miguel Ángel', email: 'miguel@norte.com', providerId: '5' },
+    ],
   },
   {
     id: '6',
@@ -67,5 +118,8 @@ export const MOCK_PROVIDERS: Provider[] = [
     email: 'info@ingenieriaavanzada.com',
     specialties: ['Proyectos', 'Mantenimiento Preventivo'],
     rating: 4.9,
+    team: [
+      { id: 'tm9', name: 'Roberto Díaz', email: 'roberto@ingenieria.com', providerId: '6' },
+    ],
   },
 ];

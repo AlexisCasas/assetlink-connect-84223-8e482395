@@ -73,9 +73,10 @@ const Login = () => {
         </CardHeader>
         <CardContent>
           <Tabs value={selectedRole} onValueChange={(v) => setSelectedRole(v as UserRole)} className="mb-6">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="cliente">Cliente</TabsTrigger>
               <TabsTrigger value="proveedor">Proveedor</TabsTrigger>
+              <TabsTrigger value="team_member">Equipo</TabsTrigger>
             </TabsList>
           </Tabs>
 

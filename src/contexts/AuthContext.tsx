@@ -1,12 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-export type UserRole = 'cliente' | 'proveedor';
+export type UserRole = 'cliente' | 'proveedor' | 'team_member';
 
 interface User {
   id: string;
   email: string;
   role: UserRole;
   name?: string;
+  providerId?: string; // Para team_members
 }
 
 interface AuthContextType {
