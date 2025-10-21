@@ -130,6 +130,29 @@ const Login = () => {
               {isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
             </button>
           </div>
+
+          {isLogin && (
+            <div className="mt-6 p-4 bg-muted rounded-lg space-y-3">
+              <h3 className="text-sm font-semibold text-center mb-2">Cuentas de Prueba</h3>
+              <div className="space-y-2 text-xs">
+                <div className="p-2 bg-background rounded border">
+                  <p className="font-medium">Cliente:</p>
+                  <p>Email: cliente@test.com</p>
+                  <p>Password: cualquiera</p>
+                </div>
+                <div className="p-2 bg-background rounded border">
+                  <p className="font-medium">Proveedor:</p>
+                  <p>Email: proveedor@test.com</p>
+                  <p>Password: cualquiera</p>
+                </div>
+                <div className="p-2 bg-background rounded border">
+                  <p className="font-medium">Equipo:</p>
+                  <p>Email: equipo@test.com</p>
+                  <p>Password: cualquiera</p>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
