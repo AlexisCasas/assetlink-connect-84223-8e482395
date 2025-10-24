@@ -9,12 +9,14 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  AlertCircle
+  AlertCircle,
+  Settings,
+  Globe
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -118,20 +120,52 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
         )}
 
         {userRole === 'proveedor' && (
-          <Button
-            variant={currentView === 'requests' ? "default" : "ghost"}
-            className={cn(
-              "w-full justify-start",
-              collapsed && "justify-center px-2"
-            )}
-            onClick={() => onViewChange?.('requests')}
-          >
-            <FileText className={cn(
-              "h-4 w-4",
-              !collapsed && "mr-2"
-            )} />
-            {!collapsed && 'Nuevas solicitudes'}
-          </Button>
+          <>
+            <Button
+              variant={currentView === 'requests' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('requests')}
+            >
+              <FileText className={cn(
+                "h-4 w-4",
+                !collapsed && "mr-2"
+              )} />
+              {!collapsed && 'Nuevas solicitudes'}
+            </Button>
+            
+            <Button
+              variant={currentView === 'public-requests' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('public-requests')}
+            >
+              <Globe className={cn(
+                "h-4 w-4",
+                !collapsed && "mr-2"
+              )} />
+              {!collapsed && 'Solicitudes Públicas'}
+            </Button>
+            
+            <Button
+              variant={currentView === 'profile' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('profile')}
+            >
+              <Settings className={cn(
+                "h-4 w-4",
+                !collapsed && "mr-2"
+              )} />
+              {!collapsed && 'Mi Perfil'}
+            </Button>
+          </>
         )}
 
         {userRole === 'team_member' && (

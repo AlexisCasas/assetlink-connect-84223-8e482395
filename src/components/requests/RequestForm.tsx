@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Request, MOCK_PROVIDERS, ServiceType } from '@/types/request';
+import { Badge } from '@/components/ui/badge';
 import { X, Upload } from 'lucide-react';
 
 interface RequestFormProps {
@@ -28,6 +29,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [deadline, setDeadline] = useState(editingRequest?.deadline || '');
   const [startTime, setStartTime] = useState(editingRequest?.startTime || '');
   const [selectedProviders, setSelectedProviders] = useState<string[]>(editingRequest?.selectedProviders || []);
+  const [clientName, setClientName] = useState(editingRequest?.clientName || '');
+  const [clientBranch, setClientBranch] = useState(editingRequest?.clientBranch || '');
 
   const handleProviderToggle = (providerId: string) => {
     if (selectedProviders.includes(providerId)) {
@@ -46,15 +49,21 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   };
 
   const handleSubmit = (isDraft: boolean) => {
-    if (!description || !asset || !location || !deadline || (!isDraft && selectedProviders.length === 0)) {
+    if (!description || !asset || !location || !deadline || !clientName || !clientBranch) {
       toast({
         title: "Error",
-        description: isDraft 
-          ? "Por favor completa los campos obligatorios" 
-          : "Por favor completa todos los campos y selecciona al menos un proveedor",
+        description: "Por favor completa los campos obligatorios",
         variant: "destructive",
       });
       return;
+    }
+
+    // Advertir si no se seleccionan proveedores (solicitud pública)
+    if (!isDraft && selectedProviders.length === 0) {
+      const confirmed = window.confirm(
+        "No has seleccionado ningún proveedor. Tu solicitud será publicada como solicitud pública para que cualquier proveedor pueda enviar una cotización. ¿Deseas continuar?"
+      );
+      if (!confirmed) return;
     }
 
     // Validar tiempo de inicio para correctivo/preventivo (mínimo 48 horas)
@@ -120,6 +129,9 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       assignments: editingRequest?.assignments || {},
       technicalVisitRequested: editingRequest?.technicalVisitRequested || {},
       quotes: editingRequest?.quotes || [],
+      clientName,
+      clientBranch,
+      isPublic: selectedProviders.length === 0,
     };
 
     onSave(request, isDraft);
@@ -151,6 +163,30 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                 value={editingRequest?.requestNumber || `SOL-${Date.now().toString().slice(-6)}`} 
                 disabled 
                 className="bg-muted"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="clientName">Nombre del Cliente *</Label>
+              <Input
+                id="clientName"
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+                placeholder="Ej: Transportes Unidos S.A."
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="clientBranch">Sede o Sucursal *</Label>
+              <Input
+                id="clientBranch"
+                value={clientBranch}
+                onChange={(e) => setClientBranch(e.target.value)}
+                placeholder="Ej: Lima Centro, Miraflores"
+                required
               />
             </div>
             
@@ -259,29 +295,45 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
           )}
 
           <div className="space-y-4">
-            <Label>Seleccionar proveedores (máximo 5) *</Label>
+            <Label>Seleccionar proveedores (máximo 5, opcional)</Label>
+            <p className="text-xs text-muted-foreground">
+              Si no seleccionas proveedores, tu solicitud será pública y cualquier proveedor podrá cotizar
+            </p>
             <div className="border rounded-lg p-4 space-y-3 max-h-64 overflow-y-auto">
-              {MOCK_PROVIDERS.map((provider) => (
-                <div
-                  key={provider.id}
-                  className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
-                >
-                  <Checkbox
-                    id={provider.id}
-                    checked={selectedProviders.includes(provider.id)}
-                    onCheckedChange={() => handleProviderToggle(provider.id)}
-                  />
-                  <div className="flex-1">
-                    <label htmlFor={provider.id} className="font-medium cursor-pointer">
-                      {provider.name}
-                    </label>
-                    <p className="text-sm text-muted-foreground">{provider.email}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {provider.specialties.join(', ')} • ⭐ {provider.rating}
-                    </p>
+              {MOCK_PROVIDERS.map((provider) => {
+                const providers = JSON.parse(localStorage.getItem('providers') || JSON.stringify(MOCK_PROVIDERS));
+                const providerData = providers.find((p: any) => p.id === provider.id);
+                const isCertified = providerData?.certified || false;
+                
+                return (
+                  <div
+                    key={provider.id}
+                    className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                  >
+                    <Checkbox
+                      id={provider.id}
+                      checked={selectedProviders.includes(provider.id)}
+                      onCheckedChange={() => handleProviderToggle(provider.id)}
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <label htmlFor={provider.id} className="font-medium cursor-pointer">
+                          {provider.name}
+                        </label>
+                        {isCertified && (
+                          <Badge variant="default" className="text-xs">
+                            Certificado
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{provider.email}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {provider.specialties.join(', ')} • ⭐ {provider.rating}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <p className="text-sm text-muted-foreground">
               Proveedores seleccionados: {selectedProviders.length}/5

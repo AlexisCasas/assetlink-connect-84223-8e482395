@@ -12,6 +12,8 @@ export interface Provider {
   specialties: string[];
   rating: number;
   team?: TeamMember[];
+  certified?: boolean;
+  certificationDocuments?: File[];
 }
 
 export interface Assignment {
@@ -48,7 +50,7 @@ export interface Request {
   documents?: File[];
   deadline: string;
   startTime?: string; // Para correctivo, preventivo y proyecto
-  selectedProviders: string[];
+  selectedProviders: string[]; // Vacío = solicitud pública
   status: 'draft' | 'sent' | 'quoted' | 'completed';
   createdAt: string;
   createdBy: string;
@@ -56,6 +58,10 @@ export interface Request {
   assignments?: { [providerId: string]: Assignment };
   technicalVisitRequested?: { [providerId: string]: boolean };
   quotes?: Quote[];
+  clientName?: string;
+  clientBranch?: string; // Sede o sucursal
+  isPublic?: boolean; // True si no se seleccionaron proveedores
+  notifiedAt?: string; // Última vez que se notificó a los proveedores
 }
 
 export const MOCK_PROVIDERS: Provider[] = [

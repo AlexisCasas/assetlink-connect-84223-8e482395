@@ -5,10 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RequestForm } from './RequestForm';
 import { Request, MOCK_PROVIDERS } from '@/types/request';
-import { Plus, Calendar, MapPin, FileText } from 'lucide-react';
+import { Plus, Calendar, MapPin, FileText, Bell, Building2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export const RequestList = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [requests, setRequests] = useState<Request[]>([]);
 
@@ -58,6 +60,24 @@ export const RequestList = () => {
     return texts[type as keyof typeof texts] || type;
   };
 
+  const handleNotifyProviders = (request: Request) => {
+    const stored = localStorage.getItem('requests');
+    const allRequests = stored ? JSON.parse(stored) : [];
+    const requestIndex = allRequests.findIndex((r: Request) => r.id === request.id);
+    
+    if (requestIndex !== -1) {
+      allRequests[requestIndex].notifiedAt = new Date().toISOString();
+      localStorage.setItem('requests', JSON.stringify(allRequests));
+      
+      toast({
+        title: "Proveedores notificados",
+        description: `Se ha notificado a ${request.isPublic ? 'todos los proveedores' : request.selectedProviders.length + ' proveedor(es)'} sobre tu solicitud urgente`,
+      });
+      
+      setRequests(allRequests.filter((r: Request) => r.createdBy === user?.email && r.status === 'sent'));
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -95,6 +115,20 @@ export const RequestList = () => {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-4 text-sm">
+                  {request.clientName && (
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Cliente:</span>
+                      <span className="font-medium">{request.clientName}</span>
+                    </div>
+                  )}
+                  {request.clientBranch && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Sede:</span>
+                      <span className="font-medium">{request.clientBranch}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Activo:</span>
@@ -116,17 +150,35 @@ export const RequestList = () => {
                 
                 <div className="pt-3 border-t">
                   <p className="text-sm text-muted-foreground mb-2">
-                    Enviado a {request.selectedProviders.length} proveedor(es):
+                    {request.isPublic ? 'Solicitud Pública - Visible para todos los proveedores' : `Enviado a ${request.selectedProviders.length} proveedor(es):`}
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {request.selectedProviders.map((providerId) => {
-                      const provider = MOCK_PROVIDERS.find(p => p.id === providerId);
-                      return (
-                        <Badge key={providerId} variant="outline">
-                          {provider?.name}
-                        </Badge>
-                      );
-                    })}
+                  {!request.isPublic && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {request.selectedProviders.map((providerId) => {
+                        const provider = MOCK_PROVIDERS.find(p => p.id === providerId);
+                        return (
+                          <Badge key={providerId} variant="outline">
+                            {provider?.name}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2 items-center">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleNotifyProviders(request)}
+                    >
+                      <Bell className="h-4 w-4 mr-2" />
+                      Notificar a Proveedores
+                    </Button>
+                    {request.notifiedAt && (
+                      <Badge variant="secondary" className="text-xs">
+                        Última notificación: {new Date(request.notifiedAt).toLocaleString()}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </CardContent>
