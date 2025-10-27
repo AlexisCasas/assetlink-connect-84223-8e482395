@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Clock, CheckCircle, User } from 'lucide-react';
+import { FileText, Clock, CheckCircle, User, MessageSquare } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import type { Request } from '@/types/request';
 
 interface QuoteListDialogProps {
@@ -22,6 +25,7 @@ interface Quote {
   created_at: string;
   team_member_name?: string;
   provider_name?: string;
+  client_observation?: string;
 }
 
 export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps) => {
@@ -29,6 +33,9 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
   const [loading, setLoading] = useState(true);
   const [totalProviders, setTotalProviders] = useState(0);
   const [showPrices, setShowPrices] = useState(false);
+  const [editingObservation, setEditingObservation] = useState<string | null>(null);
+  const [observationText, setObservationText] = useState('');
+  const { toast } = useToast();
 
   useEffect(() => {
     if (open && request.id) {
@@ -72,6 +79,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
         created_at: q.created_at,
         team_member_name: q.team_members?.name,
         provider_name: q.providers?.name,
+        client_observation: q.client_observation,
       }));
 
       setQuotes(transformedQuotes);
@@ -85,6 +93,41 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSaveObservation = async (quoteId: string) => {
+    try {
+      const { error } = await supabase
+        .from('quotes')
+        .update({ client_observation: observationText })
+        .eq('id', quoteId);
+
+      if (error) throw error;
+
+      setQuotes(quotes.map(q => 
+        q.id === quoteId ? { ...q, client_observation: observationText } : q
+      ));
+
+      setEditingObservation(null);
+      setObservationText('');
+
+      toast({
+        title: 'Observación guardada',
+        description: 'La observación se ha guardado correctamente.',
+      });
+    } catch (error) {
+      console.error('Error saving observation:', error);
+      toast({
+        title: 'Error',
+        description: 'No se pudo guardar la observación.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleStartEditObservation = (quoteId: string, currentObservation?: string) => {
+    setEditingObservation(quoteId);
+    setObservationText(currentObservation || '');
   };
 
   return (
@@ -201,6 +244,64 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                         </div>
                       </div>
                     )}
+
+                    {/* Client Observations Section */}
+                    <div className="pt-3 border-t">
+                      {editingObservation === quote.id ? (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                              Observaciones del Cliente:
+                            </label>
+                            <Textarea
+                              value={observationText}
+                              onChange={(e) => setObservationText(e.target.value)}
+                              placeholder="Escribe tus observaciones sobre esta cotización..."
+                              rows={3}
+                              className="resize-none"
+                            />
+                          </div>
+                          <div className="flex gap-2 justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingObservation(null);
+                                setObservationText('');
+                              }}
+                            >
+                              Cancelar
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveObservation(quote.id)}
+                            >
+                              Guardar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {quote.client_observation ? (
+                            <div className="bg-muted/50 p-3 rounded-md">
+                              <p className="text-sm font-medium text-muted-foreground mb-1">
+                                Tus observaciones:
+                              </p>
+                              <p className="text-sm">{quote.client_observation}</p>
+                            </div>
+                          ) : null}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleStartEditObservation(quote.id, quote.client_observation)}
+                            className="w-full"
+                          >
+                            <MessageSquare className="h-4 w-4 mr-2" />
+                            {quote.client_observation ? 'Editar observaciones' : 'Agregar observaciones'}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               ))}
