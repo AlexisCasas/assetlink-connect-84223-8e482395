@@ -33,6 +33,10 @@ interface RequestData {
   observations: string | null;
 }
 
+interface Assignment {
+  team_member_name: string;
+}
+
 export const ProviderRequestList = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -41,6 +45,7 @@ export const ProviderRequestList = () => {
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
   const [showAssignmentDialog, setShowAssignmentDialog] = useState(false);
   const [currentProvider, setCurrentProvider] = useState<any>(null);
+  const [assignments, setAssignments] = useState<Record<string, Assignment>>({});
 
   useEffect(() => {
     fetchProviderAndRequests();
@@ -64,31 +69,34 @@ export const ProviderRequestList = () => {
 
       setCurrentProvider(providerData);
 
-      // Get requests assigned to this provider
-      const { data: requestProviders } = await supabase
-        .from('request_providers')
-        .select('request_id')
-        .eq('provider_id', providerData.id);
-
-      if (!requestProviders || requestProviders.length === 0) {
-        setRequests([]);
-        setLoading(false);
-        return;
-      }
-
-      const requestIds = requestProviders.map(rp => rp.request_id);
-
-      // Fetch full request details
+      // Fetch ALL requests with status 'sent' - visible to all providers
       const { data: requestsData, error } = await supabase
         .from('requests')
         .select('*')
-        .in('id', requestIds)
         .eq('status', 'sent')
-        .order('priority', { ascending: true });
+        .order('priority', { ascending: true })
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       setRequests(requestsData || []);
+
+      // Fetch assignments for these requests
+      if (requestsData && requestsData.length > 0) {
+        const requestIds = requestsData.map(r => r.id);
+        const { data: assignmentsData } = await supabase
+          .from('assignments')
+          .select('request_id, team_member_name')
+          .in('request_id', requestIds);
+
+        if (assignmentsData) {
+          const assignmentsMap: Record<string, Assignment> = {};
+          assignmentsData.forEach(a => {
+            assignmentsMap[a.request_id] = { team_member_name: a.team_member_name };
+          });
+          setAssignments(assignmentsMap);
+        }
+      }
     } catch (error) {
       console.error('Error fetching requests:', error);
       toast({
@@ -232,8 +240,14 @@ export const ProviderRequestList = () => {
                       <TableCell>
                         <Badge variant="outline">P{request.priority}</Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        Especialista
+                      <TableCell className="text-sm">
+                        {assignments[request.id] ? (
+                          <span className="font-medium">{assignments[request.id].team_member_name}</span>
+                        ) : (
+                          <Badge variant="secondary" className="bg-muted">
+                            Sin asignar
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm">
                         {new Date(request.created_at).toLocaleDateString('es-ES', {
