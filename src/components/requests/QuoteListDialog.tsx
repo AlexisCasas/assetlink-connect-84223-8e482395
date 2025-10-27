@@ -9,6 +9,7 @@ import { FileText, Clock, CheckCircle, User, MessageSquare, MessageCircle, Thumb
 import { useToast } from '@/hooks/use-toast';
 import type { Request } from '@/types/request';
 import { QuoteChatDialog } from './QuoteChatDialog';
+import { ApprovalDialog } from './ApprovalDialog';
 
 interface QuoteListDialogProps {
   open: boolean;
@@ -27,6 +28,7 @@ interface Quote {
   team_member_name?: string;
   provider_name?: string;
   client_observation?: string;
+  approval_reason?: string;
 }
 
 export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps) => {
@@ -37,6 +39,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
   const [editingObservation, setEditingObservation] = useState<string | null>(null);
   const [observationText, setObservationText] = useState('');
   const [chatQuote, setChatQuote] = useState<{ id: string; providerName: string } | null>(null);
+  const [approvalQuote, setApprovalQuote] = useState<{ id: string; providerName: string } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -82,6 +85,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
         team_member_name: q.team_members?.name,
         provider_name: q.providers?.name,
         client_observation: q.client_observation,
+        approval_reason: q.approval_reason,
       }));
 
       setQuotes(transformedQuotes);
@@ -132,18 +136,23 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
     setObservationText(currentObservation || '');
   };
 
-  const handleApproveQuote = async (quoteId: string) => {
+  const handleApproveQuote = async (quoteId: string, approvalReason: string) => {
     try {
       const { error } = await supabase
         .from('quotes')
-        .update({ status: 'approved' })
+        .update({ 
+          status: 'approved',
+          approval_reason: approvalReason 
+        })
         .eq('id', quoteId);
 
       if (error) throw error;
 
       setQuotes(quotes.map(q => 
-        q.id === quoteId ? { ...q, status: 'approved' } : q
+        q.id === quoteId ? { ...q, status: 'approved', approval_reason: approvalReason } : q
       ));
+
+      setApprovalQuote(null);
 
       toast({
         title: 'Cotización aprobada',
@@ -274,6 +283,20 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                       </div>
                     )}
 
+                    {/* Approval Reason Display */}
+                    {quote.status === 'approved' && quote.approval_reason && (
+                      <div className="pt-3 border-t">
+                        <div className="bg-green-50 dark:bg-green-950 p-3 rounded-md">
+                          <p className="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
+                            Razones de aprobación:
+                          </p>
+                          <p className="text-sm text-green-700 dark:text-green-300">
+                            {quote.approval_reason}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Action Buttons */}
                     <div className="pt-3 border-t flex gap-2">
                       <Button
@@ -287,7 +310,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                       </Button>
                       <Button
                         size="sm"
-                        onClick={() => handleApproveQuote(quote.id)}
+                        onClick={() => setApprovalQuote({ id: quote.id, providerName: quote.provider_name || 'Proveedor' })}
                         disabled={quote.status === 'approved'}
                         className="flex-1"
                       >
@@ -366,6 +389,15 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
             onClose={() => setChatQuote(null)}
             quoteId={chatQuote.id}
             providerName={chatQuote.providerName}
+          />
+        )}
+
+        {approvalQuote && (
+          <ApprovalDialog
+            open={!!approvalQuote}
+            onClose={() => setApprovalQuote(null)}
+            onApprove={(reason) => handleApproveQuote(approvalQuote.id, reason)}
+            providerName={approvalQuote.providerName}
           />
         )}
       </DialogContent>

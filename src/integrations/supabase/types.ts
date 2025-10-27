@@ -194,6 +194,7 @@ export type Database = {
       quotes: {
         Row: {
           amount: number
+          approval_reason: string | null
           client_observation: string | null
           created_at: string
           description: string
@@ -205,6 +206,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          approval_reason?: string | null
           client_observation?: string | null
           created_at?: string
           description: string
@@ -216,6 +218,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          approval_reason?: string | null
           client_observation?: string | null
           created_at?: string
           description?: string
