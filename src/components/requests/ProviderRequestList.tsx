@@ -111,13 +111,25 @@ export const ProviderRequestList = () => {
       // Seed database with example data if empty
       await seedDatabase();
       
-      // Get current provider (optional, for context)
-      const { data: providerData } = await supabase
+      // Get current provider - ensure we always have one
+      let { data: providerData } = await supabase
         .from('providers')
         .select('*')
         .eq('email', user?.email)
         .maybeSingle();
 
+      // If user doesn't have a provider, use the first available one
+      if (!providerData) {
+        const { data: firstProvider } = await supabase
+          .from('providers')
+          .select('*')
+          .limit(1)
+          .maybeSingle();
+        
+        providerData = firstProvider;
+      }
+
+      // Set provider (should always exist after seeding)
       if (providerData) {
         setCurrentProvider(providerData);
       }

@@ -338,105 +338,149 @@ export const seedDatabase = async (): Promise<{ success: boolean; error?: any }>
   try {
     console.log('Starting database seeding...');
 
-    // Check if data already exists to avoid duplicates
-    const { data: existingRequests } = await supabase
+    // Step 1: Ensure providers exist
+    console.log('Checking providers...');
+    let { data: existingProviders } = await supabase
+      .from('providers')
+      .select('*');
+
+    let providers = existingProviders || [];
+
+    if (providers.length === 0) {
+      console.log('Seeding providers...');
+      const { data: insertedProviders, error: providersError } = await supabase
+        .from('providers')
+        .insert(PROVIDERS_DATA)
+        .select();
+
+      if (providersError) {
+        console.error('Error seeding providers:', providersError);
+        return { success: false, error: providersError };
+      }
+
+      providers = insertedProviders || [];
+      console.log(`Successfully inserted ${providers.length} providers`);
+    } else {
+      console.log(`Found ${providers.length} existing providers`);
+    }
+
+    if (providers.length === 0) {
+      console.error('No providers available');
+      return { success: false, error: 'No providers available' };
+    }
+
+    // Step 2: Ensure team members exist
+    console.log('Checking team members...');
+    let { data: existingTeamMembers } = await supabase
+      .from('team_members')
+      .select('*');
+
+    let teamMembers = existingTeamMembers || [];
+
+    if (teamMembers.length === 0) {
+      console.log('Seeding team members...');
+      const teamMembersWithProviderIds = TEAM_MEMBERS.map(member => ({
+        name: member.name,
+        email: member.email,
+        provider_id: providers[Math.min(member.providerIndex, providers.length - 1)].id
+      }));
+
+      const { data: insertedTeamMembers, error: teamMembersError } = await supabase
+        .from('team_members')
+        .insert(teamMembersWithProviderIds)
+        .select();
+
+      if (teamMembersError) {
+        console.error('Error seeding team members:', teamMembersError);
+        return { success: false, error: teamMembersError };
+      }
+
+      teamMembers = insertedTeamMembers || [];
+      console.log(`Successfully inserted ${teamMembers.length} team members`);
+    } else {
+      console.log(`Found ${teamMembers.length} existing team members`);
+    }
+
+    // Step 3: Ensure requests exist
+    console.log('Checking requests...');
+    let { data: existingRequests } = await supabase
       .from('requests')
+      .select('*')
+      .eq('status', 'sent');
+
+    let requests = existingRequests || [];
+
+    if (requests.length === 0) {
+      console.log('Seeding requests...');
+      const { data: insertedRequests, error: requestsError } = await supabase
+        .from('requests')
+        .insert(SAMPLE_REQUESTS)
+        .select();
+
+      if (requestsError) {
+        console.error('Error seeding requests:', requestsError);
+        return { success: false, error: requestsError };
+      }
+
+      requests = insertedRequests || [];
+      console.log(`Successfully inserted ${requests.length} requests`);
+    } else {
+      console.log(`Found ${requests.length} existing requests`);
+    }
+
+    if (requests.length === 0) {
+      console.error('No requests available');
+      return { success: false, error: 'No requests available' };
+    }
+
+    // Step 4: Ensure request-provider relationships exist
+    console.log('Checking request-provider relationships...');
+    const { data: existingRelations } = await supabase
+      .from('request_providers')
+      .select('request_id, provider_id')
+      .limit(1);
+
+    if (!existingRelations || existingRelations.length === 0) {
+      console.log('Creating request-provider relationships...');
+      const requestProviderRelations = [];
+      
+      for (const request of requests) {
+        for (const provider of providers) {
+          requestProviderRelations.push({
+            request_id: request.id,
+            provider_id: provider.id
+          });
+        }
+      }
+
+      if (requestProviderRelations.length > 0) {
+        const { error: relationsError } = await supabase
+          .from('request_providers')
+          .insert(requestProviderRelations);
+
+        if (relationsError) {
+          console.error('Error creating request-provider relationships:', relationsError);
+          return { success: false, error: relationsError };
+        }
+
+        console.log(`Successfully created ${requestProviderRelations.length} request-provider relationships`);
+      }
+    } else {
+      console.log('Request-provider relationships already exist');
+    }
+
+    // Step 5: Ensure assignments exist
+    console.log('Checking assignments...');
+    const { data: existingAssignments } = await supabase
+      .from('assignments')
       .select('id')
       .limit(1);
 
-    if (existingRequests && existingRequests.length > 0) {
-      console.log('Database already has data. Skipping seeding.');
-      return { success: true };
-    }
-
-    // Step 1: Insert providers and capture their IDs
-    console.log('Seeding providers...');
-    const { data: insertedProviders, error: providersError } = await supabase
-      .from('providers')
-      .insert(PROVIDERS_DATA)
-      .select();
-
-    if (providersError) {
-      console.error('Error seeding providers:', providersError);
-      return { success: false, error: providersError };
-    }
-
-    if (!insertedProviders || insertedProviders.length === 0) {
-      console.error('No providers were inserted');
-      return { success: false, error: 'No providers inserted' };
-    }
-
-    console.log(`Successfully inserted ${insertedProviders.length} providers`);
-
-    // Step 2: Insert team members linked to providers
-    console.log('Seeding team members...');
-    const teamMembersWithProviderIds = TEAM_MEMBERS.map(member => ({
-      name: member.name,
-      email: member.email,
-      provider_id: insertedProviders[member.providerIndex].id
-    }));
-
-    const { data: insertedTeamMembers, error: teamMembersError } = await supabase
-      .from('team_members')
-      .insert(teamMembersWithProviderIds)
-      .select();
-
-    if (teamMembersError) {
-      console.error('Error seeding team members:', teamMembersError);
-      return { success: false, error: teamMembersError };
-    }
-
-    console.log(`Successfully inserted ${insertedTeamMembers?.length || 0} team members`);
-
-    // Step 3: Insert requests
-    console.log('Seeding requests...');
-    const { data: insertedRequests, error: requestsError } = await supabase
-      .from('requests')
-      .insert(SAMPLE_REQUESTS)
-      .select();
-
-    if (requestsError) {
-      console.error('Error seeding requests:', requestsError);
-      return { success: false, error: requestsError };
-    }
-
-    if (!insertedRequests || insertedRequests.length === 0) {
-      console.error('No requests were inserted');
-      return { success: false, error: 'No requests inserted' };
-    }
-
-    console.log(`Successfully inserted ${insertedRequests.length} requests`);
-
-    // Step 4: Create relationships between ALL requests and ALL providers
-    console.log('Creating request-provider relationships...');
-    const requestProviderRelations = [];
-    
-    for (const request of insertedRequests) {
-      for (const provider of insertedProviders) {
-        requestProviderRelations.push({
-          request_id: request.id,
-          provider_id: provider.id
-        });
-      }
-    }
-
-    const { error: relationsError } = await supabase
-      .from('request_providers')
-      .insert(requestProviderRelations);
-
-    if (relationsError) {
-      console.error('Error creating request-provider relationships:', relationsError);
-      return { success: false, error: relationsError };
-    }
-
-    console.log(`Successfully created ${requestProviderRelations.length} request-provider relationships`);
-
-    // Step 5: Create sample assignments (assign first 10 requests to team members)
-    if (insertedTeamMembers && insertedTeamMembers.length > 0 && insertedRequests.length >= 10) {
+    if ((!existingAssignments || existingAssignments.length === 0) && teamMembers.length > 0 && requests.length >= 10) {
       console.log('Creating sample assignments...');
-      const assignments = insertedRequests.slice(0, 10).map((request, index) => {
-        const teamMember = insertedTeamMembers[index % insertedTeamMembers.length];
-        const provider = insertedProviders[Math.floor(index / insertedTeamMembers.length) % insertedProviders.length];
+      const assignments = requests.slice(0, 10).map((request, index) => {
+        const teamMember = teamMembers[index % teamMembers.length];
+        const provider = providers[Math.floor(index / teamMembers.length) % providers.length];
         const deadline = new Date();
         deadline.setDate(deadline.getDate() + (index + 2) * 2); // 4, 6, 8, 10... days from now
 
@@ -473,10 +517,11 @@ export const seedDatabase = async (): Promise<{ success: boolean; error?: any }>
 
       if (assignmentsError) {
         console.error('Error creating assignments:', assignmentsError);
-        return { success: false, error: assignmentsError };
+      } else {
+        console.log(`Successfully created ${assignments.length} sample assignments`);
       }
-
-      console.log(`Successfully created ${assignments.length} sample assignments`);
+    } else {
+      console.log('Assignments already exist or insufficient data');
     }
 
     console.log('Database seeding completed successfully!');
