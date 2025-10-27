@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { AssignmentDialog } from './AssignmentDialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { seedDatabase } from '@/lib/seedData';
 import { Search, Settings2, ArrowUpDown, Download } from 'lucide-react';
 import { 
   Table, 
@@ -96,30 +97,30 @@ export const ProviderRequestList = () => {
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
 
   useEffect(() => {
-    fetchProviderAndRequests();
+    initializeAndLoadRequests();
   }, [user]);
 
   useEffect(() => {
     filterAndSortRequests();
   }, [requests, searchQuery, sortBy, sortOrder, statusFilter, priorityFilter]);
 
-  const fetchProviderAndRequests = async () => {
+  const initializeAndLoadRequests = async () => {
     try {
       setLoading(true);
       
-      // Get current provider
+      // Seed database with example data if empty
+      await seedDatabase();
+      
+      // Get current provider (optional, for context)
       const { data: providerData } = await supabase
         .from('providers')
         .select('*')
         .eq('email', user?.email)
-        .single();
+        .maybeSingle();
 
-      if (!providerData) {
-        setLoading(false);
-        return;
+      if (providerData) {
+        setCurrentProvider(providerData);
       }
-
-      setCurrentProvider(providerData);
 
       // Fetch ALL requests with status 'sent' - visible to all providers
       const { data: requestsData, error } = await supabase
@@ -553,15 +554,15 @@ export const ProviderRequestList = () => {
              setShowAssignmentDialog(false);
              setSelectedRequests([]);
            }}
-           onAssign={(assignment) => {
-             toast({
-               title: 'Asignación exitosa',
-               description: `Se asignó correctamente a ${assignment.teamMemberName}`,
-             });
-             setShowAssignmentDialog(false);
-             setSelectedRequests([]);
-             fetchProviderAndRequests();
-           }}
+            onAssign={(assignment) => {
+              toast({
+                title: 'Asignación exitosa',
+                description: `Se asignó correctamente a ${assignment.teamMemberName}`,
+              });
+              setShowAssignmentDialog(false);
+              setSelectedRequests([]);
+              initializeAndLoadRequests();
+            }}
          />
        )}
      </div>
