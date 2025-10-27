@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RequestForm } from './RequestForm';
+import { QuoteListDialog } from './QuoteListDialog';
 import { Request, MOCK_PROVIDERS } from '@/types/request';
-import { Plus, Calendar, MapPin, FileText, Bell, Building2 } from 'lucide-react';
+import { Plus, Calendar, MapPin, FileText, Bell, Building2, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/lib/seedData';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,6 +17,8 @@ export const RequestList = () => {
   const [showForm, setShowForm] = useState(false);
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showQuotesDialog, setShowQuotesDialog] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
 
   useEffect(() => {
     const loadRequests = async () => {
@@ -226,6 +229,17 @@ export const RequestList = () => {
                       <Bell className="h-4 w-4 mr-2" />
                       Notificar a Proveedores
                     </Button>
+                    <Button 
+                      variant="default" 
+                      size="sm"
+                      onClick={() => {
+                        setSelectedRequest(request);
+                        setShowQuotesDialog(true);
+                      }}
+                    >
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      Ver cotizaciones
+                    </Button>
                     {request.notifiedAt && (
                       <Badge variant="secondary" className="text-xs">
                         Última notificación: {new Date(request.notifiedAt).toLocaleString()}
@@ -243,6 +257,17 @@ export const RequestList = () => {
         <RequestForm
           onClose={() => setShowForm(false)}
           onSave={handleSaveRequest}
+        />
+      )}
+
+      {showQuotesDialog && selectedRequest && (
+        <QuoteListDialog
+          open={showQuotesDialog}
+          onClose={() => {
+            setShowQuotesDialog(false);
+            setSelectedRequest(null);
+          }}
+          request={selectedRequest}
         />
       )}
     </div>
