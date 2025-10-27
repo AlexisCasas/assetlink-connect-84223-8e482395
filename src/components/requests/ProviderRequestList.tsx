@@ -1,48 +1,114 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Request, MOCK_PROVIDERS } from '@/types/request';
+import { Checkbox } from '@/components/ui/checkbox';
 import { AssignmentDialog } from './AssignmentDialog';
-import { FileText, Calendar, MapPin, Building2, Users, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+
+interface RequestData {
+  id: string;
+  request_number: string;
+  description: string;
+  asset: string;
+  location: string;
+  service_type: string;
+  deadline: string;
+  start_time: string | null;
+  created_at: string;
+  status: string;
+  priority: number;
+  client_name: string | null;
+  client_branch: string | null;
+  observations: string | null;
+}
 
 export const ProviderRequestList = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [receivedRequests, setReceivedRequests] = useState<Request[]>([]);
+  const [requests, setRequests] = useState<RequestData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
   const [showAssignmentDialog, setShowAssignmentDialog] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
+  const [currentProvider, setCurrentProvider] = useState<any>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem('requests');
-    if (stored) {
-      const allRequests = JSON.parse(stored);
-      
-      // Encontrar el proveedor actual basado en el email del usuario
-      const currentProvider = MOCK_PROVIDERS.find(p => p.email === user?.email);
-      
-      if (currentProvider) {
-        // Filtrar solicitudes enviadas que incluyan a este proveedor
-        const filtered = allRequests.filter((r: Request) => 
-          r.status === 'sent' && r.selectedProviders.includes(currentProvider.id)
-        );
-        // Ordenar por prioridad (emergencia primero)
-        filtered.sort((a, b) => a.priority - b.priority);
-        setReceivedRequests(filtered);
-      }
-    }
+    fetchProviderAndRequests();
   }, [user]);
+
+  const fetchProviderAndRequests = async () => {
+    try {
+      setLoading(true);
+      
+      // Get current provider
+      const { data: providerData } = await supabase
+        .from('providers')
+        .select('*')
+        .eq('email', user?.email)
+        .single();
+
+      if (!providerData) {
+        setLoading(false);
+        return;
+      }
+
+      setCurrentProvider(providerData);
+
+      // Get requests assigned to this provider
+      const { data: requestProviders } = await supabase
+        .from('request_providers')
+        .select('request_id')
+        .eq('provider_id', providerData.id);
+
+      if (!requestProviders || requestProviders.length === 0) {
+        setRequests([]);
+        setLoading(false);
+        return;
+      }
+
+      const requestIds = requestProviders.map(rp => rp.request_id);
+
+      // Fetch full request details
+      const { data: requestsData, error } = await supabase
+        .from('requests')
+        .select('*')
+        .in('id', requestIds)
+        .eq('status', 'sent')
+        .order('priority', { ascending: true });
+
+      if (error) throw error;
+
+      setRequests(requestsData || []);
+    } catch (error) {
+      console.error('Error fetching requests:', error);
+      toast({
+        title: 'Error',
+        description: 'No se pudieron cargar las solicitudes',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getServiceTypeColor = (type: string) => {
     const colors = {
-      emergencia: 'bg-red-500/10 text-red-500 border-red-500/20',
-      correctivo: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-      preventivo: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-      proyecto: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+      emergencia: 'bg-red-500 hover:bg-red-600',
+      correctivo: 'bg-orange-500 hover:bg-orange-600',
+      preventivo: 'bg-blue-500 hover:bg-blue-600',
+      proyecto: 'bg-purple-500 hover:bg-purple-600',
     };
-    return colors[type as keyof typeof colors] || '';
+    return colors[type as keyof typeof colors] || 'bg-gray-500';
   };
 
   const getServiceTypeText = (type: string) => {
@@ -55,240 +121,197 @@ export const ProviderRequestList = () => {
     return texts[type as keyof typeof texts] || type;
   };
 
-  const handleRequestTechnicalVisit = (request: Request) => {
-    const currentProvider = MOCK_PROVIDERS.find(p => p.email === user?.email);
-    if (!currentProvider) return;
+  const handleSelectRequest = (requestId: string) => {
+    setSelectedRequests(prev => 
+      prev.includes(requestId) 
+        ? prev.filter(id => id !== requestId)
+        : [...prev, requestId]
+    );
+  };
 
-    const stored = localStorage.getItem('requests');
-    if (stored) {
-      const allRequests = JSON.parse(stored);
-      const requestIndex = allRequests.findIndex((r: Request) => r.id === request.id);
-      
-      if (requestIndex >= 0) {
-        if (!allRequests[requestIndex].technicalVisitRequested) {
-          allRequests[requestIndex].technicalVisitRequested = {};
-        }
-        allRequests[requestIndex].technicalVisitRequested[currentProvider.id] = true;
-        localStorage.setItem('requests', JSON.stringify(allRequests));
-        
-        setReceivedRequests(receivedRequests.map(r => 
-          r.id === request.id 
-            ? { ...r, technicalVisitRequested: { ...r.technicalVisitRequested, [currentProvider.id]: true } }
-            : r
-        ));
-        
-        toast({
-          title: "Visita técnica solicitada",
-          description: "Se ha enviado la solicitud de visita técnica al cliente",
-        });
-      }
+  const handleSelectAll = () => {
+    if (selectedRequests.length === requests.length) {
+      setSelectedRequests([]);
+    } else {
+      setSelectedRequests(requests.map(r => r.id));
     }
   };
 
-  const handleAssignment = (assignment: any) => {
-    if (!selectedRequest) return;
-    
-    const currentProvider = MOCK_PROVIDERS.find(p => p.email === user?.email);
-    if (!currentProvider) return;
-
-    const stored = localStorage.getItem('requests');
-    if (stored) {
-      const allRequests = JSON.parse(stored);
-      const requestIndex = allRequests.findIndex((r: Request) => r.id === selectedRequest.id);
-      
-      if (requestIndex >= 0) {
-        if (!allRequests[requestIndex].assignments) {
-          allRequests[requestIndex].assignments = {};
-        }
-        allRequests[requestIndex].assignments[currentProvider.id] = assignment;
-        localStorage.setItem('requests', JSON.stringify(allRequests));
-        
-        setReceivedRequests(receivedRequests.map(r => 
-          r.id === selectedRequest.id 
-            ? { ...r, assignments: { ...r.assignments, [currentProvider.id]: assignment } }
-            : r
-        ));
-      }
-    }
-  };
-
-  const getCurrentProviderAssignment = (request: Request) => {
-    const currentProvider = MOCK_PROVIDERS.find(p => p.email === user?.email);
-    if (!currentProvider || !request.assignments) return null;
-    return request.assignments[currentProvider.id];
-  };
-
-  const hasTechnicalVisitRequested = (request: Request) => {
-    const currentProvider = MOCK_PROVIDERS.find(p => p.email === user?.email);
-    if (!currentProvider || !request.technicalVisitRequested) return false;
-    return request.technicalVisitRequested[currentProvider.id];
-  };
+  if (loading) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Cargando solicitudes...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Nuevas Solicitudes</h2>
-        <Badge variant="outline" className="text-lg px-4 py-2">
-          {receivedRequests.length} solicitud(es)
-        </Badge>
+        <div>
+          <h2 className="text-2xl font-bold">Nuevas Solicitudes</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Mostrando {requests.length} solicitud(es)
+          </p>
+        </div>
+        <Button
+          onClick={() => setShowAssignmentDialog(true)}
+          disabled={selectedRequests.length === 0}
+        >
+          Asignar a equipo ({selectedRequests.length})
+        </Button>
       </div>
 
-      {receivedRequests.length === 0 ? (
+      {requests.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
             <p className="text-muted-foreground">No tienes nuevas solicitudes</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Las solicitudes de clientes aparecerán aquí
-            </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4">
-          {receivedRequests.map((request) => {
-            const assignment = getCurrentProviderAssignment(request);
-            const visitRequested = hasTechnicalVisitRequested(request);
-            
-            return (
-              <Card key={request.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-lg">{request.requestNumber}</CardTitle>
-                        {request.serviceType === 'emergencia' && (
-                          <Badge variant="destructive" className="animate-pulse">
-                            <AlertTriangle className="w-3 h-3 mr-1" />
-                            URGENTE
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        De: {request.createdBy}
-                      </p>
-                    </div>
-                    <Badge className={getServiceTypeColor(request.serviceType)}>
-                      {getServiceTypeText(request.serviceType)}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {assignment && (
-                    <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Users className="w-4 h-4 text-green-600" />
-                        <span className="font-medium text-green-600">
-                          Asignado a: {assignment.teamMemberName}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Fecha límite: {new Date(assignment.maxDeadline).toLocaleDateString('es-ES')}
-                      </p>
-                    </div>
-                  )}
-
-                  <div>
-                    <p className="text-sm font-medium mb-1">Descripción:</p>
-                    <p className="text-sm text-muted-foreground">{request.description}</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Activo:</span>
-                      <span className="font-medium">{request.asset}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Ubicación:</span>
-                      <span className="font-medium">{request.location}</span>
-                    </div>
-                    <div className="flex items-center gap-2 md:col-span-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Fecha límite para cotizar:</span>
-                      <span className="font-medium text-primary">
-                        {new Date(request.deadline).toLocaleDateString('es-ES', {
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedRequests.length === requests.length && requests.length > 0}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead># Ticket</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Equipo</TableHead>
+                    <TableHead>Operación</TableHead>
+                    <TableHead>Ubicación</TableHead>
+                    <TableHead>Prior.</TableHead>
+                    <TableHead>Coordinador</TableHead>
+                    <TableHead>Ingresado</TableHead>
+                    <TableHead>Programado Para</TableHead>
+                    <TableHead>Comentarios</TableHead>
+                    <TableHead className="w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {requests.map((request) => (
+                    <TableRow key={request.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedRequests.includes(request.id)}
+                          onCheckedChange={() => handleSelectRequest(request.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium text-primary">
+                        {request.request_number}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getServiceTypeColor(request.service_type)}>
+                          {getServiceTypeText(request.service_type)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[150px] truncate">
+                        {request.asset}
+                      </TableCell>
+                      <TableCell className="max-w-[200px]">
+                        <div className="truncate">{request.description}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col text-sm">
+                          <span>{request.client_name || '-'}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {request.client_branch || '-'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">P{request.priority}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        Especialista
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {new Date(request.created_at).toLocaleDateString('es-ES', {
                           day: '2-digit',
-                          month: 'long',
+                          month: '2-digit',
                           year: 'numeric'
                         })}
-                      </span>
-                    </div>
-                  </div>
-
-                  {request.startTime && (
-                    <div className="p-2 bg-muted rounded">
-                      <p className="text-sm">
-                        <span className="text-muted-foreground">Inicio solicitado:</span>
-                        <span className="ml-2 font-medium">
-                          {new Date(request.startTime).toLocaleDateString('es-ES', {
-                            day: '2-digit',
-                            month: 'long',
-                            year: 'numeric',
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(request.created_at).toLocaleTimeString('es-ES', {
                             hour: '2-digit',
                             minute: '2-digit'
                           })}
-                        </span>
-                      </p>
-                    </div>
-                  )}
-
-                  {request.observations && (
-                    <div className="pt-3 border-t">
-                      <p className="text-sm font-medium mb-1">Observaciones:</p>
-                      <p className="text-sm text-muted-foreground">{request.observations}</p>
-                    </div>
-                  )}
-
-                  <div className="pt-3 border-t flex flex-wrap gap-2">
-                    <Button 
-                      size="sm"
-                      onClick={() => {
-                        setSelectedRequest(request);
-                        setShowAssignmentDialog(true);
-                      }}
-                    >
-                      <Users className="w-4 h-4 mr-2" />
-                      {assignment ? 'Reasignar' : 'Asignar a equipo'}
-                    </Button>
-                    
-                    <Button 
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleRequestTechnicalVisit(request)}
-                      disabled={visitRequested}
-                    >
-                      {visitRequested ? 'Visita solicitada' : 'Solicitar visita técnica'}
-                    </Button>
-                  </div>
-
-                  <div className="pt-2 border-t">
-                    <p className="text-xs text-muted-foreground">
-                      Recibido: {new Date(request.createdAt).toLocaleDateString('es-ES', {
-                        day: '2-digit',
-                        month: 'long',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {request.start_time ? (
+                          <>
+                            {new Date(request.start_time).toLocaleDateString('es-ES', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
+                            })}
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(request.start_time).toLocaleTimeString('es-ES', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-[200px]">
+                        <div className="text-sm truncate" title={request.observations || ''}>
+                          {request.observations || '-'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {showAssignmentDialog && selectedRequest && (
+      {showAssignmentDialog && currentProvider && selectedRequests.length > 0 && (
         <AssignmentDialog
-          request={selectedRequest}
-          providerId={MOCK_PROVIDERS.find(p => p.email === user?.email)?.id || ''}
+          request={{
+            id: requests.find(r => r.id === selectedRequests[0])!.id,
+            requestNumber: requests.find(r => r.id === selectedRequests[0])!.request_number,
+            description: requests.find(r => r.id === selectedRequests[0])!.description,
+            asset: requests.find(r => r.id === selectedRequests[0])!.asset,
+            location: requests.find(r => r.id === selectedRequests[0])!.location,
+            serviceType: requests.find(r => r.id === selectedRequests[0])!.service_type as any,
+            deadline: requests.find(r => r.id === selectedRequests[0])!.deadline,
+            selectedProviders: [],
+            status: 'sent',
+            createdAt: requests.find(r => r.id === selectedRequests[0])!.created_at,
+            createdBy: 'system',
+            priority: requests.find(r => r.id === selectedRequests[0])!.priority,
+          }}
+          providerId={currentProvider.id}
           onClose={() => {
             setShowAssignmentDialog(false);
-            setSelectedRequest(null);
           }}
-          onAssign={handleAssignment}
+          onAssign={(assignment) => {
+            toast({
+              title: 'Asignación exitosa',
+              description: `Se asignó correctamente a ${assignment.teamMemberName}`,
+            });
+            setShowAssignmentDialog(false);
+            setSelectedRequests([]);
+          }}
         />
       )}
     </div>

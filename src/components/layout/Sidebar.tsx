@@ -70,20 +70,22 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
           {!collapsed && 'Dashboard'}
         </Button>
         
-        <Button
-          variant={currentView === 'assets' ? "default" : "ghost"}
-          className={cn(
-            "w-full justify-start",
-            collapsed && "justify-center px-2"
-          )}
-          onClick={() => onViewChange?.('assets')}
-        >
-          <Package className={cn(
-            "h-4 w-4",
-            !collapsed && "mr-2"
-          )} />
-          {!collapsed && 'Activos'}
-        </Button>
+        {userRole === 'cliente' && (
+          <Button
+            variant={currentView === 'assets' ? "default" : "ghost"}
+            className={cn(
+              "w-full justify-start",
+              collapsed && "justify-center px-2"
+            )}
+            onClick={() => onViewChange?.('assets')}
+          >
+            <Package className={cn(
+              "h-4 w-4",
+              !collapsed && "mr-2"
+            )} />
+            {!collapsed && 'Activos'}
+          </Button>
+        )}
 
         {userRole === 'cliente' && (
           <>

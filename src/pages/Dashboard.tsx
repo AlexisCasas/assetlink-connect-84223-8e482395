@@ -31,6 +31,10 @@ const Dashboard = () => {
   const renderContent = () => {
     switch (currentView) {
       case 'assets':
+        // Solo mostrar activos para clientes
+        if (user?.role !== 'cliente') {
+          return <StatsCards />;
+        }
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
             <AssetTree onAssetSelect={setSelectedAsset} />
