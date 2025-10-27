@@ -33,6 +33,15 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
   const [materialItems, setMaterialItems] = useState<QuoteTableItem[]>([
     { id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }
   ]);
+  
+  // Estados para condiciones de cotización
+  const [conditions, setConditions] = useState([
+    { id: crypto.randomUUID(), description: 'Validez de la cotización: 30 días calendario' },
+    { id: crypto.randomUUID(), description: 'Precios incluyen IGV' },
+    { id: crypto.randomUUID(), description: 'Forma de pago: 50% adelanto, 50% contra entrega' }
+  ]);
+  const [validityDate, setValidityDate] = useState('');
+  const [includesIGV, setIncludesIGV] = useState(true);
 
   const addItem = (section: 'service' | 'equipment' | 'material') => {
     const newItem: QuoteTableItem = {
@@ -108,6 +117,9 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
       serviceItems: serviceItems.filter(item => item.description.trim() !== ''),
       equipmentItems: equipmentItems.filter(item => item.description.trim() !== ''),
       materialItems: materialItems.filter(item => item.description.trim() !== ''),
+      conditions: conditions.filter(c => c.description.trim() !== ''),
+      validityDate: validityDate || undefined,
+      includesIGV,
     };
 
     onSave(quote);
@@ -264,6 +276,47 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
                 <p className="text-lg font-semibold">COSTO TOTAL</p>
                 <p className="text-2xl font-bold text-primary">S/. {calculateTotal().toFixed(2)}</p>
               </div>
+            </div>
+          </div>
+
+          {/* Condiciones de la cotización */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Condiciones de la Cotización</Label>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={() => setConditions([...conditions, { id: crypto.randomUUID(), description: '' }])}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Agregar condición
+              </Button>
+            </div>
+            <div className="space-y-2 border rounded-lg p-4">
+              {conditions.map((condition, index) => (
+                <div key={condition.id} className="flex gap-2 items-start">
+                  <span className="text-sm text-muted-foreground mt-2 w-4">{index + 1}.</span>
+                  <Input
+                    value={condition.description}
+                    onChange={(e) => {
+                      const updated = conditions.map(c => 
+                        c.id === condition.id ? { ...c, description: e.target.value } : c
+                      );
+                      setConditions(updated);
+                    }}
+                    placeholder="Describe una condición de la cotización"
+                    className="flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setConditions(conditions.filter(c => c.id !== condition.id))}
+                    disabled={conditions.length === 1}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
           </div>
 

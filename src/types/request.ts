@@ -39,6 +39,11 @@ export interface QuoteTableSection {
   subtotal: number;
 }
 
+export interface QuoteCondition {
+  id: string;
+  description: string;
+}
+
 export interface Quote {
   id: string;
   requestId: string;
@@ -53,6 +58,9 @@ export interface Quote {
   serviceItems?: QuoteTableItem[];
   equipmentItems?: QuoteTableItem[];
   materialItems?: QuoteTableItem[];
+  conditions?: QuoteCondition[];
+  validityDate?: string;
+  includesIGV?: boolean;
 }
 
 export type ServiceType = 'emergencia' | 'correctivo' | 'preventivo' | 'proyecto';
