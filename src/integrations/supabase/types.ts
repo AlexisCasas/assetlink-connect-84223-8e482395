@@ -78,6 +78,38 @@ export type Database = {
           },
         ]
       }
+      chat_messages: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          quote_id: string
+          sender_type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          quote_id: string
+          sender_type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          quote_id?: string
+          sender_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string

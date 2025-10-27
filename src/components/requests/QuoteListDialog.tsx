@@ -5,9 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Clock, CheckCircle, User, MessageSquare } from 'lucide-react';
+import { FileText, Clock, CheckCircle, User, MessageSquare, MessageCircle, ThumbsUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Request } from '@/types/request';
+import { QuoteChatDialog } from './QuoteChatDialog';
 
 interface QuoteListDialogProps {
   open: boolean;
@@ -35,6 +36,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
   const [showPrices, setShowPrices] = useState(false);
   const [editingObservation, setEditingObservation] = useState<string | null>(null);
   const [observationText, setObservationText] = useState('');
+  const [chatQuote, setChatQuote] = useState<{ id: string; providerName: string } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -128,6 +130,33 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
   const handleStartEditObservation = (quoteId: string, currentObservation?: string) => {
     setEditingObservation(quoteId);
     setObservationText(currentObservation || '');
+  };
+
+  const handleApproveQuote = async (quoteId: string) => {
+    try {
+      const { error } = await supabase
+        .from('quotes')
+        .update({ status: 'approved' })
+        .eq('id', quoteId);
+
+      if (error) throw error;
+
+      setQuotes(quotes.map(q => 
+        q.id === quoteId ? { ...q, status: 'approved' } : q
+      ));
+
+      toast({
+        title: 'Cotización aprobada',
+        description: 'La cotización ha sido aprobada exitosamente.',
+      });
+    } catch (error) {
+      console.error('Error approving quote:', error);
+      toast({
+        title: 'Error',
+        description: 'No se pudo aprobar la cotización.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -245,6 +274,28 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                       </div>
                     )}
 
+                    {/* Action Buttons */}
+                    <div className="pt-3 border-t flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setChatQuote({ id: quote.id, providerName: quote.provider_name || 'Proveedor' })}
+                        className="flex-1"
+                      >
+                        <MessageCircle className="h-4 w-4 mr-2" />
+                        Contactar
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handleApproveQuote(quote.id)}
+                        disabled={quote.status === 'approved'}
+                        className="flex-1"
+                      >
+                        <ThumbsUp className="h-4 w-4 mr-2" />
+                        {quote.status === 'approved' ? 'Aprobada' : 'Aprobar'}
+                      </Button>
+                    </div>
+
                     {/* Client Observations Section */}
                     <div className="pt-3 border-t">
                       {editingObservation === quote.id ? (
@@ -308,6 +359,15 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
             </div>
           )}
         </div>
+
+        {chatQuote && (
+          <QuoteChatDialog
+            open={!!chatQuote}
+            onClose={() => setChatQuote(null)}
+            quoteId={chatQuote.id}
+            providerName={chatQuote.providerName}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
