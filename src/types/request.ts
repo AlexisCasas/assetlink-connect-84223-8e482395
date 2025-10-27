@@ -24,6 +24,21 @@ export interface Assignment {
   reason?: string;
 }
 
+export interface QuoteTableItem {
+  id: string;
+  description: string;
+  unit: string; // UND, M2, GLN, etc.
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+export interface QuoteTableSection {
+  title: string;
+  items: QuoteTableItem[];
+  subtotal: number;
+}
+
 export interface Quote {
   id: string;
   requestId: string;
@@ -34,6 +49,10 @@ export interface Quote {
   files?: File[];
   createdAt: string;
   status: 'draft' | 'submitted';
+  // Nuevas secciones de la tabla de cotización
+  serviceItems?: QuoteTableItem[];
+  equipmentItems?: QuoteTableItem[];
+  materialItems?: QuoteTableItem[];
 }
 
 export type ServiceType = 'emergencia' | 'correctivo' | 'preventivo' | 'proyecto';

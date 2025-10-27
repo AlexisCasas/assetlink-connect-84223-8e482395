@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { AssignmentDialog } from './AssignmentDialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { User, MessageSquare, FileText } from 'lucide-react';
 import { 
   Table, 
   TableBody, 
@@ -166,12 +167,6 @@ export const ProviderRequestList = () => {
             Mostrando {requests.length} solicitud(es)
           </p>
         </div>
-        <Button
-          onClick={() => setShowAssignmentDialog(true)}
-          disabled={selectedRequests.length === 0}
-        >
-          Asignar a equipo ({selectedRequests.length})
-        </Button>
       </div>
 
       {requests.length === 0 ? (
@@ -202,10 +197,10 @@ export const ProviderRequestList = () => {
                     <TableHead>Coordinador</TableHead>
                     <TableHead>Ingresado</TableHead>
                     <TableHead>Programado Para</TableHead>
-                    <TableHead>Comentarios</TableHead>
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
+                     <TableHead>Comentarios</TableHead>
+                     <TableHead>Acciones</TableHead>
+                   </TableRow>
+                 </TableHeader>
                 <TableBody>
                   {requests.map((request) => (
                     <TableRow key={request.id} className="hover:bg-muted/50">
@@ -285,49 +280,60 @@ export const ProviderRequestList = () => {
                         <div className="text-sm truncate" title={request.observations || ''}>
                           {request.observations || '-'}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                       </TableCell>
+                       <TableCell>
+                         <Button
+                           size="sm"
+                           variant="outline"
+                           onClick={() => {
+                             setSelectedRequests([request.id]);
+                             setShowAssignmentDialog(true);
+                           }}
+                         >
+                           Asignar
+                         </Button>
+                       </TableCell>
+                     </TableRow>
+                   ))}
+                 </TableBody>
+               </Table>
+             </div>
+           </CardContent>
+         </Card>
+       )}
 
-      {showAssignmentDialog && currentProvider && selectedRequests.length > 0 && (
-        <AssignmentDialog
-          request={{
-            id: requests.find(r => r.id === selectedRequests[0])!.id,
-            requestNumber: requests.find(r => r.id === selectedRequests[0])!.request_number,
-            description: requests.find(r => r.id === selectedRequests[0])!.description,
-            asset: requests.find(r => r.id === selectedRequests[0])!.asset,
-            location: requests.find(r => r.id === selectedRequests[0])!.location,
-            serviceType: requests.find(r => r.id === selectedRequests[0])!.service_type as any,
-            deadline: requests.find(r => r.id === selectedRequests[0])!.deadline,
-            selectedProviders: [],
-            status: 'sent',
-            createdAt: requests.find(r => r.id === selectedRequests[0])!.created_at,
-            createdBy: 'system',
-            priority: requests.find(r => r.id === selectedRequests[0])!.priority,
-          }}
-          providerId={currentProvider.id}
-          onClose={() => {
-            setShowAssignmentDialog(false);
-          }}
-          onAssign={(assignment) => {
-            toast({
-              title: 'Asignación exitosa',
-              description: `Se asignó correctamente a ${assignment.teamMemberName}`,
-            });
-            setShowAssignmentDialog(false);
-            setSelectedRequests([]);
-          }}
-        />
-      )}
-    </div>
-  );
-};
+       {showAssignmentDialog && currentProvider && selectedRequests.length > 0 && (
+         <AssignmentDialog
+           request={{
+             id: requests.find(r => r.id === selectedRequests[0])!.id,
+             requestNumber: requests.find(r => r.id === selectedRequests[0])!.request_number,
+             description: requests.find(r => r.id === selectedRequests[0])!.description,
+             asset: requests.find(r => r.id === selectedRequests[0])!.asset,
+             location: requests.find(r => r.id === selectedRequests[0])!.location,
+             serviceType: requests.find(r => r.id === selectedRequests[0])!.service_type as any,
+             deadline: requests.find(r => r.id === selectedRequests[0])!.deadline,
+             selectedProviders: [],
+             status: 'sent',
+             createdAt: requests.find(r => r.id === selectedRequests[0])!.created_at,
+             createdBy: 'system',
+             priority: requests.find(r => r.id === selectedRequests[0])!.priority,
+           }}
+           providerId={currentProvider.id}
+           onClose={() => {
+             setShowAssignmentDialog(false);
+             setSelectedRequests([]);
+           }}
+           onAssign={(assignment) => {
+             toast({
+               title: 'Asignación exitosa',
+               description: `Se asignó correctamente a ${assignment.teamMemberName}`,
+             });
+             setShowAssignmentDialog(false);
+             setSelectedRequests([]);
+             fetchProviderAndRequests();
+           }}
+         />
+       )}
+     </div>
+   );
+ };

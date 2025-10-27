@@ -4,8 +4,9 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Request, Quote } from '@/types/request';
-import { X, Upload } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Request, Quote, QuoteTableItem } from '@/types/request';
+import { X, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -21,27 +22,92 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [files, setFiles] = useState<FileList | null>(null);
+  
+  // Estados para las tablas de cotización
+  const [serviceItems, setServiceItems] = useState<QuoteTableItem[]>([
+    { id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }
+  ]);
+  const [equipmentItems, setEquipmentItems] = useState<QuoteTableItem[]>([
+    { id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }
+  ]);
+  const [materialItems, setMaterialItems] = useState<QuoteTableItem[]>([
+    { id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }
+  ]);
+
+  const addItem = (section: 'service' | 'equipment' | 'material') => {
+    const newItem: QuoteTableItem = {
+      id: crypto.randomUUID(),
+      description: '',
+      unit: 'UND',
+      quantity: 0,
+      unitPrice: 0,
+      total: 0
+    };
+    
+    if (section === 'service') setServiceItems([...serviceItems, newItem]);
+    if (section === 'equipment') setEquipmentItems([...equipmentItems, newItem]);
+    if (section === 'material') setMaterialItems([...materialItems, newItem]);
+  };
+
+  const removeItem = (section: 'service' | 'equipment' | 'material', id: string) => {
+    if (section === 'service') setServiceItems(serviceItems.filter(item => item.id !== id));
+    if (section === 'equipment') setEquipmentItems(equipmentItems.filter(item => item.id !== id));
+    if (section === 'material') setMaterialItems(materialItems.filter(item => item.id !== id));
+  };
+
+  const updateItem = (section: 'service' | 'equipment' | 'material', id: string, field: keyof QuoteTableItem, value: string | number) => {
+    const updateItems = (items: QuoteTableItem[]) => {
+      return items.map(item => {
+        if (item.id === id) {
+          const updated = { ...item, [field]: value };
+          // Recalcular total si cambia cantidad o precio unitario
+          if (field === 'quantity' || field === 'unitPrice') {
+            updated.total = updated.quantity * updated.unitPrice;
+          }
+          return updated;
+        }
+        return item;
+      });
+    };
+
+    if (section === 'service') setServiceItems(updateItems(serviceItems));
+    if (section === 'equipment') setEquipmentItems(updateItems(equipmentItems));
+    if (section === 'material') setMaterialItems(updateItems(materialItems));
+  };
+
+  const calculateSubtotal = (items: QuoteTableItem[]) => {
+    return items.reduce((sum, item) => sum + item.total, 0);
+  };
+
+  const calculateTotal = () => {
+    return calculateSubtotal(serviceItems) + calculateSubtotal(equipmentItems) + calculateSubtotal(materialItems);
+  };
 
   const handleSubmit = (isDraft: boolean) => {
-    if (!amount || !description) {
+    if (!description) {
       toast({
         title: "Error",
-        description: "Por favor completa todos los campos obligatorios",
+        description: "Por favor completa la descripción",
         variant: "destructive",
       });
       return;
     }
+
+    const totalAmount = calculateTotal();
 
     const quote: Quote = {
       id: crypto.randomUUID(),
       requestId: request.id,
       providerId: user?.providerId || '',
       teamMemberId: user?.id || '',
-      amount: parseFloat(amount),
+      amount: totalAmount,
       description,
       files: files ? Array.from(files) : undefined,
       createdAt: new Date().toISOString(),
       status: isDraft ? 'draft' : 'submitted',
+      serviceItems: serviceItems.filter(item => item.description.trim() !== ''),
+      equipmentItems: equipmentItems.filter(item => item.description.trim() !== ''),
+      materialItems: materialItems.filter(item => item.description.trim() !== ''),
     };
 
     onSave(quote);
@@ -53,6 +119,100 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
     });
     onClose();
   };
+
+  const renderTableSection = (
+    title: string,
+    items: QuoteTableItem[],
+    section: 'service' | 'equipment' | 'material'
+  ) => (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between bg-muted p-3 rounded-t-lg">
+        <h4 className="font-semibold">{title}</h4>
+        <Button size="sm" variant="outline" onClick={() => addItem(section)}>
+          <Plus className="h-4 w-4 mr-1" />
+          Agregar fila
+        </Button>
+      </div>
+      <div className="border rounded-b-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[40%]">Detalle</TableHead>
+              <TableHead className="w-[10%]">UND</TableHead>
+              <TableHead className="w-[10%]">CANT.</TableHead>
+              <TableHead className="w-[15%]">S/. Unitario</TableHead>
+              <TableHead className="w-[15%]">S/. Total</TableHead>
+              <TableHead className="w-[10%]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell>
+                  <Input
+                    value={item.description}
+                    onChange={(e) => updateItem(section, item.id, 'description', e.target.value)}
+                    placeholder="Descripción del ítem"
+                    className="h-8"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    value={item.unit}
+                    onChange={(e) => updateItem(section, item.id, 'unit', e.target.value)}
+                    placeholder="UND"
+                    className="h-8"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={item.quantity}
+                    onChange={(e) => updateItem(section, item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                    placeholder="0"
+                    className="h-8"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={item.unitPrice}
+                    onChange={(e) => updateItem(section, item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="h-8"
+                  />
+                </TableCell>
+                <TableCell>
+                  <span className="font-medium">S/. {item.total.toFixed(2)}</span>
+                </TableCell>
+                <TableCell>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => removeItem(section, item.id)}
+                    disabled={items.length === 1}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            <TableRow>
+              <TableCell colSpan={4} className="text-right font-semibold">
+                Subtotal {title}:
+              </TableCell>
+              <TableCell className="font-bold">
+                S/. {calculateSubtotal(items).toFixed(2)}
+              </TableCell>
+              <TableCell></TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -80,28 +240,31 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="amount">Monto de la cotización (S/.) *</Label>
-            <Input
-              id="amount"
-              type="number"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Descripción de la cotización *</Label>
+            <Label htmlFor="description">Descripción general de la cotización *</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe los trabajos a realizar, materiales, tiempo estimado, etc."
-              rows={5}
+              placeholder="Describe los trabajos a realizar, condiciones, garantías, etc."
+              rows={3}
               required
             />
+          </div>
+
+          {/* Tabla de cotización */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Detalle de la Cotización</h3>
+            
+            {renderTableSection('1. Descripción del servicio', serviceItems, 'service')}
+            {renderTableSection('2. Descripción de equipos de alto riesgo (En caso aplique)', equipmentItems, 'equipment')}
+            {renderTableSection('3. Descripción de materiales relevantes', materialItems, 'material')}
+
+            <div className="flex justify-end p-4 bg-primary/10 rounded-lg">
+              <div className="text-right">
+                <p className="text-lg font-semibold">COSTO TOTAL</p>
+                <p className="text-2xl font-bold text-primary">S/. {calculateTotal().toFixed(2)}</p>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">
