@@ -21,7 +21,10 @@ export type Database = {
           max_deadline: string
           provider_id: string
           reason: string | null
+          rejection_reason: string | null
           request_id: string
+          responded_at: string | null
+          status: Database["public"]["Enums"]["assignment_status"]
           team_member_id: string
           team_member_name: string
         }
@@ -31,7 +34,10 @@ export type Database = {
           max_deadline: string
           provider_id: string
           reason?: string | null
+          rejection_reason?: string | null
           request_id: string
+          responded_at?: string | null
+          status?: Database["public"]["Enums"]["assignment_status"]
           team_member_id: string
           team_member_name: string
         }
@@ -41,7 +47,10 @@ export type Database = {
           max_deadline?: string
           provider_id?: string
           reason?: string | null
+          rejection_reason?: string | null
           request_id?: string
+          responded_at?: string | null
+          status?: Database["public"]["Enums"]["assignment_status"]
           team_member_id?: string
           team_member_name?: string
         }
@@ -332,6 +341,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      assignment_status: "pending" | "accepted" | "rejected"
       request_status: "draft" | "sent" | "quoted" | "completed"
       service_type: "emergencia" | "correctivo" | "preventivo" | "proyecto"
     }
@@ -461,6 +471,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      assignment_status: ["pending", "accepted", "rejected"],
       request_status: ["draft", "sent", "quoted", "completed"],
       service_type: ["emergencia", "correctivo", "preventivo", "proyecto"],
     },

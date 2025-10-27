@@ -430,6 +430,39 @@ export const seedDatabase = async (): Promise<{ success: boolean; error?: any }>
     }
 
     console.log(`Successfully created ${requestProviderRelations.length} request-provider relationships`);
+
+    // Step 5: Create sample assignments (assign first 10 requests to team members)
+    if (insertedTeamMembers && insertedTeamMembers.length > 0 && insertedRequests.length >= 10) {
+      console.log('Creating sample assignments...');
+      const assignments = insertedRequests.slice(0, 10).map((request, index) => {
+        const teamMember = insertedTeamMembers[index % insertedTeamMembers.length];
+        const provider = insertedProviders[Math.floor(index / insertedTeamMembers.length) % insertedProviders.length];
+        const deadline = new Date();
+        deadline.setDate(deadline.getDate() + (index + 2) * 2); // 4, 6, 8, 10... days from now
+
+        return {
+          request_id: request.id,
+          provider_id: provider.id,
+          team_member_id: teamMember.id,
+          team_member_name: teamMember.name,
+          max_deadline: deadline.toISOString(),
+          reason: index % 3 === 0 ? 'Especialidad en el área requerida' : null,
+          status: 'pending' as const
+        };
+      });
+
+      const { error: assignmentsError } = await supabase
+        .from('assignments')
+        .insert(assignments);
+
+      if (assignmentsError) {
+        console.error('Error creating assignments:', assignmentsError);
+        return { success: false, error: assignmentsError };
+      }
+
+      console.log(`Successfully created ${assignments.length} sample assignments`);
+    }
+
     console.log('Database seeding completed successfully!');
     
     return { success: true };
