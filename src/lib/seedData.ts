@@ -1,26 +1,12 @@
 import { supabase } from '@/integrations/supabase/client';
 
+// Sample providers data (without manual IDs - let DB generate UUIDs)
 const PROVIDERS_DATA = [
   { name: 'Servicios Técnicos Integrales S.A.', email: 'contacto@sti.com', specialties: ['Mantenimiento Preventivo', 'Mantenimiento Correctivo'], rating: 4.8, certified: true },
   { name: 'Reparaciones Express Ltda.', email: 'servicios@reparacionesexpress.com', specialties: ['Emergencias', 'Reparaciones Urgentes'], rating: 4.5, certified: true },
   { name: 'Proyectos y Obras Industriales', email: 'info@proyectosindustriales.com', specialties: ['Proyectos', 'Instalaciones'], rating: 4.9, certified: true },
   { name: 'Mantenimiento Global Corp.', email: 'ventas@mantenimientoglobal.com', specialties: ['Mantenimiento Preventivo', 'Mantenimiento Correctivo', 'Proyectos'], rating: 4.7, certified: true },
   { name: 'Soluciones Técnicas del Norte', email: 'contacto@solucionesnorte.com', specialties: ['Emergencias', 'Mantenimiento Correctivo'], rating: 4.6, certified: false },
-  { name: 'Ingeniería y Servicios Avanzados', email: 'info@ingenieriaavanzada.com', specialties: ['Proyectos', 'Mantenimiento Preventivo'], rating: 4.9, certified: true },
-  { name: 'TecnoService Pro', email: 'admin@tecnoservicepro.com', specialties: ['Mantenimiento Correctivo', 'Emergencias'], rating: 4.4, certified: false },
-  { name: 'Mantenimiento Industrial Express', email: 'contacto@mie.com', specialties: ['Mantenimiento Preventivo', 'Proyectos'], rating: 4.6, certified: true },
-  { name: 'Servicios Rápidos S.A.C.', email: 'ventas@serviciosrapidos.com', specialties: ['Emergencias', 'Reparaciones Urgentes'], rating: 4.3, certified: false },
-  { name: 'Obras y Proyectos del Sur', email: 'proyectos@obrassur.com', specialties: ['Proyectos', 'Instalaciones'], rating: 4.8, certified: true },
-  { name: 'Mantenimiento Integral 360', email: 'info@mi360.com', specialties: ['Mantenimiento Preventivo', 'Mantenimiento Correctivo'], rating: 4.7, certified: true },
-  { name: 'Técnicos Especializados SAC', email: 'contacto@tecnicos.com', specialties: ['Emergencias', 'Mantenimiento Correctivo'], rating: 4.5, certified: false },
-  { name: 'Proyectos Modernos E.I.R.L.', email: 'ventas@proyectosmodernos.com', specialties: ['Proyectos', 'Instalaciones'], rating: 4.6, certified: true },
-  { name: 'Servicios Generales Premium', email: 'admin@sgpremium.com', specialties: ['Mantenimiento Preventivo', 'Proyectos'], rating: 4.8, certified: true },
-  { name: 'Reparaciones del Centro', email: 'info@reparacionescentro.com', specialties: ['Mantenimiento Correctivo', 'Emergencias'], rating: 4.4, certified: false },
-  { name: 'Ingeniería Total S.A.', email: 'contacto@ingenieriatotal.com', specialties: ['Proyectos', 'Instalaciones'], rating: 4.9, certified: true },
-  { name: 'Mantenimiento Plus', email: 'ventas@mantenimientoplus.com', specialties: ['Mantenimiento Preventivo', 'Mantenimiento Correctivo'], rating: 4.5, certified: false },
-  { name: 'Servicios Técnicos del Este', email: 'este@servicios.com', specialties: ['Emergencias', 'Reparaciones Urgentes'], rating: 4.6, certified: true },
-  { name: 'Proyectos & Soluciones', email: 'info@proyectosysoluciones.com', specialties: ['Proyectos', 'Mantenimiento Preventivo'], rating: 4.7, certified: true },
-  { name: 'Operaciones Industriales SAC', email: 'admin@operacionesindustriales.com', specialties: ['Mantenimiento Correctivo', 'Proyectos'], rating: 4.5, certified: false },
 ];
 
 const TEAM_MEMBERS = [
@@ -29,10 +15,6 @@ const TEAM_MEMBERS = [
   { name: 'Carlos Rodríguez', email: 'carlos@reparaciones.com', providerIndex: 1 },
   { name: 'Ana Martínez', email: 'ana@proyectos.com', providerIndex: 2 },
   { name: 'Luis Torres', email: 'luis@proyectos.com', providerIndex: 2 },
-  { name: 'Pedro Sánchez', email: 'pedro@global.com', providerIndex: 3 },
-  { name: 'Sofia López', email: 'sofia@norte.com', providerIndex: 4 },
-  { name: 'Miguel Ángel', email: 'miguel@norte.com', providerIndex: 4 },
-  { name: 'Roberto Díaz', email: 'roberto@ingenieria.com', providerIndex: 5 },
 ];
 
 const SAMPLE_REQUESTS = [
@@ -352,98 +334,107 @@ const SAMPLE_REQUESTS = [
   },
 ];
 
-export const seedDatabase = async () => {
+export const seedDatabase = async (): Promise<{ success: boolean; error?: any }> => {
   try {
     console.log('Starting database seeding...');
 
-    // 1. Insert providers
+    // Check if data already exists to avoid duplicates
+    const { data: existingRequests } = await supabase
+      .from('requests')
+      .select('id')
+      .limit(1);
+
+    if (existingRequests && existingRequests.length > 0) {
+      console.log('Database already has data. Skipping seeding.');
+      return { success: true };
+    }
+
+    // Step 1: Insert providers and capture their IDs
+    console.log('Seeding providers...');
     const { data: insertedProviders, error: providersError } = await supabase
       .from('providers')
-      .upsert(
-        PROVIDERS_DATA.map((p, index) => ({
-          id: `provider-${index + 1}`,
-          ...p,
-        })),
-        { onConflict: 'id' }
-      )
+      .insert(PROVIDERS_DATA)
       .select();
 
     if (providersError) {
-      console.error('Error inserting providers:', providersError);
-      throw providersError;
+      console.error('Error seeding providers:', providersError);
+      return { success: false, error: providersError };
     }
 
-    console.log(`Inserted ${insertedProviders?.length} providers`);
-
-    // 2. Insert team members
-    if (insertedProviders && insertedProviders.length > 0) {
-      const teamMembersData = TEAM_MEMBERS.map((tm, index) => ({
-        id: `team-member-${index + 1}`,
-        name: tm.name,
-        email: tm.email,
-        provider_id: insertedProviders[tm.providerIndex]?.id || insertedProviders[0].id,
-      }));
-
-      const { error: teamError } = await supabase
-        .from('team_members')
-        .upsert(teamMembersData, { onConflict: 'id' });
-
-      if (teamError) {
-        console.error('Error inserting team members:', teamError);
-      } else {
-        console.log(`Inserted ${teamMembersData.length} team members`);
-      }
+    if (!insertedProviders || insertedProviders.length === 0) {
+      console.error('No providers were inserted');
+      return { success: false, error: 'No providers inserted' };
     }
 
-    // 3. Insert sample requests
+    console.log(`Successfully inserted ${insertedProviders.length} providers`);
+
+    // Step 2: Insert team members linked to providers
+    console.log('Seeding team members...');
+    const teamMembersWithProviderIds = TEAM_MEMBERS.map(member => ({
+      name: member.name,
+      email: member.email,
+      provider_id: insertedProviders[member.providerIndex].id
+    }));
+
+    const { data: insertedTeamMembers, error: teamMembersError } = await supabase
+      .from('team_members')
+      .insert(teamMembersWithProviderIds)
+      .select();
+
+    if (teamMembersError) {
+      console.error('Error seeding team members:', teamMembersError);
+      return { success: false, error: teamMembersError };
+    }
+
+    console.log(`Successfully inserted ${insertedTeamMembers?.length || 0} team members`);
+
+    // Step 3: Insert requests
+    console.log('Seeding requests...');
     const { data: insertedRequests, error: requestsError } = await supabase
       .from('requests')
-      .upsert(
-        SAMPLE_REQUESTS.map((r, index) => ({
-          id: `request-${index + 1}`,
-          ...r,
-        })),
-        { onConflict: 'id' }
-      )
+      .insert(SAMPLE_REQUESTS)
       .select();
 
     if (requestsError) {
-      console.error('Error inserting requests:', requestsError);
-    } else {
-      console.log(`Inserted ${insertedRequests?.length} requests`);
+      console.error('Error seeding requests:', requestsError);
+      return { success: false, error: requestsError };
     }
 
-    // 4. Link ALL requests to ALL providers
-    if (insertedRequests && insertedProviders) {
-      const requestProvidersData = [];
-      
-      // Link all requests to all providers
-      for (let i = 0; i < insertedRequests.length; i++) {
-        for (let j = 0; j < insertedProviders.length; j++) {
-          requestProvidersData.push({
-            request_id: insertedRequests[i].id,
-            provider_id: insertedProviders[j].id,
-          });
-        }
-      }
+    if (!insertedRequests || insertedRequests.length === 0) {
+      console.error('No requests were inserted');
+      return { success: false, error: 'No requests inserted' };
+    }
 
-      if (requestProvidersData.length > 0) {
-        const { error: rpError } = await supabase
-          .from('request_providers')
-          .upsert(requestProvidersData, { onConflict: 'id', ignoreDuplicates: true });
+    console.log(`Successfully inserted ${insertedRequests.length} requests`);
 
-        if (rpError) {
-          console.error('Error linking requests to providers:', rpError);
-        } else {
-          console.log(`Linked ${requestProvidersData.length} request-provider relationships`);
-        }
+    // Step 4: Create relationships between ALL requests and ALL providers
+    console.log('Creating request-provider relationships...');
+    const requestProviderRelations = [];
+    
+    for (const request of insertedRequests) {
+      for (const provider of insertedProviders) {
+        requestProviderRelations.push({
+          request_id: request.id,
+          provider_id: provider.id
+        });
       }
     }
 
+    const { error: relationsError } = await supabase
+      .from('request_providers')
+      .insert(requestProviderRelations);
+
+    if (relationsError) {
+      console.error('Error creating request-provider relationships:', relationsError);
+      return { success: false, error: relationsError };
+    }
+
+    console.log(`Successfully created ${requestProviderRelations.length} request-provider relationships`);
     console.log('Database seeding completed successfully!');
+    
     return { success: true };
   } catch (error) {
-    console.error('Error seeding database:', error);
+    console.error('Unexpected error during seeding:', error);
     return { success: false, error };
   }
 };
