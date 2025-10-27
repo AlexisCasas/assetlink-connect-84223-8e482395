@@ -15,21 +15,54 @@ export const RequestList = () => {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [requests, setRequests] = useState<Request[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadRequests = async () => {
-      // Always seed the database to ensure example data exists
-      await seedDatabase();
-      
-      // Load all sent requests from Supabase (not filtered by user)
-      const { data, error } = await supabase
-        .from('requests')
-        .select('*')
-        .eq('status', 'sent')
-        .order('created_at', { ascending: false });
-      
-      if (data && !error) {
-        setRequests(data as any);
+      try {
+        setLoading(true);
+        // Always seed the database to ensure example data exists
+        await seedDatabase();
+        
+        // Load all sent requests with their provider relationships
+        const { data: requestsData, error: requestsError } = await supabase
+          .from('requests')
+          .select('*')
+          .eq('status', 'sent')
+          .order('created_at', { ascending: false });
+        
+        if (requestsError) throw requestsError;
+        
+        // Transform the data to match the Request interface
+        const transformedRequests: Request[] = (requestsData || []).map((req: any) => ({
+          id: req.id,
+          requestNumber: req.request_number,
+          description: req.description,
+          asset: req.asset,
+          location: req.location,
+          serviceType: req.service_type,
+          observations: req.observations,
+          images: req.image_urls || [],
+          documents: req.document_urls || [],
+          deadline: req.deadline,
+          startTime: req.start_time,
+          selectedProviders: [], // Will be populated if needed
+          status: req.status,
+          createdAt: req.created_at,
+          createdBy: req.created_by,
+          priority: req.priority,
+          clientName: req.client_name,
+          clientBranch: req.client_branch,
+          isPublic: req.is_public,
+          notifiedAt: req.notified_at,
+        }));
+        
+        setRequests(transformedRequests);
+      } catch (error) {
+        console.error('Error loading requests:', error);
+        setRequests([]);
+      } finally {
+        setLoading(false);
       }
     };
     loadRequests();
@@ -101,7 +134,13 @@ export const RequestList = () => {
         </Button>
       </div>
 
-      {requests.length === 0 ? (
+      {loading ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Cargando solicitudes...</p>
+          </CardContent>
+        </Card>
+      ) : requests.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
@@ -163,15 +202,15 @@ export const RequestList = () => {
                 
                 <div className="pt-3 border-t">
                   <p className="text-sm text-muted-foreground mb-2">
-                    {request.isPublic ? 'Solicitud Pública - Visible para todos los proveedores' : `Enviado a ${request.selectedProviders.length} proveedor(es):`}
+                    {request.isPublic ? 'Solicitud Pública - Visible para todos los proveedores' : `Enviado a ${(request.selectedProviders || []).length} proveedor(es)`}
                   </p>
-                  {!request.isPublic && (
+                  {!request.isPublic && request.selectedProviders && request.selectedProviders.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-3">
                       {request.selectedProviders.map((providerId) => {
                         const provider = MOCK_PROVIDERS.find(p => p.id === providerId);
                         return (
                           <Badge key={providerId} variant="outline">
-                            {provider?.name}
+                            {provider?.name || 'Proveedor'}
                           </Badge>
                         );
                       })}
