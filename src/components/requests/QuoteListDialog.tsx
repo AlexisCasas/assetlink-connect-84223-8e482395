@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Clock, CheckCircle, User, MessageSquare, MessageCircle, ThumbsUp } from 'lucide-react';
+import { FileText, Clock, CheckCircle, User, MessageSquare, MessageCircle, ThumbsUp, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Request } from '@/types/request';
 import { QuoteChatDialog } from './QuoteChatDialog';
@@ -40,6 +40,8 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
   const [observationText, setObservationText] = useState('');
   const [chatQuote, setChatQuote] = useState<{ id: string; providerName: string } | null>(null);
   const [approvalQuote, setApprovalQuote] = useState<{ id: string; providerName: string } | null>(null);
+  const [quotesClosed, setQuotesClosed] = useState(false);
+  const [closingQuotes, setClosingQuotes] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -51,6 +53,15 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
   const loadQuotes = async () => {
     try {
       setLoading(true);
+
+      // Get request status to check if quotes are closed
+      const { data: requestData } = await supabase
+        .from('requests')
+        .select('quotes_closed')
+        .eq('id', request.id)
+        .single();
+
+      setQuotesClosed(requestData?.quotes_closed || false);
 
       // Get total number of providers invited to this request
       const { count: providerCount } = await supabase
@@ -90,9 +101,10 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
 
       setQuotes(transformedQuotes);
 
-      // Show prices only if all providers have submitted
+      // Show prices if quotes are closed OR all providers have submitted
       const submittedProviders = new Set(transformedQuotes.map(q => q.provider_id)).size;
-      setShowPrices(submittedProviders >= (providerCount || 0) && providerCount > 0);
+      const allSubmitted = submittedProviders >= (providerCount || 0) && providerCount > 0;
+      setShowPrices(requestData?.quotes_closed || allSubmitted);
     } catch (error) {
       console.error('Error loading quotes:', error);
       setQuotes([]);
@@ -134,6 +146,35 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
   const handleStartEditObservation = (quoteId: string, currentObservation?: string) => {
     setEditingObservation(quoteId);
     setObservationText(currentObservation || '');
+  };
+
+  const handleCloseQuotes = async () => {
+    try {
+      setClosingQuotes(true);
+      const { error } = await supabase
+        .from('requests')
+        .update({ quotes_closed: true })
+        .eq('id', request.id);
+
+      if (error) throw error;
+
+      setQuotesClosed(true);
+      setShowPrices(true);
+
+      toast({
+        title: 'Envío de cotizaciones cerrado',
+        description: 'Ya no se podrán enviar más cotizaciones y los precios son ahora visibles.',
+      });
+    } catch (error) {
+      console.error('Error closing quotes:', error);
+      toast({
+        title: 'Error',
+        description: 'No se pudo cerrar el envío de cotizaciones.',
+        variant: 'destructive',
+      });
+    } finally {
+      setClosingQuotes(false);
+    }
   };
 
   const handleApproveQuote = async (quoteId: string, approvalReason: string) => {
@@ -181,14 +222,14 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
         <div className="space-y-4 mt-4">
           {/* Status Banner */}
           <Card className={showPrices ? 'border-green-500/50 bg-green-50 dark:bg-green-950' : 'border-orange-500/50 bg-orange-50 dark:bg-orange-950'}>
-            <CardContent className="py-4">
+            <CardContent className="py-4 space-y-3">
               <div className="flex items-center gap-3">
                 {showPrices ? (
                   <>
                     <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
                     <div>
                       <p className="font-medium text-green-900 dark:text-green-100">
-                        Todas las cotizaciones recibidas
+                        {quotesClosed ? 'Envío de cotizaciones cerrado' : 'Todas las cotizaciones recibidas'}
                       </p>
                       <p className="text-sm text-green-700 dark:text-green-300">
                         {quotes.length} de {totalProviders} proveedores han enviado sus cotizaciones. Los precios ahora son visibles.
@@ -209,6 +250,20 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                   </>
                 )}
               </div>
+
+              {/* Close Quotes Button */}
+              {!quotesClosed && quotes.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCloseQuotes}
+                  disabled={closingQuotes}
+                  className="w-full border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-950"
+                >
+                  <Lock className="h-4 w-4 mr-2" />
+                  {closingQuotes ? 'Cerrando...' : 'Cerrar envío de cotizaciones y ver precios'}
+                </Button>
+              )}
             </CardContent>
           </Card>
 

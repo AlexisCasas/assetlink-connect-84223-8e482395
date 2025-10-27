@@ -305,6 +305,7 @@ export type Database = {
           notified_at: string | null
           observations: string | null
           priority: number
+          quotes_closed: boolean
           request_number: string
           service_type: Database["public"]["Enums"]["service_type"]
           start_time: string | null
@@ -326,6 +327,7 @@ export type Database = {
           notified_at?: string | null
           observations?: string | null
           priority?: number
+          quotes_closed?: boolean
           request_number: string
           service_type: Database["public"]["Enums"]["service_type"]
           start_time?: string | null
@@ -347,6 +349,7 @@ export type Database = {
           notified_at?: string | null
           observations?: string | null
           priority?: number
+          quotes_closed?: boolean
           request_number?: string
           service_type?: Database["public"]["Enums"]["service_type"]
           start_time?: string | null
