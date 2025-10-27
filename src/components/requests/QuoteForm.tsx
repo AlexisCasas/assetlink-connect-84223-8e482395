@@ -25,6 +25,9 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
   const [description, setDescription] = useState('');
   const [files, setFiles] = useState<FileList | null>(null);
   const [needsTechnicalVisit, setNeedsTechnicalVisit] = useState(false);
+  const [elaboradoPor, setElaboradoPor] = useState('');
+  const [revisadoPor, setRevisadoPor] = useState('');
+  const [validoPor, setValidoPor] = useState('');
   
   // Estados para las tablas de cotización
   const [serviceItems, setServiceItems] = useState<QuoteTableItem[]>([
@@ -124,6 +127,9 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
       validityDate: validityDate || undefined,
       includesIGV,
       needsTechnicalVisit,
+      elaboradoPor: elaboradoPor || undefined,
+      revisadoPor: revisadoPor || undefined,
+      validoPor: validoPor || undefined,
     };
 
     onSave(quote);
@@ -360,6 +366,37 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
                 {files.length} archivo(s) seleccionado(s)
               </div>
             )}
+          </div>
+
+          {/* Responsables */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="elaborado-por">Elaborado por</Label>
+              <Input
+                id="elaborado-por"
+                value={elaboradoPor}
+                onChange={(e) => setElaboradoPor(e.target.value)}
+                placeholder="Nombre completo"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="revisado-por">Revisado por</Label>
+              <Input
+                id="revisado-por"
+                value={revisadoPor}
+                onChange={(e) => setRevisadoPor(e.target.value)}
+                placeholder="Nombre completo"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="valido-por">Válido por</Label>
+              <Input
+                id="valido-por"
+                value={validoPor}
+                onChange={(e) => setValidoPor(e.target.value)}
+                placeholder="Nombre completo"
+              />
+            </div>
           </div>
 
           {/* Technical Visit Checkbox */}

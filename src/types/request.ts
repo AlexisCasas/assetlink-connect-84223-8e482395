@@ -62,6 +62,9 @@ export interface Quote {
   validityDate?: string;
   includesIGV?: boolean;
   needsTechnicalVisit?: boolean;
+  elaboradoPor?: string;
+  revisadoPor?: string;
+  validoPor?: string;
 }
 
 export type ServiceType = 'emergencia' | 'correctivo' | 'preventivo' | 'proyecto';
