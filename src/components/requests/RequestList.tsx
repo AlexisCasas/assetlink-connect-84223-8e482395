@@ -7,6 +7,8 @@ import { RequestForm } from './RequestForm';
 import { Request, MOCK_PROVIDERS } from '@/types/request';
 import { Plus, Calendar, MapPin, FileText, Bell, Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { seedDatabase } from '@/lib/seedData';
+import { supabase } from '@/integrations/supabase/client';
 
 export const RequestList = () => {
   const { user } = useAuth();
@@ -15,11 +17,22 @@ export const RequestList = () => {
   const [requests, setRequests] = useState<Request[]>([]);
 
   useEffect(() => {
-    const stored = localStorage.getItem('requests');
-    if (stored) {
-      const allRequests = JSON.parse(stored);
-      setRequests(allRequests.filter((r: Request) => r.createdBy === user?.email && r.status === 'sent'));
-    }
+    const loadRequests = async () => {
+      // Always seed the database to ensure example data exists
+      await seedDatabase();
+      
+      // Load all sent requests from Supabase (not filtered by user)
+      const { data, error } = await supabase
+        .from('requests')
+        .select('*')
+        .eq('status', 'sent')
+        .order('created_at', { ascending: false });
+      
+      if (data && !error) {
+        setRequests(data as any);
+      }
+    };
+    loadRequests();
   }, [user]);
 
   const handleSaveRequest = (request: Request, isDraft: boolean) => {

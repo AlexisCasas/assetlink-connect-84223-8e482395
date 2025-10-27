@@ -10,20 +10,21 @@ import { TeamMemberView } from '@/components/requests/TeamMemberView';
 import { StatsCards } from '@/components/dashboard/StatsCards';
 import { ProviderProfile } from '@/components/requests/ProviderProfile';
 import { PublicRequestList } from '@/components/requests/PublicRequestList';
+import { NotificationList } from '@/components/notifications/NotificationList';
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications'>('dashboard');
   const [selectedAsset, setSelectedAsset] = useState<AssetNode | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
-    if (hash === 'assets' || hash === 'requests' || hash === 'drafts' || hash === 'public-requests' || hash === 'profile') {
+    if (hash === 'assets' || hash === 'requests' || hash === 'drafts' || hash === 'public-requests' || hash === 'profile' || hash === 'notifications') {
       setCurrentView(hash as any);
     }
   }, []);
 
-  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile') => {
+  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications') => {
     setCurrentView(view);
     window.location.hash = view;
   };
@@ -55,6 +56,8 @@ const Dashboard = () => {
         return <PublicRequestList />;
       case 'profile':
         return <ProviderProfile />;
+      case 'notifications':
+        return <NotificationList />;
       default:
         return <StatsCards />;
     }

@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { seedDatabase } from '@/lib/seedData';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Settings2, ArrowUpDown } from 'lucide-react';
+import { Search, Settings2, ArrowUpDown, Upload, FileText, X, Check } from 'lucide-react';
 import { QuoteForm } from './QuoteForm';
+import { TechnicalVisitDialog } from './TechnicalVisitDialog';
 import { 
   Table, 
   TableBody, 
@@ -109,6 +110,8 @@ export const TeamMemberView = () => {
   const [sortBy, setSortBy] = useState<'max_deadline' | 'priority'>('max_deadline');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showTechnicalVisitDialog, setShowTechnicalVisitDialog] = useState(false);
+  const [selectedAssignmentForVisit, setSelectedAssignmentForVisit] = useState<AssignmentWithRequest | null>(null);
 
   useEffect(() => {
     loadAssignments();
@@ -609,15 +612,29 @@ export const TeamMemberView = () => {
                             </div>
                           )}
                           {assignment.status === 'accepted' && (
-                            <Button
-                              size="sm"
-                              onClick={() => {
-                                setSelectedAssignment(assignment);
-                                setShowQuoteForm(true);
-                              }}
-                            >
-                              Cotizar
-                            </Button>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedAssignment(assignment);
+                                  setShowQuoteForm(true);
+                                }}
+                              >
+                                <FileText className="h-4 w-4 mr-1" />
+                                Cotizar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedAssignmentForVisit(assignment);
+                                  setShowTechnicalVisitDialog(true);
+                                }}
+                              >
+                                <Upload className="h-4 w-4 mr-1" />
+                                Documentar Visita
+                              </Button>
+                            </div>
                           )}
                           {assignment.status === 'rejected' && (
                             <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
@@ -701,6 +718,19 @@ export const TeamMemberView = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {showTechnicalVisitDialog && selectedAssignmentForVisit && (
+        <TechnicalVisitDialog
+          open={showTechnicalVisitDialog}
+          onClose={() => {
+            setShowTechnicalVisitDialog(false);
+            setSelectedAssignmentForVisit(null);
+          }}
+          requestId={selectedAssignmentForVisit.request_id}
+          assignmentId={selectedAssignmentForVisit.id}
+          teamMemberId={selectedAssignmentForVisit.team_member_id}
+        />
+      )}
     </div>
   );
 };

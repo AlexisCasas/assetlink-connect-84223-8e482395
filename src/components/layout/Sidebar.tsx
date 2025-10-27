@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   LayoutDashboard,
   Package,
@@ -11,19 +13,41 @@ import {
   LogOut,
   AlertCircle,
   Settings,
-  Globe
+  Globe,
+  Bell
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications') => void;
   currentView?: string;
   userRole?: UserRole;
 }
 
 export function Sidebar({ className, onViewChange, currentView = 'dashboard', userRole }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { user, logout } = useAuth();
+
+  useEffect(() => {
+    if (user?.email) {
+      loadUnreadCount();
+    }
+  }, [user]);
+
+  const loadUnreadCount = async () => {
+    try {
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_email', user?.email)
+        .eq('read', false);
+      
+      setUnreadCount(count || 0);
+    } catch (error) {
+      console.error('Error loading unread count:', error);
+    }
+  };
 
   return (
     <div className={cn(
@@ -118,6 +142,33 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               )} />
               {!collapsed && 'Borradores'}
             </Button>
+
+            <Button
+              variant={currentView === 'notifications' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('notifications')}
+            >
+              <Bell className={cn(
+                "h-4 w-4",
+                !collapsed && "mr-2"
+              )} />
+              {!collapsed && (
+                <>
+                  <span>Notificaciones</span>
+                  {unreadCount > 0 && (
+                    <Badge variant="destructive" className="ml-auto">
+                      {unreadCount}
+                    </Badge>
+                  )}
+                </>
+              )}
+              {collapsed && unreadCount > 0 && (
+                <Badge variant="destructive" className="absolute top-1 right-1 h-2 w-2 p-0" />
+              )}
+            </Button>
           </>
         )}
 
@@ -167,24 +218,80 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               )} />
               {!collapsed && 'Mi Perfil'}
             </Button>
+
+            <Button
+              variant={currentView === 'notifications' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('notifications')}
+            >
+              <Bell className={cn(
+                "h-4 w-4",
+                !collapsed && "mr-2"
+              )} />
+              {!collapsed && (
+                <>
+                  <span>Notificaciones</span>
+                  {unreadCount > 0 && (
+                    <Badge variant="destructive" className="ml-auto">
+                      {unreadCount}
+                    </Badge>
+                  )}
+                </>
+              )}
+              {collapsed && unreadCount > 0 && (
+                <Badge variant="destructive" className="absolute top-1 right-1 h-2 w-2 p-0" />
+              )}
+            </Button>
           </>
         )}
 
         {userRole === 'team_member' && (
-          <Button
-            variant={currentView === 'requests' ? "default" : "ghost"}
-            className={cn(
-              "w-full justify-start",
-              collapsed && "justify-center px-2"
-            )}
-            onClick={() => onViewChange?.('requests')}
-          >
-            <FileText className={cn(
-              "h-4 w-4",
-              !collapsed && "mr-2"
-            )} />
-            {!collapsed && 'Mis Asignaciones'}
-          </Button>
+          <>
+            <Button
+              variant={currentView === 'requests' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('requests')}
+            >
+              <FileText className={cn(
+                "h-4 w-4",
+                !collapsed && "mr-2"
+              )} />
+              {!collapsed && 'Mis Asignaciones'}
+            </Button>
+
+            <Button
+              variant={currentView === 'notifications' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('notifications')}
+            >
+              <Bell className={cn(
+                "h-4 w-4",
+                !collapsed && "mr-2"
+              )} />
+              {!collapsed && (
+                <>
+                  <span>Notificaciones</span>
+                  {unreadCount > 0 && (
+                    <Badge variant="destructive" className="ml-auto">
+                      {unreadCount}
+                    </Badge>
+                  )}
+                </>
+              )}
+              {collapsed && unreadCount > 0 && (
+                <Badge variant="destructive" className="absolute top-1 right-1 h-2 w-2 p-0" />
+              )}
+            </Button>
+          </>
         )}
       </nav>
 

@@ -78,6 +78,57 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          quote_id: string | null
+          read: boolean
+          request_id: string | null
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_email: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          quote_id?: string | null
+          read?: boolean
+          request_id?: string | null
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_email: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          quote_id?: string | null
+          read?: boolean
+          request_id?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["notification_type"]
+          user_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       providers: {
         Row: {
           certified: boolean | null
@@ -297,6 +348,58 @@ export type Database = {
           },
         ]
       }
+      technical_visit_documents: {
+        Row: {
+          assignment_id: string | null
+          created_at: string
+          file_urls: string[]
+          id: string
+          notes: string | null
+          request_id: string
+          team_member_id: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          created_at?: string
+          file_urls: string[]
+          id?: string
+          notes?: string | null
+          request_id: string
+          team_member_id: string
+        }
+        Update: {
+          assignment_id?: string | null
+          created_at?: string
+          file_urls?: string[]
+          id?: string
+          notes?: string | null
+          request_id?: string
+          team_member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technical_visit_documents_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_visit_documents_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_visit_documents_team_member_id_fkey"
+            columns: ["team_member_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       technical_visits: {
         Row: {
           id: string
@@ -342,6 +445,11 @@ export type Database = {
     }
     Enums: {
       assignment_status: "pending" | "accepted" | "rejected"
+      notification_type:
+        | "technical_visit"
+        | "quote_received"
+        | "assignment"
+        | "general"
       request_status: "draft" | "sent" | "quoted" | "completed"
       service_type: "emergencia" | "correctivo" | "preventivo" | "proyecto"
     }
@@ -472,6 +580,12 @@ export const Constants = {
   public: {
     Enums: {
       assignment_status: ["pending", "accepted", "rejected"],
+      notification_type: [
+        "technical_visit",
+        "quote_received",
+        "assignment",
+        "general",
+      ],
       request_status: ["draft", "sent", "quoted", "completed"],
       service_type: ["emergencia", "correctivo", "preventivo", "proyecto"],
     },

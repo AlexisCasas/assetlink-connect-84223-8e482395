@@ -3,12 +3,14 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Request, Quote, QuoteTableItem } from '@/types/request';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface QuoteFormProps {
   request: Request;
@@ -22,6 +24,7 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [files, setFiles] = useState<FileList | null>(null);
+  const [needsTechnicalVisit, setNeedsTechnicalVisit] = useState(false);
   
   // Estados para las tablas de cotización
   const [serviceItems, setServiceItems] = useState<QuoteTableItem[]>([
@@ -92,7 +95,7 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
     return calculateSubtotal(serviceItems) + calculateSubtotal(equipmentItems) + calculateSubtotal(materialItems);
   };
 
-  const handleSubmit = (isDraft: boolean) => {
+  const handleSubmit = async (isDraft: boolean) => {
     if (!description) {
       toast({
         title: "Error",
@@ -120,9 +123,27 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
       conditions: conditions.filter(c => c.description.trim() !== ''),
       validityDate: validityDate || undefined,
       includesIGV,
+      needsTechnicalVisit,
     };
 
     onSave(quote);
+    
+    // Create notification if technical visit is needed
+    if (needsTechnicalVisit && !isDraft) {
+      try {
+        await supabase.from('notifications').insert({
+          user_email: request.createdBy,
+          type: 'technical_visit',
+          title: 'Visita técnica solicitada',
+          message: `El proveedor ha solicitado una visita técnica para la solicitud ${request.requestNumber}. Se pondrán en contacto contigo para coordinar los detalles.`,
+          request_id: request.id,
+          quote_id: quote.id,
+        });
+      } catch (error) {
+        console.error('Error creating notification:', error);
+      }
+    }
+    
     toast({
       title: isDraft ? "Borrador guardado" : "Cotización enviada",
       description: isDraft 
@@ -339,6 +360,21 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
                 {files.length} archivo(s) seleccionado(s)
               </div>
             )}
+          </div>
+
+          {/* Technical Visit Checkbox */}
+          <div className="flex items-center space-x-2 p-4 border rounded-lg bg-muted/50">
+            <Checkbox 
+              id="technical-visit" 
+              checked={needsTechnicalVisit}
+              onCheckedChange={(checked) => setNeedsTechnicalVisit(checked as boolean)}
+            />
+            <label 
+              htmlFor="technical-visit" 
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+            >
+              Se necesita una visita técnica previa
+            </label>
           </div>
 
           <div className="flex gap-3 justify-end pt-4 border-t">

@@ -61,6 +61,7 @@ export interface Quote {
   conditions?: QuoteCondition[];
   validityDate?: string;
   includesIGV?: boolean;
+  needsTechnicalVisit?: boolean;
 }
 
 export type ServiceType = 'emergencia' | 'correctivo' | 'preventivo' | 'proyecto';
