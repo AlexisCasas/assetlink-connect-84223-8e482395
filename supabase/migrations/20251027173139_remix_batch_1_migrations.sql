@@ -1,3 +1,5 @@
+
+-- Migration: 20251024205948
 -- Create service type enum
 CREATE TYPE public.service_type AS ENUM ('emergencia', 'correctivo', 'preventivo', 'proyecto');
 
