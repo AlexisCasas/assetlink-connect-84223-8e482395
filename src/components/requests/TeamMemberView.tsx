@@ -1,13 +1,40 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { QuoteForm } from './QuoteForm';
-import { FileText, Calendar, MapPin, Building2, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { seedDatabase } from '@/lib/seedData';
 import { useToast } from '@/hooks/use-toast';
+import { Search, Settings2, ArrowUpDown } from 'lucide-react';
+import { QuoteForm } from './QuoteForm';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -22,39 +49,74 @@ import { Label } from '@/components/ui/label';
 interface AssignmentWithRequest {
   id: string;
   request_id: string;
+  team_member_id: string;
   team_member_name: string;
+  provider_id: string;
   max_deadline: string;
   reason: string | null;
-  status: 'pending' | 'accepted' | 'rejected';
-  responded_at: string | null;
+  status: string;
   rejection_reason: string | null;
+  responded_at: string | null;
   request: {
-    id: string;
     request_number: string;
     description: string;
     asset: string;
     location: string;
     service_type: string;
-    created_at: string;
-    observations: string | null;
+    deadline: string;
+    priority: number;
     client_name: string | null;
+    client_branch: string | null;
+    observations: string | null;
   };
 }
+
+type ColumnKey = 'ticket' | 'estado' | 'equipo' | 'operacion' | 'ubicacion' | 'prioridad' | 'asignado' | 'fecha_limite' | 'comentarios' | 'acciones';
+
+interface ColumnConfig {
+  key: ColumnKey;
+  label: string;
+  visible: boolean;
+}
+
+const DEFAULT_COLUMNS: ColumnConfig[] = [
+  { key: 'ticket', label: '# Ticket', visible: true },
+  { key: 'estado', label: 'Estado', visible: true },
+  { key: 'equipo', label: 'Equipo', visible: true },
+  { key: 'operacion', label: 'Operación', visible: true },
+  { key: 'ubicacion', label: 'Ubicación', visible: true },
+  { key: 'prioridad', label: 'Prior.', visible: true },
+  { key: 'asignado', label: 'Asignado A', visible: true },
+  { key: 'fecha_limite', label: 'Fecha Límite', visible: true },
+  { key: 'comentarios', label: 'Comentarios', visible: true },
+  { key: 'acciones', label: 'Acciones', visible: true },
+];
 
 export const TeamMemberView = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [assignments, setAssignments] = useState<AssignmentWithRequest[]>([]);
+  const [filteredAssignments, setFilteredAssignments] = useState<AssignmentWithRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<AssignmentWithRequest | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
-  const [rejectingAssignment, setRejectingAssignment] = useState<AssignmentWithRequest | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [assignmentToReject, setAssignmentToReject] = useState<string | null>(null);
+  const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
+  const [sortBy, setSortBy] = useState<'max_deadline' | 'priority'>('max_deadline');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   useEffect(() => {
     loadAssignments();
   }, [user]);
+
+  useEffect(() => {
+    filterAndSortAssignments();
+  }, [assignments, searchQuery, sortBy, sortOrder, statusFilter]);
 
   const loadAssignments = async () => {
     try {
@@ -62,53 +124,46 @@ export const TeamMemberView = () => {
       
       // Seed database with example data if empty
       await seedDatabase();
-
-      // Load ALL assignments with their requests (no filtering by user for demo purposes)
-      const { data, error } = await supabase
+      
+      // Fetch ALL assignments - visible to all team members
+      const { data: assignmentsData, error } = await supabase
         .from('assignments')
         .select(`
-          id,
-          request_id,
-          team_member_name,
-          max_deadline,
-          reason,
-          status,
-          responded_at,
-          rejection_reason,
-          requests (
-            id,
-            request_number,
-            description,
-            asset,
-            location,
-            service_type,
-            created_at,
-            observations,
-            client_name
-          )
+          *,
+          request:requests(*)
         `)
         .order('max_deadline', { ascending: true });
 
       if (error) throw error;
 
-      // Transform the data to match our interface
-      const transformedData = (data || [])
-        .filter(item => item.requests) // Only keep assignments with valid requests
-        .map(item => ({
-          id: item.id,
-          request_id: item.request_id,
-          team_member_name: item.team_member_name,
-          max_deadline: item.max_deadline,
-          reason: item.reason,
-          status: item.status as 'pending' | 'accepted' | 'rejected',
-          responded_at: item.responded_at,
-          rejection_reason: item.rejection_reason,
-          request: Array.isArray(item.requests) ? item.requests[0] : item.requests
-        }));
+      const transformedAssignments = (assignmentsData || []).map((a: any) => ({
+        id: a.id,
+        request_id: a.request_id,
+        team_member_id: a.team_member_id,
+        team_member_name: a.team_member_name,
+        provider_id: a.provider_id,
+        max_deadline: a.max_deadline,
+        reason: a.reason,
+        status: a.status,
+        rejection_reason: a.rejection_reason,
+        responded_at: a.responded_at,
+        request: {
+          request_number: a.request.request_number,
+          description: a.request.description,
+          asset: a.request.asset,
+          location: a.request.location,
+          service_type: a.request.service_type,
+          deadline: a.request.deadline,
+          priority: a.request.priority,
+          client_name: a.request.client_name,
+          client_branch: a.request.client_branch,
+          observations: a.request.observations,
+        },
+      }));
 
-      setAssignments(transformedData);
+      setAssignments(transformedAssignments);
     } catch (error) {
-      console.error('Error loading assignments:', error);
+      console.error('Error fetching assignments:', error);
       toast({
         title: 'Error',
         description: 'No se pudieron cargar las asignaciones',
@@ -119,21 +174,85 @@ export const TeamMemberView = () => {
     }
   };
 
-  const handleAccept = async (assignment: AssignmentWithRequest) => {
+  const filterAndSortAssignments = () => {
+    let filtered = [...assignments];
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(a => 
+        a.request.request_number.toLowerCase().includes(query) ||
+        a.request.description.toLowerCase().includes(query) ||
+        a.request.asset.toLowerCase().includes(query) ||
+        a.request.location.toLowerCase().includes(query) ||
+        a.team_member_name.toLowerCase().includes(query) ||
+        (a.reason && a.reason.toLowerCase().includes(query)) ||
+        (a.rejection_reason && a.rejection_reason.toLowerCase().includes(query))
+      );
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(a => a.status === statusFilter);
+    }
+
+    // Sort
+    filtered.sort((a, b) => {
+      let compareValue = 0;
+      
+      if (sortBy === 'max_deadline') {
+        compareValue = new Date(a.max_deadline).getTime() - new Date(b.max_deadline).getTime();
+      } else if (sortBy === 'priority') {
+        compareValue = a.request.priority - b.request.priority;
+      }
+
+      return sortOrder === 'asc' ? compareValue : -compareValue;
+    });
+
+    setFilteredAssignments(filtered);
+  };
+
+  const toggleColumn = (key: ColumnKey) => {
+    setColumns(columns.map(col => 
+      col.key === key ? { ...col, visible: !col.visible } : col
+    ));
+  };
+
+  const isColumnVisible = (key: ColumnKey) => {
+    return columns.find(col => col.key === key)?.visible ?? true;
+  };
+
+  const handleSelectAssignment = (assignmentId: string) => {
+    setSelectedAssignments(prev => 
+      prev.includes(assignmentId) 
+        ? prev.filter(id => id !== assignmentId)
+        : [...prev, assignmentId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedAssignments.length === filteredAssignments.length) {
+      setSelectedAssignments([]);
+    } else {
+      setSelectedAssignments(filteredAssignments.map(a => a.id));
+    }
+  };
+
+  const handleAccept = async (assignmentId: string) => {
     try {
       const { error } = await supabase
         .from('assignments')
-        .update({
+        .update({ 
           status: 'accepted',
           responded_at: new Date().toISOString()
         })
-        .eq('id', assignment.id);
+        .eq('id', assignmentId);
 
       if (error) throw error;
 
       toast({
         title: 'Asignación aceptada',
-        description: 'Ahora puedes crear la cotización',
+        description: 'Ahora puedes crear una cotización para esta solicitud',
       });
 
       loadAssignments();
@@ -147,14 +266,14 @@ export const TeamMemberView = () => {
     }
   };
 
-  const handleRejectClick = (assignment: AssignmentWithRequest) => {
-    setRejectingAssignment(assignment);
-    setRejectReason('');
+  const handleRejectClick = (assignmentId: string) => {
+    setAssignmentToReject(assignmentId);
+    setRejectionReason('');
     setShowRejectDialog(true);
   };
 
   const handleRejectConfirm = async () => {
-    if (!rejectingAssignment || !rejectReason.trim()) {
+    if (!assignmentToReject || !rejectionReason.trim()) {
       toast({
         title: 'Error',
         description: 'Debes proporcionar una razón para rechazar',
@@ -169,9 +288,9 @@ export const TeamMemberView = () => {
         .update({
           status: 'rejected',
           responded_at: new Date().toISOString(),
-          rejection_reason: rejectReason
+          rejection_reason: rejectionReason
         })
-        .eq('id', rejectingAssignment.id);
+        .eq('id', assignmentToReject);
 
       if (error) throw error;
 
@@ -181,8 +300,8 @@ export const TeamMemberView = () => {
       });
 
       setShowRejectDialog(false);
-      setRejectingAssignment(null);
-      setRejectReason('');
+      setAssignmentToReject(null);
+      setRejectionReason('');
       loadAssignments();
     } catch (error) {
       console.error('Error rejecting assignment:', error);
@@ -202,8 +321,8 @@ export const TeamMemberView = () => {
         .from('quotes')
         .insert({
           request_id: selectedAssignment.request_id,
-          provider_id: selectedAssignment.id, // Using assignment id as temporary provider reference
-          team_member_id: selectedAssignment.id,
+          provider_id: selectedAssignment.provider_id,
+          team_member_id: selectedAssignment.team_member_id,
           description: quote.description || '',
           amount: quote.total || 0,
           status: 'draft'
@@ -231,12 +350,12 @@ export const TeamMemberView = () => {
 
   const getServiceTypeColor = (type: string) => {
     const colors = {
-      emergencia: 'bg-red-500/10 text-red-500 border-red-500/20',
-      correctivo: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-      preventivo: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-      proyecto: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+      emergencia: 'bg-red-500 hover:bg-red-600',
+      correctivo: 'bg-orange-500 hover:bg-orange-600',
+      preventivo: 'bg-blue-500 hover:bg-blue-600',
+      proyecto: 'bg-purple-500 hover:bg-purple-600',
     };
-    return colors[type as keyof typeof colors] || '';
+    return colors[type as keyof typeof colors] || 'bg-gray-500';
   };
 
   const getServiceTypeText = (type: string) => {
@@ -252,13 +371,13 @@ export const TeamMemberView = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">Pendiente</Badge>;
+        return { text: 'Pendiente', className: 'bg-yellow-500 hover:bg-yellow-600' };
       case 'accepted':
-        return <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">Aceptada</Badge>;
+        return { text: 'Aceptada', className: 'bg-green-500 hover:bg-green-600' };
       case 'rejected':
-        return <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20">Rechazada</Badge>;
+        return { text: 'Rechazada', className: 'bg-red-500 hover:bg-red-600' };
       default:
-        return null;
+        return { text: status, className: 'bg-gray-500' };
     }
   };
 
@@ -275,164 +394,262 @@ export const TeamMemberView = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-4">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold">Mis Asignaciones</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Solicitudes asignadas para cotizar
+            Mostrando {filteredAssignments.length} de {assignments.length} asignación(es)
           </p>
         </div>
-        <Badge variant="outline" className="text-lg px-4 py-2">
-          {assignments.length} asignación(es)
-        </Badge>
       </div>
 
-      {assignments.length === 0 ? (
+      {/* Búsqueda y filtros */}
+      <div className="flex gap-3 items-center flex-wrap">
+        <div className="relative flex-1 min-w-[300px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por ticket, descripción, equipo, ubicación..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los estados</SelectItem>
+            <SelectItem value="pending">Pendientes</SelectItem>
+            <SelectItem value="accepted">Aceptadas</SelectItem>
+            <SelectItem value="rejected">Rechazadas</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon">
+              <ArrowUpDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[200px]">
+            <DropdownMenuLabel>Ordenar por</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuRadioGroup value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+              <DropdownMenuRadioItem value="max_deadline">
+                Fecha límite
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="priority">
+                Prioridad
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuRadioGroup value={sortOrder} onValueChange={(v) => setSortOrder(v as any)}>
+              <DropdownMenuRadioItem value="asc">Ascendente</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="desc">Descendente</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon">
+              <Settings2 className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[200px]">
+            <DropdownMenuLabel>Columnas visibles</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {columns.map(col => (
+              <DropdownMenuCheckboxItem
+                key={col.key}
+                checked={col.visible}
+                onCheckedChange={() => toggleColumn(col.key)}
+                disabled={col.key === 'ticket'}
+              >
+                {col.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {filteredAssignments.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground">No tienes solicitudes asignadas</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Las solicitudes asignadas por tu supervisor aparecerán aquí
+            <p className="text-muted-foreground">
+              {searchQuery || statusFilter !== 'all'
+                ? 'No se encontraron asignaciones con los filtros aplicados'
+                : 'No tienes asignaciones'}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4">
-          {assignments.map((assignment) => {
-            const request = assignment.request;
-            
-            return (
-              <Card key={assignment.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg">{request.request_number}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Cliente: {request.client_name || 'No especificado'}
-                      </p>
-                    </div>
-                    <div className="flex gap-2 flex-wrap justify-end">
-                      <Badge className={getServiceTypeColor(request.service_type)}>
-                        {getServiceTypeText(request.service_type)}
-                      </Badge>
-                      {getStatusBadge(assignment.status)}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-muted-foreground">Fecha límite:</span>
-                      <span className="font-medium text-primary">
-                        {new Date(assignment.max_deadline).toLocaleDateString('es-ES', {
-                          day: '2-digit',
-                          month: 'long',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </span>
-                    </div>
-                    {assignment.reason && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Motivo de asignación: {assignment.reason}
-                      </p>
-                    )}
-                    {assignment.rejection_reason && (
-                      <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded">
-                        <p className="text-xs font-medium text-red-600">
-                          Razón del rechazo: {assignment.rejection_reason}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium mb-1">Descripción:</p>
-                    <p className="text-sm text-muted-foreground">{request.description}</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Activo:</span>
-                      <span className="font-medium">{request.asset}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Ubicación:</span>
-                      <span className="font-medium">{request.location}</span>
-                    </div>
-                  </div>
-
-                  {request.observations && (
-                    <div className="pt-3 border-t">
-                      <p className="text-sm font-medium mb-1">Observaciones:</p>
-                      <p className="text-sm text-muted-foreground">{request.observations}</p>
-                    </div>
-                  )}
-
-                  <div className="pt-3 border-t flex justify-end gap-2">
-                    {assignment.status === 'pending' && (
-                      <>
-                        <Button 
-                          variant="outline"
-                          onClick={() => handleRejectClick(assignment)}
-                          className="gap-2"
-                        >
-                          <XCircle className="w-4 h-4" />
-                          Rechazar
-                        </Button>
-                        <Button 
-                          onClick={() => handleAccept(assignment)}
-                          className="gap-2"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                          Aceptar
-                        </Button>
-                      </>
-                    )}
-                    {assignment.status === 'accepted' && (
-                      <Button 
-                        onClick={() => {
-                          setSelectedAssignment(assignment);
-                          setShowQuoteForm(true);
-                        }}
-                      >
-                        Crear cotización
-                      </Button>
-                    )}
-                    {assignment.status === 'rejected' && (
-                      <Badge variant="outline" className="text-red-600 border-red-600">
-                        Rechazada
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedAssignments.length === filteredAssignments.length && filteredAssignments.length > 0}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    </TableHead>
+                    {isColumnVisible('ticket') && <TableHead># Ticket</TableHead>}
+                    {isColumnVisible('estado') && <TableHead>Estado</TableHead>}
+                    {isColumnVisible('equipo') && <TableHead>Equipo</TableHead>}
+                    {isColumnVisible('operacion') && <TableHead>Operación</TableHead>}
+                    {isColumnVisible('ubicacion') && <TableHead>Ubicación</TableHead>}
+                    {isColumnVisible('prioridad') && <TableHead>Prior.</TableHead>}
+                    {isColumnVisible('asignado') && <TableHead>Asignado A</TableHead>}
+                    {isColumnVisible('fecha_limite') && <TableHead>Fecha Límite</TableHead>}
+                    {isColumnVisible('comentarios') && <TableHead>Comentarios</TableHead>}
+                    {isColumnVisible('acciones') && <TableHead>Acciones</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAssignments.map((assignment) => (
+                    <TableRow key={assignment.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedAssignments.includes(assignment.id)}
+                          onCheckedChange={() => handleSelectAssignment(assignment.id)}
+                        />
+                      </TableCell>
+                      {isColumnVisible('ticket') && (
+                        <TableCell className="font-medium text-primary">
+                          {assignment.request.request_number}
+                        </TableCell>
+                      )}
+                      {isColumnVisible('estado') && (
+                        <TableCell>
+                          <Badge className={getStatusBadge(assignment.status).className}>
+                            {getStatusBadge(assignment.status).text}
+                          </Badge>
+                        </TableCell>
+                      )}
+                      {isColumnVisible('equipo') && (
+                        <TableCell className="max-w-[150px] truncate">
+                          {assignment.request.asset}
+                        </TableCell>
+                      )}
+                      {isColumnVisible('operacion') && (
+                        <TableCell>
+                          <Badge className={getServiceTypeColor(assignment.request.service_type)}>
+                            {getServiceTypeText(assignment.request.service_type)}
+                          </Badge>
+                        </TableCell>
+                      )}
+                      {isColumnVisible('ubicacion') && (
+                        <TableCell>
+                          <div className="flex flex-col text-sm">
+                            <span>{assignment.request.client_name || '-'}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {assignment.request.client_branch || '-'}
+                            </span>
+                          </div>
+                        </TableCell>
+                      )}
+                      {isColumnVisible('prioridad') && (
+                        <TableCell>
+                          <Badge variant="outline">P{assignment.request.priority}</Badge>
+                        </TableCell>
+                      )}
+                      {isColumnVisible('asignado') && (
+                        <TableCell className="text-sm font-medium">
+                          {assignment.team_member_name}
+                        </TableCell>
+                      )}
+                      {isColumnVisible('fecha_limite') && (
+                        <TableCell className="text-sm">
+                          {new Date(assignment.max_deadline).toLocaleDateString('es-ES', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric'
+                          })}
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(assignment.max_deadline).toLocaleTimeString('es-ES', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </TableCell>
+                      )}
+                      {isColumnVisible('comentarios') && (
+                        <TableCell className="max-w-[200px]">
+                          <div className="text-sm truncate" title={assignment.reason || assignment.rejection_reason || ''}>
+                            {assignment.status === 'rejected' 
+                              ? assignment.rejection_reason 
+                              : assignment.reason || '-'}
+                          </div>
+                        </TableCell>
+                      )}
+                      {isColumnVisible('acciones') && (
+                        <TableCell>
+                          {assignment.status === 'pending' && (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAccept(assignment.id)}
+                              >
+                                Aceptar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleRejectClick(assignment.id)}
+                              >
+                                Rechazar
+                              </Button>
+                            </div>
+                          )}
+                          {assignment.status === 'accepted' && (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setSelectedAssignment(assignment);
+                                setShowQuoteForm(true);
+                              }}
+                            >
+                              Cotizar
+                            </Button>
+                          )}
+                          {assignment.status === 'rejected' && (
+                            <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
+                              Rechazada
+                            </Badge>
+                          )}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {showQuoteForm && selectedAssignment && (
         <QuoteForm
           request={{
-            id: selectedAssignment.request.id,
+            id: selectedAssignment.request_id,
             requestNumber: selectedAssignment.request.request_number,
             description: selectedAssignment.request.description,
             asset: selectedAssignment.request.asset,
             location: selectedAssignment.request.location,
             serviceType: selectedAssignment.request.service_type as any,
-            deadline: selectedAssignment.max_deadline,
+            deadline: selectedAssignment.request.deadline,
             selectedProviders: [],
             status: 'sent',
-            createdAt: selectedAssignment.request.created_at,
-            createdBy: selectedAssignment.request.client_name || 'Sistema',
-            priority: 4,
+            createdAt: new Date().toISOString(),
+            createdBy: 'system',
+            priority: selectedAssignment.request.priority,
           }}
           onClose={() => {
             setShowQuoteForm(false);
@@ -447,7 +664,7 @@ export const TeamMemberView = () => {
           <DialogHeader>
             <DialogTitle>Rechazar asignación</DialogTitle>
             <DialogDescription>
-              Por favor, explica por qué rechazas esta asignación. Esta información será enviada al supervisor.
+              Por favor, explica por qué rechazas esta asignación.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -455,9 +672,9 @@ export const TeamMemberView = () => {
               <Label htmlFor="reject-reason">Razón del rechazo *</Label>
               <Textarea
                 id="reject-reason"
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Ej: No tengo las herramientas necesarias para este trabajo"
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Ej: No tengo las herramientas necesarias"
                 rows={4}
                 className="resize-none"
               />
@@ -468,8 +685,8 @@ export const TeamMemberView = () => {
               variant="outline" 
               onClick={() => {
                 setShowRejectDialog(false);
-                setRejectingAssignment(null);
-                setRejectReason('');
+                setAssignmentToReject(null);
+                setRejectionReason('');
               }}
             >
               Cancelar
@@ -477,7 +694,7 @@ export const TeamMemberView = () => {
             <Button 
               variant="destructive"
               onClick={handleRejectConfirm}
-              disabled={!rejectReason.trim()}
+              disabled={!rejectionReason.trim()}
             >
               Confirmar rechazo
             </Button>

@@ -440,14 +440,30 @@ export const seedDatabase = async (): Promise<{ success: boolean; error?: any }>
         const deadline = new Date();
         deadline.setDate(deadline.getDate() + (index + 2) * 2); // 4, 6, 8, 10... days from now
 
+        // Vary statuses: some pending, some accepted, some rejected
+        let status: 'pending' | 'accepted' | 'rejected' = 'pending';
+        let rejection_reason = null;
+        let responded_at = null;
+        
+        if (index % 3 === 1) {
+          status = 'accepted';
+          responded_at = new Date(Date.now() - (index * 24 * 60 * 60 * 1000)).toISOString();
+        } else if (index % 3 === 2) {
+          status = 'rejected';
+          rejection_reason = 'No cuento con las herramientas necesarias para este trabajo';
+          responded_at = new Date(Date.now() - (index * 24 * 60 * 60 * 1000)).toISOString();
+        }
+
         return {
           request_id: request.id,
           provider_id: provider.id,
           team_member_id: teamMember.id,
           team_member_name: teamMember.name,
           max_deadline: deadline.toISOString(),
-          reason: index % 3 === 0 ? 'Especialidad en el área requerida' : null,
-          status: 'pending' as const
+          reason: index % 3 === 0 ? 'Especialidad en el área requerida' : 'Asignado por disponibilidad',
+          status,
+          rejection_reason,
+          responded_at
         };
       });
 
