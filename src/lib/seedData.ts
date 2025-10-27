@@ -79,7 +79,7 @@ const SAMPLE_REQUESTS = [
     priority: 4,
     client_name: 'Transportes Unidos S.A.',
     client_branch: 'Sede Principal',
-    is_public: true,
+    is_public: false,
   },
   {
     request_number: 'SOL-001238',
@@ -95,7 +95,7 @@ const SAMPLE_REQUESTS = [
     priority: 2,
     client_name: 'Transportes Unidos S.A.',
     client_branch: 'Lima Este',
-    is_public: true,
+    is_public: false,
   },
   {
     request_number: 'SOL-001239',
@@ -126,7 +126,7 @@ const SAMPLE_REQUESTS = [
     priority: 1,
     client_name: 'Express Cargo S.A.C.',
     client_branch: 'Callao',
-    is_public: true,
+    is_public: false,
   },
   {
     request_number: 'SOL-001241',
@@ -142,7 +142,7 @@ const SAMPLE_REQUESTS = [
     priority: 4,
     client_name: 'Turismo Nacional EIRL',
     client_branch: 'Sede Central',
-    is_public: true,
+    is_public: false,
   },
   {
     request_number: 'SOL-001242',
@@ -189,7 +189,7 @@ const SAMPLE_REQUESTS = [
     priority: 1,
     client_name: 'Rutas del Perú S.A.',
     client_branch: 'Villa El Salvador',
-    is_public: true,
+    is_public: false,
   },
   {
     request_number: 'SOL-001245',
@@ -205,7 +205,7 @@ const SAMPLE_REQUESTS = [
     priority: 3,
     client_name: 'Móvil Tours S.A.',
     client_branch: 'Ate Vitarte',
-    is_public: true,
+    is_public: false,
   },
   {
     request_number: 'SOL-001246',
@@ -251,7 +251,7 @@ const SAMPLE_REQUESTS = [
     priority: 1,
     client_name: 'Cruz del Sur S.A.C.',
     client_branch: 'Fiori',
-    is_public: true,
+    is_public: false,
   },
   {
     request_number: 'SOL-001249',
@@ -267,7 +267,7 @@ const SAMPLE_REQUESTS = [
     priority: 4,
     client_name: 'Oltursa S.A.',
     client_branch: 'San Miguel',
-    is_public: true,
+    is_public: false,
   },
   {
     request_number: 'SOL-001250',
@@ -314,7 +314,7 @@ const SAMPLE_REQUESTS = [
     priority: 2,
     client_name: 'Soyuz S.A.',
     client_branch: 'La Molina',
-    is_public: true,
+    is_public: false,
   },
   {
     request_number: 'SOL-001253',
@@ -330,7 +330,7 @@ const SAMPLE_REQUESTS = [
     priority: 4,
     client_name: 'Línea S.A.',
     client_branch: 'Oficina Central',
-    is_public: true,
+    is_public: false,
   },
 ];
 

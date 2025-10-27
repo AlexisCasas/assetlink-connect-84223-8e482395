@@ -135,7 +135,7 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
                 "h-4 w-4",
                 !collapsed && "mr-2"
               )} />
-              {!collapsed && 'Nuevas solicitudes'}
+              {!collapsed && 'Solicitudes'}
             </Button>
             
             <Button

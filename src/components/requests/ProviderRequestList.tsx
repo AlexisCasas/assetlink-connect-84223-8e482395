@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { AssignmentDialog } from './AssignmentDialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Settings2, ArrowUpDown } from 'lucide-react';
+import { Search, Settings2, ArrowUpDown, Download } from 'lucide-react';
 import { 
   Table, 
   TableBody, 
@@ -269,11 +269,19 @@ export const ProviderRequestList = () => {
     <div className="p-6 space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold">Nuevas Solicitudes</h2>
+          <h2 className="text-2xl font-bold">Solicitudes</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Mostrando {filteredRequests.length} de {requests.length} solicitud(es)
           </p>
         </div>
+        <Button 
+          variant="outline"
+          disabled={selectedRequests.length === 0}
+          className="gap-2"
+        >
+          <Download className="h-4 w-4" />
+          Descargar ({selectedRequests.length})
+        </Button>
       </div>
 
       {/* Búsqueda y filtros */}
