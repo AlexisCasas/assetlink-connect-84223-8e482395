@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Request, Quote } from '@/types/request';
 import { QuoteField, PercentageField, QuoteSummaryData, QuoteTableItem } from '@/types/quote-template';
 import { X, Plus, Trash2, Edit2, ArrowUp, ArrowDown, Save, Percent } from 'lucide-react';
@@ -39,6 +40,8 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
   const [validoPor, setValidoPor] = useState('');
   const [deliveryDays, setDeliveryDays] = useState(1);
   const [validityDays, setValidityDays] = useState(30);
+  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [loadingTeamMembers, setLoadingTeamMembers] = useState(true);
   
   // Dynamic fields
   const [fields, setFields] = useState<QuoteField[]>([
@@ -58,6 +61,42 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
   const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [editingFieldTitle, setEditingFieldTitle] = useState('');
+
+  // Load team members
+  useEffect(() => {
+    const loadTeamMembers = async () => {
+      if (!providerId) return;
+      
+      setLoadingTeamMembers(true);
+      try {
+        const { data, error } = await supabase
+          .from('team_members')
+          .select('id, name, email')
+          .eq('provider_id', providerId);
+        
+        if (error) throw error;
+        setTeamMembers(data || []);
+      } catch (error) {
+        console.error('Error loading team members:', error);
+        toast({
+          title: "Error",
+          description: "No se pudo cargar los miembros del equipo",
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingTeamMembers(false);
+      }
+    };
+    
+    loadTeamMembers();
+  }, [providerId, toast]);
+
+  // Auto-complete "Elaborado por"
+  useEffect(() => {
+    if (user?.name) {
+      setElaboradoPor(user.name);
+    }
+  }, [user]);
 
   // Load template when selected
   useEffect(() => {
@@ -224,6 +263,36 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
         variant: "destructive",
       });
       return;
+    }
+
+    // Validation for non-draft quotes
+    if (!isDraft) {
+      if (!elaboradoPor) {
+        toast({
+          title: "Error",
+          description: "El campo 'Elaborado por' es obligatorio",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (!revisadoPor) {
+        toast({
+          title: "Error",
+          description: "Por favor selecciona quién revisará la cotización",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (!validoPor) {
+        toast({
+          title: "Error",
+          description: "Por favor selecciona quién aprobará la cotización",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     const totalAmount = calculateFinalTotal();
@@ -607,27 +676,85 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
               <Input
                 id="elaborado-por"
                 value={elaboradoPor}
-                onChange={(e) => setElaboradoPor(e.target.value)}
-                placeholder="Nombre completo"
+                disabled
+                className="bg-muted"
+                placeholder="Auto-completado"
               />
+              <p className="text-xs text-muted-foreground">
+                Se completa automáticamente con tu nombre
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="revisado-por">Revisado por</Label>
-              <Input
-                id="revisado-por"
-                value={revisadoPor}
-                onChange={(e) => setRevisadoPor(e.target.value)}
-                placeholder="Nombre completo"
-              />
+              <Select 
+                value={revisadoPor} 
+                onValueChange={setRevisadoPor}
+                disabled={loadingTeamMembers || teamMembers.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    loadingTeamMembers 
+                      ? "Cargando..." 
+                      : teamMembers.length === 0 
+                        ? "No hay miembros disponibles" 
+                        : "Seleccionar responsable"
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {user?.name && (
+                    <SelectItem value={user.name}>
+                      {user.name} (Yo)
+                    </SelectItem>
+                  )}
+                  {teamMembers
+                    .filter(member => member.id !== user?.id)
+                    .map(member => (
+                      <SelectItem key={member.id} value={member.name}>
+                        {member.name}
+                      </SelectItem>
+                    ))
+                  }
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Selecciona quien revisará la cotización
+              </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="valido-por">Válido por</Label>
-              <Input
-                id="valido-por"
-                value={validoPor}
-                onChange={(e) => setValidoPor(e.target.value)}
-                placeholder="Nombre completo"
-              />
+              <Label htmlFor="aprobado-por">Aprobado por</Label>
+              <Select 
+                value={validoPor} 
+                onValueChange={setValidoPor}
+                disabled={loadingTeamMembers || teamMembers.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    loadingTeamMembers 
+                      ? "Cargando..." 
+                      : teamMembers.length === 0 
+                        ? "No hay miembros disponibles" 
+                        : "Seleccionar aprobador"
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {user?.name && (
+                    <SelectItem value={user.name}>
+                      {user.name} (Yo)
+                    </SelectItem>
+                  )}
+                  {teamMembers
+                    .filter(member => member.id !== user?.id)
+                    .map(member => (
+                      <SelectItem key={member.id} value={member.name}>
+                        {member.name}
+                      </SelectItem>
+                    ))
+                  }
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Selecciona quien aprobará la cotización
+              </p>
             </div>
           </div>
 
