@@ -83,21 +83,30 @@ export type Database = {
           created_at: string
           id: string
           message: string
-          quote_id: string
+          quote_id: string | null
+          request_id: string | null
+          sender_email: string | null
+          sender_name: string | null
           sender_type: string
         }
         Insert: {
           created_at?: string
           id?: string
           message: string
-          quote_id: string
+          quote_id?: string | null
+          request_id?: string | null
+          sender_email?: string | null
+          sender_name?: string | null
           sender_type: string
         }
         Update: {
           created_at?: string
           id?: string
           message?: string
-          quote_id?: string
+          quote_id?: string | null
+          request_id?: string | null
+          sender_email?: string | null
+          sender_name?: string | null
           sender_type?: string
         }
         Relationships: [
@@ -106,6 +115,13 @@ export type Database = {
             columns: ["quote_id"]
             isOneToOne: false
             referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
             referencedColumns: ["id"]
           },
         ]
@@ -278,6 +294,44 @@ export type Database = {
             columns: ["team_member_id"]
             isOneToOne: false
             referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      request_chat_participants: {
+        Row: {
+          id: string
+          joined_at: string | null
+          last_read_at: string | null
+          request_id: string
+          user_email: string
+          user_name: string | null
+          user_role: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string | null
+          last_read_at?: string | null
+          request_id: string
+          user_email: string
+          user_name?: string | null
+          user_role: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string | null
+          last_read_at?: string | null
+          request_id?: string
+          user_email?: string
+          user_name?: string | null
+          user_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_chat_participants_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
             referencedColumns: ["id"]
           },
         ]
