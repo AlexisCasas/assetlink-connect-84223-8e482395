@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { seedDatabase } from '@/lib/seedData';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Settings2, ArrowUpDown, Upload, FileText, X, Check } from 'lucide-react';
+import { Search, Settings2, ArrowUpDown, Upload, FileText, X, Check, GripVertical } from 'lucide-react';
 import { QuoteForm } from './QuoteForm';
 import { TechnicalVisitDialog } from './TechnicalVisitDialog';
 import { AcceptRejectDialog } from './AcceptRejectDialog';
@@ -79,19 +79,20 @@ interface ColumnConfig {
   key: ColumnKey;
   label: string;
   visible: boolean;
+  order: number;
 }
 
 const DEFAULT_COLUMNS: ColumnConfig[] = [
-  { key: 'ticket', label: '# Ticket', visible: true },
-  { key: 'estado', label: 'Estado', visible: true },
-  { key: 'equipo', label: 'Equipo', visible: true },
-  { key: 'operacion', label: 'Operación', visible: true },
-  { key: 'ubicacion', label: 'Ubicación', visible: true },
-  { key: 'prioridad', label: 'Prior.', visible: true },
-  { key: 'asignado', label: 'Asignado A', visible: true },
-  { key: 'fecha_limite', label: 'Fecha Límite', visible: true },
-  { key: 'comentarios', label: 'Comentarios', visible: true },
-  { key: 'acciones', label: 'Acciones', visible: true },
+  { key: 'ticket', label: '# Ticket', visible: true, order: 0 },
+  { key: 'estado', label: 'Estado', visible: true, order: 1 },
+  { key: 'equipo', label: 'Equipo', visible: true, order: 2 },
+  { key: 'operacion', label: 'Operación', visible: true, order: 3 },
+  { key: 'ubicacion', label: 'Ubicación', visible: true, order: 4 },
+  { key: 'prioridad', label: 'Prior.', visible: true, order: 5 },
+  { key: 'asignado', label: 'Asignado A', visible: true, order: 6 },
+  { key: 'fecha_limite', label: 'Fecha Límite', visible: true, order: 7 },
+  { key: 'comentarios', label: 'Comentarios', visible: true, order: 8 },
+  { key: 'acciones', label: 'Acciones', visible: true, order: 9 },
 ];
 
 export const TeamMemberView = () => {
@@ -115,6 +116,18 @@ export const TeamMemberView = () => {
   const [selectedAssignmentForVisit, setSelectedAssignmentForVisit] = useState<AssignmentWithRequest | null>(null);
   const [showAcceptRejectDialog, setShowAcceptRejectDialog] = useState(false);
   const [currentAssignmentForDialog, setCurrentAssignmentForDialog] = useState<AssignmentWithRequest | null>(null);
+  const [draggedColumn, setDraggedColumn] = useState<ColumnKey | null>(null);
+
+  useEffect(() => {
+    const savedColumns = localStorage.getItem('teamMemberColumns');
+    if (savedColumns) {
+      try {
+        setColumns(JSON.parse(savedColumns));
+      } catch (e) {
+        console.error('Error loading saved columns:', e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     loadAssignments();
@@ -219,13 +232,205 @@ export const TeamMemberView = () => {
   };
 
   const toggleColumn = (key: ColumnKey) => {
-    setColumns(columns.map(col => 
+    const newColumns = columns.map(col => 
       col.key === key ? { ...col, visible: !col.visible } : col
-    ));
+    );
+    setColumns(newColumns);
+    localStorage.setItem('teamMemberColumns', JSON.stringify(newColumns));
   };
 
   const isColumnVisible = (key: ColumnKey) => {
     return columns.find(col => col.key === key)?.visible ?? true;
+  };
+
+  const handleDragStart = (e: React.DragEvent, key: ColumnKey) => {
+    if (key === 'ticket') return;
+    setDraggedColumn(key);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetKey: ColumnKey) => {
+    e.preventDefault();
+    
+    if (!draggedColumn || draggedColumn === targetKey || targetKey === 'ticket') {
+      setDraggedColumn(null);
+      return;
+    }
+
+    const draggedCol = columns.find(col => col.key === draggedColumn);
+    const targetCol = columns.find(col => col.key === targetKey);
+    
+    if (!draggedCol || !targetCol) return;
+
+    const newColumns = columns.map(col => {
+      if (col.key === draggedColumn) {
+        return { ...col, order: targetCol.order };
+      }
+      if (col.key === targetKey) {
+        return { ...col, order: draggedCol.order };
+      }
+      return col;
+    });
+
+    const sortedColumns = newColumns.sort((a, b) => a.order - b.order);
+    setColumns(sortedColumns);
+    localStorage.setItem('teamMemberColumns', JSON.stringify(sortedColumns));
+    setDraggedColumn(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedColumn(null);
+  };
+
+  const resetColumns = () => {
+    setColumns(DEFAULT_COLUMNS);
+    localStorage.setItem('teamMemberColumns', JSON.stringify(DEFAULT_COLUMNS));
+  };
+
+  const renderCell = (key: ColumnKey, assignment: AssignmentWithRequest) => {
+    const statusBadge = getStatusBadge(assignment.status);
+    
+    switch (key) {
+      case 'ticket':
+        return (
+          <TableCell key={key} className="font-medium text-primary">
+            {assignment.request.request_number}
+          </TableCell>
+        );
+      case 'estado':
+        return (
+          <TableCell key={key}>
+            <Badge className={statusBadge.className}>
+              {statusBadge.text}
+            </Badge>
+          </TableCell>
+        );
+      case 'equipo':
+        return (
+          <TableCell key={key} className="max-w-[150px] truncate">
+            {assignment.request.asset}
+          </TableCell>
+        );
+      case 'operacion':
+        return (
+          <TableCell key={key} className="max-w-[200px]">
+            <div className="flex flex-col">
+              <Badge className={getServiceTypeColor(assignment.request.service_type)}>
+                {getServiceTypeText(assignment.request.service_type)}
+              </Badge>
+              <span className="text-sm mt-1 truncate">{assignment.request.description}</span>
+            </div>
+          </TableCell>
+        );
+      case 'ubicacion':
+        return (
+          <TableCell key={key}>
+            <div className="flex flex-col text-sm">
+              <span>{assignment.request.client_name || '-'}</span>
+              <span className="text-xs text-muted-foreground">
+                {assignment.request.client_branch || '-'}
+              </span>
+            </div>
+          </TableCell>
+        );
+      case 'prioridad':
+        return (
+          <TableCell key={key}>
+            <Badge variant="outline">P{assignment.request.priority}</Badge>
+          </TableCell>
+        );
+      case 'asignado':
+        return (
+          <TableCell key={key}>
+            {assignment.team_member_name}
+          </TableCell>
+        );
+      case 'fecha_limite':
+        return (
+          <TableCell key={key}>
+            {new Date(assignment.max_deadline).toLocaleDateString('es-ES', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            })}
+          </TableCell>
+        );
+      case 'comentarios':
+        return (
+          <TableCell key={key} className="max-w-[200px]">
+            <div className="truncate text-sm text-muted-foreground">
+              {assignment.request.observations || assignment.reason || '-'}
+            </div>
+          </TableCell>
+        );
+      case 'acciones':
+        return (
+          <TableCell key={key}>
+            <div className="flex gap-2">
+              {assignment.status === 'pending' && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAccept(assignment.id);
+                    }}
+                  >
+                    <Check className="h-4 w-4 mr-1" />
+                    Aceptar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRejectClick(assignment.id);
+                    }}
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Rechazar
+                  </Button>
+                </>
+              )}
+              {assignment.status === 'accepted' && (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedAssignment(assignment);
+                      setShowQuoteForm(true);
+                    }}
+                  >
+                    <FileText className="h-4 w-4 mr-1" />
+                    Cotizar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedAssignmentForVisit(assignment);
+                      setShowTechnicalVisitDialog(true);
+                    }}
+                  >
+                    <Upload className="h-4 w-4 mr-1" />
+                    Doc. Visita
+                  </Button>
+                </>
+              )}
+            </div>
+          </TableCell>
+        );
+      default:
+        return null;
+    }
   };
 
   const handleSelectAssignment = (assignmentId: string) => {
@@ -478,6 +683,15 @@ export const TeamMemberView = () => {
                 {col.label}
               </DropdownMenuCheckboxItem>
             ))}
+            <DropdownMenuSeparator />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetColumns}
+              className="w-full"
+            >
+              Restablecer orden
+            </Button>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -505,16 +719,26 @@ export const TeamMemberView = () => {
                         onCheckedChange={handleSelectAll}
                       />
                     </TableHead>
-                    {isColumnVisible('ticket') && <TableHead># Ticket</TableHead>}
-                    {isColumnVisible('estado') && <TableHead>Estado</TableHead>}
-                    {isColumnVisible('equipo') && <TableHead>Equipo</TableHead>}
-                    {isColumnVisible('operacion') && <TableHead>Operación</TableHead>}
-                    {isColumnVisible('ubicacion') && <TableHead>Ubicación</TableHead>}
-                    {isColumnVisible('prioridad') && <TableHead>Prior.</TableHead>}
-                    {isColumnVisible('asignado') && <TableHead>Asignado A</TableHead>}
-                    {isColumnVisible('fecha_limite') && <TableHead>Fecha Límite</TableHead>}
-                    {isColumnVisible('comentarios') && <TableHead>Comentarios</TableHead>}
-                    {isColumnVisible('acciones') && <TableHead>Acciones</TableHead>}
+                    {[...columns]
+                      .sort((a, b) => a.order - b.order)
+                      .filter(col => col.visible)
+                      .map(col => (
+                        <TableHead
+                          key={col.key}
+                          draggable={col.key !== 'ticket'}
+                          onDragStart={(e) => handleDragStart(e, col.key)}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, col.key)}
+                          onDragEnd={handleDragEnd}
+                          className={`${col.key !== 'ticket' ? 'cursor-move' : ''} ${draggedColumn === col.key ? 'opacity-50' : ''}`}
+                          title={col.key !== 'ticket' ? 'Arrastra para reordenar' : ''}
+                        >
+                          <div className="flex items-center gap-2">
+                            {col.key !== 'ticket' && <GripVertical className="h-4 w-4 text-muted-foreground" />}
+                            {col.label}
+                          </div>
+                        </TableHead>
+                      ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -542,133 +766,17 @@ export const TeamMemberView = () => {
                             : undefined
                         }
                       >
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedAssignments.includes(assignment.id)}
-                          onCheckedChange={() => handleSelectAssignment(assignment.id)}
-                        />
-                      </TableCell>
-                      {isColumnVisible('ticket') && (
-                        <TableCell className="font-medium text-primary">
-                          {assignment.request.request_number}
-                        </TableCell>
-                      )}
-                      {isColumnVisible('estado') && (
                         <TableCell>
-                          <Badge className={getStatusBadge(assignment.status).className}>
-                            {getStatusBadge(assignment.status).text}
-                          </Badge>
+                          <Checkbox
+                            checked={selectedAssignments.includes(assignment.id)}
+                            onCheckedChange={() => handleSelectAssignment(assignment.id)}
+                          />
                         </TableCell>
-                      )}
-                      {isColumnVisible('equipo') && (
-                        <TableCell className="max-w-[150px] truncate">
-                          {assignment.request.asset}
-                        </TableCell>
-                      )}
-                      {isColumnVisible('operacion') && (
-                        <TableCell>
-                          <Badge className={getServiceTypeColor(assignment.request.service_type)}>
-                            {getServiceTypeText(assignment.request.service_type)}
-                          </Badge>
-                        </TableCell>
-                      )}
-                      {isColumnVisible('ubicacion') && (
-                        <TableCell>
-                          <div className="flex flex-col text-sm">
-                            <span>{assignment.request.client_name || '-'}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {assignment.request.client_branch || '-'}
-                            </span>
-                          </div>
-                        </TableCell>
-                      )}
-                      {isColumnVisible('prioridad') && (
-                        <TableCell>
-                          <Badge variant="outline">P{assignment.request.priority}</Badge>
-                        </TableCell>
-                      )}
-                      {isColumnVisible('asignado') && (
-                        <TableCell className="text-sm font-medium">
-                          {assignment.team_member_name}
-                        </TableCell>
-                      )}
-                      {isColumnVisible('fecha_limite') && (
-                        <TableCell className="text-sm">
-                          {new Date(assignment.max_deadline).toLocaleDateString('es-ES', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric'
-                          })}
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(assignment.max_deadline).toLocaleTimeString('es-ES', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
-                        </TableCell>
-                      )}
-                      {isColumnVisible('comentarios') && (
-                        <TableCell className="max-w-[200px]">
-                          <div className="text-sm truncate" title={assignment.reason || assignment.rejection_reason || ''}>
-                            {assignment.status === 'rejected' 
-                              ? assignment.rejection_reason 
-                              : assignment.reason || '-'}
-                          </div>
-                        </TableCell>
-                      )}
-                      {isColumnVisible('acciones') && (
-                        <TableCell>
-                          {assignment.status === 'pending' && (
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleAccept(assignment.id)}
-                              >
-                                Aceptar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleRejectClick(assignment.id)}
-                              >
-                                Rechazar
-                              </Button>
-                            </div>
-                          )}
-                          {assignment.status === 'accepted' && (
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedAssignment(assignment);
-                                  setShowQuoteForm(true);
-                                }}
-                              >
-                                <FileText className="h-4 w-4 mr-1" />
-                                Cotizar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setSelectedAssignmentForVisit(assignment);
-                                  setShowTechnicalVisitDialog(true);
-                                }}
-                              >
-                                <Upload className="h-4 w-4 mr-1" />
-                                Documentar Visita
-                              </Button>
-                            </div>
-                          )}
-                          {assignment.status === 'rejected' && (
-                            <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
-                              Rechazada
-                            </Badge>
-                          )}
-                        </TableCell>
-                      )}
-                    </TableRow>
+                        {[...columns]
+                          .sort((a, b) => a.order - b.order)
+                          .filter(col => col.visible)
+                          .map(col => renderCell(col.key, assignment))}
+                      </TableRow>
                     );
                   })}
                 </TableBody>

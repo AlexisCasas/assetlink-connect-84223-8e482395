@@ -9,7 +9,7 @@ import { AssignmentDialog } from './AssignmentDialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { seedDatabase } from '@/lib/seedData';
-import { Search, Settings2, ArrowUpDown, Download } from 'lucide-react';
+import { Search, Settings2, ArrowUpDown, Download, GripVertical } from 'lucide-react';
 import { 
   Table, 
   TableBody, 
@@ -63,20 +63,21 @@ interface ColumnConfig {
   key: ColumnKey;
   label: string;
   visible: boolean;
+  order: number;
 }
 
 const DEFAULT_COLUMNS: ColumnConfig[] = [
-  { key: 'ticket', label: '# Ticket', visible: true },
-  { key: 'estado', label: 'Estado', visible: true },
-  { key: 'equipo', label: 'Equipo', visible: true },
-  { key: 'operacion', label: 'Operación', visible: true },
-  { key: 'ubicacion', label: 'Ubicación', visible: true },
-  { key: 'prioridad', label: 'Prior.', visible: true },
-  { key: 'coordinador', label: 'Coordinador', visible: true },
-  { key: 'ingresado', label: 'Ingresado', visible: true },
-  { key: 'programado', label: 'Programado Para', visible: true },
-  { key: 'comentarios', label: 'Comentarios', visible: true },
-  { key: 'acciones', label: 'Acciones', visible: true },
+  { key: 'ticket', label: '# Ticket', visible: true, order: 0 },
+  { key: 'estado', label: 'Estado', visible: true, order: 1 },
+  { key: 'equipo', label: 'Equipo', visible: true, order: 2 },
+  { key: 'operacion', label: 'Operación', visible: true, order: 3 },
+  { key: 'ubicacion', label: 'Ubicación', visible: true, order: 4 },
+  { key: 'prioridad', label: 'Prior.', visible: true, order: 5 },
+  { key: 'coordinador', label: 'Coordinador', visible: true, order: 6 },
+  { key: 'ingresado', label: 'Ingresado', visible: true, order: 7 },
+  { key: 'programado', label: 'Programado Para', visible: true, order: 8 },
+  { key: 'comentarios', label: 'Comentarios', visible: true, order: 9 },
+  { key: 'acciones', label: 'Acciones', visible: true, order: 10 },
 ];
 
 export const ProviderRequestList = () => {
@@ -95,6 +96,18 @@ export const ProviderRequestList = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [draggedColumn, setDraggedColumn] = useState<ColumnKey | null>(null);
+
+  useEffect(() => {
+    const savedColumns = localStorage.getItem('providerRequestColumns');
+    if (savedColumns) {
+      try {
+        setColumns(JSON.parse(savedColumns));
+      } catch (e) {
+        console.error('Error loading saved columns:', e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     initializeAndLoadRequests();
@@ -257,13 +270,167 @@ export const ProviderRequestList = () => {
   };
 
   const toggleColumn = (key: ColumnKey) => {
-    setColumns(columns.map(col => 
+    const newColumns = columns.map(col => 
       col.key === key ? { ...col, visible: !col.visible } : col
-    ));
+    );
+    setColumns(newColumns);
+    localStorage.setItem('providerRequestColumns', JSON.stringify(newColumns));
   };
 
   const isColumnVisible = (key: ColumnKey) => {
     return columns.find(col => col.key === key)?.visible ?? true;
+  };
+
+  const handleDragStart = (e: React.DragEvent, key: ColumnKey) => {
+    if (key === 'ticket') return;
+    setDraggedColumn(key);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetKey: ColumnKey) => {
+    e.preventDefault();
+    
+    if (!draggedColumn || draggedColumn === targetKey || targetKey === 'ticket') {
+      setDraggedColumn(null);
+      return;
+    }
+
+    const draggedCol = columns.find(col => col.key === draggedColumn);
+    const targetCol = columns.find(col => col.key === targetKey);
+    
+    if (!draggedCol || !targetCol) return;
+
+    const newColumns = columns.map(col => {
+      if (col.key === draggedColumn) {
+        return { ...col, order: targetCol.order };
+      }
+      if (col.key === targetKey) {
+        return { ...col, order: draggedCol.order };
+      }
+      return col;
+    });
+
+    const sortedColumns = newColumns.sort((a, b) => a.order - b.order);
+    setColumns(sortedColumns);
+    localStorage.setItem('providerRequestColumns', JSON.stringify(sortedColumns));
+    setDraggedColumn(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedColumn(null);
+  };
+
+  const resetColumns = () => {
+    setColumns(DEFAULT_COLUMNS);
+    localStorage.setItem('providerRequestColumns', JSON.stringify(DEFAULT_COLUMNS));
+  };
+
+  const renderCell = (key: ColumnKey, request: RequestData) => {
+    switch (key) {
+      case 'ticket':
+        return (
+          <TableCell key={key} className="font-medium text-primary">
+            {request.request_number}
+          </TableCell>
+        );
+      case 'estado':
+        return (
+          <TableCell key={key}>
+            <Badge className={getServiceTypeColor(request.service_type)}>
+              {getServiceTypeText(request.service_type)}
+            </Badge>
+          </TableCell>
+        );
+      case 'equipo':
+        return (
+          <TableCell key={key} className="max-w-[150px] truncate">
+            {request.asset}
+          </TableCell>
+        );
+      case 'operacion':
+        return (
+          <TableCell key={key} className="max-w-[200px]">
+            <div className="truncate">{request.description}</div>
+          </TableCell>
+        );
+      case 'ubicacion':
+        return (
+          <TableCell key={key}>
+            <div className="flex flex-col text-sm">
+              <span>{request.client_name || '-'}</span>
+              <span className="text-xs text-muted-foreground">
+                {request.client_branch || '-'}
+              </span>
+            </div>
+          </TableCell>
+        );
+      case 'prioridad':
+        return (
+          <TableCell key={key}>
+            <Badge variant="outline">P{request.priority}</Badge>
+          </TableCell>
+        );
+      case 'coordinador':
+        return (
+          <TableCell key={key}>
+            {assignments[request.id]?.team_member_name || '-'}
+          </TableCell>
+        );
+      case 'ingresado':
+        return (
+          <TableCell key={key}>
+            {new Date(request.created_at).toLocaleDateString('es-ES', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            })}
+          </TableCell>
+        );
+      case 'programado':
+        return (
+          <TableCell key={key}>
+            {request.start_time 
+              ? new Date(request.start_time).toLocaleString('es-ES', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })
+              : '-'}
+          </TableCell>
+        );
+      case 'comentarios':
+        return (
+          <TableCell key={key} className="max-w-[200px]">
+            <div className="truncate text-sm text-muted-foreground">
+              {request.observations || '-'}
+            </div>
+          </TableCell>
+        );
+      case 'acciones':
+        return (
+          <TableCell key={key}>
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedRequests([request.id]);
+                setShowAssignmentDialog(true);
+              }}
+            >
+              Asignar
+            </Button>
+          </TableCell>
+        );
+      default:
+        return null;
+    }
   };
 
   if (loading) {
@@ -382,6 +549,15 @@ export const ProviderRequestList = () => {
                 {col.label}
               </DropdownMenuCheckboxItem>
             ))}
+            <DropdownMenuSeparator />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetColumns}
+              className="w-full"
+            >
+              Restablecer orden
+            </Button>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -409,17 +585,26 @@ export const ProviderRequestList = () => {
                         onCheckedChange={handleSelectAll}
                       />
                     </TableHead>
-                    {isColumnVisible('ticket') && <TableHead># Ticket</TableHead>}
-                    {isColumnVisible('estado') && <TableHead>Estado</TableHead>}
-                    {isColumnVisible('equipo') && <TableHead>Equipo</TableHead>}
-                    {isColumnVisible('operacion') && <TableHead>Operación</TableHead>}
-                    {isColumnVisible('ubicacion') && <TableHead>Ubicación</TableHead>}
-                    {isColumnVisible('prioridad') && <TableHead>Prior.</TableHead>}
-                    {isColumnVisible('coordinador') && <TableHead>Coordinador</TableHead>}
-                    {isColumnVisible('ingresado') && <TableHead>Ingresado</TableHead>}
-                    {isColumnVisible('programado') && <TableHead>Programado Para</TableHead>}
-                    {isColumnVisible('comentarios') && <TableHead>Comentarios</TableHead>}
-                    {isColumnVisible('acciones') && <TableHead>Acciones</TableHead>}
+                    {[...columns]
+                      .sort((a, b) => a.order - b.order)
+                      .filter(col => col.visible)
+                      .map(col => (
+                        <TableHead
+                          key={col.key}
+                          draggable={col.key !== 'ticket'}
+                          onDragStart={(e) => handleDragStart(e, col.key)}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, col.key)}
+                          onDragEnd={handleDragEnd}
+                          className={`${col.key !== 'ticket' ? 'cursor-move' : ''} ${draggedColumn === col.key ? 'opacity-50' : ''}`}
+                          title={col.key !== 'ticket' ? 'Arrastra para reordenar' : ''}
+                        >
+                          <div className="flex items-center gap-2">
+                            {col.key !== 'ticket' && <GripVertical className="h-4 w-4 text-muted-foreground" />}
+                            {col.label}
+                          </div>
+                        </TableHead>
+                      ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -439,111 +624,10 @@ export const ProviderRequestList = () => {
                           onCheckedChange={() => handleSelectRequest(request.id)}
                         />
                       </TableCell>
-                      {isColumnVisible('ticket') && (
-                        <TableCell className="font-medium text-primary">
-                          {request.request_number}
-                        </TableCell>
-                      )}
-                      {isColumnVisible('estado') && (
-                        <TableCell>
-                          <Badge className={getServiceTypeColor(request.service_type)}>
-                            {getServiceTypeText(request.service_type)}
-                          </Badge>
-                        </TableCell>
-                      )}
-                      {isColumnVisible('equipo') && (
-                        <TableCell className="max-w-[150px] truncate">
-                          {request.asset}
-                        </TableCell>
-                      )}
-                      {isColumnVisible('operacion') && (
-                        <TableCell className="max-w-[200px]">
-                          <div className="truncate">{request.description}</div>
-                        </TableCell>
-                      )}
-                      {isColumnVisible('ubicacion') && (
-                        <TableCell>
-                          <div className="flex flex-col text-sm">
-                            <span>{request.client_name || '-'}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {request.client_branch || '-'}
-                            </span>
-                          </div>
-                        </TableCell>
-                      )}
-                      {isColumnVisible('prioridad') && (
-                        <TableCell>
-                          <Badge variant="outline">P{request.priority}</Badge>
-                        </TableCell>
-                      )}
-                      {isColumnVisible('coordinador') && (
-                        <TableCell className="text-sm">
-                          {assignments[request.id] ? (
-                            <span className="font-medium">{assignments[request.id].team_member_name}</span>
-                          ) : (
-                            <Badge variant="secondary" className="bg-muted">
-                              Sin asignar
-                            </Badge>
-                          )}
-                        </TableCell>
-                      )}
-                      {isColumnVisible('ingresado') && (
-                        <TableCell className="text-sm">
-                          {new Date(request.created_at).toLocaleDateString('es-ES', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric'
-                          })}
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(request.created_at).toLocaleTimeString('es-ES', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
-                        </TableCell>
-                      )}
-                      {isColumnVisible('programado') && (
-                        <TableCell className="text-sm">
-                          {request.start_time ? (
-                            <>
-                              {new Date(request.start_time).toLocaleDateString('es-ES', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric'
-              })}
-                              <div className="text-xs text-muted-foreground">
-                                {new Date(request.start_time).toLocaleTimeString('es-ES', {
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </div>
-                            </>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                      )}
-                      {isColumnVisible('comentarios') && (
-                        <TableCell className="max-w-[200px]">
-                          <div className="text-sm truncate" title={request.observations || ''}>
-                            {request.observations || '-'}
-                          </div>
-                        </TableCell>
-                      )}
-                      {isColumnVisible('acciones') && (
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedRequests([request.id]);
-                              setShowAssignmentDialog(true);
-                            }}
-                          >
-                            Asignar
-                          </Button>
-                        </TableCell>
-                      )}
+                      {[...columns]
+                        .sort((a, b) => a.order - b.order)
+                        .filter(col => col.visible)
+                        .map(col => renderCell(col.key, request))}
                     </TableRow>
                   ))}
                 </TableBody>
