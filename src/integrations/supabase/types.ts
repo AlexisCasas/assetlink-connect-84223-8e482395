@@ -191,6 +191,36 @@ export type Database = {
         }
         Relationships: []
       }
+      quote_templates: {
+        Row: {
+          created_at: string
+          fields: Json
+          id: string
+          name: string
+          percentage_fields: Json
+          provider_id: string
+          team_member_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          fields?: Json
+          id?: string
+          name: string
+          percentage_fields?: Json
+          provider_id: string
+          team_member_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          fields?: Json
+          id?: string
+          name?: string
+          percentage_fields?: Json
+          provider_id?: string
+          team_member_id?: string | null
+        }
+        Relationships: []
+      }
       quotes: {
         Row: {
           amount: number

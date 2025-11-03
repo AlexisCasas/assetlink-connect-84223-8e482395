@@ -11,7 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Search, Settings2, ArrowUpDown, Upload, FileText, X, Check } from 'lucide-react';
 import { QuoteForm } from './QuoteForm';
 import { TechnicalVisitDialog } from './TechnicalVisitDialog';
-import { 
+import { AcceptRejectDialog } from './AcceptRejectDialog';
+import {
   Table, 
   TableBody, 
   TableCell, 
@@ -112,6 +113,8 @@ export const TeamMemberView = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showTechnicalVisitDialog, setShowTechnicalVisitDialog] = useState(false);
   const [selectedAssignmentForVisit, setSelectedAssignmentForVisit] = useState<AssignmentWithRequest | null>(null);
+  const [showAcceptRejectDialog, setShowAcceptRejectDialog] = useState(false);
+  const [currentAssignmentForDialog, setCurrentAssignmentForDialog] = useState<AssignmentWithRequest | null>(null);
 
   useEffect(() => {
     loadAssignments();
@@ -515,8 +518,30 @@ export const TeamMemberView = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAssignments.map((assignment) => (
-                    <TableRow key={assignment.id} className="hover:bg-muted/50">
+                  {filteredAssignments.map((assignment) => {
+                    const handleDoubleClick = () => {
+                      if (assignment.status === 'pending') {
+                        setCurrentAssignmentForDialog(assignment);
+                        setShowAcceptRejectDialog(true);
+                      } else if (assignment.status === 'accepted') {
+                        setSelectedAssignment(assignment);
+                        setShowQuoteForm(true);
+                      }
+                    };
+
+                    return (
+                      <TableRow 
+                        key={assignment.id} 
+                        className="hover:bg-muted/50 cursor-pointer"
+                        onDoubleClick={handleDoubleClick}
+                        title={
+                          assignment.status === 'pending' 
+                            ? "Doble click para aceptar/rechazar" 
+                            : assignment.status === 'accepted'
+                            ? "Doble click para cotizar"
+                            : undefined
+                        }
+                      >
                       <TableCell>
                         <Checkbox
                           checked={selectedAssignments.includes(assignment.id)}
@@ -644,7 +669,8 @@ export const TeamMemberView = () => {
                         </TableCell>
                       )}
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -713,11 +739,36 @@ export const TeamMemberView = () => {
               onClick={handleRejectConfirm}
               disabled={!rejectionReason.trim()}
             >
-              Confirmar rechazo
+              Confirmar Rechazo
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {showAcceptRejectDialog && currentAssignmentForDialog && (
+        <AcceptRejectDialog
+          requestNumber={currentAssignmentForDialog.request.request_number}
+          requestDescription={currentAssignmentForDialog.request.description}
+          maxDeadline={currentAssignmentForDialog.max_deadline}
+          reason={currentAssignmentForDialog.reason || undefined}
+          onAccept={() => {
+            handleAccept(currentAssignmentForDialog.id);
+            setShowAcceptRejectDialog(false);
+            setCurrentAssignmentForDialog(null);
+          }}
+          onReject={(reason) => {
+            setAssignmentToReject(currentAssignmentForDialog.id);
+            setRejectionReason(reason);
+            setShowAcceptRejectDialog(false);
+            setCurrentAssignmentForDialog(null);
+            handleRejectConfirm();
+          }}
+          onClose={() => {
+            setShowAcceptRejectDialog(false);
+            setCurrentAssignmentForDialog(null);
+          }}
+        />
+      )}
 
       {showTechnicalVisitDialog && selectedAssignmentForVisit && (
         <TechnicalVisitDialog

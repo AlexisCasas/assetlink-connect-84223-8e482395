@@ -424,7 +424,15 @@ export const ProviderRequestList = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredRequests.map((request) => (
-                    <TableRow key={request.id} className="hover:bg-muted/50">
+                    <TableRow 
+                      key={request.id} 
+                      className="hover:bg-muted/50 cursor-pointer"
+                      onDoubleClick={() => {
+                        setSelectedRequests([request.id]);
+                        setShowAssignmentDialog(true);
+                      }}
+                      title="Doble click para asignar"
+                    >
                       <TableCell>
                         <Checkbox
                           checked={selectedRequests.includes(request.id)}

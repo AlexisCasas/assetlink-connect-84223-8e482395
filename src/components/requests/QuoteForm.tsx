@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -6,11 +6,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Request, Quote, QuoteTableItem } from '@/types/request';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { Request, Quote } from '@/types/request';
+import { QuoteField, PercentageField, QuoteSummaryData, QuoteTableItem } from '@/types/quote-template';
+import { X, Plus, Trash2, Edit2, ArrowUp, ArrowDown, Save, Percent } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { TemplateSelector } from './TemplateSelector';
+import { SaveTemplateDialog } from './SaveTemplateDialog';
+import { QuoteSummary } from './QuoteSummary';
+import { useQuoteTemplates } from '@/hooks/useQuoteTemplates';
 
 interface QuoteFormProps {
   request: Request;
@@ -21,81 +26,194 @@ interface QuoteFormProps {
 export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [amount, setAmount] = useState('');
+  const providerId = user?.providerId || '';
+  const teamMemberId = user?.id || '';
+  
+  const { templates, loading: templatesLoading, saveTemplate, deleteTemplate } = useQuoteTemplates(providerId, teamMemberId);
+
   const [description, setDescription] = useState('');
   const [files, setFiles] = useState<FileList | null>(null);
   const [needsTechnicalVisit, setNeedsTechnicalVisit] = useState(false);
   const [elaboradoPor, setElaboradoPor] = useState('');
   const [revisadoPor, setRevisadoPor] = useState('');
   const [validoPor, setValidoPor] = useState('');
+  const [deliveryDays, setDeliveryDays] = useState(1);
+  const [validityDays, setValidityDays] = useState(30);
   
-  // Estados para las tablas de cotización
-  const [serviceItems, setServiceItems] = useState<QuoteTableItem[]>([
-    { id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }
-  ]);
-  const [equipmentItems, setEquipmentItems] = useState<QuoteTableItem[]>([
-    { id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }
-  ]);
-  const [materialItems, setMaterialItems] = useState<QuoteTableItem[]>([
-    { id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }
-  ]);
-  
-  // Estados para condiciones de cotización
-  const [conditions, setConditions] = useState([
-    { id: crypto.randomUUID(), description: 'Validez de la cotización: 30 días calendario' },
-    { id: crypto.randomUUID(), description: 'Precios incluyen IGV' },
-    { id: crypto.randomUUID(), description: 'Forma de pago: 50% adelanto, 50% contra entrega' }
-  ]);
-  const [validityDate, setValidityDate] = useState('');
-  const [includesIGV, setIncludesIGV] = useState(true);
-
-  const addItem = (section: 'service' | 'equipment' | 'material') => {
-    const newItem: QuoteTableItem = {
+  // Dynamic fields
+  const [fields, setFields] = useState<QuoteField[]>([
+    {
       id: crypto.randomUUID(),
-      description: '',
-      unit: 'UND',
-      quantity: 0,
-      unitPrice: 0,
-      total: 0
+      title: 'Descripción del servicio',
+      items: [{ id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }],
+      order: 0,
+    },
+  ]);
+
+  // Percentage fields
+  const [percentageFields, setPercentageFields] = useState<PercentageField[]>([]);
+
+  // Template management
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const [editingFieldTitle, setEditingFieldTitle] = useState('');
+
+  // Load template when selected
+  useEffect(() => {
+    if (selectedTemplateId) {
+      const template = templates.find(t => t.id === selectedTemplateId);
+      if (template) {
+        setFields(template.fields.map(f => ({ ...f, id: crypto.randomUUID() })));
+        setPercentageFields(template.percentage_fields.map(p => ({ ...p, id: crypto.randomUUID() })));
+      }
+    }
+  }, [selectedTemplateId, templates]);
+
+  const addField = () => {
+    const newField: QuoteField = {
+      id: crypto.randomUUID(),
+      title: 'Nuevo campo',
+      items: [{ id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }],
+      order: fields.length,
     };
-    
-    if (section === 'service') setServiceItems([...serviceItems, newItem]);
-    if (section === 'equipment') setEquipmentItems([...equipmentItems, newItem]);
-    if (section === 'material') setMaterialItems([...materialItems, newItem]);
+    setFields([...fields, newField]);
   };
 
-  const removeItem = (section: 'service' | 'equipment' | 'material', id: string) => {
-    if (section === 'service') setServiceItems(serviceItems.filter(item => item.id !== id));
-    if (section === 'equipment') setEquipmentItems(equipmentItems.filter(item => item.id !== id));
-    if (section === 'material') setMaterialItems(materialItems.filter(item => item.id !== id));
-  };
-
-  const updateItem = (section: 'service' | 'equipment' | 'material', id: string, field: keyof QuoteTableItem, value: string | number) => {
-    const updateItems = (items: QuoteTableItem[]) => {
-      return items.map(item => {
-        if (item.id === id) {
-          const updated = { ...item, [field]: value };
-          // Recalcular total si cambia cantidad o precio unitario
-          if (field === 'quantity' || field === 'unitPrice') {
-            updated.total = updated.quantity * updated.unitPrice;
-          }
-          return updated;
-        }
-        return item;
+  const removeField = (fieldId: string) => {
+    if (fields.length === 1) {
+      toast({
+        title: "Error",
+        description: "Debe haber al menos un campo",
+        variant: "destructive",
       });
+      return;
+    }
+    setFields(fields.filter(f => f.id !== fieldId));
+  };
+
+  const updateFieldTitle = (fieldId: string, newTitle: string) => {
+    setFields(fields.map(f => f.id === fieldId ? { ...f, title: newTitle } : f));
+  };
+
+  const moveField = (fieldId: string, direction: 'up' | 'down') => {
+    const index = fields.findIndex(f => f.id === fieldId);
+    if ((direction === 'up' && index === 0) || (direction === 'down' && index === fields.length - 1)) return;
+    
+    const newFields = [...fields];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    [newFields[index], newFields[targetIndex]] = [newFields[targetIndex], newFields[index]];
+    setFields(newFields);
+  };
+
+  const addItem = (fieldId: string) => {
+    setFields(fields.map(field => {
+      if (field.id === fieldId) {
+        return {
+          ...field,
+          items: [...field.items, { id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }],
+        };
+      }
+      return field;
+    }));
+  };
+
+  const removeItem = (fieldId: string, itemId: string) => {
+    setFields(fields.map(field => {
+      if (field.id === fieldId && field.items.length > 1) {
+        return {
+          ...field,
+          items: field.items.filter(item => item.id !== itemId),
+        };
+      }
+      return field;
+    }));
+  };
+
+  const updateItem = (fieldId: string, itemId: string, key: keyof QuoteTableItem, value: string | number) => {
+    setFields(fields.map(field => {
+      if (field.id === fieldId) {
+        return {
+          ...field,
+          items: field.items.map(item => {
+            if (item.id === itemId) {
+              const updated = { ...item, [key]: value };
+              if (key === 'quantity' || key === 'unitPrice') {
+                updated.total = updated.quantity * updated.unitPrice;
+              }
+              return updated;
+            }
+            return item;
+          }),
+        };
+      }
+      return field;
+    }));
+  };
+
+  const calculateFieldSubtotal = (field: QuoteField) => {
+    return field.items.reduce((sum, item) => sum + item.total, 0);
+  };
+
+  const calculateSubtotal = () => {
+    return fields.reduce((sum, field) => sum + calculateFieldSubtotal(field), 0);
+  };
+
+  // Percentage fields management
+  const addPercentageField = () => {
+    const newField: PercentageField = {
+      id: crypto.randomUUID(),
+      name: 'Nuevo campo',
+      percentage: 0,
+      order: percentageFields.length,
     };
-
-    if (section === 'service') setServiceItems(updateItems(serviceItems));
-    if (section === 'equipment') setEquipmentItems(updateItems(equipmentItems));
-    if (section === 'material') setMaterialItems(updateItems(materialItems));
+    setPercentageFields([...percentageFields, newField]);
   };
 
-  const calculateSubtotal = (items: QuoteTableItem[]) => {
-    return items.reduce((sum, item) => sum + item.total, 0);
+  const removePercentageField = (fieldId: string) => {
+    setPercentageFields(percentageFields.filter(f => f.id !== fieldId));
   };
 
-  const calculateTotal = () => {
-    return calculateSubtotal(serviceItems) + calculateSubtotal(equipmentItems) + calculateSubtotal(materialItems);
+  const updatePercentageField = (fieldId: string, key: 'name' | 'percentage', value: string | number) => {
+    setPercentageFields(percentageFields.map(f => 
+      f.id === fieldId ? { ...f, [key]: value } : f
+    ));
+  };
+
+  const calculatePercentageAmounts = () => {
+    let runningTotal = calculateSubtotal();
+    const amounts: Array<{ name: string; amount: number }> = [];
+
+    percentageFields.forEach(field => {
+      const amount = (runningTotal * field.percentage) / 100;
+      amounts.push({ name: field.name, amount });
+      runningTotal += amount;
+    });
+
+    return amounts;
+  };
+
+  const calculateTotalWithPercentages = () => {
+    const subtotal = calculateSubtotal();
+    const percentageTotal = calculatePercentageAmounts().reduce((sum, p) => sum + p.amount, 0);
+    return subtotal + percentageTotal;
+  };
+
+  const calculateIGV = () => {
+    return calculateTotalWithPercentages() * 0.18;
+  };
+
+  const calculateFinalTotal = () => {
+    return calculateTotalWithPercentages() + calculateIGV();
+  };
+
+  const handleSaveTemplate = async (name: string) => {
+    const fieldsToSave = fields.map(f => ({
+      ...f,
+      items: [], // Don't save actual values
+    }));
+    
+    return await saveTemplate(name, fieldsToSave, percentageFields);
   };
 
   const handleSubmit = async (isDraft: boolean) => {
@@ -108,24 +226,18 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
       return;
     }
 
-    const totalAmount = calculateTotal();
+    const totalAmount = calculateFinalTotal();
 
     const quote: Quote = {
       id: crypto.randomUUID(),
       requestId: request.id,
-      providerId: user?.providerId || '',
-      teamMemberId: user?.id || '',
+      providerId,
+      teamMemberId,
       amount: totalAmount,
       description,
       files: files ? Array.from(files) : undefined,
       createdAt: new Date().toISOString(),
       status: isDraft ? 'draft' : 'submitted',
-      serviceItems: serviceItems.filter(item => item.description.trim() !== ''),
-      equipmentItems: equipmentItems.filter(item => item.description.trim() !== ''),
-      materialItems: materialItems.filter(item => item.description.trim() !== ''),
-      conditions: conditions.filter(c => c.description.trim() !== ''),
-      validityDate: validityDate || undefined,
-      includesIGV,
       needsTechnicalVisit,
       elaboradoPor: elaboradoPor || undefined,
       revisadoPor: revisadoPor || undefined,
@@ -134,14 +246,13 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
 
     onSave(quote);
     
-    // Create notification if technical visit is needed
     if (needsTechnicalVisit && !isDraft) {
       try {
         await supabase.from('notifications').insert({
           user_email: request.createdBy,
           type: 'technical_visit',
           title: 'Visita técnica solicitada',
-          message: `El proveedor ha solicitado una visita técnica para la solicitud ${request.requestNumber}. Se pondrán en contacto contigo para coordinar los detalles.`,
+          message: `El proveedor ha solicitado una visita técnica para la solicitud ${request.requestNumber}.`,
           request_id: request.id,
           quote_id: quote.id,
         });
@@ -159,110 +270,28 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
     onClose();
   };
 
-  const renderTableSection = (
-    title: string,
-    items: QuoteTableItem[],
-    section: 'service' | 'equipment' | 'material'
-  ) => (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between bg-muted p-3 rounded-t-lg">
-        <h4 className="font-semibold">{title}</h4>
-        <Button size="sm" variant="outline" onClick={() => addItem(section)}>
-          <Plus className="h-4 w-4 mr-1" />
-          Agregar fila
-        </Button>
-      </div>
-      <div className="border rounded-b-lg overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[40%]">Detalle</TableHead>
-              <TableHead className="w-[10%]">UND</TableHead>
-              <TableHead className="w-[10%]">CANT.</TableHead>
-              <TableHead className="w-[15%]">S/. Unitario</TableHead>
-              <TableHead className="w-[15%]">S/. Total</TableHead>
-              <TableHead className="w-[10%]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell>
-                  <Input
-                    value={item.description}
-                    onChange={(e) => updateItem(section, item.id, 'description', e.target.value)}
-                    placeholder="Descripción del ítem"
-                    className="h-8"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    value={item.unit}
-                    onChange={(e) => updateItem(section, item.id, 'unit', e.target.value)}
-                    placeholder="UND"
-                    className="h-8"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={item.quantity}
-                    onChange={(e) => updateItem(section, item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                    placeholder="0"
-                    className="h-8"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={item.unitPrice}
-                    onChange={(e) => updateItem(section, item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                    className="h-8"
-                  />
-                </TableCell>
-                <TableCell>
-                  <span className="font-medium">S/. {item.total.toFixed(2)}</span>
-                </TableCell>
-                <TableCell>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => removeItem(section, item.id)}
-                    disabled={items.length === 1}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            <TableRow>
-              <TableCell colSpan={4} className="text-right font-semibold">
-                Subtotal {title}:
-              </TableCell>
-              <TableCell className="font-bold">
-                S/. {calculateSubtotal(items).toFixed(2)}
-              </TableCell>
-              <TableCell></TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </div>
-    </div>
-  );
+  const summaryData: QuoteSummaryData = {
+    fields: fields.map(f => ({
+      title: f.title,
+      total: calculateFieldSubtotal(f),
+    })),
+    subtotal: calculateSubtotal(),
+    percentageFields: calculatePercentageAmounts(),
+    igv: calculateIGV(),
+    total: calculateFinalTotal(),
+  };
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <CardHeader className="flex flex-row items-center justify-between">
+      <Card className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+        <CardHeader className="flex flex-row items-center justify-between sticky top-0 bg-background z-10 border-b">
           <CardTitle>Crear Cotización - {request.requestNumber}</CardTitle>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6 p-6">
+          {/* Request Details */}
           <div className="p-4 bg-muted rounded-lg space-y-2">
             <h3 className="font-medium">Detalles de la solicitud</h3>
             <p className="text-sm text-muted-foreground">{request.description}</p>
@@ -278,6 +307,16 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
             </div>
           </div>
 
+          {/* Template Selector */}
+          <TemplateSelector
+            templates={templates}
+            selectedTemplateId={selectedTemplateId}
+            onSelect={setSelectedTemplateId}
+            onDelete={deleteTemplate}
+            loading={templatesLoading}
+          />
+
+          {/* Description */}
           <div className="space-y-2">
             <Label htmlFor="description">Descripción general de la cotización *</Label>
             <Textarea
@@ -290,63 +329,259 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
             />
           </div>
 
-          {/* Tabla de cotización */}
+          {/* Dynamic Fields */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Detalle de la Cotización</h3>
-            
-            {renderTableSection('1. Descripción del servicio', serviceItems, 'service')}
-            {renderTableSection('2. Descripción de equipos de alto riesgo (En caso aplique)', equipmentItems, 'equipment')}
-            {renderTableSection('3. Descripción de materiales relevantes', materialItems, 'material')}
-
-            <div className="flex justify-end p-4 bg-primary/10 rounded-lg">
-              <div className="text-right">
-                <p className="text-lg font-semibold">COSTO TOTAL</p>
-                <p className="text-2xl font-bold text-primary">S/. {calculateTotal().toFixed(2)}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Condiciones de la cotización */}
-          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Condiciones de la Cotización</Label>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={() => setConditions([...conditions, { id: crypto.randomUUID(), description: '' }])}
-              >
+              <h3 className="text-lg font-semibold">Detalle de la Cotización</h3>
+              <Button size="sm" onClick={addField}>
                 <Plus className="h-4 w-4 mr-1" />
-                Agregar condición
+                Agregar Campo
               </Button>
             </div>
-            <div className="space-y-2 border rounded-lg p-4">
-              {conditions.map((condition, index) => (
-                <div key={condition.id} className="flex gap-2 items-start">
-                  <span className="text-sm text-muted-foreground mt-2 w-4">{index + 1}.</span>
-                  <Input
-                    value={condition.description}
-                    onChange={(e) => {
-                      const updated = conditions.map(c => 
-                        c.id === condition.id ? { ...c, description: e.target.value } : c
-                      );
-                      setConditions(updated);
-                    }}
-                    placeholder="Describe una condición de la cotización"
-                    className="flex-1"
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setConditions(conditions.filter(c => c.id !== condition.id))}
-                    disabled={conditions.length === 1}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+
+            {fields.map((field, fieldIndex) => (
+              <div key={field.id} className="space-y-2 border rounded-lg p-4 bg-card">
+                {/* Field Header */}
+                <div className="flex items-center justify-between bg-muted p-3 rounded-lg">
+                  <div className="flex items-center gap-2 flex-1">
+                    {editingFieldId === field.id ? (
+                      <Input
+                        value={editingFieldTitle}
+                        onChange={(e) => setEditingFieldTitle(e.target.value)}
+                        onBlur={() => {
+                          updateFieldTitle(field.id, editingFieldTitle);
+                          setEditingFieldId(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            updateFieldTitle(field.id, editingFieldTitle);
+                            setEditingFieldId(null);
+                          }
+                        }}
+                        className="h-8 max-w-md"
+                        autoFocus
+                      />
+                    ) : (
+                      <>
+                        <h4 className="font-semibold">{fieldIndex + 1}. {field.title}</h4>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingFieldId(field.id);
+                            setEditingFieldTitle(field.title);
+                          }}
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => moveField(field.id, 'up')}
+                      disabled={fieldIndex === 0}
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => moveField(field.id, 'down')}
+                      disabled={fieldIndex === fields.length - 1}
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => addItem(field.id)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => removeField(field.id)}
+                      disabled={fields.length === 1}
+                      className="text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              ))}
+
+                {/* Field Table */}
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[40%]">Detalle</TableHead>
+                        <TableHead className="w-[10%]">UND</TableHead>
+                        <TableHead className="w-[10%]">CANT.</TableHead>
+                        <TableHead className="w-[15%]">S/. Unitario</TableHead>
+                        <TableHead className="w-[15%]">S/. Total</TableHead>
+                        <TableHead className="w-[10%]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {field.items.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <Input
+                              value={item.description}
+                              onChange={(e) => updateItem(field.id, item.id, 'description', e.target.value)}
+                              placeholder="Descripción del ítem"
+                              className="h-8"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              value={item.unit}
+                              onChange={(e) => updateItem(field.id, item.id, 'unit', e.target.value)}
+                              placeholder="UND"
+                              className="h-8"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={item.quantity || ''}
+                              onChange={(e) => updateItem(field.id, item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                              placeholder="0"
+                              className="h-8"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={item.unitPrice || ''}
+                              onChange={(e) => updateItem(field.id, item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                              placeholder="0.00"
+                              className="h-8"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-medium">S/. {item.total.toFixed(2)}</span>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => removeItem(field.id, item.id)}
+                              disabled={field.items.length === 1}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-right font-semibold">
+                          Subtotal:
+                        </TableCell>
+                        <TableCell className="font-bold">
+                          S/. {calculateFieldSubtotal(field).toFixed(2)}
+                        </TableCell>
+                        <TableCell></TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Percentage Fields */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Percent className="w-5 h-5" />
+                Campos de Porcentaje
+              </h3>
+              <Button size="sm" variant="outline" onClick={addPercentageField}>
+                <Plus className="h-4 w-4 mr-1" />
+                Agregar Campo %
+              </Button>
+            </div>
+
+            {percentageFields.length > 0 && (
+              <div className="border rounded-lg p-4 space-y-3 bg-muted/50">
+                <div className="flex items-center justify-between text-sm font-medium">
+                  <span>Subtotal Base:</span>
+                  <span>S/. {calculateSubtotal().toFixed(2)}</span>
+                </div>
+                {percentageFields.map((field, index) => {
+                  const amounts = calculatePercentageAmounts();
+                  return (
+                    <div key={field.id} className="flex items-center gap-3 bg-background p-3 rounded-lg">
+                      <Input
+                        value={field.name}
+                        onChange={(e) => updatePercentageField(field.id, 'name', e.target.value)}
+                        placeholder="Nombre del campo"
+                        className="flex-1 h-8"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={field.percentage || ''}
+                          onChange={(e) => updatePercentageField(field.id, 'percentage', parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-20 h-8"
+                        />
+                        <span className="text-sm">%</span>
+                      </div>
+                      <span className="text-sm font-medium min-w-[100px] text-right">
+                        S/. {amounts[index]?.amount.toFixed(2) || '0.00'}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removePercentageField(field.id)}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Summary */}
+          <QuoteSummary data={summaryData} deliveryDays={deliveryDays} validityDays={validityDays} />
+
+          {/* Delivery and Validity */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="delivery-days">Plazo de Entrega (días)</Label>
+              <Input
+                id="delivery-days"
+                type="number"
+                value={deliveryDays}
+                onChange={(e) => setDeliveryDays(parseInt(e.target.value) || 1)}
+                min="1"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="validity-days">Vigencia (días)</Label>
+              <Input
+                id="validity-days"
+                type="number"
+                value={validityDays}
+                onChange={(e) => setValidityDays(parseInt(e.target.value) || 30)}
+                min="1"
+              />
             </div>
           </div>
 
+          {/* Files */}
           <div className="space-y-2">
             <Label htmlFor="files">Archivos de sustento (opcional)</Label>
             <div className="border-2 border-dashed rounded-lg p-4 hover:border-primary/50 transition-colors">
@@ -357,9 +592,6 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
                 onChange={(e) => setFiles(e.target.files)}
                 className="cursor-pointer"
               />
-              <p className="text-xs text-muted-foreground mt-2">
-                Puedes adjuntar fotos, documentos PDF, hojas de cálculo, etc.
-              </p>
             </div>
             {files && files.length > 0 && (
               <div className="text-sm text-muted-foreground">
@@ -368,7 +600,7 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
             )}
           </div>
 
-          {/* Responsables */}
+          {/* Responsible persons */}
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="elaborado-por">Elaborado por</Label>
@@ -399,7 +631,7 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
             </div>
           </div>
 
-          {/* Technical Visit Checkbox */}
+          {/* Technical Visit */}
           <div className="flex items-center space-x-2 p-4 border rounded-lg bg-muted/50">
             <Checkbox 
               id="technical-visit" 
@@ -414,19 +646,33 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
             </label>
           </div>
 
-          <div className="flex gap-3 justify-end pt-4 border-t">
-            <Button variant="outline" onClick={onClose}>
-              Cancelar
+          {/* Action Buttons */}
+          <div className="flex gap-3 justify-between pt-4 border-t sticky bottom-0 bg-background">
+            <Button variant="outline" onClick={() => setShowSaveTemplateDialog(true)}>
+              <Save className="h-4 w-4 mr-2" />
+              Guardar Plantilla
             </Button>
-            <Button variant="outline" onClick={() => handleSubmit(true)}>
-              Guardar borrador
-            </Button>
-            <Button onClick={() => handleSubmit(false)}>
-              Enviar cotización
-            </Button>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button variant="outline" onClick={() => handleSubmit(true)}>
+                Guardar borrador
+              </Button>
+              <Button onClick={() => handleSubmit(false)}>
+                Enviar cotización
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      {showSaveTemplateDialog && (
+        <SaveTemplateDialog
+          onSave={handleSaveTemplate}
+          onClose={() => setShowSaveTemplateDialog(false)}
+        />
+      )}
     </div>
   );
 };
