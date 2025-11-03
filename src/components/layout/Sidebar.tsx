@@ -14,12 +14,13 @@ import {
   AlertCircle,
   Settings,
   Globe,
-  Bell
+  Bell,
+  MessageSquare
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -27,11 +28,13 @@ interface SidebarProps {
 export function Sidebar({ className, onViewChange, currentView = 'dashboard', userRole }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadContactCount, setUnreadContactCount] = useState(0);
   const { user, logout } = useAuth();
 
   useEffect(() => {
     if (user?.email) {
       loadUnreadCount();
+      loadUnreadContactCount();
     }
   }, [user]);
 
@@ -42,10 +45,40 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
         .select('*', { count: 'exact', head: true })
         .eq('user_email', user?.email)
         .eq('read', false);
-      
+
       setUnreadCount(count || 0);
     } catch (error) {
       console.error('Error loading unread count:', error);
+    }
+  };
+
+  const loadUnreadContactCount = async () => {
+    try {
+      const { data: participations } = await supabase
+        .from('request_chat_participants')
+        .select('request_id, last_read_at')
+        .eq('user_email', user?.email);
+
+      if (!participations || participations.length === 0) {
+        setUnreadContactCount(0);
+        return;
+      }
+
+      let totalUnread = 0;
+      for (const chat of participations) {
+        const { count } = await supabase
+          .from('chat_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('request_id', chat.request_id)
+          .neq('sender_email', user?.email)
+          .gt('created_at', chat.last_read_at || '1970-01-01');
+        
+        totalUnread += count || 0;
+      }
+      
+      setUnreadContactCount(totalUnread);
+    } catch (error) {
+      console.error('Error loading unread contact count:', error);
     }
   };
 
@@ -293,6 +326,33 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
             </Button>
           </>
         )}
+        
+        <Button
+          variant={currentView === 'contact' ? "default" : "ghost"}
+          className={cn(
+            "w-full justify-start",
+            collapsed && "justify-center px-2"
+          )}
+          onClick={() => onViewChange?.('contact')}
+        >
+          <MessageSquare className={cn(
+            "h-4 w-4",
+            !collapsed && "mr-2"
+          )} />
+          {!collapsed && (
+            <>
+              <span>Contacto</span>
+              {unreadContactCount > 0 && (
+                <Badge variant="destructive" className="ml-auto">
+                  {unreadContactCount}
+                </Badge>
+              )}
+            </>
+          )}
+          {collapsed && unreadContactCount > 0 && (
+            <Badge variant="destructive" className="absolute top-1 right-1 h-2 w-2 p-0" />
+          )}
+        </Button>
       </nav>
 
       {/* User Profile */}

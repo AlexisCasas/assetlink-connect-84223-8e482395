@@ -11,10 +11,11 @@ import { StatsCards } from '@/components/dashboard/StatsCards';
 import { ProviderProfile } from '@/components/requests/ProviderProfile';
 import { PublicRequestList } from '@/components/requests/PublicRequestList';
 import { NotificationList } from '@/components/notifications/NotificationList';
+import { ContactList } from '@/components/contact/ContactList';
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact'>('dashboard');
   const [selectedAsset, setSelectedAsset] = useState<AssetNode | null>(null);
 
   useEffect(() => {
@@ -24,7 +25,7 @@ const Dashboard = () => {
     }
   }, []);
 
-  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications') => {
+  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact') => {
     setCurrentView(view);
     window.location.hash = view;
   };
@@ -58,6 +59,8 @@ const Dashboard = () => {
         return <ProviderProfile />;
       case 'notifications':
         return <NotificationList />;
+      case 'contact':
+        return <ContactList />;
       default:
         return <StatsCards />;
     }
