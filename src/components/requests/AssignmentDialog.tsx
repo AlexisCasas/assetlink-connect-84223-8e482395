@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Request, Assignment } from '@/types/request';
-import { X } from 'lucide-react';
+import { X, Eye, CheckCircle2, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -23,6 +23,8 @@ export const AssignmentDialog = ({ request, providerId, onClose, onAssign }: Ass
   const currentAssignment = request.assignments?.[providerId];
   
   const [selectedMember, setSelectedMember] = useState('');
+  const [selectedReviewer, setSelectedReviewer] = useState('');
+  const [selectedApprover, setSelectedApprover] = useState('');
   const [deadline, setDeadline] = useState('');
   const [reason, setReason] = useState('');
   const [isSubcontractor, setIsSubcontractor] = useState(false);
@@ -58,6 +60,24 @@ export const AssignmentDialog = ({ request, providerId, onClose, onAssign }: Ass
   };
 
   const handleAssign = async () => {
+    if (!selectedReviewer) {
+      toast({
+        title: "Error",
+        description: "Por favor selecciona quien revisará la cotización",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedApprover) {
+      toast({
+        title: "Error",
+        description: "Por favor selecciona quien aprobará la cotización",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (isSubcontractor) {
       if (!subcontractorName || !subcontractorEmail || !deadline) {
         toast({
@@ -81,9 +101,25 @@ export const AssignmentDialog = ({ request, providerId, onClose, onAssign }: Ass
 
         if (error) throw error;
 
+        const reviewer = teamMembers.find(m => m.id === selectedReviewer);
+        const approver = teamMembers.find(m => m.id === selectedApprover);
+        
+        if (!reviewer || !approver) {
+          toast({
+            title: "Error",
+            description: "Error al obtener datos del revisor o aprobador",
+            variant: "destructive",
+          });
+          return;
+        }
+
         const assignment: Assignment = {
           teamMemberId: newMember.id,
           teamMemberName: newMember.name,
+          reviewerId: selectedReviewer,
+          reviewerName: reviewer.name,
+          approverId: selectedApprover,
+          approverName: approver.name,
           assignedAt: new Date().toISOString(),
           maxDeadline: deadline,
           reason: reason || undefined,
@@ -96,6 +132,10 @@ export const AssignmentDialog = ({ request, providerId, onClose, onAssign }: Ass
             provider_id: providerId,
             team_member_id: newMember.id,
             team_member_name: newMember.name,
+            reviewer_id: selectedReviewer,
+            reviewer_name: reviewer.name,
+            approver_id: selectedApprover,
+            approver_name: approver.name,
             max_deadline: deadline,
             reason: reason || null,
           });
@@ -127,11 +167,25 @@ export const AssignmentDialog = ({ request, providerId, onClose, onAssign }: Ass
       }
 
       const member = teamMembers.find(m => m.id === selectedMember);
-      if (!member) return;
+      const reviewer = teamMembers.find(m => m.id === selectedReviewer);
+      const approver = teamMembers.find(m => m.id === selectedApprover);
+      
+      if (!member || !reviewer || !approver) {
+        toast({
+          title: "Error",
+          description: "Error al obtener datos de los miembros seleccionados",
+          variant: "destructive",
+        });
+        return;
+      }
 
       const assignment: Assignment = {
         teamMemberId: selectedMember,
         teamMemberName: member.name,
+        reviewerId: selectedReviewer,
+        reviewerName: reviewer.name,
+        approverId: selectedApprover,
+        approverName: approver.name,
         assignedAt: new Date().toISOString(),
         maxDeadline: deadline,
         reason: reason || undefined,
@@ -145,6 +199,10 @@ export const AssignmentDialog = ({ request, providerId, onClose, onAssign }: Ass
             provider_id: providerId,
             team_member_id: selectedMember,
             team_member_name: member.name,
+            reviewer_id: selectedReviewer,
+            reviewer_name: reviewer.name,
+            approver_id: selectedApprover,
+            approver_name: approver.name,
             max_deadline: deadline,
             reason: reason || null,
           });
@@ -201,62 +259,125 @@ export const AssignmentDialog = ({ request, providerId, onClose, onAssign }: Ass
             </div>
           ) : (
             <>
-              {!isSubcontractor && (
+              {/* ROL 1: COTIZADOR */}
+              <div className="space-y-2 p-4 border rounded-lg bg-blue-50 dark:bg-blue-950">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-blue-600" />
+                  <h4 className="font-medium">ROL 1: Cotizador (Elaborador)</h4>
+                </div>
+                
+                {!isSubcontractor && (
+                  <div className="space-y-2">
+                    <Label htmlFor="member">Asignar a miembro del equipo *</Label>
+                    <Select value={selectedMember} onValueChange={setSelectedMember}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona un miembro del equipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teamMembers.map((member) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            {member.name} - {member.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="subcontractor"
+                    checked={isSubcontractor}
+                    onCheckedChange={(checked) => {
+                      setIsSubcontractor(checked as boolean);
+                      setSelectedMember('');
+                    }}
+                  />
+                  <Label htmlFor="subcontractor" className="cursor-pointer">
+                    Asignar el trabajo a un subcontratista
+                  </Label>
+                </div>
+
+                {isSubcontractor && (
+                  <div className="space-y-3 p-4 border rounded-md bg-muted/50">
+                    <h4 className="font-medium text-sm">Datos del subcontratista</h4>
+                    <div className="space-y-2">
+                      <Label htmlFor="subcontractor-name">Nombre completo *</Label>
+                      <Input
+                        id="subcontractor-name"
+                        value={subcontractorName}
+                        onChange={(e) => setSubcontractorName(e.target.value)}
+                        placeholder="Nombre del subcontratista"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="subcontractor-email">Email *</Label>
+                      <Input
+                        id="subcontractor-email"
+                        type="email"
+                        value={subcontractorEmail}
+                        onChange={(e) => setSubcontractorEmail(e.target.value)}
+                        placeholder="email@ejemplo.com"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ROL 2: REVISOR */}
+              <div className="space-y-2 p-4 border rounded-lg bg-orange-50 dark:bg-orange-950">
+                <div className="flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-orange-600" />
+                  <h4 className="font-medium">ROL 2: Revisor</h4>
+                </div>
                 <div className="space-y-2">
-                  <Label htmlFor="member">Asignar a miembro del equipo *</Label>
-                  <Select value={selectedMember} onValueChange={setSelectedMember}>
+                  <Label htmlFor="reviewer">Asignar revisión a *</Label>
+                  <Select value={selectedReviewer} onValueChange={setSelectedReviewer}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecciona un miembro del equipo" />
+                      <SelectValue placeholder="Selecciona quien revisará" />
                     </SelectTrigger>
                     <SelectContent>
                       {teamMembers.map((member) => (
                         <SelectItem key={member.id} value={member.id}>
                           {member.name} - {member.email}
+                          {member.id === selectedMember && " (Cotizador)"}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    💡 Puede ser la misma persona que el cotizador
+                  </p>
                 </div>
-              )}
-
-              <div className="flex items-center space-x-2 p-3 border rounded-lg">
-                <Checkbox
-                  id="subcontractor"
-                  checked={isSubcontractor}
-                  onCheckedChange={(checked) => {
-                    setIsSubcontractor(checked as boolean);
-                    setSelectedMember('');
-                  }}
-                />
-                <Label htmlFor="subcontractor" className="cursor-pointer">
-                  Asignar el trabajo a un subcontratista
-                </Label>
               </div>
 
-              {isSubcontractor && (
-                <div className="space-y-3 p-4 border rounded-lg bg-muted/50">
-                  <h4 className="font-medium">Datos del subcontratista</h4>
-                  <div className="space-y-2">
-                    <Label htmlFor="subcontractor-name">Nombre completo *</Label>
-                    <Input
-                      id="subcontractor-name"
-                      value={subcontractorName}
-                      onChange={(e) => setSubcontractorName(e.target.value)}
-                      placeholder="Nombre del subcontratista"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="subcontractor-email">Email *</Label>
-                    <Input
-                      id="subcontractor-email"
-                      type="email"
-                      value={subcontractorEmail}
-                      onChange={(e) => setSubcontractorEmail(e.target.value)}
-                      placeholder="email@ejemplo.com"
-                    />
-                  </div>
+              {/* ROL 3: APROBADOR */}
+              <div className="space-y-2 p-4 border rounded-lg bg-green-50 dark:bg-green-950">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  <h4 className="font-medium">ROL 3: Aprobador</h4>
                 </div>
-              )}
+                <div className="space-y-2">
+                  <Label htmlFor="approver">Asignar validación a *</Label>
+                  <Select value={selectedApprover} onValueChange={setSelectedApprover}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona quien aprobará" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teamMembers.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          {member.name} - {member.email}
+                          {member.id === selectedMember && " (Cotizador)"}
+                          {member.id === selectedReviewer && member.id !== selectedMember && " (Revisor)"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    💡 Puede ser la misma persona que el cotizador o revisor
+                  </p>
+                </div>
+              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="deadline">Fecha máxima de entrega de cotización *</Label>

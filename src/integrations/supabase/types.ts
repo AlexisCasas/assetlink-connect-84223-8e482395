@@ -16,6 +16,8 @@ export type Database = {
     Tables: {
       assignments: {
         Row: {
+          approver_id: string | null
+          approver_name: string | null
           assigned_at: string
           id: string
           max_deadline: string
@@ -24,11 +26,15 @@ export type Database = {
           rejection_reason: string | null
           request_id: string
           responded_at: string | null
+          reviewer_id: string | null
+          reviewer_name: string | null
           status: Database["public"]["Enums"]["assignment_status"]
           team_member_id: string
           team_member_name: string
         }
         Insert: {
+          approver_id?: string | null
+          approver_name?: string | null
           assigned_at?: string
           id?: string
           max_deadline: string
@@ -37,11 +43,15 @@ export type Database = {
           rejection_reason?: string | null
           request_id: string
           responded_at?: string | null
+          reviewer_id?: string | null
+          reviewer_name?: string | null
           status?: Database["public"]["Enums"]["assignment_status"]
           team_member_id: string
           team_member_name: string
         }
         Update: {
+          approver_id?: string | null
+          approver_name?: string | null
           assigned_at?: string
           id?: string
           max_deadline?: string
@@ -50,11 +60,20 @@ export type Database = {
           rejection_reason?: string | null
           request_id?: string
           responded_at?: string | null
+          reviewer_id?: string | null
+          reviewer_name?: string | null
           status?: Database["public"]["Enums"]["assignment_status"]
           team_member_id?: string
           team_member_name?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "assignments_approver_id_fkey"
+            columns: ["approver_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "assignments_provider_id_fkey"
             columns: ["provider_id"]
@@ -67,6 +86,13 @@ export type Database = {
             columns: ["request_id"]
             isOneToOne: false
             referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignments_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
             referencedColumns: ["id"]
           },
           {

@@ -19,6 +19,10 @@ export interface Provider {
 export interface Assignment {
   teamMemberId: string;
   teamMemberName: string;
+  reviewerId?: string;
+  reviewerName?: string;
+  approverId?: string;
+  approverName?: string;
   assignedAt: string;
   maxDeadline: string;
   reason?: string;
