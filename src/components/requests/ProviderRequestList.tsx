@@ -9,7 +9,9 @@ import { AssignmentDialog } from './AssignmentDialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { seedDatabase } from '@/lib/seedData';
-import { Search, Settings2, ArrowUpDown, Download, GripVertical } from 'lucide-react';
+import { Search, Settings2, ArrowUpDown, Download, GripVertical, Eye, FileText, UserCog } from 'lucide-react';
+import { RequestDetailDialog } from './RequestDetailDialog';
+import { QuoteDetailDialog } from './QuoteDetailDialog';
 import { 
   Table, 
   TableBody, 
@@ -97,6 +99,11 @@ export const ProviderRequestList = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [draggedColumn, setDraggedColumn] = useState<ColumnKey | null>(null);
+  const [quotes, setQuotes] = useState<Record<string, any>>({});
+  const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [showQuoteDialog, setShowQuoteDialog] = useState(false);
+  const [selectedRequestForDetail, setSelectedRequestForDetail] = useState<RequestData | null>(null);
+  const [selectedRequestForQuote, setSelectedRequestForQuote] = useState<RequestData | null>(null);
 
   useEffect(() => {
     const savedColumns = localStorage.getItem('providerRequestColumns');
@@ -173,6 +180,23 @@ export const ProviderRequestList = () => {
             assignmentsMap[a.request_id] = { team_member_name: a.team_member_name };
           });
           setAssignments(assignmentsMap);
+        }
+
+        // Cargar cotizaciones aprobadas/enviadas
+        const { data: quotesData } = await supabase
+          .from('quotes')
+          .select('*')
+          .in('request_id', requestIds)
+          .in('status', ['submitted', 'approved']);
+        
+        if (quotesData) {
+          const quotesMap: Record<string, any> = {};
+          quotesData.forEach(q => {
+            if (!quotesMap[q.request_id]) {
+              quotesMap[q.request_id] = q;
+            }
+          });
+          setQuotes(quotesMap);
         }
       }
     } catch (error) {
@@ -416,16 +440,47 @@ export const ProviderRequestList = () => {
       case 'acciones':
         return (
           <TableCell key={key}>
-            <Button
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedRequests([request.id]);
-                setShowAssignmentDialog(true);
-              }}
-            >
-              Asignar
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedRequestForDetail(request);
+                  setShowDetailDialog(true);
+                }}
+                title="Ver detalles completos"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+
+              {quotes[request.id] && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedRequestForQuote(request);
+                    setShowQuoteDialog(true);
+                  }}
+                  title="Ver cotización"
+                >
+                  <FileText className="h-4 w-4" />
+                </Button>
+              )}
+
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedRequests([request.id]);
+                  setShowAssignmentDialog(true);
+                }}
+              >
+                <UserCog className="h-4 w-4 mr-1" />
+                Asignar
+              </Button>
+            </div>
           </TableCell>
         );
       default:
@@ -667,6 +722,28 @@ export const ProviderRequestList = () => {
               setSelectedRequests([]);
               initializeAndLoadRequests();
             }}
+         />
+       )}
+
+       {showDetailDialog && selectedRequestForDetail && (
+         <RequestDetailDialog
+           request={selectedRequestForDetail}
+           assignment={assignments[selectedRequestForDetail.id]}
+           onClose={() => {
+             setShowDetailDialog(false);
+             setSelectedRequestForDetail(null);
+           }}
+         />
+       )}
+
+       {showQuoteDialog && selectedRequestForQuote && quotes[selectedRequestForQuote.id] && (
+         <QuoteDetailDialog
+           quote={quotes[selectedRequestForQuote.id]}
+           request={selectedRequestForQuote}
+           onClose={() => {
+             setShowQuoteDialog(false);
+             setSelectedRequestForQuote(null);
+           }}
          />
        )}
      </div>
