@@ -228,7 +228,7 @@ export const AssignmentDialog = ({ request, providerId, onClose, onAssign }: Ass
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-5xl">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>
             {currentAssignment ? 'Reasignar solicitud' : 'Asignar a equipo'}
@@ -259,123 +259,128 @@ export const AssignmentDialog = ({ request, providerId, onClose, onAssign }: Ass
             </div>
           ) : (
             <>
-              {/* ROL 1: COTIZADOR */}
-              <div className="space-y-2 p-4 border rounded-lg bg-blue-50 dark:bg-blue-950">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-blue-600" />
-                  <h4 className="font-medium">ROL 1: Cotizador (Elaborador)</h4>
+              {/* Grid horizontal para los 3 roles */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* ROL 1: COTIZADOR */}
+                <div className="space-y-2 p-3 border rounded-lg bg-blue-50 dark:bg-blue-950 flex flex-col h-full">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <h4 className="font-medium text-sm">ROL 1: Cotizador</h4>
+                  </div>
+                  
+                  {!isSubcontractor && (
+                    <div className="space-y-2 flex-1">
+                      <Label htmlFor="member" className="text-xs">Asignar a miembro *</Label>
+                      <Select value={selectedMember} onValueChange={setSelectedMember}>
+                        <SelectTrigger className="text-sm">
+                          <SelectValue placeholder="Seleccionar..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teamMembers.map((member) => (
+                            <SelectItem key={member.id} value={member.id}>
+                              {member.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <div className="flex items-center space-x-2 mt-2">
+                    <Checkbox
+                      id="subcontractor"
+                      checked={isSubcontractor}
+                      onCheckedChange={(checked) => {
+                        setIsSubcontractor(checked as boolean);
+                        setSelectedMember('');
+                      }}
+                    />
+                    <Label htmlFor="subcontractor" className="cursor-pointer text-xs">
+                      Subcontratista
+                    </Label>
+                  </div>
+
+                  {isSubcontractor && (
+                    <div className="space-y-2 p-2 border rounded-md bg-muted/50 mt-2">
+                      <h4 className="font-medium text-xs">Datos subcontratista</h4>
+                      <div className="space-y-1">
+                        <Label htmlFor="subcontractor-name" className="text-xs">Nombre *</Label>
+                        <Input
+                          id="subcontractor-name"
+                          value={subcontractorName}
+                          onChange={(e) => setSubcontractorName(e.target.value)}
+                          placeholder="Nombre"
+                          className="text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="subcontractor-email" className="text-xs">Email *</Label>
+                        <Input
+                          id="subcontractor-email"
+                          type="email"
+                          value={subcontractorEmail}
+                          onChange={(e) => setSubcontractorEmail(e.target.value)}
+                          placeholder="email@ejemplo.com"
+                          className="text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                
-                {!isSubcontractor && (
-                  <div className="space-y-2">
-                    <Label htmlFor="member">Asignar a miembro del equipo *</Label>
-                    <Select value={selectedMember} onValueChange={setSelectedMember}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un miembro del equipo" />
+
+                {/* ROL 2: REVISOR */}
+                <div className="space-y-2 p-3 border rounded-lg bg-orange-50 dark:bg-orange-950 flex flex-col h-full">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-orange-600" />
+                    <h4 className="font-medium text-sm">ROL 2: Revisor</h4>
+                  </div>
+                  <div className="space-y-2 flex-1">
+                    <Label htmlFor="reviewer" className="text-xs">Asignar revisión *</Label>
+                    <Select value={selectedReviewer} onValueChange={setSelectedReviewer}>
+                      <SelectTrigger className="text-sm">
+                        <SelectValue placeholder="Seleccionar..." />
                       </SelectTrigger>
                       <SelectContent>
                         {teamMembers.map((member) => (
                           <SelectItem key={member.id} value={member.id}>
-                            {member.name} - {member.email}
+                            {member.name}
+                            {member.id === selectedMember && " ✓"}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-[10px] text-muted-foreground">
+                      💡 Puede ser la misma persona
+                    </p>
                   </div>
-                )}
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="subcontractor"
-                    checked={isSubcontractor}
-                    onCheckedChange={(checked) => {
-                      setIsSubcontractor(checked as boolean);
-                      setSelectedMember('');
-                    }}
-                  />
-                  <Label htmlFor="subcontractor" className="cursor-pointer">
-                    Asignar el trabajo a un subcontratista
-                  </Label>
                 </div>
 
-                {isSubcontractor && (
-                  <div className="space-y-3 p-4 border rounded-md bg-muted/50">
-                    <h4 className="font-medium text-sm">Datos del subcontratista</h4>
-                    <div className="space-y-2">
-                      <Label htmlFor="subcontractor-name">Nombre completo *</Label>
-                      <Input
-                        id="subcontractor-name"
-                        value={subcontractorName}
-                        onChange={(e) => setSubcontractorName(e.target.value)}
-                        placeholder="Nombre del subcontratista"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="subcontractor-email">Email *</Label>
-                      <Input
-                        id="subcontractor-email"
-                        type="email"
-                        value={subcontractorEmail}
-                        onChange={(e) => setSubcontractorEmail(e.target.value)}
-                        placeholder="email@ejemplo.com"
-                      />
-                    </div>
+                {/* ROL 3: APROBADOR */}
+                <div className="space-y-2 p-3 border rounded-lg bg-green-50 dark:bg-green-950 flex flex-col h-full">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <h4 className="font-medium text-sm">ROL 3: Aprobador</h4>
                   </div>
-                )}
-              </div>
-
-              {/* ROL 2: REVISOR */}
-              <div className="space-y-2 p-4 border rounded-lg bg-orange-50 dark:bg-orange-950">
-                <div className="flex items-center gap-2">
-                  <Eye className="w-4 h-4 text-orange-600" />
-                  <h4 className="font-medium">ROL 2: Revisor</h4>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="reviewer">Asignar revisión a *</Label>
-                  <Select value={selectedReviewer} onValueChange={setSelectedReviewer}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona quien revisará" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teamMembers.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.name} - {member.email}
-                          {member.id === selectedMember && " (Cotizador)"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    💡 Puede ser la misma persona que el cotizador
-                  </p>
-                </div>
-              </div>
-
-              {/* ROL 3: APROBADOR */}
-              <div className="space-y-2 p-4 border rounded-lg bg-green-50 dark:bg-green-950">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  <h4 className="font-medium">ROL 3: Aprobador</h4>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="approver">Asignar validación a *</Label>
-                  <Select value={selectedApprover} onValueChange={setSelectedApprover}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona quien aprobará" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teamMembers.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.name} - {member.email}
-                          {member.id === selectedMember && " (Cotizador)"}
-                          {member.id === selectedReviewer && member.id !== selectedMember && " (Revisor)"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    💡 Puede ser la misma persona que el cotizador o revisor
-                  </p>
+                  <div className="space-y-2 flex-1">
+                    <Label htmlFor="approver" className="text-xs">Asignar validación *</Label>
+                    <Select value={selectedApprover} onValueChange={setSelectedApprover}>
+                      <SelectTrigger className="text-sm">
+                        <SelectValue placeholder="Seleccionar..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teamMembers.map((member) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            {member.name}
+                            {member.id === selectedMember && " ✓"}
+                            {member.id === selectedReviewer && member.id !== selectedMember && " ✓"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground">
+                      💡 Puede ser la misma persona
+                    </p>
+                  </div>
                 </div>
               </div>
 
