@@ -185,6 +185,27 @@ export type Database = {
         }
         Relationships: []
       }
+      client_specialties: {
+        Row: {
+          client_email: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          client_email: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          client_email?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
