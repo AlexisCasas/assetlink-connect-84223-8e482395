@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,7 +7,7 @@ import { RequestForm } from './RequestForm';
 import { QuoteListDialog } from './QuoteListDialog';
 import { RequestChatDialog } from './RequestChatDialog';
 import { Request, MOCK_PROVIDERS } from '@/types/request';
-import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil } from 'lucide-react';
+import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/lib/seedData';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,6 +28,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 export const RequestList = () => {
   const { user } = useAuth();
@@ -41,6 +50,12 @@ export const RequestList = () => {
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [editingRequest, setEditingRequest] = useState<Request | null>(null);
   const [requestDetails, setRequestDetails] = useState<any[]>([]);
+
+  // Filtros
+  const [filterStore, setFilterStore] = useState<string>('all');
+  const [filterBranch, setFilterBranch] = useState<string>('all');
+  const [filterDate, setFilterDate] = useState<string>('');
+  const [filterServiceType, setFilterServiceType] = useState<string>('all');
 
   const loadRequests = async () => {
     try {
@@ -229,6 +244,49 @@ export const RequestList = () => {
     return texts[type as keyof typeof texts] || type;
   };
 
+  // Obtener valores únicos para los filtros
+  const uniqueStores = useMemo(() => {
+    const stores = requests.map(r => r.store).filter(Boolean) as string[];
+    return [...new Set(stores)];
+  }, [requests]);
+
+  const uniqueBranches = useMemo(() => {
+    const branches = requests.map(r => r.branch || r.clientBranch).filter(Boolean) as string[];
+    return [...new Set(branches)];
+  }, [requests]);
+
+  // Aplicar filtros
+  const filteredRequests = useMemo(() => {
+    return requests.filter(request => {
+      // Filtro por tienda
+      if (filterStore !== 'all' && request.store !== filterStore) return false;
+      
+      // Filtro por sede
+      const requestBranch = request.branch || request.clientBranch;
+      if (filterBranch !== 'all' && requestBranch !== filterBranch) return false;
+      
+      // Filtro por fecha de registro
+      if (filterDate) {
+        const requestDate = request.createdAt 
+          ? format(new Date(request.createdAt), 'yyyy-MM-dd')
+          : '';
+        if (requestDate !== filterDate) return false;
+      }
+      
+      // Filtro por tipo de servicio
+      if (filterServiceType !== 'all' && request.serviceType !== filterServiceType) return false;
+      
+      return true;
+    });
+  }, [requests, filterStore, filterBranch, filterDate, filterServiceType]);
+
+  const clearFilters = () => {
+    setFilterStore('all');
+    setFilterBranch('all');
+    setFilterDate('');
+    setFilterServiceType('all');
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -239,20 +297,97 @@ export const RequestList = () => {
         </Button>
       </div>
 
+      {/* Filtros */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Filtros</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Tienda</Label>
+            <Select value={filterStore} onValueChange={setFilterStore}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todas las tiendas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las tiendas</SelectItem>
+                {uniqueStores.map((store) => (
+                  <SelectItem key={store} value={store}>{store}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Sede</Label>
+            <Select value={filterBranch} onValueChange={setFilterBranch}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todas las sedes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las sedes</SelectItem>
+                {uniqueBranches.map((branch) => (
+                  <SelectItem key={branch} value={branch}>{branch}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Fecha de Registro</Label>
+            <Input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="h-10"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Tipo de Servicio</Label>
+            <Select value={filterServiceType} onValueChange={setFilterServiceType}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos los tipos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                <SelectItem value="emergencia">Emergencia</SelectItem>
+                <SelectItem value="correctivo">Correctivo</SelectItem>
+                <SelectItem value="preventivo">Preventivo</SelectItem>
+                <SelectItem value="proyecto">Proyecto</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-end">
+            <Button variant="outline" size="sm" onClick={clearFilters} className="w-full">
+              Limpiar filtros
+            </Button>
+          </div>
+        </div>
+      </Card>
+
       {loading ? (
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Cargando solicitudes...</p>
           </CardContent>
         </Card>
-      ) : requests.length === 0 ? (
+      ) : filteredRequests.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground">No tienes solicitudes enviadas</p>
-            <Button onClick={() => { setEditingRequest(null); setShowForm(true); }} className="mt-4">
-              Crear primera solicitud
-            </Button>
+            <p className="text-muted-foreground">
+              {requests.length === 0 
+                ? 'No tienes solicitudes enviadas' 
+                : 'No hay solicitudes que coincidan con los filtros'}
+            </p>
+            {requests.length === 0 && (
+              <Button onClick={() => { setEditingRequest(null); setShowForm(true); }} className="mt-4">
+                Crear primera solicitud
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -272,7 +407,7 @@ export const RequestList = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {requests.map((request) => (
+                {filteredRequests.map((request) => (
                   <TableRow key={request.id}>
                     <TableCell className="font-medium">
                       {request.requestNumber}
