@@ -167,32 +167,69 @@ export const RequestList = () => {
 
   const handleSaveRequest = async (request: Request, isDraft: boolean) => {
     try {
-      // Actualizar cabecera en requests
-      const { error: requestError } = await supabase
+      // Verificar si el request ya existe
+      const { data: existing } = await supabase
         .from('requests')
-        .update({
-          description: request.description,
-          service_type: request.serviceType,
-          deadline: request.deadline,
-          city: request.city,
-          store: request.store,
-          branch: request.branch,
-          location: request.location,
-          requires_visit: request.requiresVisit,
-          visit_date: request.visitDate || null,
-          asset: request.asset,
-          status: isDraft ? 'draft' : 'sent',
-        })
-        .eq('id', request.id);
+        .select('id')
+        .eq('id', request.id)
+        .maybeSingle();
 
-      if (requestError) throw requestError;
+      if (existing) {
+        // Actualizar registro existente
+        const { error: requestError } = await supabase
+          .from('requests')
+          .update({
+            description: request.description,
+            service_type: request.serviceType,
+            deadline: request.deadline,
+            city: request.city,
+            store: request.store,
+            branch: request.branch,
+            location: request.location,
+            requires_visit: request.requiresVisit,
+            visit_date: request.visitDate || null,
+            asset: request.asset,
+            status: isDraft ? 'draft' : 'sent',
+            is_public: request.isPublic,
+          })
+          .eq('id', request.id);
 
-      // Eliminar detalles antiguos y crear nuevos
-      await supabase
-        .from('request_details')
-        .delete()
-        .eq('request_id', request.id);
+        if (requestError) throw requestError;
 
+        // Eliminar detalles antiguos
+        await supabase
+          .from('request_details')
+          .delete()
+          .eq('request_id', request.id);
+      } else {
+        // Insertar nuevo registro
+        const { error: insertError } = await supabase
+          .from('requests')
+          .insert({
+            id: request.id,
+            request_number: request.requestNumber,
+            description: request.description,
+            service_type: request.serviceType,
+            deadline: request.deadline,
+            city: request.city,
+            store: request.store,
+            branch: request.branch,
+            location: request.location,
+            requires_visit: request.requiresVisit,
+            visit_date: request.visitDate || null,
+            asset: request.asset,
+            status: isDraft ? 'draft' : 'sent',
+            created_by: user?.email || '',
+            is_public: request.isPublic,
+            client_name: request.clientName,
+            client_branch: request.clientBranch,
+            priority: request.priority,
+          });
+
+        if (insertError) throw insertError;
+      }
+
+      // Insertar detalles nuevos
       if (request.details && request.details.length > 0) {
         const detailsToInsert = request.details.map(d => ({
           request_id: request.id,
@@ -296,6 +333,26 @@ export const RequestList = () => {
       proyecto: 'Proyecto',
     };
     return texts[type as keyof typeof texts] || type;
+  };
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      draft: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
+      sent: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+      quoted: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+      completed: 'bg-green-500/10 text-green-500 border-green-500/20',
+    };
+    return colors[status] || '';
+  };
+
+  const getStatusText = (status: string) => {
+    const texts: Record<string, string> = {
+      draft: 'Borrador',
+      sent: 'Enviado',
+      quoted: 'Cotizado',
+      completed: 'Completado',
+    };
+    return texts[status] || status;
   };
 
   // Obtener valores únicos para los filtros
@@ -452,6 +509,7 @@ export const RequestList = () => {
                 <TableRow>
                   <TableHead>Nro. Solicitud</TableHead>
                   <TableHead>Tipo de Servicio</TableHead>
+                  <TableHead>Estado</TableHead>
                   <TableHead>Sede</TableHead>
                   <TableHead>Fecha de Registro</TableHead>
                   <TableHead>Tienda</TableHead>
@@ -469,6 +527,11 @@ export const RequestList = () => {
                     <TableCell>
                       <Badge className={getServiceTypeColor(request.serviceType)}>
                         {getServiceTypeText(request.serviceType)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={getStatusColor(request.status)}>
+                        {getStatusText(request.status)}
                       </Badge>
                     </TableCell>
                     <TableCell>{request.branch || request.clientBranch || '-'}</TableCell>
