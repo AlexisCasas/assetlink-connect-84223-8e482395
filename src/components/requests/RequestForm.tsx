@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
 
 interface RequestFormProps {
   onClose: () => void;
-  onSave: (request: Request, isDraft: boolean) => void;
+  onSave: (request: Request, isDraft: boolean) => Promise<void>;
   editingRequest?: Request;
 }
 
@@ -277,16 +277,16 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       })),
     };
 
-    onSave(request, isDraft);
-    
-    toast({
-      title: isDraft ? "Borrador guardado" : "Solicitud enviada",
-      description: isDraft 
-        ? "Tu solicitud ha sido guardada como borrador" 
-        : `Solicitud enviada a ${selectedProviders.length} proveedor(es)`,
-    });
-    
-    onClose();
+    try {
+      await onSave(request, isDraft);
+    } catch (error) {
+      console.error('Error saving request:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo guardar la solicitud",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
