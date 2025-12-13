@@ -64,18 +64,47 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const { user } = useAuth();
   const { toast } = useToast();
   
+  // Formatear fecha para input date
+  const formatDateForInput = (dateString: string | undefined) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      return date.toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  };
+  
   // Cabecera
   const [description, setDescription] = useState(editingRequest?.description || '');
   const [serviceType, setServiceType] = useState<ServiceType>(editingRequest?.serviceType || 'correctivo');
-  const [deadline, setDeadline] = useState(editingRequest?.deadline || '');
-  const [city, setCity] = useState('');
-  const [store, setStore] = useState('');
-  const [branch, setBranch] = useState('');
-  const [requiresVisit, setRequiresVisit] = useState(false);
-  const [visitDate, setVisitDate] = useState('');
+  const [deadline, setDeadline] = useState(formatDateForInput(editingRequest?.deadline));
+  const [city, setCity] = useState(editingRequest?.city || '');
+  const [store, setStore] = useState(editingRequest?.store || '');
+  const [branch, setBranch] = useState(editingRequest?.branch || '');
+  const [requiresVisit, setRequiresVisit] = useState(editingRequest?.requiresVisit || false);
+  const [visitDate, setVisitDate] = useState(formatDateForInput(editingRequest?.visitDate));
   
-  // Detalle (1 a muchos)
-  const [details, setDetails] = useState<RequestDetail[]>([createEmptyDetail()]);
+  // Detalle (1 a muchos) - inicializar con datos existentes o vacío
+  const initialDetails = editingRequest?.details?.length 
+    ? editingRequest.details.map(d => ({
+        id: crypto.randomUUID(),
+        equipment: d.equipment || '',
+        subEquipment: d.subEquipment || '',
+        area: d.area || '',
+        subArea: d.subArea || '',
+        activities: d.activities || '',
+        relevantMaterials: d.relevantMaterials || '',
+        quantity: d.quantity?.toString() || '',
+        unitMeasure: d.unitMeasure || '',
+        observation: d.observation || '',
+        responsibleUser: d.responsibleUser || '',
+        delegateType: d.delegateType || '',
+        attachments: [] as File[],
+      }))
+    : [createEmptyDetail()];
+  
+  const [details, setDetails] = useState<RequestDetail[]>(initialDetails);
   
   // Proveedores
   const [selectedProviders, setSelectedProviders] = useState<string[]>(editingRequest?.selectedProviders || []);

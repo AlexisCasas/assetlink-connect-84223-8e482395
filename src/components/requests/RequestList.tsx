@@ -111,34 +111,102 @@ export const RequestList = () => {
   };
 
   const handleEditRequest = async (request: Request) => {
-    await loadRequestDetails(request.id);
+    // Cargar detalles primero y esperar resultado
+    const { data: detailsData } = await supabase
+      .from('request_details')
+      .select('*')
+      .eq('request_id', request.id);
+    
+    const details = (detailsData || []).map((d: any) => ({
+      equipment: d.equipment || '',
+      subEquipment: d.sub_equipment || '',
+      area: d.area || '',
+      subArea: d.sub_area || '',
+      activities: d.activities || '',
+      relevantMaterials: d.relevant_materials || '',
+      quantity: d.quantity,
+      unitMeasure: d.unit_measure || '',
+      observation: d.observation || '',
+      responsibleUser: d.responsible_user || '',
+      delegateType: d.delegate_type || '',
+    }));
+
     setEditingRequest({
       ...request,
-      details: requestDetails.map((d: any) => ({
-        equipment: d.equipment || '',
-        subEquipment: d.sub_equipment || '',
-        area: d.area || '',
-        subArea: d.sub_area || '',
-        activities: d.activities || '',
-        relevantMaterials: d.relevant_materials || '',
-        quantity: d.quantity,
-        unitMeasure: d.unit_measure || '',
-        observation: d.observation || '',
-        responsibleUser: d.responsible_user || '',
-        delegateType: d.delegate_type || '',
-      })),
+      details,
     });
     setShowForm(true);
   };
 
-  const handleSaveRequest = (request: Request, isDraft: boolean) => {
-    toast({
-      title: isDraft ? "Borrador guardado" : "Solicitud actualizada",
-      description: isDraft 
-        ? "Tu solicitud ha sido guardada como borrador" 
-        : "Los cambios han sido guardados",
-    });
-    loadRequests();
+  const handleSaveRequest = async (request: Request, isDraft: boolean) => {
+    try {
+      // Actualizar cabecera en requests
+      const { error: requestError } = await supabase
+        .from('requests')
+        .update({
+          description: request.description,
+          service_type: request.serviceType,
+          deadline: request.deadline,
+          city: request.city,
+          store: request.store,
+          branch: request.branch,
+          location: request.location,
+          requires_visit: request.requiresVisit,
+          visit_date: request.visitDate || null,
+          asset: request.asset,
+          status: isDraft ? 'draft' : 'sent',
+        })
+        .eq('id', request.id);
+
+      if (requestError) throw requestError;
+
+      // Eliminar detalles antiguos y crear nuevos
+      await supabase
+        .from('request_details')
+        .delete()
+        .eq('request_id', request.id);
+
+      if (request.details && request.details.length > 0) {
+        const detailsToInsert = request.details.map(d => ({
+          request_id: request.id,
+          equipment: d.equipment || null,
+          sub_equipment: d.subEquipment || null,
+          area: d.area || null,
+          sub_area: d.subArea || null,
+          activities: d.activities || null,
+          relevant_materials: d.relevantMaterials || null,
+          quantity: d.quantity || null,
+          unit_measure: d.unitMeasure || null,
+          observation: d.observation || null,
+          responsible_user: d.responsibleUser || null,
+          delegate_type: d.delegateType || null,
+        }));
+
+        const { error: detailsError } = await supabase
+          .from('request_details')
+          .insert(detailsToInsert);
+
+        if (detailsError) throw detailsError;
+      }
+
+      toast({
+        title: isDraft ? "Borrador guardado" : "Solicitud actualizada",
+        description: isDraft 
+          ? "Tu solicitud ha sido guardada como borrador" 
+          : "Los cambios han sido guardados correctamente",
+      });
+      
+      setShowForm(false);
+      setEditingRequest(null);
+      loadRequests();
+    } catch (error) {
+      console.error('Error saving request:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo guardar la solicitud",
+        variant: "destructive",
+      });
+    }
   };
 
   const getServiceTypeColor = (type: string) => {
