@@ -73,6 +73,21 @@ export interface Quote {
 
 export type ServiceType = 'emergencia' | 'correctivo' | 'preventivo' | 'proyecto';
 
+export interface RequestDetailData {
+  equipment?: string;
+  subEquipment?: string;
+  area?: string;
+  subArea?: string;
+  activities?: string;
+  relevantMaterials?: string;
+  quantity?: number;
+  unitMeasure?: string;
+  observation?: string;
+  responsibleUser?: string;
+  delegateType?: string;
+  attachmentUrls?: string[];
+}
+
 export interface Request {
   id: string;
   requestNumber: string;
@@ -97,6 +112,14 @@ export interface Request {
   clientBranch?: string; // Sede o sucursal
   isPublic?: boolean; // True si no se seleccionaron proveedores
   notifiedAt?: string; // Última vez que se notificó a los proveedores
+  // Nuevos campos de cabecera
+  city?: string;
+  store?: string;
+  branch?: string;
+  requiresVisit?: boolean;
+  visitDate?: string;
+  // Detalle (1 a muchos)
+  details?: RequestDetailData[];
 }
 
 export const MOCK_PROVIDERS: Provider[] = [

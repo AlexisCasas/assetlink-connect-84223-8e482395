@@ -10,8 +10,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Request, ServiceType } from '@/types/request';
 import { Badge } from '@/components/ui/badge';
-import { X, Upload, Search, CheckCircle2 } from 'lucide-react';
+import { X, Upload, Search, CheckCircle2, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { Separator } from '@/components/ui/separator';
 
 interface RequestFormProps {
   onClose: () => void;
@@ -19,36 +20,84 @@ interface RequestFormProps {
   editingRequest?: Request;
 }
 
+interface RequestDetail {
+  id: string;
+  equipment: string;
+  subEquipment: string;
+  area: string;
+  subArea: string;
+  activities: string;
+  relevantMaterials: string;
+  quantity: string;
+  unitMeasure: string;
+  observation: string;
+  responsibleUser: string;
+  delegateType: string;
+  attachments: File[];
+}
+
+const CITIES = ['Tacna', 'Ilo', 'Arequipa'];
+const STORES = ['Plaza Vea', 'Makro'];
+const BRANCHES = ['Tacna', 'Marina', 'Ilo', 'Ejercito'];
+const EQUIPMENT_OPTIONS = ['CÁMARA CONGELADOS PESCADOS 01', 'ESCALERA DE AVIÓN 03', 'ESCALERA DE AVIÓN # 01'];
+const SUB_EQUIPMENT_OPTIONS = ['EXTRACTOR 02', 'EXTRACTOR 03'];
+const AREA_OPTIONS = ['Transtienda', 'Almacén', 'Sala de Ventas'];
+const SUB_AREA_OPTIONS = ['Congelados', 'Abarrotes', 'Electro'];
+
+const createEmptyDetail = (): RequestDetail => ({
+  id: crypto.randomUUID(),
+  equipment: '',
+  subEquipment: '',
+  area: '',
+  subArea: '',
+  activities: '',
+  relevantMaterials: '',
+  quantity: '',
+  unitMeasure: '',
+  observation: '',
+  responsibleUser: '',
+  delegateType: '',
+  attachments: [],
+});
+
 export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  // Cabecera
   const [description, setDescription] = useState(editingRequest?.description || '');
-  const [asset, setAsset] = useState(editingRequest?.asset || '');
-  const [location, setLocation] = useState(editingRequest?.location || '');
   const [serviceType, setServiceType] = useState<ServiceType>(editingRequest?.serviceType || 'correctivo');
-  const [observations, setObservations] = useState(editingRequest?.observations || '');
   const [deadline, setDeadline] = useState(editingRequest?.deadline || '');
-  const [startTime, setStartTime] = useState(editingRequest?.startTime || '');
+  const [city, setCity] = useState('');
+  const [store, setStore] = useState('');
+  const [branch, setBranch] = useState('');
+  const [requiresVisit, setRequiresVisit] = useState(false);
+  const [visitDate, setVisitDate] = useState('');
+  
+  // Detalle (1 a muchos)
+  const [details, setDetails] = useState<RequestDetail[]>([createEmptyDetail()]);
+  
+  // Proveedores
   const [selectedProviders, setSelectedProviders] = useState<string[]>(editingRequest?.selectedProviders || []);
-  const [clientName, setClientName] = useState(editingRequest?.clientName || '');
-  const [clientBranch, setClientBranch] = useState(editingRequest?.clientBranch || '');
-  const [images, setImages] = useState<File[]>([]);
-  const [documents, setDocuments] = useState<File[]>([]);
   const [providers, setProviders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCertified, setFilterCertified] = useState<'all' | 'certified' | 'non-certified'>('all');
   const [filterSpecialty, setFilterSpecialty] = useState<string>('all');
   const [availableSpecialties, setAvailableSpecialties] = useState<string[]>([]);
+  
+  // Usuarios del cliente para encargado
+  const [clientUsers, setClientUsers] = useState<string[]>([]);
 
   useEffect(() => {
     fetchProviders();
+    // Simular usuarios del cliente (en producción vendría de la base de datos)
+    setClientUsers(['Juan Pérez', 'María García', 'Carlos López', 'Ana Rodríguez']);
   }, []);
 
   const fetchProviders = async () => {
     const { data } = await supabase.from('providers').select('*').order('name');
     setProviders(data || []);
     
-    // Extract unique specialties from all providers
     const specialties = new Set<string>();
     (data || []).forEach((provider: any) => {
       if (provider.specialties && Array.isArray(provider.specialties)) {
@@ -69,44 +118,6 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
     return matchesSearch && matchesCertified && matchesSpecialty;
   });
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      if (images.length + newFiles.length > 5) {
-        toast({
-          title: 'Límite excedido',
-          description: 'Solo puedes subir un máximo de 5 imágenes',
-          variant: 'destructive',
-        });
-        return;
-      }
-      setImages([...images, ...newFiles]);
-    }
-  };
-
-  const handleDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      if (documents.length + newFiles.length > 5) {
-        toast({
-          title: 'Límite excedido',
-          description: 'Solo puedes subir un máximo de 5 documentos',
-          variant: 'destructive',
-        });
-        return;
-      }
-      setDocuments([...documents, ...newFiles]);
-    }
-  };
-
-  const removeImage = (index: number) => {
-    setImages(images.filter((_, i) => i !== index));
-  };
-
-  const removeDocument = (index: number) => {
-    setDocuments(documents.filter((_, i) => i !== index));
-  };
-
   const handleProviderToggle = (providerId: string) => {
     if (selectedProviders.includes(providerId)) {
       setSelectedProviders(selectedProviders.filter(id => id !== providerId));
@@ -123,17 +134,62 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
     }
   };
 
-  const handleSubmit = (isDraft: boolean) => {
-    if (!description || !asset || !location || !deadline || !clientName || !clientBranch) {
+  const addDetail = () => {
+    setDetails([...details, createEmptyDetail()]);
+  };
+
+  const removeDetail = (id: string) => {
+    if (details.length > 1) {
+      setDetails(details.filter(d => d.id !== id));
+    }
+  };
+
+  const updateDetail = (id: string, field: keyof RequestDetail, value: any) => {
+    setDetails(details.map(d => d.id === id ? { ...d, [field]: value } : d));
+  };
+
+  const handleDetailAttachmentChange = (detailId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const newFiles = Array.from(e.target.files);
+      const detail = details.find(d => d.id === detailId);
+      if (detail && detail.attachments.length + newFiles.length > 5) {
+        toast({
+          title: 'Límite excedido',
+          description: 'Solo puedes subir un máximo de 5 anexos por detalle',
+          variant: 'destructive',
+        });
+        return;
+      }
+      updateDetail(detailId, 'attachments', [...(detail?.attachments || []), ...newFiles]);
+    }
+  };
+
+  const removeDetailAttachment = (detailId: string, index: number) => {
+    const detail = details.find(d => d.id === detailId);
+    if (detail) {
+      updateDetail(detailId, 'attachments', detail.attachments.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleSubmit = async (isDraft: boolean) => {
+    if (!description || !deadline || !city || !store || !branch) {
       toast({
         title: "Error",
-        description: "Por favor completa los campos obligatorios",
+        description: "Por favor completa los campos obligatorios de la cabecera",
         variant: "destructive",
       });
       return;
     }
 
-    // Advertir si no se seleccionan proveedores (solicitud pública)
+    if (requiresVisit && !visitDate) {
+      toast({
+        title: "Error",
+        description: "Por favor indica la fecha de visita técnica",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!isDraft && selectedProviders.length === 0) {
       const confirmed = window.confirm(
         "No has seleccionado ningún proveedor. Tu solicitud será publicada como solicitud pública para que cualquier proveedor pueda enviar una cotización. ¿Deseas continuar?"
@@ -141,44 +197,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       if (!confirmed) return;
     }
 
-    // Validar tiempo de inicio para correctivo/preventivo (mínimo 48 horas)
-    if (!isDraft && (serviceType === 'correctivo' || serviceType === 'preventivo')) {
-      if (!startTime) {
-        toast({
-          title: "Error",
-          description: "Debes indicar el tiempo de inicio para este tipo de servicio",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      const startDate = new Date(startTime);
-      const minDate = new Date();
-      minDate.setHours(minDate.getHours() + 48);
-      
-      if (startDate < minDate) {
-        toast({
-          title: "Error",
-          description: "El tiempo de inicio debe ser al menos 48 horas desde ahora",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    // Validar tiempo de inicio para proyecto
-    if (!isDraft && serviceType === 'proyecto' && !startTime) {
-      toast({
-        title: "Error",
-        description: "Debes indicar cuándo deseas iniciar el proyecto",
-        variant: "destructive",
-      });
-      return;
-    }
-
     const requestNumber = editingRequest?.requestNumber || `SOL-${Date.now().toString().slice(-6)}`;
     
-    // Determinar prioridad: 1=emergencia, 2=correctivo, 3=preventivo, 4=proyecto
     const priorityMap: { [key in ServiceType]: number } = {
       emergencia: 1,
       correctivo: 2,
@@ -190,12 +210,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       id: editingRequest?.id || crypto.randomUUID(),
       requestNumber,
       description,
-      asset,
-      location,
+      asset: details[0]?.equipment || '',
+      location: `${city} - ${store} - ${branch}`,
       serviceType,
-      observations,
+      observations: '',
       deadline,
-      startTime: serviceType !== 'emergencia' ? startTime : undefined,
+      startTime: undefined,
       selectedProviders,
       status: isDraft ? 'draft' : 'sent',
       createdAt: editingRequest?.createdAt || new Date().toISOString(),
@@ -204,9 +224,28 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       assignments: editingRequest?.assignments || {},
       technicalVisitRequested: editingRequest?.technicalVisitRequested || {},
       quotes: editingRequest?.quotes || [],
-      clientName,
-      clientBranch,
+      clientName: store,
+      clientBranch: branch,
       isPublic: selectedProviders.length === 0,
+      // Nuevos campos
+      city,
+      store,
+      branch,
+      requiresVisit,
+      visitDate: requiresVisit ? visitDate : undefined,
+      details: details.map(d => ({
+        equipment: d.equipment,
+        subEquipment: d.subEquipment,
+        area: d.area,
+        subArea: d.subArea,
+        activities: d.activities,
+        relevantMaterials: d.relevantMaterials,
+        quantity: d.quantity ? parseFloat(d.quantity) : undefined,
+        unitMeasure: d.unitMeasure,
+        observation: d.observation,
+        responsibleUser: d.responsibleUser,
+        delegateType: d.delegateType,
+      })),
     };
 
     onSave(request, isDraft);
@@ -223,202 +262,354 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <CardHeader className="flex flex-row items-center justify-between">
+      <Card className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+        <CardHeader className="flex flex-row items-center justify-between sticky top-0 bg-card z-10">
           <CardTitle>Nueva Solicitud</CardTitle>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Nro de solicitud</Label>
-              <Input 
-                value={editingRequest?.requestNumber || `SOL-${Date.now().toString().slice(-6)}`} 
-                disabled 
-                className="bg-muted"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="clientName">Nombre del Cliente *</Label>
-              <Input
-                id="clientName"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                placeholder="Ej: Transportes Unidos S.A."
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="clientBranch">Sede o Sucursal *</Label>
-              <Input
-                id="clientBranch"
-                value={clientBranch}
-                onChange={(e) => setClientBranch(e.target.value)}
-                placeholder="Ej: Lima Centro, Miraflores"
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="deadline">Fecha límite de envío de cotizaciones *</Label>
-              <Input
-                id="deadline"
-                type="date"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Descripción *</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe el servicio requerido"
-              rows={3}
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="asset">Activo *</Label>
-              <Input
-                id="asset"
-                value={asset}
-                onChange={(e) => setAsset(e.target.value)}
-                placeholder="Ej: Bus Mercedes Benz O500"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="location">Ubicación *</Label>
-              <Input
-                id="location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Ej: Terminal Central"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="serviceType">Tipo de servicio *</Label>
-            <Select value={serviceType} onValueChange={(value) => setServiceType(value as ServiceType)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="emergencia">Emergencia</SelectItem>
-                <SelectItem value="correctivo">Correctivo</SelectItem>
-                <SelectItem value="preventivo">Preventivo</SelectItem>
-                <SelectItem value="proyecto">Proyecto</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="observations">Observaciones (opcional)</Label>
-            <Textarea
-              id="observations"
-              value={observations}
-              onChange={(e) => setObservations(e.target.value)}
-              placeholder="Información adicional relevante"
-              rows={2}
-            />
-          </div>
-
-          {serviceType !== 'emergencia' && (
-            <div className="space-y-2">
-              <Label htmlFor="startTime">
-                {serviceType === 'proyecto' 
-                  ? 'Fecha deseada de inicio del proyecto *' 
-                  : 'Fecha de inicio del servicio * (mínimo 48 horas)'}
-              </Label>
-              <Input
-                id="startTime"
-                type="datetime-local"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                required
-              />
-              {(serviceType === 'correctivo' || serviceType === 'preventivo') && (
-                <p className="text-xs text-muted-foreground">
-                  El plazo mínimo es de 48 horas desde ahora
-                </p>
-              )}
-            </div>
-          )}
-
-          {serviceType === 'emergencia' && (
-            <div className="p-4 border border-red-500/20 bg-red-500/10 rounded-lg">
-              <p className="text-sm text-red-600 dark:text-red-400 font-medium">
-                ⚠️ Esta es una solicitud de emergencia. Los proveedores serán notificados inmediatamente.
-              </p>
-            </div>
-          )}
-
+          {/* CABECERA */}
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="images">Imágenes (opcional, máx. 5)</Label>
-              <Input
-                id="images"
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleImageChange}
-                disabled={images.length >= 5}
-              />
-              {images.length > 0 && (
-                <div className="space-y-1 mt-2">
-                  {images.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
-                      <span className="truncate flex-1">{file.name}</span>
-                      <Button variant="ghost" size="sm" onClick={() => removeImage(index)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <h3 className="text-lg font-semibold text-primary">Datos de Cabecera</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Nro de solicitud</Label>
+                <Input 
+                  value={editingRequest?.requestNumber || `SOL-${Date.now().toString().slice(-6)}`} 
+                  disabled 
+                  className="bg-muted"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="serviceType">Tipo de servicio *</Label>
+                <Select value={serviceType} onValueChange={(value) => setServiceType(value as ServiceType)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="emergencia">Emergencia</SelectItem>
+                    <SelectItem value="correctivo">Correctivo</SelectItem>
+                    <SelectItem value="preventivo">Preventivo</SelectItem>
+                    <SelectItem value="proyecto">Proyecto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="deadline">Fecha de Entrega de Solicitudes de Cotización *</Label>
+                <Input
+                  id="deadline"
+                  type="date"
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                  required
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="documents">Documentos (opcional, máx. 5)</Label>
-              <Input
-                id="documents"
-                type="file"
-                multiple
-                accept=".pdf,.doc,.docx,.xls,.xlsx"
-                onChange={handleDocumentChange}
-                disabled={documents.length >= 5}
-              />
-              {documents.length > 0 && (
-                <div className="space-y-1 mt-2">
-                  {documents.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
-                      <span className="truncate flex-1">{file.name}</span>
-                      <Button variant="ghost" size="sm" onClick={() => removeDocument(index)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Creador</Label>
+                <Input 
+                  value={user?.email || ''} 
+                  disabled 
+                  className="bg-muted"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="city">Ciudad *</Label>
+                <Select value={city} onValueChange={setCity}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona ciudad" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {CITIES.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="store">Tienda *</Label>
+                <Select value={store} onValueChange={setStore}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona tienda" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {STORES.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="branch">Sede *</Label>
+                <Select value={branch} onValueChange={setBranch}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona sede" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {BRANCHES.map((b) => (
+                      <SelectItem key={b} value={b}>{b}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="description">Descripción *</Label>
+                <Textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Describe el servicio requerido"
+                  rows={2}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="requiresVisit"
+                  checked={requiresVisit}
+                  onCheckedChange={(checked) => setRequiresVisit(checked as boolean)}
+                />
+                <Label htmlFor="requiresVisit" className="cursor-pointer">¿Requiere visita técnica?</Label>
+              </div>
+
+              {requiresVisit && (
+                <div className="space-y-2">
+                  <Label htmlFor="visitDate">Fecha Visita Técnica *</Label>
+                  <Input
+                    id="visitDate"
+                    type="date"
+                    value={visitDate}
+                    onChange={(e) => setVisitDate(e.target.value)}
+                    required
+                  />
                 </div>
               )}
             </div>
           </div>
 
+          <Separator />
+
+          {/* DETALLE */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-primary">Detalle de la Solicitud</h3>
+              <Button type="button" variant="outline" size="sm" onClick={addDetail}>
+                <Plus className="w-4 h-4 mr-2" />
+                Agregar Detalle
+              </Button>
+            </div>
+
+            {details.map((detail, index) => (
+              <Card key={detail.id} className="p-4 bg-muted/30">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium">Detalle #{index + 1}</h4>
+                  {details.length > 1 && (
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => removeDetail(detail.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Equipo</Label>
+                    <Select 
+                      value={detail.equipment} 
+                      onValueChange={(value) => updateDetail(detail.id, 'equipment', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona equipo" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        {EQUIPMENT_OPTIONS.map((eq) => (
+                          <SelectItem key={eq} value={eq}>{eq}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Subequipo</Label>
+                    <Select 
+                      value={detail.subEquipment} 
+                      onValueChange={(value) => updateDetail(detail.id, 'subEquipment', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona subequipo" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        {SUB_EQUIPMENT_OPTIONS.map((seq) => (
+                          <SelectItem key={seq} value={seq}>{seq}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Área</Label>
+                    <Select 
+                      value={detail.area} 
+                      onValueChange={(value) => updateDetail(detail.id, 'area', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona área" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        {AREA_OPTIONS.map((a) => (
+                          <SelectItem key={a} value={a}>{a}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Subárea</Label>
+                    <Select 
+                      value={detail.subArea} 
+                      onValueChange={(value) => updateDetail(detail.id, 'subArea', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona subárea" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        {SUB_AREA_OPTIONS.map((sa) => (
+                          <SelectItem key={sa} value={sa}>{sa}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Partidas o Actividades</Label>
+                    <Input
+                      value={detail.activities}
+                      onChange={(e) => updateDetail(detail.id, 'activities', e.target.value)}
+                      placeholder="Describe las actividades"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Materiales Relevantes</Label>
+                    <Input
+                      value={detail.relevantMaterials}
+                      onChange={(e) => updateDetail(detail.id, 'relevantMaterials', e.target.value)}
+                      placeholder="Materiales necesarios"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Cantidad</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={detail.quantity}
+                      onChange={(e) => updateDetail(detail.id, 'quantity', e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>U.M (Unidad de Medida)</Label>
+                    <Input
+                      value={detail.unitMeasure}
+                      onChange={(e) => updateDetail(detail.id, 'unitMeasure', e.target.value)}
+                      placeholder="Ej: Unidad, Metro, Kg"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Observación</Label>
+                    <Input
+                      value={detail.observation}
+                      onChange={(e) => updateDetail(detail.id, 'observation', e.target.value)}
+                      placeholder="Observaciones adicionales"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Encargado</Label>
+                    <Select 
+                      value={detail.responsibleUser} 
+                      onValueChange={(value) => updateDetail(detail.id, 'responsibleUser', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona encargado" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        {clientUsers.map((u) => (
+                          <SelectItem key={u} value={u}>{u}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Delegado</Label>
+                    <Select 
+                      value={detail.delegateType} 
+                      onValueChange={(value) => updateDetail(detail.id, 'delegateType', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona tipo" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        <SelectItem value="Tercero">Tercero</SelectItem>
+                        <SelectItem value="Propio">Propio</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Anexos (máx. 5)</Label>
+                    <Input
+                      type="file"
+                      multiple
+                      onChange={(e) => handleDetailAttachmentChange(detail.id, e)}
+                      disabled={detail.attachments.length >= 5}
+                    />
+                    {detail.attachments.length > 0 && (
+                      <div className="space-y-1 mt-2">
+                        {detail.attachments.map((file, i) => (
+                          <div key={i} className="flex items-center justify-between p-2 bg-background rounded text-sm">
+                            <span className="truncate flex-1">{file.name}</span>
+                            <Button variant="ghost" size="sm" onClick={() => removeDetailAttachment(detail.id, i)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <Separator />
+
+          {/* PROVEEDORES */}
           <div className="space-y-4">
             <Label>Seleccionar proveedores (máximo 5, opcional)</Label>
             <p className="text-xs text-muted-foreground">
@@ -450,7 +641,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               </Select>
               <Select value={filterCertified} onValueChange={(value: any) => setFilterCertified(value)}>
                 <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue />
+                  <SelectValue placeholder="Certificación" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
                   <SelectItem value="all">Todos</SelectItem>
@@ -460,57 +651,88 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               </Select>
             </div>
 
-            <div className="border rounded-lg p-4 space-y-3 max-h-64 overflow-y-auto">
+            {selectedProviders.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {selectedProviders.map(providerId => {
+                  const provider = providers.find(p => p.id === providerId);
+                  return provider ? (
+                    <Badge key={providerId} variant="secondary" className="pl-2 pr-1 py-1">
+                      {provider.name}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-4 w-4 ml-1 hover:bg-transparent"
+                        onClick={() => handleProviderToggle(providerId)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Badge>
+                  ) : null;
+                })}
+              </div>
+            )}
+
+            <div className="border rounded-lg max-h-48 overflow-y-auto">
               {filteredProviders.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
+                <div className="p-4 text-center text-muted-foreground text-sm">
                   No se encontraron proveedores
-                </p>
+                </div>
               ) : (
-                filteredProviders.map((provider) => (
+                filteredProviders.map(provider => (
                   <div
                     key={provider.id}
-                    className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                    className={`flex items-center justify-between p-3 border-b last:border-b-0 cursor-pointer hover:bg-muted/50 transition-colors ${
+                      selectedProviders.includes(provider.id) ? 'bg-primary/10' : ''
+                    }`}
+                    onClick={() => handleProviderToggle(provider.id)}
                   >
-                    <Checkbox
-                      id={provider.id}
-                      checked={selectedProviders.includes(provider.id)}
-                      onCheckedChange={() => handleProviderToggle(provider.id)}
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <label htmlFor={provider.id} className="font-medium cursor-pointer">
-                          {provider.name}
-                        </label>
-                        {provider.certified && (
-                          <Badge variant="default" className="text-xs flex items-center gap-1">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Certificado
-                          </Badge>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded border flex items-center justify-center ${
+                        selectedProviders.includes(provider.id) 
+                          ? 'bg-primary border-primary' 
+                          : 'border-muted-foreground'
+                      }`}>
+                        {selectedProviders.includes(provider.id) && (
+                          <CheckCircle2 className="w-4 h-4 text-primary-foreground" />
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">{provider.email}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {provider.specialties?.join(', ') || 'Sin especialidades'} • ⭐ {provider.rating || 'N/A'}
-                      </p>
+                      <div>
+                        <p className="font-medium text-sm">{provider.name}</p>
+                        <p className="text-xs text-muted-foreground">{provider.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {provider.certified && (
+                        <Badge variant="outline" className="text-xs">Certificado</Badge>
+                      )}
+                      <Badge variant="secondary" className="text-xs">
+                        ★ {provider.rating?.toFixed(1) || '0.0'}
+                      </Badge>
                     </div>
                   </div>
                 ))
               )}
             </div>
-            <p className="text-sm text-muted-foreground">
-              Proveedores seleccionados: {selectedProviders.length}/5
-            </p>
           </div>
 
-          <div className="flex gap-3 justify-end pt-4 border-t">
-            <Button variant="outline" onClick={onClose}>
+          {/* BOTONES */}
+          <div className="flex flex-col sm:flex-row gap-2 pt-4">
+            <Button variant="outline" onClick={onClose} className="flex-1 sm:flex-none">
               Cancelar
             </Button>
-            <Button variant="outline" onClick={() => handleSubmit(true)}>
+            <div className="flex-1" />
+            <Button 
+              variant="secondary" 
+              onClick={() => handleSubmit(true)}
+              className="flex-1 sm:flex-none"
+            >
               Guardar como borrador
             </Button>
-            <Button onClick={() => handleSubmit(false)}>
-              Enviar a proveedores
+            <Button 
+              onClick={() => handleSubmit(false)}
+              className="flex-1 sm:flex-none"
+            >
+              Enviar a Proveedores
             </Button>
           </div>
         </CardContent>
