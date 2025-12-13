@@ -20,8 +20,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Users, Phone, Mail, Briefcase } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, Phone, Mail, Briefcase, Tag } from 'lucide-react';
 
 interface ApprovedProvider {
   id: string;
@@ -33,12 +41,22 @@ interface ApprovedProvider {
   created_at: string;
 }
 
+interface ClientSpecialty {
+  id: string;
+  client_email: string;
+  name: string;
+  created_at: string;
+}
+
 export const ApprovedProvidersList = () => {
   const { user } = useAuth();
   const [providers, setProviders] = useState<ApprovedProvider[]>([]);
+  const [specialties, setSpecialties] = useState<ClientSpecialty[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
+  const [showSpecialtyDialog, setShowSpecialtyDialog] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ApprovedProvider | null>(null);
+  const [newSpecialtyName, setNewSpecialtyName] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -47,24 +65,34 @@ export const ApprovedProvidersList = () => {
   });
 
   useEffect(() => {
-    loadProviders();
+    loadData();
   }, [user]);
 
-  const loadProviders = async () => {
+  const loadData = async () => {
     if (!user?.email) return;
     
     try {
-      const { data, error } = await supabase
-        .from('client_approved_providers')
-        .select('*')
-        .eq('client_email', user.email)
-        .order('created_at', { ascending: false });
+      const [providersResult, specialtiesResult] = await Promise.all([
+        supabase
+          .from('client_approved_providers')
+          .select('*')
+          .eq('client_email', user.email)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('client_specialties')
+          .select('*')
+          .eq('client_email', user.email)
+          .order('name', { ascending: true }),
+      ]);
 
-      if (error) throw error;
-      setProviders(data || []);
+      if (providersResult.error) throw providersResult.error;
+      if (specialtiesResult.error) throw specialtiesResult.error;
+      
+      setProviders(providersResult.data || []);
+      setSpecialties(specialtiesResult.data || []);
     } catch (error) {
-      console.error('Error loading providers:', error);
-      toast.error('Error al cargar proveedores');
+      console.error('Error loading data:', error);
+      toast.error('Error al cargar datos');
     } finally {
       setLoading(false);
     }
@@ -106,7 +134,7 @@ export const ApprovedProvidersList = () => {
             name: formData.name.trim(),
             email: formData.email.trim(),
             phone: formData.phone.trim() || null,
-            specialty: formData.specialty.trim() || null,
+            specialty: formData.specialty || null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingProvider.id);
@@ -121,7 +149,7 @@ export const ApprovedProvidersList = () => {
             name: formData.name.trim(),
             email: formData.email.trim(),
             phone: formData.phone.trim() || null,
-            specialty: formData.specialty.trim() || null,
+            specialty: formData.specialty || null,
           });
 
         if (error) throw error;
@@ -129,7 +157,7 @@ export const ApprovedProvidersList = () => {
       }
 
       handleCloseDialog();
-      loadProviders();
+      loadData();
     } catch (error) {
       console.error('Error saving provider:', error);
       toast.error('Error al guardar proveedor');
@@ -147,10 +175,60 @@ export const ApprovedProvidersList = () => {
 
       if (error) throw error;
       toast.success('Proveedor eliminado');
-      loadProviders();
+      loadData();
     } catch (error) {
       console.error('Error deleting provider:', error);
       toast.error('Error al eliminar proveedor');
+    }
+  };
+
+  const handleAddSpecialty = async () => {
+    if (!newSpecialtyName.trim()) {
+      toast.error('Ingrese un nombre para la especialidad');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('client_specialties')
+        .insert({
+          client_email: user?.email,
+          name: newSpecialtyName.trim(),
+        });
+
+      if (error) {
+        if (error.code === '23505') {
+          toast.error('Esta especialidad ya existe');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast.success('Especialidad agregada');
+      setNewSpecialtyName('');
+      loadData();
+    } catch (error) {
+      console.error('Error adding specialty:', error);
+      toast.error('Error al agregar especialidad');
+    }
+  };
+
+  const handleDeleteSpecialty = async (id: string, name: string) => {
+    if (!confirm(`¿Está seguro de eliminar la especialidad "${name}"?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('client_specialties')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      toast.success('Especialidad eliminada');
+      loadData();
+    } catch (error) {
+      console.error('Error deleting specialty:', error);
+      toast.error('Error al eliminar especialidad');
     }
   };
 
@@ -177,11 +255,29 @@ export const ApprovedProvidersList = () => {
             Gestiona tu lista de proveedores aprobados
           </p>
         </div>
-        <Button onClick={() => handleOpenDialog()}>
-          <Plus className="h-4 w-4 mr-2" />
-          Agregar Proveedor
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowSpecialtyDialog(true)}>
+            <Tag className="h-4 w-4 mr-2" />
+            Gestionar Especialidades
+          </Button>
+          <Button onClick={() => handleOpenDialog()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Agregar Proveedor
+          </Button>
+        </div>
       </div>
+
+      {/* Specialty badges */}
+      {specialties.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <span className="text-sm text-muted-foreground">Especialidades:</span>
+          {specialties.map((specialty) => (
+            <Badge key={specialty.id} variant="secondary">
+              {specialty.name}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -230,10 +326,10 @@ export const ApprovedProvidersList = () => {
                     </TableCell>
                     <TableCell>
                       {provider.specialty ? (
-                        <div className="flex items-center gap-2">
-                          <Briefcase className="h-4 w-4 text-muted-foreground" />
+                        <Badge variant="outline">
+                          <Briefcase className="h-3 w-3 mr-1" />
                           {provider.specialty}
-                        </div>
+                        </Badge>
                       ) : (
                         <span className="text-muted-foreground">-</span>
                       )}
@@ -265,7 +361,7 @@ export const ApprovedProvidersList = () => {
         </CardContent>
       </Card>
 
-      {/* Dialog para agregar/editar */}
+      {/* Dialog para agregar/editar proveedor */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
           <DialogHeader>
@@ -304,12 +400,38 @@ export const ApprovedProvidersList = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="specialty">Especialidad</Label>
-              <Input
-                id="specialty"
-                value={formData.specialty}
-                onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
-                placeholder="Ej: Electricidad, Plomería, etc."
-              />
+              {specialties.length > 0 ? (
+                <Select
+                  value={formData.specialty}
+                  onValueChange={(value) => setFormData({ ...formData, specialty: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona una especialidad" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="">Sin especialidad</SelectItem>
+                    {specialties.map((specialty) => (
+                      <SelectItem key={specialty.id} value={specialty.name}>
+                        {specialty.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm text-muted-foreground p-3 border rounded-md">
+                  No hay especialidades definidas. 
+                  <Button
+                    variant="link"
+                    className="px-1 h-auto"
+                    onClick={() => {
+                      setShowDialog(false);
+                      setShowSpecialtyDialog(true);
+                    }}
+                  >
+                    Agregar especialidades
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -318,6 +440,66 @@ export const ApprovedProvidersList = () => {
             </Button>
             <Button onClick={handleSubmit}>
               {editingProvider ? 'Guardar Cambios' : 'Agregar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para gestionar especialidades */}
+      <Dialog open={showSpecialtyDialog} onOpenChange={setShowSpecialtyDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="h-5 w-5" />
+              Gestionar Especialidades
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Nueva especialidad..."
+                value={newSpecialtyName}
+                onChange={(e) => setNewSpecialtyName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddSpecialty();
+                  }
+                }}
+              />
+              <Button onClick={handleAddSpecialty}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {specialties.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4">
+                No hay especialidades definidas
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {specialties.map((specialty) => (
+                  <div
+                    key={specialty.id}
+                    className="flex items-center justify-between p-2 border rounded-md"
+                  >
+                    <span>{specialty.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteSpecialty(specialty.id, specialty.name)}
+                      className="text-destructive hover:text-destructive h-8 w-8 p-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSpecialtyDialog(false)}>
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
