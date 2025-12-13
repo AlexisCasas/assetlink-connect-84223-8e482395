@@ -416,6 +416,68 @@ export type Database = {
           },
         ]
       }
+      request_details: {
+        Row: {
+          activities: string | null
+          area: string | null
+          attachment_urls: string[] | null
+          created_at: string
+          delegate_type: string | null
+          equipment: string | null
+          id: string
+          observation: string | null
+          quantity: number | null
+          relevant_materials: string | null
+          request_id: string
+          responsible_user: string | null
+          sub_area: string | null
+          sub_equipment: string | null
+          unit_measure: string | null
+        }
+        Insert: {
+          activities?: string | null
+          area?: string | null
+          attachment_urls?: string[] | null
+          created_at?: string
+          delegate_type?: string | null
+          equipment?: string | null
+          id?: string
+          observation?: string | null
+          quantity?: number | null
+          relevant_materials?: string | null
+          request_id: string
+          responsible_user?: string | null
+          sub_area?: string | null
+          sub_equipment?: string | null
+          unit_measure?: string | null
+        }
+        Update: {
+          activities?: string | null
+          area?: string | null
+          attachment_urls?: string[] | null
+          created_at?: string
+          delegate_type?: string | null
+          equipment?: string | null
+          id?: string
+          observation?: string | null
+          quantity?: number | null
+          relevant_materials?: string | null
+          request_id?: string
+          responsible_user?: string | null
+          sub_area?: string | null
+          sub_equipment?: string | null
+          unit_measure?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_details_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       request_providers: {
         Row: {
           created_at: string
@@ -455,6 +517,8 @@ export type Database = {
       requests: {
         Row: {
           asset: string
+          branch: string | null
+          city: string | null
           client_branch: string | null
           client_name: string | null
           created_at: string
@@ -471,12 +535,17 @@ export type Database = {
           priority: number
           quotes_closed: boolean
           request_number: string
+          requires_visit: boolean | null
           service_type: Database["public"]["Enums"]["service_type"]
           start_time: string | null
           status: Database["public"]["Enums"]["request_status"]
+          store: string | null
+          visit_date: string | null
         }
         Insert: {
           asset: string
+          branch?: string | null
+          city?: string | null
           client_branch?: string | null
           client_name?: string | null
           created_at?: string
@@ -493,12 +562,17 @@ export type Database = {
           priority?: number
           quotes_closed?: boolean
           request_number: string
+          requires_visit?: boolean | null
           service_type: Database["public"]["Enums"]["service_type"]
           start_time?: string | null
           status?: Database["public"]["Enums"]["request_status"]
+          store?: string | null
+          visit_date?: string | null
         }
         Update: {
           asset?: string
+          branch?: string | null
+          city?: string | null
           client_branch?: string | null
           client_name?: string | null
           created_at?: string
@@ -515,9 +589,12 @@ export type Database = {
           priority?: number
           quotes_closed?: boolean
           request_number?: string
+          requires_visit?: boolean | null
           service_type?: Database["public"]["Enums"]["service_type"]
           start_time?: string | null
           status?: Database["public"]["Enums"]["request_status"]
+          store?: string | null
+          visit_date?: string | null
         }
         Relationships: []
       }
