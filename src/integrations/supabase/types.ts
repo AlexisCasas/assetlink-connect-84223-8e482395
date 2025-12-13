@@ -152,6 +152,39 @@ export type Database = {
           },
         ]
       }
+      client_approved_providers: {
+        Row: {
+          client_email: string
+          created_at: string
+          email: string
+          id: string
+          name: string
+          phone: string | null
+          specialty: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_email: string
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          phone?: string | null
+          specialty?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_email?: string
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          specialty?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string

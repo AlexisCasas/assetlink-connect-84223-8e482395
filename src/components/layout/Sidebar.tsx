@@ -15,12 +15,13 @@ import {
   Settings,
   Globe,
   Bell,
-  MessageSquare
+  MessageSquare,
+  Users
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -174,6 +175,21 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
                 !collapsed && "mr-2"
               )} />
               {!collapsed && 'Borradores'}
+            </Button>
+
+            <Button
+              variant={currentView === 'approved-providers' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('approved-providers')}
+            >
+              <Users className={cn(
+                "h-4 w-4",
+                !collapsed && "mr-2"
+              )} />
+              {!collapsed && 'Proveedores Homologados'}
             </Button>
 
             <Button
