@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RequestForm } from './RequestForm';
 import { QuoteListDialog } from './QuoteListDialog';
+import { RequestChatDialog } from './RequestChatDialog';
 import { Request, MOCK_PROVIDERS } from '@/types/request';
-import { Plus, Calendar, MapPin, FileText, Bell, Building2, DollarSign } from 'lucide-react';
+import { Plus, Calendar, MapPin, FileText, Bell, Building2, DollarSign, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/lib/seedData';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,6 +19,7 @@ export const RequestList = () => {
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [showQuotesDialog, setShowQuotesDialog] = useState(false);
+  const [showChatDialog, setShowChatDialog] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
 
   useEffect(() => {
@@ -220,7 +222,7 @@ export const RequestList = () => {
                     </div>
                   )}
                   
-                  <div className="flex gap-2 items-center">
+                  <div className="flex gap-2 items-center flex-wrap">
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -228,6 +230,17 @@ export const RequestList = () => {
                     >
                       <Bell className="h-4 w-4 mr-2" />
                       Notificar a Proveedores
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setSelectedRequest(request);
+                        setShowChatDialog(true);
+                      }}
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Chat
                     </Button>
                     <Button 
                       variant="default" 
@@ -268,6 +281,18 @@ export const RequestList = () => {
             setSelectedRequest(null);
           }}
           request={selectedRequest}
+        />
+      )}
+
+      {showChatDialog && selectedRequest && (
+        <RequestChatDialog
+          open={showChatDialog}
+          onClose={() => {
+            setShowChatDialog(false);
+            setSelectedRequest(null);
+          }}
+          requestId={selectedRequest.id}
+          requestNumber={selectedRequest.requestNumber}
         />
       )}
     </div>
