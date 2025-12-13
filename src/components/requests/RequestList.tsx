@@ -7,7 +7,7 @@ import { RequestForm } from './RequestForm';
 import { QuoteListDialog } from './QuoteListDialog';
 import { RequestChatDialog } from './RequestChatDialog';
 import { Request, MOCK_PROVIDERS } from '@/types/request';
-import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil, Filter } from 'lucide-react';
+import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil, Filter, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/lib/seedData';
 import { supabase } from '@/integrations/supabase/client';
@@ -27,6 +27,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import {
@@ -50,6 +60,8 @@ export const RequestList = () => {
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [editingRequest, setEditingRequest] = useState<Request | null>(null);
   const [requestDetails, setRequestDetails] = useState<any[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [requestToDelete, setRequestToDelete] = useState<string | null>(null);
 
   // Filtros
   const [filterStore, setFilterStore] = useState<string>('all');
@@ -221,6 +233,48 @@ export const RequestList = () => {
         description: "No se pudo guardar la solicitud",
         variant: "destructive",
       });
+    }
+  };
+
+  const confirmDeleteRequest = (id: string) => {
+    setRequestToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteRequest = async () => {
+    if (!requestToDelete) return;
+
+    try {
+      // Eliminar detalles primero
+      await supabase
+        .from('request_details')
+        .delete()
+        .eq('request_id', requestToDelete);
+
+      // Eliminar la solicitud
+      const { error } = await supabase
+        .from('requests')
+        .delete()
+        .eq('id', requestToDelete);
+
+      if (error) throw error;
+
+      toast({
+        title: "Solicitud eliminada",
+        description: "La solicitud ha sido eliminada correctamente",
+      });
+      
+      loadRequests();
+    } catch (error) {
+      console.error('Error deleting request:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la solicitud",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteDialogOpen(false);
+      setRequestToDelete(null);
     }
   };
 
@@ -470,6 +524,15 @@ export const RequestList = () => {
                         >
                           <DollarSign className="h-4 w-4" />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => confirmDeleteRequest(request.id)}
+                          title="Eliminar solicitud"
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -658,6 +721,24 @@ export const RequestList = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Diálogo de confirmación para eliminar */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar solicitud?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. La solicitud será eliminada permanentemente junto con todos sus detalles.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteRequest} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -5,8 +5,28 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RequestForm } from './RequestForm';
 import { Request } from '@/types/request';
-import { FileText, Edit, Trash2 } from 'lucide-react';
+import { FileText, Edit, Trash2, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export const DraftList = () => {
   const { user } = useAuth();
@@ -14,51 +34,255 @@ export const DraftList = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingDraft, setEditingDraft] = useState<Request | undefined>();
   const [drafts, setDrafts] = useState<Request[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [draftToDelete, setDraftToDelete] = useState<string | null>(null);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [selectedDraft, setSelectedDraft] = useState<Request | null>(null);
+  const [draftDetails, setDraftDetails] = useState<any[]>([]);
 
-  const loadDrafts = () => {
-    const stored = localStorage.getItem('requests');
-    if (stored) {
-      const allRequests = JSON.parse(stored);
-      setDrafts(allRequests.filter((r: Request) => r.createdBy === user?.email && r.status === 'draft'));
+  const loadDrafts = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('requests')
+        .select('*')
+        .eq('status', 'draft')
+        .eq('created_by', user?.email || '')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const transformedDrafts: Request[] = (data || []).map((req: any) => ({
+        id: req.id,
+        requestNumber: req.request_number,
+        description: req.description,
+        asset: req.asset,
+        location: req.location,
+        serviceType: req.service_type,
+        observations: req.observations,
+        images: req.image_urls || [],
+        documents: req.document_urls || [],
+        deadline: req.deadline,
+        startTime: req.start_time,
+        selectedProviders: [],
+        status: req.status,
+        createdAt: req.created_at,
+        createdBy: req.created_by,
+        priority: req.priority,
+        clientName: req.client_name,
+        clientBranch: req.client_branch,
+        isPublic: req.is_public,
+        city: req.city,
+        store: req.store,
+        branch: req.branch,
+        requiresVisit: req.requires_visit,
+        visitDate: req.visit_date,
+      }));
+
+      setDrafts(transformedDrafts);
+    } catch (error) {
+      console.error('Error loading drafts:', error);
+      setDrafts([]);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadDrafts();
+    if (user?.email) {
+      loadDrafts();
+    }
   }, [user]);
 
-  const handleSaveRequest = (request: Request, isDraft: boolean) => {
-    const stored = localStorage.getItem('requests');
-    const allRequests = stored ? JSON.parse(stored) : [];
-    
-    const existingIndex = allRequests.findIndex((r: Request) => r.id === request.id);
-    if (existingIndex >= 0) {
-      allRequests[existingIndex] = request;
-    } else {
-      allRequests.push(request);
-    }
-    
-    localStorage.setItem('requests', JSON.stringify(allRequests));
-    loadDrafts();
+  const loadDraftDetails = async (requestId: string) => {
+    const { data } = await supabase
+      .from('request_details')
+      .select('*')
+      .eq('request_id', requestId);
+    setDraftDetails(data || []);
   };
 
-  const handleDelete = (id: string) => {
-    const stored = localStorage.getItem('requests');
-    if (stored) {
-      const allRequests = JSON.parse(stored);
-      const filtered = allRequests.filter((r: Request) => r.id !== id);
-      localStorage.setItem('requests', JSON.stringify(filtered));
-      loadDrafts();
+  const handleViewDraft = async (draft: Request) => {
+    setSelectedDraft(draft);
+    await loadDraftDetails(draft.id);
+    setShowViewDialog(true);
+  };
+
+  const handleSaveRequest = async (request: Request, isDraft: boolean) => {
+    try {
+      // Verificar si existe
+      const { data: existing } = await supabase
+        .from('requests')
+        .select('id')
+        .eq('id', request.id)
+        .single();
+
+      if (existing) {
+        // Actualizar
+        const { error: requestError } = await supabase
+          .from('requests')
+          .update({
+            description: request.description,
+            service_type: request.serviceType,
+            deadline: request.deadline,
+            city: request.city,
+            store: request.store,
+            branch: request.branch,
+            location: request.location,
+            requires_visit: request.requiresVisit,
+            visit_date: request.visitDate || null,
+            asset: request.asset,
+            status: isDraft ? 'draft' : 'sent',
+            is_public: request.isPublic,
+          })
+          .eq('id', request.id);
+
+        if (requestError) throw requestError;
+
+        // Eliminar detalles antiguos
+        await supabase
+          .from('request_details')
+          .delete()
+          .eq('request_id', request.id);
+      } else {
+        // Crear nuevo
+        const { error: insertError } = await supabase
+          .from('requests')
+          .insert({
+            id: request.id,
+            request_number: request.requestNumber,
+            description: request.description,
+            service_type: request.serviceType,
+            deadline: request.deadline,
+            city: request.city,
+            store: request.store,
+            branch: request.branch,
+            location: request.location,
+            requires_visit: request.requiresVisit,
+            visit_date: request.visitDate || null,
+            asset: request.asset,
+            status: isDraft ? 'draft' : 'sent',
+            created_by: user?.email || '',
+            is_public: request.isPublic,
+            client_name: request.clientName,
+            client_branch: request.clientBranch,
+            priority: request.priority,
+          });
+
+        if (insertError) throw insertError;
+      }
+
+      // Insertar detalles
+      if (request.details && request.details.length > 0) {
+        const detailsToInsert = request.details.map(d => ({
+          request_id: request.id,
+          equipment: d.equipment || null,
+          sub_equipment: d.subEquipment || null,
+          area: d.area || null,
+          sub_area: d.subArea || null,
+          activities: d.activities || null,
+          relevant_materials: d.relevantMaterials || null,
+          quantity: d.quantity || null,
+          unit_measure: d.unitMeasure || null,
+          observation: d.observation || null,
+          responsible_user: d.responsibleUser || null,
+          delegate_type: d.delegateType || null,
+        }));
+
+        await supabase
+          .from('request_details')
+          .insert(detailsToInsert);
+      }
+
       toast({
-        title: "Borrador eliminado",
-        description: "El borrador ha sido eliminado correctamente",
+        title: isDraft ? "Borrador guardado" : "Solicitud enviada",
+        description: isDraft 
+          ? "Tu solicitud ha sido guardada como borrador" 
+          : "La solicitud ha sido enviada correctamente",
+      });
+
+      setShowForm(false);
+      setEditingDraft(undefined);
+      loadDrafts();
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo guardar la solicitud",
+        variant: "destructive",
       });
     }
   };
 
-  const handleEdit = (draft: Request) => {
-    setEditingDraft(draft);
+  const handleDelete = async () => {
+    if (!draftToDelete) return;
+
+    try {
+      // Eliminar detalles primero
+      await supabase
+        .from('request_details')
+        .delete()
+        .eq('request_id', draftToDelete);
+
+      // Eliminar la solicitud
+      const { error } = await supabase
+        .from('requests')
+        .delete()
+        .eq('id', draftToDelete);
+
+      if (error) throw error;
+
+      toast({
+        title: "Borrador eliminado",
+        description: "El borrador ha sido eliminado correctamente",
+      });
+      
+      loadDrafts();
+    } catch (error) {
+      console.error('Error deleting draft:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el borrador",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteDialogOpen(false);
+      setDraftToDelete(null);
+    }
+  };
+
+  const handleEdit = async (draft: Request) => {
+    // Cargar detalles
+    const { data: detailsData } = await supabase
+      .from('request_details')
+      .select('*')
+      .eq('request_id', draft.id);
+
+    const details = (detailsData || []).map((d: any) => ({
+      equipment: d.equipment || '',
+      subEquipment: d.sub_equipment || '',
+      area: d.area || '',
+      subArea: d.sub_area || '',
+      activities: d.activities || '',
+      relevantMaterials: d.relevant_materials || '',
+      quantity: d.quantity,
+      unitMeasure: d.unit_measure || '',
+      observation: d.observation || '',
+      responsibleUser: d.responsible_user || '',
+      delegateType: d.delegate_type || '',
+    }));
+
+    setEditingDraft({
+      ...draft,
+      details,
+    });
     setShowForm(true);
+  };
+
+  const confirmDelete = (id: string) => {
+    setDraftToDelete(id);
+    setDeleteDialogOpen(true);
   };
 
   const getServiceTypeColor = (type: string) => {
@@ -87,7 +311,13 @@ export const DraftList = () => {
         <h2 className="text-2xl font-bold">Borradores</h2>
       </div>
 
-      {drafts.length === 0 ? (
+      {loading ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Cargando borradores...</p>
+          </CardContent>
+        </Card>
+      ) : drafts.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
@@ -111,14 +341,25 @@ export const DraftList = () => {
                     <Button
                       variant="outline"
                       size="icon"
+                      onClick={() => handleViewDraft(draft)}
+                      title="Ver"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
                       onClick={() => handleEdit(draft)}
+                      title="Editar"
                     >
                       <Edit className="w-4 h-4" />
                     </Button>
                     <Button
                       variant="outline"
                       size="icon"
-                      onClick={() => handleDelete(draft.id)}
+                      onClick={() => confirmDelete(draft.id)}
+                      title="Eliminar"
+                      className="text-destructive hover:text-destructive"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -133,12 +374,109 @@ export const DraftList = () => {
                   <span className="text-muted-foreground">
                     Creado: {new Date(draft.createdAt).toLocaleDateString()}
                   </span>
+                  {draft.store && (
+                    <span className="text-muted-foreground">Tienda: {draft.store}</span>
+                  )}
+                  {draft.branch && (
+                    <span className="text-muted-foreground">Sede: {draft.branch}</span>
+                  )}
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Diálogo de confirmación para eliminar */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar borrador?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. El borrador será eliminado permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Diálogo para ver detalle */}
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Detalle del Borrador - {selectedDraft?.requestNumber}</DialogTitle>
+          </DialogHeader>
+          
+          {selectedDraft && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-medium">Descripción:</span>
+                  <p className="text-muted-foreground">{selectedDraft.description}</p>
+                </div>
+                <div>
+                  <span className="font-medium">Tipo de Servicio:</span>
+                  <Badge className={`ml-2 ${getServiceTypeColor(selectedDraft.serviceType)}`}>
+                    {getServiceTypeText(selectedDraft.serviceType)}
+                  </Badge>
+                </div>
+                <div>
+                  <span className="font-medium">Ciudad:</span>
+                  <p className="text-muted-foreground">{selectedDraft.city || '-'}</p>
+                </div>
+                <div>
+                  <span className="font-medium">Tienda:</span>
+                  <p className="text-muted-foreground">{selectedDraft.store || '-'}</p>
+                </div>
+                <div>
+                  <span className="font-medium">Sede:</span>
+                  <p className="text-muted-foreground">{selectedDraft.branch || '-'}</p>
+                </div>
+                <div>
+                  <span className="font-medium">Fecha Límite:</span>
+                  <p className="text-muted-foreground">
+                    {selectedDraft.deadline 
+                      ? format(new Date(selectedDraft.deadline), 'dd/MM/yyyy', { locale: es })
+                      : '-'}
+                  </p>
+                </div>
+              </div>
+
+              {draftDetails.length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="font-medium mb-3">Detalles de la Solicitud</h4>
+                    <div className="space-y-3">
+                      {draftDetails.map((detail, index) => (
+                        <Card key={detail.id} className="p-3 bg-muted/30">
+                          <p className="font-medium text-sm mb-2">Detalle #{index + 1}</p>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            {detail.equipment && (
+                              <div><span className="text-muted-foreground">Equipo:</span> {detail.equipment}</div>
+                            )}
+                            {detail.area && (
+                              <div><span className="text-muted-foreground">Área:</span> {detail.area}</div>
+                            )}
+                            {detail.activities && (
+                              <div className="col-span-2"><span className="text-muted-foreground">Actividades:</span> {detail.activities}</div>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {showForm && (
         <RequestForm
