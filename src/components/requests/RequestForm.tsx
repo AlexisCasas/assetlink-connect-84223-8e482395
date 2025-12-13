@@ -750,18 +750,21 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               Cancelar
             </Button>
             <div className="flex-1" />
-            <Button 
-              variant="secondary" 
-              onClick={() => handleSubmit(true)}
-              className="flex-1 sm:flex-none"
-            >
-              Guardar como borrador
-            </Button>
+            {/* Solo mostrar botón de borrador si no es una solicitud ya enviada */}
+            {editingRequest?.status !== 'sent' && (
+              <Button 
+                variant="secondary" 
+                onClick={() => handleSubmit(true)}
+                className="flex-1 sm:flex-none"
+              >
+                Guardar como borrador
+              </Button>
+            )}
             <Button 
               onClick={() => handleSubmit(false)}
               className="flex-1 sm:flex-none"
             >
-              Enviar a Proveedores
+              {editingRequest?.status === 'sent' ? 'Guardar cambios' : 'Enviar a Proveedores'}
             </Button>
           </div>
         </CardContent>
