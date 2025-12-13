@@ -7,7 +7,7 @@ import { RequestForm } from './RequestForm';
 import { QuoteListDialog } from './QuoteListDialog';
 import { RequestChatDialog } from './RequestChatDialog';
 import { Request, MOCK_PROVIDERS } from '@/types/request';
-import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil, Filter, Trash2 } from 'lucide-react';
+import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil, Filter, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/lib/seedData';
 import { supabase } from '@/integrations/supabase/client';
@@ -68,6 +68,11 @@ export const RequestList = () => {
   const [filterBranch, setFilterBranch] = useState<string>('all');
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterServiceType, setFilterServiceType] = useState<string>('all');
+
+  // Ordenamiento
+  type SortKey = 'requestNumber' | 'serviceType' | 'status' | 'branch' | 'createdAt' | 'store' | 'createdBy' | 'deadline';
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const loadRequests = async () => {
     try {
@@ -366,9 +371,29 @@ export const RequestList = () => {
     return [...new Set(branches)];
   }, [requests]);
 
-  // Aplicar filtros
+  // Función para manejar el ordenamiento
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortOrder('asc');
+    }
+  };
+
+  // Renderizar icono de ordenamiento
+  const renderSortIcon = (key: SortKey) => {
+    if (sortKey !== key) {
+      return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />;
+    }
+    return sortOrder === 'asc' 
+      ? <ArrowUp className="ml-1 h-3 w-3" /> 
+      : <ArrowDown className="ml-1 h-3 w-3" />;
+  };
+
+  // Aplicar filtros y ordenamiento
   const filteredRequests = useMemo(() => {
-    return requests.filter(request => {
+    let result = requests.filter(request => {
       // Filtro por tienda
       if (filterStore !== 'all' && request.store !== filterStore) return false;
       
@@ -389,7 +414,56 @@ export const RequestList = () => {
       
       return true;
     });
-  }, [requests, filterStore, filterBranch, filterDate, filterServiceType]);
+
+    // Aplicar ordenamiento
+    if (sortKey) {
+      result = [...result].sort((a, b) => {
+        let aVal: string | number | null = null;
+        let bVal: string | number | null = null;
+
+        switch (sortKey) {
+          case 'requestNumber':
+            aVal = a.requestNumber || '';
+            bVal = b.requestNumber || '';
+            break;
+          case 'serviceType':
+            aVal = getServiceTypeText(a.serviceType);
+            bVal = getServiceTypeText(b.serviceType);
+            break;
+          case 'status':
+            aVal = getStatusText(a.status);
+            bVal = getStatusText(b.status);
+            break;
+          case 'branch':
+            aVal = a.branch || a.clientBranch || '';
+            bVal = b.branch || b.clientBranch || '';
+            break;
+          case 'createdAt':
+            aVal = a.createdAt || '';
+            bVal = b.createdAt || '';
+            break;
+          case 'store':
+            aVal = a.store || '';
+            bVal = b.store || '';
+            break;
+          case 'createdBy':
+            aVal = a.createdBy || '';
+            bVal = b.createdBy || '';
+            break;
+          case 'deadline':
+            aVal = a.deadline || '';
+            bVal = b.deadline || '';
+            break;
+        }
+
+        if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [requests, filterStore, filterBranch, filterDate, filterServiceType, sortKey, sortOrder]);
 
   const clearFilters = () => {
     setFilterStore('all');
@@ -507,14 +581,78 @@ export const RequestList = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nro. Solicitud</TableHead>
-                  <TableHead>Tipo de Servicio</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Sede</TableHead>
-                  <TableHead>Fecha de Registro</TableHead>
-                  <TableHead>Tienda</TableHead>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Fecha Entrega Cotizaciones</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort('requestNumber')}
+                  >
+                    <div className="flex items-center">
+                      Nro. Solicitud
+                      {renderSortIcon('requestNumber')}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort('serviceType')}
+                  >
+                    <div className="flex items-center">
+                      Tipo de Servicio
+                      {renderSortIcon('serviceType')}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort('status')}
+                  >
+                    <div className="flex items-center">
+                      Estado
+                      {renderSortIcon('status')}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort('branch')}
+                  >
+                    <div className="flex items-center">
+                      Sede
+                      {renderSortIcon('branch')}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort('createdAt')}
+                  >
+                    <div className="flex items-center">
+                      Fecha de Registro
+                      {renderSortIcon('createdAt')}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort('store')}
+                  >
+                    <div className="flex items-center">
+                      Tienda
+                      {renderSortIcon('store')}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort('createdBy')}
+                  >
+                    <div className="flex items-center">
+                      Usuario
+                      {renderSortIcon('createdBy')}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort('deadline')}
+                  >
+                    <div className="flex items-center">
+                      Fecha Entrega Cotizaciones
+                      {renderSortIcon('deadline')}
+                    </div>
+                  </TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
