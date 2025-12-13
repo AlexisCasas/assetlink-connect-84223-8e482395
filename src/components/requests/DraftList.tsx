@@ -116,7 +116,7 @@ export const DraftList = () => {
         .from('requests')
         .select('id')
         .eq('id', request.id)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         // Actualizar
