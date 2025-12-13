@@ -12,20 +12,21 @@ import { ProviderProfile } from '@/components/requests/ProviderProfile';
 import { PublicRequestList } from '@/components/requests/PublicRequestList';
 import { NotificationList } from '@/components/notifications/NotificationList';
 import { ContactList } from '@/components/contact/ContactList';
+import { ApprovedProvidersList } from '@/components/providers/ApprovedProvidersList';
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers'>('dashboard');
   const [selectedAsset, setSelectedAsset] = useState<AssetNode | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
-    if (hash === 'assets' || hash === 'requests' || hash === 'drafts' || hash === 'public-requests' || hash === 'profile' || hash === 'notifications') {
+    if (hash === 'assets' || hash === 'requests' || hash === 'drafts' || hash === 'public-requests' || hash === 'profile' || hash === 'notifications' || hash === 'approved-providers') {
       setCurrentView(hash as any);
     }
   }, []);
 
-  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact') => {
+  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers') => {
     setCurrentView(view);
     window.location.hash = view;
   };
@@ -61,6 +62,8 @@ const Dashboard = () => {
         return <NotificationList />;
       case 'contact':
         return <ContactList />;
+      case 'approved-providers':
+        return <ApprovedProvidersList />;
       default:
         return <StatsCards />;
     }
