@@ -37,6 +37,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [providers, setProviders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCertified, setFilterCertified] = useState<'all' | 'certified' | 'non-certified'>('all');
+  const [filterSpecialty, setFilterSpecialty] = useState<string>('all');
+  const [availableSpecialties, setAvailableSpecialties] = useState<string[]>([]);
 
   useEffect(() => {
     fetchProviders();
@@ -45,6 +47,15 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const fetchProviders = async () => {
     const { data } = await supabase.from('providers').select('*').order('name');
     setProviders(data || []);
+    
+    // Extract unique specialties from all providers
+    const specialties = new Set<string>();
+    (data || []).forEach((provider: any) => {
+      if (provider.specialties && Array.isArray(provider.specialties)) {
+        provider.specialties.forEach((specialty: string) => specialties.add(specialty));
+      }
+    });
+    setAvailableSpecialties(Array.from(specialties).sort());
   };
 
   const filteredProviders = providers.filter(provider => {
@@ -53,7 +64,9 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
     const matchesCertified = filterCertified === 'all' ||
                             (filterCertified === 'certified' && provider.certified) ||
                             (filterCertified === 'non-certified' && !provider.certified);
-    return matchesSearch && matchesCertified;
+    const matchesSpecialty = filterSpecialty === 'all' ||
+                            (provider.specialties && provider.specialties.includes(filterSpecialty));
+    return matchesSearch && matchesCertified && matchesSpecialty;
   });
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -412,7 +425,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               Si no seleccionas proveedores, tu solicitud será pública y cualquier proveedor podrá cotizar
             </p>
             
-            <div className="flex gap-2">
+            <div className="flex flex-col md:flex-row gap-2">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -422,11 +435,24 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   className="pl-9"
                 />
               </div>
+              <Select value={filterSpecialty} onValueChange={setFilterSpecialty}>
+                <SelectTrigger className="w-full md:w-[200px]">
+                  <SelectValue placeholder="Especialidad" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="all">Todas las especialidades</SelectItem>
+                  {availableSpecialties.map((specialty) => (
+                    <SelectItem key={specialty} value={specialty}>
+                      {specialty}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Select value={filterCertified} onValueChange={(value: any) => setFilterCertified(value)}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full md:w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover">
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="certified">Certificados</SelectItem>
                   <SelectItem value="non-certified">No certificados</SelectItem>
