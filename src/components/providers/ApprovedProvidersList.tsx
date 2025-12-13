@@ -401,15 +401,15 @@ export const ApprovedProvidersList = () => {
             <div className="space-y-2">
               <Label htmlFor="specialty">Especialidad</Label>
               {specialties.length > 0 ? (
-                <Select
-                  value={formData.specialty}
-                  onValueChange={(value) => setFormData({ ...formData, specialty: value })}
+              <Select
+                  value={formData.specialty || "none"}
+                  onValueChange={(value) => setFormData({ ...formData, specialty: value === "none" ? "" : value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona una especialidad" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover">
-                    <SelectItem value="">Sin especialidad</SelectItem>
+                    <SelectItem value="none">Sin especialidad</SelectItem>
                     {specialties.map((specialty) => (
                       <SelectItem key={specialty.id} value={specialty.name}>
                         {specialty.name}
