@@ -104,12 +104,10 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
 
       setQuotes(transformedQuotes);
 
-      // Show prices ONLY if quotes are closed OR quotes received >= minQuotes
+      // Show prices ONLY when quotes received >= minQuotes (regardless of quotes_closed status)
       const quotesReceived = transformedQuotes.length;
-      const shouldShowPrices = requestData?.quotes_closed === true || quotesReceived >= reqMinQuotes;
+      const shouldShowPrices = quotesReceived >= reqMinQuotes;
       setShowPrices(shouldShowPrices);
-      
-      console.log('Quote visibility check:', { quotesReceived, reqMinQuotes, quotesClosed: requestData?.quotes_closed, shouldShowPrices });
     } catch (error) {
       console.error('Error loading quotes:', error);
       setQuotes([]);
