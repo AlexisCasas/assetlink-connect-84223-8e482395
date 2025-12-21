@@ -7,7 +7,7 @@ import { RequestForm } from './RequestForm';
 import { QuoteListDialog } from './QuoteListDialog';
 import { RequestChatDialog } from './RequestChatDialog';
 import { Request, MOCK_PROVIDERS } from '@/types/request';
-import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil, Filter, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Columns3, GripVertical } from 'lucide-react';
+import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil, Filter, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Columns3, GripVertical, ChevronDown, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/lib/seedData';
 import { supabase } from '@/integrations/supabase/client';
@@ -71,6 +71,10 @@ export const RequestList = () => {
   const [requestDetails, setRequestDetails] = useState<any[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [requestToDelete, setRequestToDelete] = useState<string | null>(null);
+  
+  // Preview inline
+  const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
+  const [expandedDetails, setExpandedDetails] = useState<any[]>([]);
 
   // Filtros
   const [filterStore, setFilterStore] = useState<string>('all');
@@ -266,6 +270,20 @@ export const RequestList = () => {
       .select('*')
       .eq('request_id', requestId);
     setRequestDetails(data || []);
+  };
+
+  const togglePreview = async (requestId: string) => {
+    if (expandedRequestId === requestId) {
+      setExpandedRequestId(null);
+      setExpandedDetails([]);
+    } else {
+      const { data } = await supabase
+        .from('request_details')
+        .select('*')
+        .eq('request_id', requestId);
+      setExpandedDetails(data || []);
+      setExpandedRequestId(requestId);
+    }
   };
 
   const handleViewRequest = async (request: Request) => {
@@ -740,6 +758,8 @@ export const RequestList = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  {/* Columna para el botón de preview */}
+                  <TableHead className="w-10 px-2"></TableHead>
                   {columnOrder.filter(col => visibleColumns[col]).map((column) => {
                     if (column === 'actions') {
                       return (
@@ -784,118 +804,177 @@ export const RequestList = () => {
               </TableHeader>
               <TableBody>
                 {filteredRequests.map((request) => (
-                  <TableRow key={request.id}>
-                    {columnOrder.filter(col => visibleColumns[col]).map((column) => {
-                      switch (column) {
-                        case 'requestNumber':
-                          return (
-                            <TableCell key={column} className="font-medium">
-                              {request.requestNumber}
-                            </TableCell>
-                          );
-                        case 'serviceType':
-                          return (
-                            <TableCell key={column}>
-                              <Badge className={getServiceTypeColor(request.serviceType)}>
-                                {getServiceTypeText(request.serviceType)}
-                              </Badge>
-                            </TableCell>
-                          );
-                        case 'status':
-                          return (
-                            <TableCell key={column}>
-                              <Badge variant="outline" className={getStatusColor(request.status)}>
-                                {getStatusText(request.status)}
-                              </Badge>
-                            </TableCell>
-                          );
-                        case 'branch':
-                          return (
-                            <TableCell key={column}>{request.branch || request.clientBranch || '-'}</TableCell>
-                          );
-                        case 'createdAt':
-                          return (
-                            <TableCell key={column}>
-                              {request.createdAt 
-                                ? format(new Date(request.createdAt), 'dd/MM/yyyy', { locale: es })
-                                : '-'}
-                            </TableCell>
-                          );
-                        case 'store':
-                          return (
-                            <TableCell key={column}>{request.store || '-'}</TableCell>
-                          );
-                        case 'createdBy':
-                          return (
-                            <TableCell key={column}>{request.createdBy}</TableCell>
-                          );
-                        case 'deadline':
-                          return (
-                            <TableCell key={column}>
-                              {request.deadline 
-                                ? format(new Date(request.deadline), 'dd/MM/yyyy', { locale: es })
-                                : '-'}
-                            </TableCell>
-                          );
-                        case 'actions':
-                          return (
-                            <TableCell key={column} className="text-right">
-                              <div className="flex justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleViewRequest(request)}
-                                  title="Ver solicitud"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEditRequest(request)}
-                                  title="Editar solicitud"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    setSelectedRequest(request);
-                                    setShowChatDialog(true);
-                                  }}
-                                  title="Chat"
-                                >
-                                  <MessageSquare className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => {
-                                    setSelectedRequest(request);
-                                    setShowQuotesDialog(true);
-                                  }}
-                                  title="Ver cotizaciones"
-                                >
-                                  <DollarSign className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => confirmDeleteRequest(request.id)}
-                                  title="Eliminar solicitud"
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          );
-                        default:
-                          return null;
-                      }
-                    })}
-                  </TableRow>
+                  <>
+                    <TableRow key={request.id}>
+                      {/* Botón de preview como primera celda */}
+                      <TableCell className="w-10 px-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => togglePreview(request.id)}
+                          title="Previsualizar detalles"
+                        >
+                          {expandedRequestId === request.id ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                      {columnOrder.filter(col => visibleColumns[col]).map((column) => {
+                        switch (column) {
+                          case 'requestNumber':
+                            return (
+                              <TableCell key={column} className="font-medium">
+                                {request.requestNumber}
+                              </TableCell>
+                            );
+                          case 'serviceType':
+                            return (
+                              <TableCell key={column}>
+                                <Badge className={getServiceTypeColor(request.serviceType)}>
+                                  {getServiceTypeText(request.serviceType)}
+                                </Badge>
+                              </TableCell>
+                            );
+                          case 'status':
+                            return (
+                              <TableCell key={column}>
+                                <Badge variant="outline" className={getStatusColor(request.status)}>
+                                  {getStatusText(request.status)}
+                                </Badge>
+                              </TableCell>
+                            );
+                          case 'branch':
+                            return (
+                              <TableCell key={column}>{request.branch || request.clientBranch || '-'}</TableCell>
+                            );
+                          case 'createdAt':
+                            return (
+                              <TableCell key={column}>
+                                {request.createdAt 
+                                  ? format(new Date(request.createdAt), 'dd/MM/yyyy', { locale: es })
+                                  : '-'}
+                              </TableCell>
+                            );
+                          case 'store':
+                            return (
+                              <TableCell key={column}>{request.store || '-'}</TableCell>
+                            );
+                          case 'createdBy':
+                            return (
+                              <TableCell key={column}>{request.createdBy}</TableCell>
+                            );
+                          case 'deadline':
+                            return (
+                              <TableCell key={column}>
+                                {request.deadline 
+                                  ? format(new Date(request.deadline), 'dd/MM/yyyy', { locale: es })
+                                  : '-'}
+                              </TableCell>
+                            );
+                          case 'actions':
+                            return (
+                              <TableCell key={column} className="text-right">
+                                <div className="flex justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleViewRequest(request)}
+                                    title="Ver solicitud"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEditRequest(request)}
+                                    title="Editar solicitud"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setSelectedRequest(request);
+                                      setShowChatDialog(true);
+                                    }}
+                                    title="Chat"
+                                  >
+                                    <MessageSquare className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setSelectedRequest(request);
+                                      setShowQuotesDialog(true);
+                                    }}
+                                    title="Ver cotizaciones"
+                                  >
+                                    <DollarSign className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => confirmDeleteRequest(request.id)}
+                                    title="Eliminar solicitud"
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            );
+                          default:
+                            return null;
+                        }
+                      })}
+                    </TableRow>
+                    {/* Fila expandida con detalles */}
+                    {expandedRequestId === request.id && (
+                      <TableRow className="bg-muted/30">
+                        <TableCell colSpan={columnOrder.filter(col => visibleColumns[col]).length + 1} className="p-0">
+                          <div className="overflow-x-auto">
+                            <Table className="text-sm">
+                              <TableHeader>
+                                <TableRow className="bg-muted/50">
+                                  <TableHead className="min-w-[120px]">Equipo</TableHead>
+                                  <TableHead className="min-w-[120px]">Subequipo</TableHead>
+                                  <TableHead className="min-w-[100px]">Área</TableHead>
+                                  <TableHead className="min-w-[200px]">Actividades</TableHead>
+                                  <TableHead className="min-w-[80px]">Cantidad</TableHead>
+                                  <TableHead className="min-w-[80px]">U.M</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {expandedDetails.length > 0 ? (
+                                  expandedDetails.map((detail, idx) => (
+                                    <TableRow key={idx}>
+                                      <TableCell>{detail.equipment || '-'}</TableCell>
+                                      <TableCell>{detail.sub_equipment || '-'}</TableCell>
+                                      <TableCell>{detail.area || '-'}</TableCell>
+                                      <TableCell>{detail.activities || '-'}</TableCell>
+                                      <TableCell>{detail.quantity ?? '-'}</TableCell>
+                                      <TableCell>{detail.unit_measure || '-'}</TableCell>
+                                    </TableRow>
+                                  ))
+                                ) : (
+                                  <TableRow>
+                                    <TableCell colSpan={6} className="text-center text-muted-foreground py-4">
+                                      Sin detalles registrados
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 ))}
               </TableBody>
             </Table>
