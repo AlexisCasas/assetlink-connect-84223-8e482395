@@ -101,7 +101,7 @@ export interface Request {
   deadline: string;
   startTime?: string; // Para correctivo, preventivo y proyecto
   selectedProviders: string[]; // Vacío = solicitud pública
-  status: 'draft' | 'sent' | 'quoted' | 'completed';
+  status: 'draft' | 'sent' | 'quoted' | 'completed' | 'anulado';
   createdAt: string;
   createdBy: string;
   priority: number; // 1 = emergencia (más alta), 4 = proyecto (más baja)

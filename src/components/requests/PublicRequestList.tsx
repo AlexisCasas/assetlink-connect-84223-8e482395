@@ -17,7 +17,7 @@ interface Request {
   observations?: string;
   deadline: string;
   start_time?: string;
-  status: 'draft' | 'sent' | 'quoted' | 'completed';
+  status: 'draft' | 'sent' | 'quoted' | 'completed' | 'anulado';
   created_at: string;
   created_by: string;
   priority: number;

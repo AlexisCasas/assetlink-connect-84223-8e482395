@@ -437,31 +437,25 @@ export const RequestList = () => {
     if (!requestToDelete) return;
 
     try {
-      // Eliminar detalles primero
-      await supabase
-        .from('request_details')
-        .delete()
-        .eq('request_id', requestToDelete);
-
-      // Eliminar la solicitud
+      // Cambiar estado a anulado en lugar de eliminar
       const { error } = await supabase
         .from('requests')
-        .delete()
+        .update({ status: 'anulado' })
         .eq('id', requestToDelete);
 
       if (error) throw error;
 
       toast({
-        title: "Solicitud eliminada",
-        description: "La solicitud ha sido eliminada correctamente",
+        title: "Solicitud anulada",
+        description: "La solicitud ha sido anulada correctamente",
       });
       
       loadRequests();
     } catch (error) {
-      console.error('Error deleting request:', error);
+      console.error('Error anulando solicitud:', error);
       toast({
         title: "Error",
-        description: "No se pudo eliminar la solicitud",
+        description: "No se pudo anular la solicitud",
         variant: "destructive",
       });
     } finally {
@@ -496,6 +490,7 @@ export const RequestList = () => {
       sent: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
       quoted: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
       completed: 'bg-green-500/10 text-green-500 border-green-500/20',
+      anulado: 'bg-red-500/10 text-red-500 border-red-500/20',
     };
     return colors[status] || '';
   };
@@ -506,6 +501,7 @@ export const RequestList = () => {
       sent: 'Enviado',
       quoted: 'Cotizado',
       completed: 'Completado',
+      anulado: 'Anulado',
     };
     return texts[status] || status;
   };
@@ -1144,19 +1140,19 @@ export const RequestList = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo de confirmación para eliminar */}
+      {/* Diálogo de confirmación para anular */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar solicitud?</AlertDialogTitle>
+            <AlertDialogTitle>¿Anular solicitud?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. La solicitud será eliminada permanentemente junto con todos sus detalles.
+              La solicitud será marcada como anulada y ya no aparecerá en el listado activo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteRequest} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Eliminar
+              Anular
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -732,7 +732,7 @@ export type Database = {
         | "quote_received"
         | "assignment"
         | "general"
-      request_status: "draft" | "sent" | "quoted" | "completed"
+      request_status: "draft" | "sent" | "quoted" | "completed" | "anulado"
       service_type: "emergencia" | "correctivo" | "preventivo" | "proyecto"
     }
     CompositeTypes: {
@@ -868,7 +868,7 @@ export const Constants = {
         "assignment",
         "general",
       ],
-      request_status: ["draft", "sent", "quoted", "completed"],
+      request_status: ["draft", "sent", "quoted", "completed", "anulado"],
       service_type: ["emergencia", "correctivo", "preventivo", "proyecto"],
     },
   },
