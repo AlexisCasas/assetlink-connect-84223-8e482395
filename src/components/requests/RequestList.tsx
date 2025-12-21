@@ -7,7 +7,7 @@ import { RequestForm } from './RequestForm';
 import { QuoteListDialog } from './QuoteListDialog';
 import { RequestChatDialog } from './RequestChatDialog';
 import { Request, MOCK_PROVIDERS } from '@/types/request';
-import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil, Filter, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Columns3 } from 'lucide-react';
+import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil, Filter, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Columns3, GripVertical } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/lib/seedData';
 import { supabase } from '@/integrations/supabase/client';
@@ -98,6 +98,8 @@ export const RequestList = () => {
     actions: 'Acciones',
   };
 
+  const defaultColumnOrder: ColumnKey[] = ['requestNumber', 'serviceType', 'status', 'branch', 'createdAt', 'store', 'createdBy', 'deadline', 'actions'];
+
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const saved = localStorage.getItem('requestListVisibleColumns');
     if (saved) {
@@ -120,10 +122,30 @@ export const RequestList = () => {
     };
   });
 
+  const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(() => {
+    const saved = localStorage.getItem('requestListColumnOrder');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // Si hay error, usar valores por defecto
+      }
+    }
+    return defaultColumnOrder;
+  });
+
+  // Estado para drag and drop
+  const [draggedColumn, setDraggedColumn] = useState<ColumnKey | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<ColumnKey | null>(null);
+
   // Guardar configuración de columnas en localStorage
   useEffect(() => {
     localStorage.setItem('requestListVisibleColumns', JSON.stringify(visibleColumns));
   }, [visibleColumns]);
+
+  useEffect(() => {
+    localStorage.setItem('requestListColumnOrder', JSON.stringify(columnOrder));
+  }, [columnOrder]);
 
   const toggleColumn = (column: ColumnKey) => {
     setVisibleColumns(prev => ({
@@ -145,6 +167,43 @@ export const RequestList = () => {
       actions: true,
     };
     setVisibleColumns(allVisible);
+    setColumnOrder(defaultColumnOrder);
+  };
+
+  // Funciones de drag and drop
+  const handleDragStart = (column: ColumnKey) => {
+    setDraggedColumn(column);
+  };
+
+  const handleDragOver = (e: React.DragEvent, column: ColumnKey) => {
+    e.preventDefault();
+    if (draggedColumn && draggedColumn !== column) {
+      setDragOverColumn(column);
+    }
+  };
+
+  const handleDrop = (targetColumn: ColumnKey) => {
+    if (!draggedColumn || draggedColumn === targetColumn) {
+      setDraggedColumn(null);
+      setDragOverColumn(null);
+      return;
+    }
+
+    const newOrder = [...columnOrder];
+    const draggedIndex = newOrder.indexOf(draggedColumn);
+    const targetIndex = newOrder.indexOf(targetColumn);
+
+    newOrder.splice(draggedIndex, 1);
+    newOrder.splice(targetIndex, 0, draggedColumn);
+
+    setColumnOrder(newOrder);
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedColumn(null);
+    setDragOverColumn(null);
   };
 
   const loadRequests = async () => {
@@ -681,197 +740,161 @@ export const RequestList = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {visibleColumns.requestNumber && (
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50 select-none"
-                      onClick={() => handleSort('requestNumber')}
-                    >
-                      <div className="flex items-center">
-                        Nro. Solicitud
-                        {renderSortIcon('requestNumber')}
-                      </div>
-                    </TableHead>
-                  )}
-                  {visibleColumns.serviceType && (
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50 select-none"
-                      onClick={() => handleSort('serviceType')}
-                    >
-                      <div className="flex items-center">
-                        Tipo de Servicio
-                        {renderSortIcon('serviceType')}
-                      </div>
-                    </TableHead>
-                  )}
-                  {visibleColumns.status && (
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50 select-none"
-                      onClick={() => handleSort('status')}
-                    >
-                      <div className="flex items-center">
-                        Estado
-                        {renderSortIcon('status')}
-                      </div>
-                    </TableHead>
-                  )}
-                  {visibleColumns.branch && (
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50 select-none"
-                      onClick={() => handleSort('branch')}
-                    >
-                      <div className="flex items-center">
-                        Sede
-                        {renderSortIcon('branch')}
-                      </div>
-                    </TableHead>
-                  )}
-                  {visibleColumns.createdAt && (
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50 select-none"
-                      onClick={() => handleSort('createdAt')}
-                    >
-                      <div className="flex items-center">
-                        Fecha de Registro
-                        {renderSortIcon('createdAt')}
-                      </div>
-                    </TableHead>
-                  )}
-                  {visibleColumns.store && (
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50 select-none"
-                      onClick={() => handleSort('store')}
-                    >
-                      <div className="flex items-center">
-                        Tienda
-                        {renderSortIcon('store')}
-                      </div>
-                    </TableHead>
-                  )}
-                  {visibleColumns.createdBy && (
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50 select-none"
-                      onClick={() => handleSort('createdBy')}
-                    >
-                      <div className="flex items-center">
-                        Usuario
-                        {renderSortIcon('createdBy')}
-                      </div>
-                    </TableHead>
-                  )}
-                  {visibleColumns.deadline && (
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50 select-none"
-                      onClick={() => handleSort('deadline')}
-                    >
-                      <div className="flex items-center">
-                        Fecha Entrega Cotizaciones
-                        {renderSortIcon('deadline')}
-                      </div>
-                    </TableHead>
-                  )}
-                  {visibleColumns.actions && (
-                    <TableHead className="text-right">Acciones</TableHead>
-                  )}
+                  {columnOrder.filter(col => visibleColumns[col]).map((column) => {
+                    if (column === 'actions') {
+                      return (
+                        <TableHead 
+                          key={column}
+                          className={`text-right transition-colors ${dragOverColumn === column ? 'bg-primary/10' : ''}`}
+                          draggable
+                          onDragStart={() => handleDragStart(column)}
+                          onDragOver={(e) => handleDragOver(e, column)}
+                          onDrop={() => handleDrop(column)}
+                          onDragEnd={handleDragEnd}
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab" />
+                            {columnLabels[column]}
+                          </div>
+                        </TableHead>
+                      );
+                    }
+
+                    const sortableColumn = column as SortKey;
+                    return (
+                      <TableHead 
+                        key={column}
+                        className={`cursor-pointer hover:bg-muted/50 select-none transition-colors ${dragOverColumn === column ? 'bg-primary/10' : ''}`}
+                        draggable
+                        onDragStart={() => handleDragStart(column)}
+                        onDragOver={(e) => handleDragOver(e, column)}
+                        onDrop={() => handleDrop(column)}
+                        onDragEnd={handleDragEnd}
+                        onClick={() => handleSort(sortableColumn)}
+                      >
+                        <div className="flex items-center gap-1">
+                          <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab" />
+                          {columnLabels[column]}
+                          {renderSortIcon(sortableColumn)}
+                        </div>
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredRequests.map((request) => (
                   <TableRow key={request.id}>
-                    {visibleColumns.requestNumber && (
-                      <TableCell className="font-medium">
-                        {request.requestNumber}
-                      </TableCell>
-                    )}
-                    {visibleColumns.serviceType && (
-                      <TableCell>
-                        <Badge className={getServiceTypeColor(request.serviceType)}>
-                          {getServiceTypeText(request.serviceType)}
-                        </Badge>
-                      </TableCell>
-                    )}
-                    {visibleColumns.status && (
-                      <TableCell>
-                        <Badge variant="outline" className={getStatusColor(request.status)}>
-                          {getStatusText(request.status)}
-                        </Badge>
-                      </TableCell>
-                    )}
-                    {visibleColumns.branch && (
-                      <TableCell>{request.branch || request.clientBranch || '-'}</TableCell>
-                    )}
-                    {visibleColumns.createdAt && (
-                      <TableCell>
-                        {request.createdAt 
-                          ? format(new Date(request.createdAt), 'dd/MM/yyyy', { locale: es })
-                          : '-'}
-                      </TableCell>
-                    )}
-                    {visibleColumns.store && (
-                      <TableCell>{request.store || '-'}</TableCell>
-                    )}
-                    {visibleColumns.createdBy && (
-                      <TableCell>{request.createdBy}</TableCell>
-                    )}
-                    {visibleColumns.deadline && (
-                      <TableCell>
-                        {request.deadline 
-                          ? format(new Date(request.deadline), 'dd/MM/yyyy', { locale: es })
-                          : '-'}
-                      </TableCell>
-                    )}
-                    {visibleColumns.actions && (
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleViewRequest(request)}
-                            title="Ver solicitud"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEditRequest(request)}
-                            title="Editar solicitud"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setSelectedRequest(request);
-                              setShowChatDialog(true);
-                            }}
-                            title="Chat"
-                          >
-                            <MessageSquare className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setSelectedRequest(request);
-                              setShowQuotesDialog(true);
-                            }}
-                            title="Ver cotizaciones"
-                          >
-                            <DollarSign className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => confirmDeleteRequest(request.id)}
-                            title="Eliminar solicitud"
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    )}
+                    {columnOrder.filter(col => visibleColumns[col]).map((column) => {
+                      switch (column) {
+                        case 'requestNumber':
+                          return (
+                            <TableCell key={column} className="font-medium">
+                              {request.requestNumber}
+                            </TableCell>
+                          );
+                        case 'serviceType':
+                          return (
+                            <TableCell key={column}>
+                              <Badge className={getServiceTypeColor(request.serviceType)}>
+                                {getServiceTypeText(request.serviceType)}
+                              </Badge>
+                            </TableCell>
+                          );
+                        case 'status':
+                          return (
+                            <TableCell key={column}>
+                              <Badge variant="outline" className={getStatusColor(request.status)}>
+                                {getStatusText(request.status)}
+                              </Badge>
+                            </TableCell>
+                          );
+                        case 'branch':
+                          return (
+                            <TableCell key={column}>{request.branch || request.clientBranch || '-'}</TableCell>
+                          );
+                        case 'createdAt':
+                          return (
+                            <TableCell key={column}>
+                              {request.createdAt 
+                                ? format(new Date(request.createdAt), 'dd/MM/yyyy', { locale: es })
+                                : '-'}
+                            </TableCell>
+                          );
+                        case 'store':
+                          return (
+                            <TableCell key={column}>{request.store || '-'}</TableCell>
+                          );
+                        case 'createdBy':
+                          return (
+                            <TableCell key={column}>{request.createdBy}</TableCell>
+                          );
+                        case 'deadline':
+                          return (
+                            <TableCell key={column}>
+                              {request.deadline 
+                                ? format(new Date(request.deadline), 'dd/MM/yyyy', { locale: es })
+                                : '-'}
+                            </TableCell>
+                          );
+                        case 'actions':
+                          return (
+                            <TableCell key={column} className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleViewRequest(request)}
+                                  title="Ver solicitud"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditRequest(request)}
+                                  title="Editar solicitud"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setSelectedRequest(request);
+                                    setShowChatDialog(true);
+                                  }}
+                                  title="Chat"
+                                >
+                                  <MessageSquare className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setSelectedRequest(request);
+                                    setShowQuotesDialog(true);
+                                  }}
+                                  title="Ver cotizaciones"
+                                >
+                                  <DollarSign className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => confirmDeleteRequest(request.id)}
+                                  title="Eliminar solicitud"
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          );
+                        default:
+                          return null;
+                      }
+                    })}
                   </TableRow>
                 ))}
               </TableBody>
