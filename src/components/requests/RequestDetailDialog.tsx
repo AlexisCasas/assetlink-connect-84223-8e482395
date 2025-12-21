@@ -1,7 +1,9 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, MapPin, Building2, Wrench, FileText, User, Image, File } from 'lucide-react';
+import { Calendar, MapPin, Building2, Wrench, FileText, User, Image, File, List } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 interface RequestDetailDialogProps {
   request: any;
@@ -74,25 +76,27 @@ export const RequestDetailDialog = ({ request, assignment, onClose }: RequestDet
             </CardContent>
           </Card>
 
-          {/* Detalles Técnicos */}
+          {/* Información Técnica General */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Wrench className="h-5 w-5" />
-                Detalles Técnicos
+                Información Técnica
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div>
-                <p className="text-sm text-muted-foreground">Equipo/Activo</p>
-                <p className="font-medium">{request.asset}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Ubicación</p>
-                <p className="font-medium flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  {request.location}
-                </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Equipo/Activo</p>
+                  <p className="font-medium">{request.asset}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Ubicación</p>
+                  <p className="font-medium flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    {request.location}
+                  </p>
+                </div>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Descripción</p>
@@ -110,6 +114,61 @@ export const RequestDetailDialog = ({ request, assignment, onClose }: RequestDet
               )}
             </CardContent>
           </Card>
+
+          {/* Detalle de la Solicitud en Tabla */}
+          {request.details && request.details.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <List className="h-5 w-5" />
+                  Detalle de la Solicitud ({request.details.length} {request.details.length === 1 ? 'fila' : 'filas'})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className="w-full whitespace-nowrap">
+                  <div className="min-w-max">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="min-w-[50px]">#</TableHead>
+                          <TableHead className="min-w-[200px]">Equipo</TableHead>
+                          <TableHead className="min-w-[150px]">Subequipo</TableHead>
+                          <TableHead className="min-w-[120px]">Área</TableHead>
+                          <TableHead className="min-w-[120px]">Subárea</TableHead>
+                          <TableHead className="min-w-[200px]">Actividades</TableHead>
+                          <TableHead className="min-w-[180px]">Materiales</TableHead>
+                          <TableHead className="min-w-[80px]">Cantidad</TableHead>
+                          <TableHead className="min-w-[80px]">U.M</TableHead>
+                          <TableHead className="min-w-[150px]">Observación</TableHead>
+                          <TableHead className="min-w-[130px]">Encargado</TableHead>
+                          <TableHead className="min-w-[100px]">Delegado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {request.details.map((detail: any, index: number) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">{index + 1}</TableCell>
+                            <TableCell>{detail.equipment || '-'}</TableCell>
+                            <TableCell>{detail.subEquipment || detail.sub_equipment || '-'}</TableCell>
+                            <TableCell>{detail.area || '-'}</TableCell>
+                            <TableCell>{detail.subArea || detail.sub_area || '-'}</TableCell>
+                            <TableCell>{detail.activities || '-'}</TableCell>
+                            <TableCell>{detail.relevantMaterials || detail.relevant_materials || '-'}</TableCell>
+                            <TableCell>{detail.quantity || '-'}</TableCell>
+                            <TableCell>{detail.unitMeasure || detail.unit_measure || '-'}</TableCell>
+                            <TableCell>{detail.observation || '-'}</TableCell>
+                            <TableCell>{detail.responsibleUser || detail.responsible_user || '-'}</TableCell>
+                            <TableCell>{detail.delegateType || detail.delegate_type || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Fechas */}
           <Card>

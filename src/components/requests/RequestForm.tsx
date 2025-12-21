@@ -10,9 +10,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Request, ServiceType } from '@/types/request';
 import { Badge } from '@/components/ui/badge';
-import { X, Upload, Search, CheckCircle2, Plus, Trash2 } from 'lucide-react';
+import { X, Upload, Search, CheckCircle2, Plus, Trash2, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Separator } from '@/components/ui/separator';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface RequestFormProps {
   onClose: () => void;
@@ -102,9 +105,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
         delegateType: d.delegateType || '',
         attachments: [] as File[],
       }))
-    : [createEmptyDetail()];
+    : [];
   
   const [details, setDetails] = useState<RequestDetail[]>(initialDetails);
+  const [editingDetailId, setEditingDetailId] = useState<string | null>(null);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [currentDetail, setCurrentDetail] = useState<RequestDetail | null>(null);
   
   // Proveedores
   const [selectedProviders, setSelectedProviders] = useState<string[]>(editingRequest?.selectedProviders || []);
@@ -164,17 +170,43 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   };
 
   const addDetail = () => {
-    setDetails([...details, createEmptyDetail()]);
+    const newDetail = createEmptyDetail();
+    setCurrentDetail(newDetail);
+    setEditingDetailId(null);
+    setIsDetailDialogOpen(true);
+  };
+
+  const editDetail = (detail: RequestDetail) => {
+    setCurrentDetail({ ...detail });
+    setEditingDetailId(detail.id);
+    setIsDetailDialogOpen(true);
   };
 
   const removeDetail = (id: string) => {
-    if (details.length > 1) {
-      setDetails(details.filter(d => d.id !== id));
-    }
+    setDetails(details.filter(d => d.id !== id));
   };
 
   const updateDetail = (id: string, field: keyof RequestDetail, value: any) => {
     setDetails(details.map(d => d.id === id ? { ...d, [field]: value } : d));
+  };
+
+  const saveDetailFromDialog = () => {
+    if (!currentDetail) return;
+    
+    if (editingDetailId) {
+      setDetails(details.map(d => d.id === editingDetailId ? currentDetail : d));
+    } else {
+      setDetails([...details, currentDetail]);
+    }
+    setIsDetailDialogOpen(false);
+    setCurrentDetail(null);
+    setEditingDetailId(null);
+  };
+
+  const updateCurrentDetail = (field: keyof RequestDetail, value: any) => {
+    if (currentDetail) {
+      setCurrentDetail({ ...currentDetail, [field]: value });
+    }
   };
 
   const handleDetailAttachmentChange = (detailId: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -434,39 +466,112 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
 
           <Separator />
 
-          {/* DETALLE */}
+          {/* DETALLE EN TABLA */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-primary">Detalle de la Solicitud</h3>
               <Button type="button" variant="outline" size="sm" onClick={addDetail}>
                 <Plus className="w-4 h-4 mr-2" />
-                Agregar Detalle
+                Agregar Fila
               </Button>
             </div>
 
-            {details.map((detail, index) => (
-              <Card key={detail.id} className="p-4 bg-muted/30">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium">Detalle #{index + 1}</h4>
-                  {details.length > 1 && (
-                    <Button 
-                      type="button" 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => removeDetail(detail.id)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
+            {details.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground border rounded-lg">
+                <p>No hay detalles agregados.</p>
+                <Button type="button" variant="link" onClick={addDetail}>
+                  Agregar el primer detalle
+                </Button>
+              </div>
+            ) : (
+              <ScrollArea className="w-full whitespace-nowrap border rounded-lg">
+                <div className="min-w-max">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="min-w-[50px]">#</TableHead>
+                        <TableHead className="min-w-[180px]">Equipo</TableHead>
+                        <TableHead className="min-w-[130px]">Subequipo</TableHead>
+                        <TableHead className="min-w-[100px]">Área</TableHead>
+                        <TableHead className="min-w-[100px]">Subárea</TableHead>
+                        <TableHead className="min-w-[150px]">Actividades</TableHead>
+                        <TableHead className="min-w-[130px]">Materiales</TableHead>
+                        <TableHead className="min-w-[80px]">Cantidad</TableHead>
+                        <TableHead className="min-w-[70px]">U.M</TableHead>
+                        <TableHead className="min-w-[120px]">Observación</TableHead>
+                        <TableHead className="min-w-[110px]">Encargado</TableHead>
+                        <TableHead className="min-w-[90px]">Delegado</TableHead>
+                        <TableHead className="min-w-[100px] text-center">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {details.map((detail, index) => (
+                        <TableRow key={detail.id}>
+                          <TableCell className="font-medium">{index + 1}</TableCell>
+                          <TableCell className="max-w-[180px] truncate" title={detail.equipment}>{detail.equipment || '-'}</TableCell>
+                          <TableCell className="max-w-[130px] truncate" title={detail.subEquipment}>{detail.subEquipment || '-'}</TableCell>
+                          <TableCell>{detail.area || '-'}</TableCell>
+                          <TableCell>{detail.subArea || '-'}</TableCell>
+                          <TableCell className="max-w-[150px] truncate" title={detail.activities}>{detail.activities || '-'}</TableCell>
+                          <TableCell className="max-w-[130px] truncate" title={detail.relevantMaterials}>{detail.relevantMaterials || '-'}</TableCell>
+                          <TableCell>{detail.quantity || '-'}</TableCell>
+                          <TableCell>{detail.unitMeasure || '-'}</TableCell>
+                          <TableCell className="max-w-[120px] truncate" title={detail.observation}>{detail.observation || '-'}</TableCell>
+                          <TableCell>{detail.responsibleUser || '-'}</TableCell>
+                          <TableCell>{detail.delegateType || '-'}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-center gap-1">
+                              <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => editDetail(detail)}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => removeDetail(detail.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+            )}
+          </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Dialog para editar/agregar detalle */}
+          <Dialog open={isDetailDialogOpen} onOpenChange={(open) => {
+            setIsDetailDialogOpen(open);
+            if (!open) {
+              setCurrentDetail(null);
+              setEditingDetailId(null);
+            }
+          }}>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingDetailId ? 'Editar Detalle' : 'Agregar Nuevo Detalle'}
+                </DialogTitle>
+              </DialogHeader>
+              
+              {currentDetail && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
                   <div className="space-y-2">
                     <Label>Equipo</Label>
                     <Select 
-                      value={detail.equipment} 
-                      onValueChange={(value) => updateDetail(detail.id, 'equipment', value)}
+                      value={currentDetail.equipment} 
+                      onValueChange={(value) => updateCurrentDetail('equipment', value)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona equipo" />
@@ -482,8 +587,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   <div className="space-y-2">
                     <Label>Subequipo</Label>
                     <Select 
-                      value={detail.subEquipment} 
-                      onValueChange={(value) => updateDetail(detail.id, 'subEquipment', value)}
+                      value={currentDetail.subEquipment} 
+                      onValueChange={(value) => updateCurrentDetail('subEquipment', value)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona subequipo" />
@@ -499,8 +604,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   <div className="space-y-2">
                     <Label>Área</Label>
                     <Select 
-                      value={detail.area} 
-                      onValueChange={(value) => updateDetail(detail.id, 'area', value)}
+                      value={currentDetail.area} 
+                      onValueChange={(value) => updateCurrentDetail('area', value)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona área" />
@@ -516,8 +621,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   <div className="space-y-2">
                     <Label>Subárea</Label>
                     <Select 
-                      value={detail.subArea} 
-                      onValueChange={(value) => updateDetail(detail.id, 'subArea', value)}
+                      value={currentDetail.subArea} 
+                      onValueChange={(value) => updateCurrentDetail('subArea', value)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona subárea" />
@@ -533,8 +638,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   <div className="space-y-2">
                     <Label>Partidas o Actividades</Label>
                     <Input
-                      value={detail.activities}
-                      onChange={(e) => updateDetail(detail.id, 'activities', e.target.value)}
+                      value={currentDetail.activities}
+                      onChange={(e) => updateCurrentDetail('activities', e.target.value)}
                       placeholder="Describe las actividades"
                     />
                   </div>
@@ -542,8 +647,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   <div className="space-y-2">
                     <Label>Materiales Relevantes</Label>
                     <Input
-                      value={detail.relevantMaterials}
-                      onChange={(e) => updateDetail(detail.id, 'relevantMaterials', e.target.value)}
+                      value={currentDetail.relevantMaterials}
+                      onChange={(e) => updateCurrentDetail('relevantMaterials', e.target.value)}
                       placeholder="Materiales necesarios"
                     />
                   </div>
@@ -553,8 +658,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                     <Input
                       type="number"
                       step="0.01"
-                      value={detail.quantity}
-                      onChange={(e) => updateDetail(detail.id, 'quantity', e.target.value)}
+                      value={currentDetail.quantity}
+                      onChange={(e) => updateCurrentDetail('quantity', e.target.value)}
                       placeholder="0.00"
                     />
                   </div>
@@ -562,8 +667,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   <div className="space-y-2">
                     <Label>U.M (Unidad de Medida)</Label>
                     <Input
-                      value={detail.unitMeasure}
-                      onChange={(e) => updateDetail(detail.id, 'unitMeasure', e.target.value)}
+                      value={currentDetail.unitMeasure}
+                      onChange={(e) => updateCurrentDetail('unitMeasure', e.target.value)}
                       placeholder="Ej: Unidad, Metro, Kg"
                     />
                   </div>
@@ -571,8 +676,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   <div className="space-y-2">
                     <Label>Observación</Label>
                     <Input
-                      value={detail.observation}
-                      onChange={(e) => updateDetail(detail.id, 'observation', e.target.value)}
+                      value={currentDetail.observation}
+                      onChange={(e) => updateCurrentDetail('observation', e.target.value)}
                       placeholder="Observaciones adicionales"
                     />
                   </div>
@@ -580,8 +685,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   <div className="space-y-2">
                     <Label>Encargado</Label>
                     <Select 
-                      value={detail.responsibleUser} 
-                      onValueChange={(value) => updateDetail(detail.id, 'responsibleUser', value)}
+                      value={currentDetail.responsibleUser} 
+                      onValueChange={(value) => updateCurrentDetail('responsibleUser', value)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona encargado" />
@@ -597,8 +702,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   <div className="space-y-2">
                     <Label>Delegado</Label>
                     <Select 
-                      value={detail.delegateType} 
-                      onValueChange={(value) => updateDetail(detail.id, 'delegateType', value)}
+                      value={currentDetail.delegateType} 
+                      onValueChange={(value) => updateCurrentDetail('delegateType', value)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona tipo" />
@@ -610,20 +715,40 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 md:col-span-2">
                     <Label>Anexos (máx. 5)</Label>
                     <Input
                       type="file"
                       multiple
-                      onChange={(e) => handleDetailAttachmentChange(detail.id, e)}
-                      disabled={detail.attachments.length >= 5}
+                      onChange={(e) => {
+                        if (e.target.files && currentDetail) {
+                          const newFiles = Array.from(e.target.files);
+                          if (currentDetail.attachments.length + newFiles.length > 5) {
+                            toast({
+                              title: 'Límite excedido',
+                              description: 'Solo puedes subir un máximo de 5 anexos por detalle',
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
+                          updateCurrentDetail('attachments', [...currentDetail.attachments, ...newFiles]);
+                        }
+                      }}
+                      disabled={currentDetail.attachments.length >= 5}
                     />
-                    {detail.attachments.length > 0 && (
+                    {currentDetail.attachments.length > 0 && (
                       <div className="space-y-1 mt-2">
-                        {detail.attachments.map((file, i) => (
-                          <div key={i} className="flex items-center justify-between p-2 bg-background rounded text-sm">
+                        {currentDetail.attachments.map((file, i) => (
+                          <div key={i} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
                             <span className="truncate flex-1">{file.name}</span>
-                            <Button variant="ghost" size="sm" onClick={() => removeDetailAttachment(detail.id, i)}>
+                            <Button 
+                              type="button"
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => {
+                                updateCurrentDetail('attachments', currentDetail.attachments.filter((_, idx) => idx !== i));
+                              }}
+                            >
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
@@ -632,9 +757,18 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                     )}
                   </div>
                 </div>
-              </Card>
-            ))}
-          </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setIsDetailDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={saveDetailFromDialog}>
+                  {editingDetailId ? 'Guardar Cambios' : 'Agregar'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <Separator />
 
