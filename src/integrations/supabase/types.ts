@@ -109,6 +109,7 @@ export type Database = {
           created_at: string
           id: string
           message: string
+          parent_id: string | null
           quote_id: string | null
           request_id: string | null
           sender_email: string | null
@@ -119,6 +120,7 @@ export type Database = {
           created_at?: string
           id?: string
           message: string
+          parent_id?: string | null
           quote_id?: string | null
           request_id?: string | null
           sender_email?: string | null
@@ -129,6 +131,7 @@ export type Database = {
           created_at?: string
           id?: string
           message?: string
+          parent_id?: string | null
           quote_id?: string | null
           request_id?: string | null
           sender_email?: string | null
@@ -136,6 +139,13 @@ export type Database = {
           sender_type?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "chat_messages_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "chat_messages_quote_id_fkey"
             columns: ["quote_id"]

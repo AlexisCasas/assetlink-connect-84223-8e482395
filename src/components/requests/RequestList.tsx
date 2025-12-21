@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RequestForm } from './RequestForm';
 import { QuoteListDialog } from './QuoteListDialog';
-import { RequestChatDialog } from './RequestChatDialog';
+import { ForumQADialog } from './ForumQADialog';
 import { Request, MOCK_PROVIDERS } from '@/types/request';
 import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil, Filter, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Columns3, GripVertical, ChevronDown, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -940,7 +940,7 @@ export const RequestList = () => {
                                       setSelectedRequest(request);
                                       setShowChatDialog(true);
                                     }}
-                                    title="Chat"
+                                    title="Foro de Preguntas"
                                   >
                                     <MessageSquare className="h-4 w-4" />
                                   </Button>
@@ -1041,7 +1041,7 @@ export const RequestList = () => {
       )}
 
       {showChatDialog && selectedRequest && (
-        <RequestChatDialog
+        <ForumQADialog
           open={showChatDialog}
           onClose={() => {
             setShowChatDialog(false);
