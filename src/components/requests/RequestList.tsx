@@ -1014,67 +1014,50 @@ export const RequestList = () => {
 
               {/* Detalles */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-primary">Detalle de la Solicitud</h3>
+                <h3 className="text-lg font-semibold text-primary">Detalle de la Solicitud ({requestDetails.length} {requestDetails.length === 1 ? 'fila' : 'filas'})</h3>
                 {requestDetails.length === 0 ? (
                   <p className="text-muted-foreground text-sm">No hay detalles registrados</p>
                 ) : (
-                  requestDetails.map((detail: any, index: number) => (
-                    <Card key={detail.id} className="p-4 bg-muted/30">
-                      <h4 className="font-medium mb-3">Detalle #{index + 1}</h4>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Equipo:</span>
-                          <p className="font-medium">{detail.equipment || '-'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Subequipo:</span>
-                          <p className="font-medium">{detail.sub_equipment || '-'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Área:</span>
-                          <p className="font-medium">{detail.area || '-'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Subárea:</span>
-                          <p className="font-medium">{detail.sub_area || '-'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Cantidad:</span>
-                          <p className="font-medium">{detail.quantity || '-'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">U.M.:</span>
-                          <p className="font-medium">{detail.unit_measure || '-'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Encargado:</span>
-                          <p className="font-medium">{detail.responsible_user || '-'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Delegado:</span>
-                          <p className="font-medium">{detail.delegate_type || '-'}</p>
-                        </div>
-                        {detail.activities && (
-                          <div className="col-span-full">
-                            <span className="text-muted-foreground">Actividades:</span>
-                            <p className="font-medium">{detail.activities}</p>
-                          </div>
-                        )}
-                        {detail.relevant_materials && (
-                          <div className="col-span-full">
-                            <span className="text-muted-foreground">Materiales Relevantes:</span>
-                            <p className="font-medium">{detail.relevant_materials}</p>
-                          </div>
-                        )}
-                        {detail.observation && (
-                          <div className="col-span-full">
-                            <span className="text-muted-foreground">Observación:</span>
-                            <p className="font-medium">{detail.observation}</p>
-                          </div>
-                        )}
-                      </div>
-                    </Card>
-                  ))
+                  <div className="border rounded-md overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="min-w-[50px]">#</TableHead>
+                            <TableHead className="min-w-[200px]">Equipo</TableHead>
+                            <TableHead className="min-w-[150px]">Subequipo</TableHead>
+                            <TableHead className="min-w-[120px]">Área</TableHead>
+                            <TableHead className="min-w-[120px]">Subárea</TableHead>
+                            <TableHead className="min-w-[200px]">Actividades</TableHead>
+                            <TableHead className="min-w-[180px]">Materiales</TableHead>
+                            <TableHead className="min-w-[80px]">Cantidad</TableHead>
+                            <TableHead className="min-w-[80px]">U.M</TableHead>
+                            <TableHead className="min-w-[150px]">Observación</TableHead>
+                            <TableHead className="min-w-[130px]">Encargado</TableHead>
+                            <TableHead className="min-w-[100px]">Delegado</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {requestDetails.map((detail: any, index: number) => (
+                            <TableRow key={detail.id}>
+                              <TableCell className="font-medium">{index + 1}</TableCell>
+                              <TableCell>{detail.equipment || '-'}</TableCell>
+                              <TableCell>{detail.sub_equipment || '-'}</TableCell>
+                              <TableCell>{detail.area || '-'}</TableCell>
+                              <TableCell>{detail.sub_area || '-'}</TableCell>
+                              <TableCell>{detail.activities || '-'}</TableCell>
+                              <TableCell>{detail.relevant_materials || '-'}</TableCell>
+                              <TableCell>{detail.quantity || '-'}</TableCell>
+                              <TableCell>{detail.unit_measure || '-'}</TableCell>
+                              <TableCell>{detail.observation || '-'}</TableCell>
+                              <TableCell>{detail.responsible_user || '-'}</TableCell>
+                              <TableCell>{detail.delegate_type || '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
