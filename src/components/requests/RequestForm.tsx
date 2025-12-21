@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Request, ServiceType } from '@/types/request';
 import { Badge } from '@/components/ui/badge';
-import { X, Upload, Search, CheckCircle2, Plus, Trash2, Pencil } from 'lucide-react';
+import { X, Upload, Search, CheckCircle2, Plus, Trash2, Pencil, CheckCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -774,10 +774,33 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
 
           {/* PROVEEDORES */}
           <div className="space-y-4">
-            <Label>Seleccionar proveedores (máximo 5, opcional)</Label>
-            <p className="text-xs text-muted-foreground">
-              Si no seleccionas proveedores, tu solicitud será pública y cualquier proveedor podrá cotizar
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Seleccionar proveedores (máximo 5, opcional)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Si no seleccionas proveedores, tu solicitud será pública y cualquier proveedor podrá cotizar
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const allProviderIds = filteredProviders.map(p => p.id);
+                  setSelectedProviders(allProviderIds);
+                  if (allProviderIds.length > 5) {
+                    toast({
+                      title: "Proveedores seleccionados",
+                      description: `Se han seleccionado los ${allProviderIds.length} proveedores disponibles`,
+                    });
+                  }
+                }}
+                disabled={filteredProviders.length === 0}
+              >
+                <CheckCheck className="h-4 w-4 mr-2" />
+                Seleccionar todos
+              </Button>
+            </div>
             
             <div className="flex flex-col md:flex-row gap-2">
               <div className="flex-1 relative">
