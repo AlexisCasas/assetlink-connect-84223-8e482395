@@ -35,6 +35,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalProviders, setTotalProviders] = useState(0);
+  const [minQuotes, setMinQuotes] = useState(3);
   const [showPrices, setShowPrices] = useState(false);
   const [editingObservation, setEditingObservation] = useState<string | null>(null);
   const [observationText, setObservationText] = useState('');
@@ -54,14 +55,16 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
     try {
       setLoading(true);
 
-      // Get request status to check if quotes are closed
+      // Get request status to check if quotes are closed and min_quotes value
       const { data: requestData } = await supabase
         .from('requests')
-        .select('quotes_closed')
+        .select('quotes_closed, min_quotes')
         .eq('id', request.id)
         .single();
 
       setQuotesClosed(requestData?.quotes_closed || false);
+      const reqMinQuotes = requestData?.min_quotes ?? 3;
+      setMinQuotes(reqMinQuotes);
 
       // Get total number of providers invited to this request
       const { count: providerCount } = await supabase
@@ -101,10 +104,10 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
 
       setQuotes(transformedQuotes);
 
-      // Show prices if quotes are closed OR all providers have submitted
-      const submittedProviders = new Set(transformedQuotes.map(q => q.provider_id)).size;
-      const allSubmitted = submittedProviders >= (providerCount || 0) && providerCount > 0;
-      setShowPrices(requestData?.quotes_closed || allSubmitted);
+      // Show prices if quotes are closed OR quotes received >= minQuotes
+      const quotesReceived = transformedQuotes.length;
+      const minMet = quotesReceived >= reqMinQuotes;
+      setShowPrices(requestData?.quotes_closed || minMet);
     } catch (error) {
       console.error('Error loading quotes:', error);
       setQuotes([]);
@@ -229,10 +232,10 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                     <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
                     <div>
                       <p className="font-medium text-green-900 dark:text-green-100">
-                        {quotesClosed ? 'Envío de cotizaciones cerrado' : 'Todas las cotizaciones recibidas'}
+                        {quotesClosed ? 'Envío de cotizaciones cerrado' : `Mínimo de ${minQuotes} cotizaciones alcanzado`}
                       </p>
                       <p className="text-sm text-green-700 dark:text-green-300">
-                        {quotes.length} de {totalProviders} proveedores han enviado sus cotizaciones. Los precios ahora son visibles.
+                        {quotes.length} de {minQuotes} cotizaciones mínimas recibidas. Los precios ahora son visibles.
                       </p>
                     </div>
                   </>
@@ -244,7 +247,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                         Esperando cotizaciones
                       </p>
                       <p className="text-sm text-orange-700 dark:text-orange-300">
-                        {quotes.length} de {totalProviders} proveedores han enviado sus cotizaciones. Los precios se mostrarán cuando todos respondan.
+                        {quotes.length} de {minQuotes} cotizaciones mínimas recibidas. Los precios se mostrarán al alcanzar el mínimo requerido.
                       </p>
                     </div>
                   </>

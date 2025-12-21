@@ -75,6 +75,9 @@ export const RequestList = () => {
   // Preview inline
   const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
   const [expandedDetails, setExpandedDetails] = useState<any[]>([]);
+  
+  // Conteo de cotizaciones por solicitud
+  const [quoteCounts, setQuoteCounts] = useState<Record<string, number>>({});
 
   // Filtros
   const [filterStore, setFilterStore] = useState<string>('all');
@@ -83,12 +86,12 @@ export const RequestList = () => {
   const [filterServiceType, setFilterServiceType] = useState<string>('all');
 
   // Ordenamiento
-  type SortKey = 'requestNumber' | 'serviceType' | 'status' | 'branch' | 'createdAt' | 'store' | 'createdBy' | 'deadline';
+  type SortKey = 'requestNumber' | 'serviceType' | 'status' | 'branch' | 'createdAt' | 'store' | 'createdBy' | 'deadline' | 'quotesProgress';
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Configuración de columnas visibles
-  type ColumnKey = 'requestNumber' | 'serviceType' | 'status' | 'branch' | 'createdAt' | 'store' | 'createdBy' | 'deadline' | 'actions';
+  type ColumnKey = 'requestNumber' | 'serviceType' | 'status' | 'branch' | 'createdAt' | 'store' | 'createdBy' | 'deadline' | 'quotesProgress' | 'actions';
   
   const columnLabels: Record<ColumnKey, string> = {
     requestNumber: 'Nro. Solicitud',
@@ -99,10 +102,11 @@ export const RequestList = () => {
     store: 'Tienda',
     createdBy: 'Usuario',
     deadline: 'Fecha Entrega Cotizaciones',
+    quotesProgress: 'Cotizaciones',
     actions: 'Acciones',
   };
 
-  const defaultColumnOrder: ColumnKey[] = ['requestNumber', 'serviceType', 'status', 'branch', 'createdAt', 'store', 'createdBy', 'deadline', 'actions'];
+  const defaultColumnOrder: ColumnKey[] = ['requestNumber', 'serviceType', 'status', 'branch', 'createdAt', 'store', 'createdBy', 'deadline', 'quotesProgress', 'actions'];
 
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const saved = localStorage.getItem('requestListVisibleColumns');
@@ -122,6 +126,7 @@ export const RequestList = () => {
       store: true,
       createdBy: true,
       deadline: true,
+      quotesProgress: true,
       actions: true,
     };
   });
@@ -168,6 +173,7 @@ export const RequestList = () => {
       store: true,
       createdBy: true,
       deadline: true,
+      quotesProgress: true,
       actions: true,
     };
     setVisibleColumns(allVisible);
@@ -249,9 +255,27 @@ export const RequestList = () => {
         branch: req.branch,
         requiresVisit: req.requires_visit,
         visitDate: req.visit_date,
+        minQuotes: req.min_quotes ?? 3,
       }));
       
       setRequests(transformedRequests);
+      
+      // Cargar conteo de cotizaciones para cada solicitud
+      if (transformedRequests.length > 0) {
+        const requestIds = transformedRequests.map(r => r.id);
+        const { data: quotesData } = await supabase
+          .from('quotes')
+          .select('request_id')
+          .in('request_id', requestIds)
+          .eq('status', 'submitted');
+        
+        // Contar cotizaciones por solicitud
+        const counts: Record<string, number> = {};
+        (quotesData || []).forEach((q: any) => {
+          counts[q.request_id] = (counts[q.request_id] || 0) + 1;
+        });
+        setQuoteCounts(counts);
+      }
     } catch (error) {
       console.error('Error loading requests:', error);
       setRequests([]);
@@ -346,6 +370,7 @@ export const RequestList = () => {
             asset: request.asset,
             status: isDraft ? 'draft' : 'sent',
             is_public: request.isPublic,
+            min_quotes: request.minQuotes ?? 3,
           })
           .eq('id', request.id);
 
@@ -379,6 +404,7 @@ export const RequestList = () => {
             client_name: request.clientName,
             client_branch: request.clientBranch,
             priority: request.priority,
+            min_quotes: request.minQuotes ?? 3,
           });
 
         if (insertError) throw insertError;
@@ -868,6 +894,23 @@ export const RequestList = () => {
                                 {request.deadline 
                                   ? format(new Date(request.deadline), 'dd/MM/yyyy', { locale: es })
                                   : '-'}
+                              </TableCell>
+                            );
+                          case 'quotesProgress':
+                            const received = quoteCounts[request.id] || 0;
+                            const minRequired = request.minQuotes ?? 3;
+                            const isComplete = received >= minRequired;
+                            return (
+                              <TableCell key={column}>
+                                <Badge 
+                                  variant="outline" 
+                                  className={isComplete 
+                                    ? 'bg-green-500/10 text-green-600 border-green-500/20' 
+                                    : 'bg-orange-500/10 text-orange-600 border-orange-500/20'
+                                  }
+                                >
+                                  {received}/{minRequired}
+                                </Badge>
                               </TableCell>
                             );
                           case 'actions':
