@@ -530,6 +530,7 @@ export type Database = {
           image_urls: string[] | null
           is_public: boolean | null
           location: string
+          min_quotes: number
           notified_at: string | null
           observations: string | null
           priority: number
@@ -557,6 +558,7 @@ export type Database = {
           image_urls?: string[] | null
           is_public?: boolean | null
           location: string
+          min_quotes?: number
           notified_at?: string | null
           observations?: string | null
           priority?: number
@@ -584,6 +586,7 @@ export type Database = {
           image_urls?: string[] | null
           is_public?: boolean | null
           location?: string
+          min_quotes?: number
           notified_at?: string | null
           observations?: string | null
           priority?: number

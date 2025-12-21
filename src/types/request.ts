@@ -118,6 +118,7 @@ export interface Request {
   branch?: string;
   requiresVisit?: boolean;
   visitDate?: string;
+  minQuotes?: number; // Cantidad mínima de cotizaciones requeridas (default: 3)
   // Detalle (1 a muchos)
   details?: RequestDetailData[];
 }

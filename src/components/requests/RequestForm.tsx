@@ -87,6 +87,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [branch, setBranch] = useState(editingRequest?.branch || '');
   const [requiresVisit, setRequiresVisit] = useState(editingRequest?.requiresVisit || false);
   const [visitDate, setVisitDate] = useState(formatDateForInput(editingRequest?.visitDate));
+  const [minQuotes, setMinQuotes] = useState<number>(editingRequest?.minQuotes ?? 3);
   
   // Detalle (1 a muchos) - inicializar con datos existentes o vacío
   const initialDetails = editingRequest?.details?.length 
@@ -294,6 +295,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       branch,
       requiresVisit,
       visitDate: requiresVisit ? visitDate : undefined,
+      minQuotes,
       details: details.map(d => ({
         equipment: d.equipment,
         subEquipment: d.subEquipment,
@@ -439,7 +441,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="requiresVisit"
@@ -461,6 +463,22 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   />
                 </div>
               )}
+
+              <div className="space-y-2">
+                <Label htmlFor="minQuotes">Cotizaciones mínimas requeridas *</Label>
+                <Input
+                  id="minQuotes"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={minQuotes}
+                  onChange={(e) => setMinQuotes(Math.max(1, parseInt(e.target.value) || 3))}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Los precios se mostrarán al alcanzar este número de cotizaciones
+                </p>
+              </div>
             </div>
           </div>
 
