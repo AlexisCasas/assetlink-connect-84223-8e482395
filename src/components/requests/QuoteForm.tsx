@@ -1,562 +1,337 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Request, Quote } from '@/types/request';
-import { QuoteField, PercentageField, QuoteSummaryData, QuoteTableItem } from '@/types/quote-template';
-import { X, Plus, Trash2, Edit2, ArrowUp, ArrowDown, Save, Percent } from 'lucide-react';
+import { Request, QuoteSection, QuoteSectionItem, QuoteSalesConditions } from '@/types/request';
+import { X, Plus, Trash2, Edit2, Save, Mail, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { TemplateSelector } from './TemplateSelector';
-import { SaveTemplateDialog } from './SaveTemplateDialog';
 import { QuoteSummary } from './QuoteSummary';
-import { useQuoteTemplates } from '@/hooks/useQuoteTemplates';
+import {
+  createDefaultSections,
+  createGeneralSection,
+  createSection,
+  createEmptyItem,
+  calcSectionSubtotal,
+  calculateQuote,
+  formatSoles,
+  DEFAULT_SALES_CONDITIONS,
+} from '@/lib/quoteCalculations';
 
 interface QuoteFormProps {
   request: Request;
   onClose: () => void;
-  onSave: (quote: Quote) => void;
+  onSave?: (quote: any) => void;
+  existingQuote?: any;
 }
 
-export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
+export const QuoteForm = ({ request, onClose, onSave, existingQuote }: QuoteFormProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const providerId = user?.providerId || '';
   const teamMemberId = user?.id || '';
-  
-  const { templates, loading: templatesLoading, saveTemplate, deleteTemplate } = useQuoteTemplates(providerId, teamMemberId);
 
-  const [description, setDescription] = useState('');
-  const [files, setFiles] = useState<FileList | null>(null);
-  const [needsTechnicalVisit, setNeedsTechnicalVisit] = useState(false);
-  const [elaboradoPor, setElaboradoPor] = useState('');
-  const [revisadoPor, setRevisadoPor] = useState('');
-  const [validoPor, setValidoPor] = useState('');
-  const [deliveryDays, setDeliveryDays] = useState(1);
-  const [validityDays, setValidityDays] = useState(30);
-  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; name: string; email: string }>>([]);
-  const [loadingTeamMembers, setLoadingTeamMembers] = useState(true);
-  
-  // Dynamic fields
-  const [fields, setFields] = useState<QuoteField[]>([
-    {
-      id: crypto.randomUUID(),
-      title: 'Descripción del servicio',
-      items: [{ id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }],
-      order: 0,
-    },
-  ]);
+  const initial = useMemo(() => {
+    if (existingQuote?.quote_sections && Array.isArray(existingQuote.quote_sections) && existingQuote.quote_sections.length > 0) {
+      return {
+        sections: existingQuote.quote_sections as QuoteSection[],
+        gPct: Number(existingQuote.general_expenses_percentage) || 0,
+        uPct: Number(existingQuote.utilities_percentage) || 0,
+        gEnabled: Number(existingQuote.general_expenses_percentage) > 0 || existingQuote.general_expenses_enabled || true,
+        uEnabled: Number(existingQuote.utilities_percentage) > 0 || existingQuote.utilities_enabled || true,
+        sales: { ...DEFAULT_SALES_CONDITIONS, ...(existingQuote.sales_conditions || {}) } as QuoteSalesConditions,
+        description: existingQuote.description || '',
+      };
+    }
+    return {
+      sections: createDefaultSections(),
+      gPct: 10,
+      uPct: 10,
+      gEnabled: true,
+      uEnabled: true,
+      sales: { ...DEFAULT_SALES_CONDITIONS },
+      description: '',
+    };
+  }, [existingQuote]);
 
-  // Percentage fields
-  const [percentageFields, setPercentageFields] = useState<PercentageField[]>([]);
+  const [sections, setSections] = useState<QuoteSection[]>(initial.sections);
+  const [generalExpensesPercentage, setGEPct] = useState<number>(initial.gPct);
+  const [utilitiesPercentage, setUPct] = useState<number>(initial.uPct);
+  const [generalExpensesEnabled, setGEEnabled] = useState<boolean>(initial.gEnabled);
+  const [utilitiesEnabled, setUEnabled] = useState<boolean>(initial.uEnabled);
+  const [salesConditions, setSalesConditions] = useState<QuoteSalesConditions>(initial.sales);
+  const [description, setDescription] = useState<string>(initial.description);
+  const [elaboradoPor, setElaboradoPor] = useState<string>(user?.name || '');
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  // Template management
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
-  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
-  const [editingFieldTitle, setEditingFieldTitle] = useState('');
-
-  // Load team members
   useEffect(() => {
-    const loadTeamMembers = async () => {
-      if (!providerId) return;
-      
-      setLoadingTeamMembers(true);
-      try {
-        const { data, error } = await supabase
-          .from('team_members')
-          .select('id, name, email')
-          .eq('provider_id', providerId);
-        
+    if (user?.name && !elaboradoPor) setElaboradoPor(user.name);
+  }, [user, elaboradoPor]);
+
+  // Section ops
+  const addSection = () => {
+    setSections([...sections, createSection('Nueva sección', sections.length)]);
+  };
+  const removeSection = (id: string) => {
+    if (sections.length === 1) {
+      toast({ title: 'Error', description: 'Debe haber al menos una sección', variant: 'destructive' });
+      return;
+    }
+    setSections(sections.filter(s => s.id !== id));
+  };
+  const renameSection = (id: string, name: string) => {
+    setSections(sections.map(s => s.id === id ? { ...s, name } : s));
+  };
+  const useGeneralMode = () => {
+    setSections(createGeneralSection());
+  };
+  const useStandardMode = () => {
+    setSections(createDefaultSections());
+  };
+
+  // Item ops
+  const addItem = (sectionId: string) => {
+    setSections(sections.map(s => s.id === sectionId ? { ...s, items: [...s.items, createEmptyItem()] } : s));
+  };
+  const removeItem = (sectionId: string, itemId: string) => {
+    setSections(sections.map(s => {
+      if (s.id !== sectionId) return s;
+      if (s.items.length === 1) return s;
+      return { ...s, items: s.items.filter(i => i.id !== itemId) };
+    }));
+  };
+  const updateItem = (sectionId: string, itemId: string, key: keyof QuoteSectionItem, value: string | number) => {
+    setSections(sections.map(s => {
+      if (s.id !== sectionId) return s;
+      return {
+        ...s,
+        items: s.items.map(i => {
+          if (i.id !== itemId) return i;
+          let v: any = value;
+          if (key === 'quantity' || key === 'totalPrice') {
+            v = Math.max(0, Number(value) || 0);
+          }
+          return { ...i, [key]: v };
+        }),
+      };
+    }));
+  };
+
+  const calc = calculateQuote(sections, generalExpensesPercentage, utilitiesPercentage, generalExpensesEnabled, utilitiesEnabled);
+
+  const validateForSubmit = (): boolean => {
+    const hasValidLine = sections.some(s => s.enabled && s.items.some(i => i.description.trim() && Number(i.totalPrice) > 0));
+    if (!hasValidLine) {
+      toast({ title: 'Error', description: 'Agrega al menos una línea con descripción y precio total mayor a 0', variant: 'destructive' });
+      return false;
+    }
+    if (!elaboradoPor.trim()) {
+      toast({ title: 'Error', description: 'Indica quién elabora la cotización', variant: 'destructive' });
+      return false;
+    }
+    return true;
+  };
+
+  type Mode = 'draft' | 'submit' | 'email';
+
+  const handleSave = async (mode: Mode) => {
+    if (mode !== 'draft' && !validateForSubmit()) return;
+
+    setSaving(true);
+    try {
+      const sectionsWithSubtotals = sections.map(s => ({ ...s, subtotal: calcSectionSubtotal(s) }));
+      const summaryDesc = description.trim() || `${sections.filter(s => s.enabled).map(s => `${s.name}: ${formatSoles(calcSectionSubtotal(s))}`).join(' | ')} - Elaborado por: ${elaboradoPor}`;
+
+      const status = mode === 'draft' ? 'draft' : 'submitted';
+      const payload: any = {
+        request_id: request.id,
+        provider_id: providerId,
+        team_member_id: teamMemberId || providerId,
+        amount: calc.totalAmount,
+        description: summaryDesc,
+        status,
+        quote_sections: sectionsWithSubtotals,
+        base_subtotal: calc.baseSubtotal,
+        general_expenses_percentage: calc.generalExpensesPercentage,
+        general_expenses_amount: calc.generalExpensesAmount,
+        utilities_percentage: calc.utilitiesPercentage,
+        utilities_amount: calc.utilitiesAmount,
+        subtotal: calc.subtotal,
+        igv_amount: calc.igvAmount,
+        total_amount: calc.totalAmount,
+        sales_conditions: salesConditions,
+      };
+
+      if (mode === 'submit' || mode === 'email') {
+        payload.sent_at = new Date().toISOString();
+      }
+      if (mode === 'email') {
+        payload.emailed_at = new Date().toISOString();
+      }
+
+      // Find existing quote for this request+provider to avoid duplicates
+      let quoteId = existingQuote?.id;
+      if (!quoteId) {
+        const { data: existing } = await supabase
+          .from('quotes')
+          .select('id')
+          .eq('request_id', request.id)
+          .eq('provider_id', providerId)
+          .maybeSingle();
+        if (existing) quoteId = existing.id;
+      }
+
+      let savedId = quoteId;
+      if (quoteId) {
+        const { error } = await supabase.from('quotes').update(payload).eq('id', quoteId);
         if (error) throw error;
-        setTeamMembers(data || []);
-      } catch (error) {
-        console.error('Error loading team members:', error);
-        toast({
-          title: "Error",
-          description: "No se pudo cargar los miembros del equipo",
-          variant: "destructive",
-        });
-      } finally {
-        setLoadingTeamMembers(false);
+      } else {
+        const { data, error } = await supabase.from('quotes').insert(payload).select('id').single();
+        if (error) throw error;
+        savedId = data.id;
       }
-    };
-    
-    loadTeamMembers();
-  }, [providerId, toast]);
 
-  // Auto-complete "Elaborado por"
-  useEffect(() => {
-    if (user?.name) {
-      setElaboradoPor(user.name);
-    }
-  }, [user]);
-
-  // Load template when selected
-  useEffect(() => {
-    if (selectedTemplateId) {
-      const template = templates.find(t => t.id === selectedTemplateId);
-      if (template) {
-        setFields(template.fields.map(f => ({ ...f, id: crypto.randomUUID() })));
-        setPercentageFields(template.percentage_fields.map(p => ({ ...p, id: crypto.randomUUID() })));
-      }
-    }
-  }, [selectedTemplateId, templates]);
-
-  const addField = () => {
-    const newField: QuoteField = {
-      id: crypto.randomUUID(),
-      title: 'Nuevo campo',
-      items: [{ id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }],
-      order: fields.length,
-    };
-    setFields([...fields, newField]);
-  };
-
-  const removeField = (fieldId: string) => {
-    if (fields.length === 1) {
-      toast({
-        title: "Error",
-        description: "Debe haber al menos un campo",
-        variant: "destructive",
-      });
-      return;
-    }
-    setFields(fields.filter(f => f.id !== fieldId));
-  };
-
-  const updateFieldTitle = (fieldId: string, newTitle: string) => {
-    setFields(fields.map(f => f.id === fieldId ? { ...f, title: newTitle } : f));
-  };
-
-  const moveField = (fieldId: string, direction: 'up' | 'down') => {
-    const index = fields.findIndex(f => f.id === fieldId);
-    if ((direction === 'up' && index === 0) || (direction === 'down' && index === fields.length - 1)) return;
-    
-    const newFields = [...fields];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    [newFields[index], newFields[targetIndex]] = [newFields[targetIndex], newFields[index]];
-    setFields(newFields);
-  };
-
-  const addItem = (fieldId: string) => {
-    setFields(fields.map(field => {
-      if (field.id === fieldId) {
-        return {
-          ...field,
-          items: [...field.items, { id: crypto.randomUUID(), description: '', unit: 'UND', quantity: 0, unitPrice: 0, total: 0 }],
-        };
-      }
-      return field;
-    }));
-  };
-
-  const removeItem = (fieldId: string, itemId: string) => {
-    setFields(fields.map(field => {
-      if (field.id === fieldId && field.items.length > 1) {
-        return {
-          ...field,
-          items: field.items.filter(item => item.id !== itemId),
-        };
-      }
-      return field;
-    }));
-  };
-
-  const updateItem = (fieldId: string, itemId: string, key: keyof QuoteTableItem, value: string | number) => {
-    setFields(fields.map(field => {
-      if (field.id === fieldId) {
-        return {
-          ...field,
-          items: field.items.map(item => {
-            if (item.id === itemId) {
-              const updated = { ...item, [key]: value };
-              if (key === 'quantity' || key === 'unitPrice') {
-                updated.total = updated.quantity * updated.unitPrice;
-              }
-              return updated;
-            }
-            return item;
-          }),
-        };
-      }
-      return field;
-    }));
-  };
-
-  const calculateFieldSubtotal = (field: QuoteField) => {
-    return field.items.reduce((sum, item) => sum + item.total, 0);
-  };
-
-  const calculateSubtotal = () => {
-    return fields.reduce((sum, field) => sum + calculateFieldSubtotal(field), 0);
-  };
-
-  // Percentage fields management
-  const addPercentageField = () => {
-    const newField: PercentageField = {
-      id: crypto.randomUUID(),
-      name: 'Nuevo campo',
-      percentage: 0,
-      order: percentageFields.length,
-    };
-    setPercentageFields([...percentageFields, newField]);
-  };
-
-  const removePercentageField = (fieldId: string) => {
-    setPercentageFields(percentageFields.filter(f => f.id !== fieldId));
-  };
-
-  const updatePercentageField = (fieldId: string, key: 'name' | 'percentage', value: string | number) => {
-    setPercentageFields(percentageFields.map(f => 
-      f.id === fieldId ? { ...f, [key]: value } : f
-    ));
-  };
-
-  const calculatePercentageAmounts = () => {
-    let runningTotal = calculateSubtotal();
-    const amounts: Array<{ name: string; amount: number }> = [];
-
-    percentageFields.forEach(field => {
-      const amount = (runningTotal * field.percentage) / 100;
-      amounts.push({ name: field.name, amount });
-      runningTotal += amount;
-    });
-
-    return amounts;
-  };
-
-  const calculateTotalWithPercentages = () => {
-    const subtotal = calculateSubtotal();
-    const percentageTotal = calculatePercentageAmounts().reduce((sum, p) => sum + p.amount, 0);
-    return subtotal + percentageTotal;
-  };
-
-  const calculateIGV = () => {
-    return calculateTotalWithPercentages() * 0.18;
-  };
-
-  const calculateFinalTotal = () => {
-    return calculateTotalWithPercentages() + calculateIGV();
-  };
-
-  const handleSaveTemplate = async (name: string) => {
-    const fieldsToSave = fields.map(f => ({
-      ...f,
-      items: [], // Don't save actual values
-    }));
-    
-    return await saveTemplate(name, fieldsToSave, percentageFields);
-  };
-
-  const handleSubmit = async (isDraft: boolean) => {
-    if (!description) {
-      toast({
-        title: "Error",
-        description: "Por favor completa la descripción",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validation for non-draft quotes
-    if (!isDraft) {
-      if (!elaboradoPor) {
-        toast({
-          title: "Error",
-          description: "El campo 'Elaborado por' es obligatorio",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      if (!revisadoPor) {
-        toast({
-          title: "Error",
-          description: "Por favor selecciona quién revisará la cotización",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      if (!validoPor) {
-        toast({
-          title: "Error",
-          description: "Por favor selecciona quién aprobará la cotización",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    const totalAmount = calculateFinalTotal();
-
-    const quote: Quote = {
-      id: crypto.randomUUID(),
-      requestId: request.id,
-      providerId,
-      teamMemberId,
-      amount: totalAmount,
-      description,
-      files: files ? Array.from(files) : undefined,
-      createdAt: new Date().toISOString(),
-      status: isDraft ? 'draft' : 'submitted',
-      needsTechnicalVisit,
-      elaboradoPor: elaboradoPor || undefined,
-      revisadoPor: revisadoPor || undefined,
-      validoPor: validoPor || undefined,
-    };
-
-    onSave(quote);
-    
-    if (needsTechnicalVisit && !isDraft) {
-      try {
+      // Notification + request status update on submit / email
+      if (mode === 'submit' || mode === 'email') {
+        const providerName = user?.name || 'Proveedor';
+        const reqNumber = (request as any).requestNumber || (request as any).request_number || '';
         await supabase.from('notifications').insert({
-          user_email: request.createdBy,
-          type: 'technical_visit',
-          title: 'Visita técnica solicitada',
-          message: `El proveedor ha solicitado una visita técnica para la solicitud ${request.requestNumber}.`,
+          user_email: (request as any).createdBy || (request as any).created_by,
+          type: 'quote_received',
+          title: mode === 'email' ? 'Cotización recibida por correo' : 'Nueva cotización recibida',
+          message: `El proveedor ${providerName} envió una cotización para la solicitud ${reqNumber}.`,
           request_id: request.id,
-          quote_id: quote.id,
+          quote_id: savedId,
         });
-      } catch (error) {
-        console.error('Error creating notification:', error);
+
+        // Update request status to 'quoted' only if currently 'sent'
+        await supabase
+          .from('requests')
+          .update({ status: 'quoted' })
+          .eq('id', request.id)
+          .eq('status', 'sent');
       }
+
+      toast({
+        title: mode === 'draft' ? 'Borrador guardado' : mode === 'email' ? 'Cotización enviada por correo' : 'Cotización enviada',
+        description: mode === 'draft'
+          ? 'Tu cotización quedó en borrador'
+          : mode === 'email'
+            ? 'Se simuló el envío por correo al cliente'
+            : 'La cotización fue enviada al cliente',
+      });
+
+      onSave?.({ id: savedId, ...payload });
+      onClose();
+    } catch (e: any) {
+      console.error('Error saving quote:', e);
+      toast({ title: 'Error', description: e.message || 'No se pudo guardar la cotización', variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-    
-    toast({
-      title: isDraft ? "Borrador guardado" : "Cotización enviada",
-      description: isDraft 
-        ? "Tu cotización ha sido guardada como borrador" 
-        : "La cotización ha sido enviada al cliente",
-    });
-    onClose();
   };
 
-  const summaryData: QuoteSummaryData = {
-    fields: fields.map(f => ({
-      title: f.title,
-      total: calculateFieldSubtotal(f),
-    })),
-    subtotal: calculateSubtotal(),
-    percentageFields: calculatePercentageAmounts(),
-    igv: calculateIGV(),
-    total: calculateFinalTotal(),
-  };
+  const updSales = (k: keyof QuoteSalesConditions, v: any) => setSalesConditions({ ...salesConditions, [k]: v });
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+      <Card className="w-full max-w-6xl max-h-[92vh] overflow-y-auto">
         <CardHeader className="flex flex-row items-center justify-between sticky top-0 bg-background z-10 border-b">
-          <CardTitle>Crear Cotización - {request.requestNumber}</CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </Button>
+          <CardTitle>Cotización - {(request as any).requestNumber || (request as any).request_number}</CardTitle>
+          <Button variant="ghost" size="icon" onClick={onClose}><X className="w-4 h-4" /></Button>
         </CardHeader>
         <CardContent className="space-y-6 p-6">
-          {/* Request Details */}
+          {/* Request summary */}
           <div className="p-4 bg-muted rounded-lg space-y-2">
             <h3 className="font-medium">Detalles de la solicitud</h3>
             <p className="text-sm text-muted-foreground">{request.description}</p>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Activo:</span>
-                <span className="ml-2 font-medium">{request.asset}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Ubicación:</span>
-                <span className="ml-2 font-medium">{request.location}</span>
-              </div>
-            </div>
           </div>
 
-          {/* Template Selector */}
-          <TemplateSelector
-            templates={templates}
-            selectedTemplateId={selectedTemplateId}
-            onSelect={setSelectedTemplateId}
-            onDelete={deleteTemplate}
-            loading={templatesLoading}
-          />
-
-          {/* Description */}
-          <div className="space-y-2">
-            <Label htmlFor="description">Descripción general de la cotización *</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe los trabajos a realizar, condiciones, garantías, etc."
-              rows={3}
-              required
-            />
+          {/* Mode toggles */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={useStandardMode}>Secciones estándar</Button>
+            <Button size="sm" variant="outline" onClick={useGeneralMode}>Usar sección general</Button>
+            <Button size="sm" onClick={addSection}><Plus className="h-4 w-4 mr-1" />Agregar sección</Button>
           </div>
 
-          {/* Dynamic Fields */}
+          {/* Sections */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Detalle de la Cotización</h3>
-              <Button size="sm" onClick={addField}>
-                <Plus className="h-4 w-4 mr-1" />
-                Agregar Campo
-              </Button>
-            </div>
-
-            {fields.map((field, fieldIndex) => (
-              <div key={field.id} className="space-y-2 border rounded-lg p-4 bg-card">
-                {/* Field Header */}
-                <div className="flex items-center justify-between bg-muted p-3 rounded-lg">
+            {sections.map((section, idx) => (
+              <div key={section.id} className="border rounded-lg p-4 bg-card space-y-2">
+                <div className="flex items-center justify-between bg-muted p-3 rounded-md">
                   <div className="flex items-center gap-2 flex-1">
-                    {editingFieldId === field.id ? (
+                    {editingSectionId === section.id ? (
                       <Input
-                        value={editingFieldTitle}
-                        onChange={(e) => setEditingFieldTitle(e.target.value)}
-                        onBlur={() => {
-                          updateFieldTitle(field.id, editingFieldTitle);
-                          setEditingFieldId(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            updateFieldTitle(field.id, editingFieldTitle);
-                            setEditingFieldId(null);
-                          }
-                        }}
-                        className="h-8 max-w-md"
                         autoFocus
+                        value={editingName}
+                        onChange={e => setEditingName(e.target.value)}
+                        onBlur={() => { renameSection(section.id, editingName); setEditingSectionId(null); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { renameSection(section.id, editingName); setEditingSectionId(null); } }}
+                        className="h-8 max-w-md"
                       />
                     ) : (
                       <>
-                        <h4 className="font-semibold">{fieldIndex + 1}. {field.title}</h4>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setEditingFieldId(field.id);
-                            setEditingFieldTitle(field.title);
-                          }}
-                        >
+                        <h4 className="font-semibold">{idx + 1}. {section.name}</h4>
+                        <Button size="sm" variant="ghost" onClick={() => { setEditingSectionId(section.id); setEditingName(section.name); }}>
                           <Edit2 className="h-3 w-3" />
                         </Button>
                       </>
                     )}
                   </div>
                   <div className="flex gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => moveField(field.id, 'up')}
-                      disabled={fieldIndex === 0}
-                    >
-                      <ArrowUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => moveField(field.id, 'down')}
-                      disabled={fieldIndex === fields.length - 1}
-                    >
-                      <ArrowDown className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => addItem(field.id)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => addItem(section.id)}>
                       <Plus className="h-4 w-4" />
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => removeField(field.id)}
-                      disabled={fields.length === 1}
-                      className="text-destructive"
-                    >
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeSection(section.id)} disabled={sections.length === 1}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
 
-                {/* Field Table */}
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[40%]">Detalle</TableHead>
-                        <TableHead className="w-[10%]">UND</TableHead>
-                        <TableHead className="w-[10%]">CANT.</TableHead>
-                        <TableHead className="w-[15%]">S/. Unitario</TableHead>
-                        <TableHead className="w-[15%]">S/. Total</TableHead>
-                        <TableHead className="w-[10%]"></TableHead>
+                        <TableHead className="w-[45%]">Descripción</TableHead>
+                        <TableHead className="w-[15%]">Cantidad</TableHead>
+                        <TableHead className="w-[15%]">Unidad</TableHead>
+                        <TableHead className="w-[20%]">Precio Total (S/)</TableHead>
+                        <TableHead className="w-[5%]"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {field.items.map((item) => (
+                      {section.items.map(item => (
                         <TableRow key={item.id}>
                           <TableCell>
-                            <Input
-                              value={item.description}
-                              onChange={(e) => updateItem(field.id, item.id, 'description', e.target.value)}
-                              placeholder="Descripción del ítem"
-                              className="h-8"
-                            />
+                            <Input value={item.description} onChange={e => updateItem(section.id, item.id, 'description', e.target.value)} placeholder="Descripción" className="h-8" />
                           </TableCell>
                           <TableCell>
-                            <Input
-                              value={item.unit}
-                              onChange={(e) => updateItem(field.id, item.id, 'unit', e.target.value)}
-                              placeholder="UND"
-                              className="h-8"
-                            />
+                            <Input type="number" min="0" step="0.01" value={item.quantity || ''} onChange={e => updateItem(section.id, item.id, 'quantity', parseFloat(e.target.value) || 0)} placeholder="0" className="h-8" />
                           </TableCell>
                           <TableCell>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={item.quantity || ''}
-                              onChange={(e) => updateItem(field.id, item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                              placeholder="0"
-                              className="h-8"
-                            />
+                            <Input value={item.unitMeasure} onChange={e => updateItem(section.id, item.id, 'unitMeasure', e.target.value)} placeholder="m2, und, glns..." className="h-8" />
                           </TableCell>
                           <TableCell>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={item.unitPrice || ''}
-                              onChange={(e) => updateItem(field.id, item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                              placeholder="0.00"
-                              className="h-8"
-                            />
+                            <Input type="number" min="0" step="0.01" value={item.totalPrice || ''} onChange={e => updateItem(section.id, item.id, 'totalPrice', parseFloat(e.target.value) || 0)} placeholder="0.00" className="h-8" />
                           </TableCell>
                           <TableCell>
-                            <span className="font-medium">S/. {item.total.toFixed(2)}</span>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => removeItem(field.id, item.id)}
-                              disabled={field.items.length === 1}
-                            >
+                            <Button size="sm" variant="ghost" onClick={() => removeItem(section.id, item.id)} disabled={section.items.length === 1}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </TableCell>
                         </TableRow>
                       ))}
                       <TableRow>
-                        <TableCell colSpan={4} className="text-right font-semibold">
-                          Subtotal:
-                        </TableCell>
-                        <TableCell className="font-bold">
-                          S/. {calculateFieldSubtotal(field).toFixed(2)}
-                        </TableCell>
-                        <TableCell></TableCell>
+                        <TableCell colSpan={3} className="text-right font-semibold">Subtotal:</TableCell>
+                        <TableCell className="font-bold font-mono">{formatSoles(calcSectionSubtotal(section))}</TableCell>
+                        <TableCell />
                       </TableRow>
                     </TableBody>
                   </Table>
@@ -565,241 +340,116 @@ export const QuoteForm = ({ request, onClose, onSave }: QuoteFormProps) => {
             ))}
           </div>
 
-          {/* Percentage Fields */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Percent className="w-5 h-5" />
-                Campos de Porcentaje
-              </h3>
-              <Button size="sm" variant="outline" onClick={addPercentageField}>
-                <Plus className="h-4 w-4 mr-1" />
-                Agregar Campo %
-              </Button>
-            </div>
-
-            {percentageFields.length > 0 && (
-              <div className="border rounded-lg p-4 space-y-3 bg-muted/50">
-                <div className="flex items-center justify-between text-sm font-medium">
-                  <span>Subtotal Base:</span>
-                  <span>S/. {calculateSubtotal().toFixed(2)}</span>
+          {/* Percentage fields */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Gastos Generales</CardTitle>
+                  <Switch checked={generalExpensesEnabled} onCheckedChange={setGEEnabled} />
                 </div>
-                {percentageFields.map((field, index) => {
-                  const amounts = calculatePercentageAmounts();
-                  return (
-                    <div key={field.id} className="flex items-center gap-3 bg-background p-3 rounded-lg">
-                      <Input
-                        value={field.name}
-                        onChange={(e) => updatePercentageField(field.id, 'name', e.target.value)}
-                        placeholder="Nombre del campo"
-                        className="flex-1 h-8"
-                      />
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={field.percentage || ''}
-                          onChange={(e) => updatePercentageField(field.id, 'percentage', parseFloat(e.target.value) || 0)}
-                          placeholder="0"
-                          className="w-20 h-8"
-                        />
-                        <span className="text-sm">%</span>
-                      </div>
-                      <span className="text-sm font-medium min-w-[100px] text-right">
-                        S/. {amounts[index]?.amount.toFixed(2) || '0.00'}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removePercentageField(field.id)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <Input type="number" min="0" step="0.01" disabled={!generalExpensesEnabled}
+                    value={generalExpensesPercentage || ''}
+                    onChange={e => setGEPct(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="0" className="w-28" />
+                  <span>%</span>
+                  <span className="ml-auto font-mono text-sm">{formatSoles(calc.generalExpensesAmount)}</span>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Utilidades</CardTitle>
+                  <Switch checked={utilitiesEnabled} onCheckedChange={setUEnabled} />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <Input type="number" min="0" step="0.01" disabled={!utilitiesEnabled}
+                    value={utilitiesPercentage || ''}
+                    onChange={e => setUPct(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="0" className="w-28" />
+                  <span>%</span>
+                  <span className="ml-auto font-mono text-sm">{formatSoles(calc.utilitiesAmount)}</span>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Summary */}
-          <QuoteSummary data={summaryData} deliveryDays={deliveryDays} validityDays={validityDays} />
+          <QuoteSummary
+            sections={sections}
+            generalExpensesPercentage={generalExpensesPercentage}
+            utilitiesPercentage={utilitiesPercentage}
+            generalExpensesEnabled={generalExpensesEnabled}
+            utilitiesEnabled={utilitiesEnabled}
+          />
 
-          {/* Delivery and Validity */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="delivery-days">Plazo de Entrega (días)</Label>
-              <Input
-                id="delivery-days"
-                type="number"
-                value={deliveryDays}
-                onChange={(e) => setDeliveryDays(parseInt(e.target.value) || 1)}
-                min="1"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="validity-days">Vigencia (días)</Label>
-              <Input
-                id="validity-days"
-                type="number"
-                value={validityDays}
-                onChange={(e) => setValidityDays(parseInt(e.target.value) || 30)}
-                min="1"
-              />
-            </div>
-          </div>
-
-          {/* Files */}
-          <div className="space-y-2">
-            <Label htmlFor="files">Archivos de sustento (opcional)</Label>
-            <div className="border-2 border-dashed rounded-lg p-4 hover:border-primary/50 transition-colors">
-              <Input
-                id="files"
-                type="file"
-                multiple
-                onChange={(e) => setFiles(e.target.files)}
-                className="cursor-pointer"
-              />
-            </div>
-            {files && files.length > 0 && (
-              <div className="text-sm text-muted-foreground">
-                {files.length} archivo(s) seleccionado(s)
+          {/* Sales conditions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Condiciones de Venta</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Validez de la cotización (días)</Label>
+                  <Input type="number" min="0" value={salesConditions.validityDays}
+                    onChange={e => updSales('validityDays', Math.max(0, parseInt(e.target.value) || 0))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Garantía (meses)</Label>
+                  <Input type="number" min="0" value={salesConditions.warrantyMonths}
+                    onChange={e => updSales('warrantyMonths', Math.max(0, parseInt(e.target.value) || 0))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tiempo de entrega (días)</Label>
+                  <Input type="number" min="0" value={salesConditions.deliveryDays}
+                    onChange={e => updSales('deliveryDays', Math.max(0, parseInt(e.target.value) || 0))} />
+                </div>
               </div>
-            )}
-          </div>
+              <div className="space-y-2">
+                <Label>Condiciones de pago</Label>
+                <Input value={salesConditions.paymentTerms} onChange={e => updSales('paymentTerms', e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Notas adicionales</Label>
+                <Textarea rows={3} value={salesConditions.additionalNotes || ''} onChange={e => updSales('additionalNotes', e.target.value)} placeholder="Observaciones, exclusiones, etc." />
+              </div>
+            </CardContent>
+          </Card>
 
-          {/* Responsible persons */}
-          <div className="grid grid-cols-3 gap-4">
+          {/* Description / Elaborated by */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="elaborado-por">Elaborado por</Label>
-              <Input
-                id="elaborado-por"
-                value={elaboradoPor}
-                disabled
-                className="bg-muted"
-                placeholder="Auto-completado"
-              />
-              <p className="text-xs text-muted-foreground">
-                Se completa automáticamente con tu nombre
-              </p>
+              <Label>Elaborado por</Label>
+              <Input value={elaboradoPor} onChange={e => setElaboradoPor(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="revisado-por">Revisado por</Label>
-              <Select 
-                value={revisadoPor} 
-                onValueChange={setRevisadoPor}
-                disabled={loadingTeamMembers || teamMembers.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={
-                    loadingTeamMembers 
-                      ? "Cargando..." 
-                      : teamMembers.length === 0 
-                        ? "No hay miembros disponibles" 
-                        : "Seleccionar responsable"
-                  } />
-                </SelectTrigger>
-                <SelectContent>
-                  {user?.name && (
-                    <SelectItem value={user.name}>
-                      {user.name} (Yo)
-                    </SelectItem>
-                  )}
-                  {teamMembers
-                    .filter(member => member.id !== user?.id)
-                    .map(member => (
-                      <SelectItem key={member.id} value={member.name}>
-                        {member.name}
-                      </SelectItem>
-                    ))
-                  }
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Selecciona quien revisará la cotización
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="aprobado-por">Aprobado por</Label>
-              <Select 
-                value={validoPor} 
-                onValueChange={setValidoPor}
-                disabled={loadingTeamMembers || teamMembers.length === 0}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={
-                    loadingTeamMembers 
-                      ? "Cargando..." 
-                      : teamMembers.length === 0 
-                        ? "No hay miembros disponibles" 
-                        : "Seleccionar aprobador"
-                  } />
-                </SelectTrigger>
-                <SelectContent>
-                  {user?.name && (
-                    <SelectItem value={user.name}>
-                      {user.name} (Yo)
-                    </SelectItem>
-                  )}
-                  {teamMembers
-                    .filter(member => member.id !== user?.id)
-                    .map(member => (
-                      <SelectItem key={member.id} value={member.name}>
-                        {member.name}
-                      </SelectItem>
-                    ))
-                  }
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Selecciona quien aprobará la cotización
-              </p>
+              <Label>Descripción / título de la cotización</Label>
+              <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Ej. Pintado de fachada" />
             </div>
           </div>
 
-          {/* Technical Visit */}
-          <div className="flex items-center space-x-2 p-4 border rounded-lg bg-muted/50">
-            <Checkbox 
-              id="technical-visit" 
-              checked={needsTechnicalVisit}
-              onCheckedChange={(checked) => setNeedsTechnicalVisit(checked as boolean)}
-            />
-            <label 
-              htmlFor="technical-visit" 
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-            >
-              Se necesita una visita técnica previa
-            </label>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 justify-between pt-4 border-t sticky bottom-0 bg-background">
-            <Button variant="outline" onClick={() => setShowSaveTemplateDialog(true)}>
-              <Save className="h-4 w-4 mr-2" />
-              Guardar Plantilla
+          {/* Action buttons */}
+          <div className="flex flex-wrap gap-3 justify-end pt-4 border-t sticky bottom-0 bg-background">
+            <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+            <Button variant="outline" onClick={() => handleSave('draft')} disabled={saving}>
+              <Save className="h-4 w-4 mr-1" /> Guardar borrador
             </Button>
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={onClose}>
-                Cancelar
-              </Button>
-              <Button variant="outline" onClick={() => handleSubmit(true)}>
-                Guardar borrador
-              </Button>
-              <Button onClick={() => handleSubmit(false)}>
-                Enviar cotización
-              </Button>
-            </div>
+            <Button variant="outline" onClick={() => handleSave('email')} disabled={saving}>
+              <Mail className="h-4 w-4 mr-1" /> Enviar por correo
+            </Button>
+            <Button onClick={() => handleSave('submit')} disabled={saving}>
+              <FileText className="h-4 w-4 mr-1" /> Enviar cotización
+            </Button>
           </div>
         </CardContent>
       </Card>
-
-      {showSaveTemplateDialog && (
-        <SaveTemplateDialog
-          onSave={handleSaveTemplate}
-          onClose={() => setShowSaveTemplateDialog(false)}
-        />
-      )}
     </div>
   );
 };
