@@ -672,13 +672,13 @@ export const RequestList = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Tienda</Label>
+            <Label className="text-xs text-muted-foreground">Sucursal</Label>
             <Select value={filterStore} onValueChange={setFilterStore}>
               <SelectTrigger>
-                <SelectValue placeholder="Todas las tiendas" />
+                <SelectValue placeholder="Todas las sucursales" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas las tiendas</SelectItem>
+                <SelectItem value="all">Todas las sucursales</SelectItem>
                 {uniqueStores.map((store) => (
                   <SelectItem key={store} value={store}>{store}</SelectItem>
                 ))}
