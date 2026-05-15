@@ -91,22 +91,23 @@ export const RequestList = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Configuración de columnas visibles
-  type ColumnKey = 'requestNumber' | 'serviceType' | 'status' | 'branch' | 'createdAt' | 'store' | 'createdBy' | 'deadline' | 'quotesProgress' | 'actions';
+  type ColumnKey = 'requestNumber' | 'title' | 'serviceType' | 'status' | 'branch' | 'createdAt' | 'store' | 'createdBy' | 'deadline' | 'quotesProgress' | 'actions';
   
   const columnLabels: Record<ColumnKey, string> = {
     requestNumber: 'Nro. Solicitud',
+    title: 'Título',
     serviceType: 'Tipo de Servicio',
     status: 'Estado',
     branch: 'Sede',
     createdAt: 'Fecha de Registro',
-    store: 'Tienda',
+    store: 'Sucursal',
     createdBy: 'Usuario',
     deadline: 'Fecha Entrega Cotizaciones',
     quotesProgress: 'Cotizaciones',
     actions: 'Acciones',
   };
 
-  const defaultColumnOrder: ColumnKey[] = ['requestNumber', 'serviceType', 'status', 'branch', 'createdAt', 'store', 'createdBy', 'deadline', 'quotesProgress', 'actions'];
+  const defaultColumnOrder: ColumnKey[] = ['requestNumber', 'title', 'serviceType', 'status', 'branch', 'createdAt', 'store', 'createdBy', 'deadline', 'quotesProgress', 'actions'];
 
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const saved = localStorage.getItem('requestListVisibleColumns');
@@ -119,6 +120,7 @@ export const RequestList = () => {
     }
     return {
       requestNumber: true,
+      title: true,
       serviceType: true,
       status: true,
       branch: true,
@@ -166,6 +168,7 @@ export const RequestList = () => {
   const resetColumns = () => {
     const allVisible: Record<ColumnKey, boolean> = {
       requestNumber: true,
+      title: true,
       serviceType: true,
       status: true,
       branch: true,
