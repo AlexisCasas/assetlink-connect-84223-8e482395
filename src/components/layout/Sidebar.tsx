@@ -16,12 +16,13 @@ import {
   Globe,
   Bell,
   MessageSquare,
-  Users
+  Users,
+  Building2
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches') => void;
   currentView?: string;
   userRole?: UserRole;
 }
