@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { lovable } from '@/integrations/lovable';
+import type { Session } from '@supabase/supabase-js';
 
 export type UserRole = 'cliente' | 'proveedor' | 'team_member';
 
@@ -12,101 +15,133 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
+  loading: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<boolean>;
   register: (email: string, password: string, name: string, role: UserRole) => Promise<boolean>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const DEMO_PASSWORD = 'demo-password-2024';
+
+const DEMO_ACCOUNTS: Record<string, { role: UserRole; name: string; providerId?: string }> = {
+  'cliente@test.com': { role: 'cliente', name: 'Cliente Demo' },
+  'proveedor@test.com': { role: 'proveedor', name: 'Proveedor Demo', providerId: 'provider-1' },
+  'equipo@test.com': { role: 'team_member', name: 'Juan Pérez', providerId: 'provider-1' },
+};
+
+async function loadProfile(session: Session): Promise<User | null> {
+  const uid = session.user.id;
+  const email = session.user.email ?? '';
+
+  // Fetch profile + role
+  const [{ data: profile }, { data: roles }] = await Promise.all([
+    supabase.from('profiles').select('name, provider_id').eq('id', uid).maybeSingle(),
+    supabase.from('user_roles').select('role').eq('user_id', uid),
+  ]);
+
+  let role: UserRole = (roles?.[0]?.role as UserRole) ?? 'cliente';
+
+  // Demo overrides (so the seeded mockup works regardless)
+  const demo = DEMO_ACCOUNTS[email];
+  if (demo) role = demo.role;
+
+  return {
+    id: uid,
+    email,
+    role,
+    name: profile?.name ?? session.user.user_metadata?.name ?? email.split('@')[0],
+    providerId: profile?.provider_id ?? demo?.providerId,
+  };
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    // Listener FIRST
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setUser(null);
+        return;
+      }
+      // Defer Supabase calls to avoid deadlock inside the callback
+      setTimeout(() => {
+        loadProfile(session).then(setUser);
+      }, 0);
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        loadProfile(session).then((u) => {
+          setUser(u);
+          setLoading(false);
+        });
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => sub.subscription.unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string, role: UserRole): Promise<boolean> => {
-    // Inicializar datos de ejemplo para cuentas de prueba
-    if (email === 'cliente@test.com' && role === 'cliente') {
-      initializeClientTestData();
-    } else if (email === 'proveedor@test.com' && role === 'proveedor') {
-      initializeProviderTestData();
-    } else if (email === 'equipo@test.com' && role === 'team_member') {
-      initializeTeamMemberTestData();
-    }
-
-    // Permitir login con cualquier cuenta sin registro previo
-    let userData: User = {
-      id: crypto.randomUUID(),
-      email,
-      role,
-      name: email.split('@')[0],
-    };
-
-    // IDs específicos para cuentas de prueba
-    if (email === 'cliente@test.com') {
-      userData.id = 'test-client-001' as string;
-      userData.name = 'Cliente Demo';
-    } else if (email === 'proveedor@test.com') {
-      userData.id = 'provider-1' as string;
-      userData.name = 'Proveedor Demo';
-    } else if (email === 'equipo@test.com') {
-      userData.id = 'team-member-1' as string;
-      userData.name = 'Juan Pérez';
-      userData.providerId = 'provider-1';
-    }
-
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
-    return true;
-  };
-
   const register = async (email: string, password: string, name: string, role: UserRole): Promise<boolean> => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    
-    // Verificar si el usuario ya existe
-    if (users.find((u: any) => u.email === email)) {
-      return false;
-    }
-
-    const newUser = {
-      id: crypto.randomUUID(),
+    const { error } = await supabase.auth.signUp({
       email,
       password,
-      name,
-      role,
-    };
-
-    users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
-
-    const userData = {
-      id: newUser.id,
-      email: newUser.email,
-      role: newUser.role,
-      name: newUser.name,
-    };
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
-    return true;
+      options: {
+        emailRedirectTo: `${window.location.origin}/`,
+        data: { name, role },
+      },
+    });
+    return !error;
   };
 
-  const logout = () => {
+  const login = async (email: string, password: string, role: UserRole): Promise<boolean> => {
+    const demo = DEMO_ACCOUNTS[email];
+    const pwd = demo ? DEMO_PASSWORD : password;
+    const targetRole = demo?.role ?? role;
+    const targetName = demo?.name ?? email.split('@')[0];
+
+    let { error } = await supabase.auth.signInWithPassword({ email, password: pwd });
+
+    // For demo accounts, auto-create on first use
+    if (error && demo) {
+      const { error: signUpErr } = await supabase.auth.signUp({
+        email,
+        password: pwd,
+        options: { data: { name: targetName, role: targetRole } },
+      });
+      if (signUpErr) return false;
+      const retry = await supabase.auth.signInWithPassword({ email, password: pwd });
+      error = retry.error;
+    }
+    return !error;
+  };
+
+  const loginWithGoogle = async () => {
+    await lovable.auth.signInWithOAuth('google', {
+      redirect_uri: window.location.origin,
+    });
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('user');
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        loading,
         login,
         register,
+        loginWithGoogle,
         logout,
         isAuthenticated: !!user,
       }}
@@ -116,181 +151,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-const initializeClientTestData = () => {
-  const testRequests = [
-    {
-      id: 'req-001',
-      requestNumber: 'SOL-2024-001',
-      description: 'Reparación de sistema de aire acondicionado',
-      asset: 'AC-001 - Aire Acondicionado Principal',
-      location: 'Edificio A - Piso 3',
-      serviceType: 'correctivo',
-      observations: 'El equipo presenta fugas y no enfría adecuadamente',
-      images: [],
-      documents: [],
-      quotationDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      selectedProviders: ['provider-1', 'provider-2'],
-      status: 'sent',
-      clientId: 'test-client-001',
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      startTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'req-002',
-      requestNumber: 'SOL-2024-002',
-      description: 'Mantenimiento preventivo de ascensores',
-      asset: 'ASC-001 - Ascensor Principal',
-      location: 'Edificio B',
-      serviceType: 'preventivo',
-      observations: 'Mantenimiento trimestral programado',
-      images: [],
-      documents: [],
-      quotationDeadline: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-      selectedProviders: ['provider-1'],
-      status: 'sent',
-      clientId: 'test-client-001',
-      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      startTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    }
-  ];
-
-  const testDrafts = [
-    {
-      id: 'draft-001',
-      requestNumber: 'DRAFT-001',
-      description: 'Instalación de sistema de seguridad',
-      asset: 'SEG-001',
-      location: 'Edificio C',
-      serviceType: 'proyecto',
-      observations: '',
-      images: [],
-      documents: [],
-      quotationDeadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      selectedProviders: ['provider-3'],
-      status: 'draft',
-      clientId: 'test-client-001',
-      createdAt: new Date().toISOString(),
-      startTime: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-    }
-  ];
-
-  localStorage.setItem('requests', JSON.stringify(testRequests));
-  localStorage.setItem('drafts', JSON.stringify(testDrafts));
-};
-
-const initializeProviderTestData = () => {
-  const testRequests = [
-    {
-      id: 'req-001',
-      requestNumber: 'SOL-2024-001',
-      description: 'Reparación de sistema de aire acondicionado',
-      asset: 'AC-001 - Aire Acondicionado Principal',
-      location: 'Edificio A - Piso 3',
-      serviceType: 'correctivo',
-      observations: 'El equipo presenta fugas y no enfría adecuadamente',
-      images: [],
-      documents: [],
-      quotationDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      selectedProviders: ['provider-1', 'provider-2'],
-      status: 'sent',
-      clientId: 'test-client-001',
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      startTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-      priority: 'media',
-      assignments: [
-        {
-          id: 'assign-001',
-          requestId: 'req-001',
-          teamMemberId: 'team-member-1',
-          teamMemberName: 'Juan Pérez',
-          assignedBy: 'provider-1',
-          assignedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-          deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-          status: 'pending'
-        }
-      ]
-    },
-    {
-      id: 'req-002',
-      requestNumber: 'SOL-2024-002',
-      description: 'Mantenimiento preventivo de ascensores',
-      asset: 'ASC-001 - Ascensor Principal',
-      location: 'Edificio B',
-      serviceType: 'preventivo',
-      observations: 'Mantenimiento trimestral programado',
-      images: [],
-      documents: [],
-      quotationDeadline: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-      selectedProviders: ['provider-1'],
-      status: 'sent',
-      clientId: 'test-client-001',
-      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      startTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      priority: 'baja'
-    },
-    {
-      id: 'req-003',
-      requestNumber: 'SOL-2024-003',
-      description: 'Fuga de agua en tubería principal',
-      asset: 'TUB-001',
-      location: 'Sótano - Edificio A',
-      serviceType: 'emergencia',
-      observations: 'Requiere atención inmediata',
-      images: [],
-      documents: [],
-      quotationDeadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-      selectedProviders: ['provider-1'],
-      status: 'sent',
-      clientId: 'test-client-002',
-      createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-      priority: 'alta'
-    }
-  ];
-
-  localStorage.setItem('requests', JSON.stringify(testRequests));
-};
-
-const initializeTeamMemberTestData = () => {
-  const testRequests = [
-    {
-      id: 'req-001',
-      requestNumber: 'SOL-2024-001',
-      description: 'Reparación de sistema de aire acondicionado',
-      asset: 'AC-001 - Aire Acondicionado Principal',
-      location: 'Edificio A - Piso 3',
-      serviceType: 'correctivo',
-      observations: 'El equipo presenta fugas y no enfría adecuadamente',
-      images: [],
-      documents: [],
-      quotationDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      selectedProviders: ['provider-1', 'provider-2'],
-      status: 'sent',
-      clientId: 'test-client-001',
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      startTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-      priority: 'media',
-      assignments: [
-        {
-          id: 'assign-001',
-          requestId: 'req-001',
-          teamMemberId: 'team-member-1',
-          teamMemberName: 'Juan Pérez',
-          assignedBy: 'provider-1',
-          assignedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-          deadline: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-          status: 'pending'
-        }
-      ]
-    }
-  ];
-
-  localStorage.setItem('requests', JSON.stringify(testRequests));
-};
-
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
