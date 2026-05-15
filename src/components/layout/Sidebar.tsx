@@ -194,6 +194,18 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
             </Button>
 
             <Button
+              variant={currentView === 'branches' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('branches')}
+            >
+              <Building2 className={cn("h-4 w-4", !collapsed && "mr-2")} />
+              {!collapsed && 'Sucursales'}
+            </Button>
+
+            <Button
               variant={currentView === 'notifications' ? "default" : "ghost"}
               className={cn(
                 "w-full justify-start",
