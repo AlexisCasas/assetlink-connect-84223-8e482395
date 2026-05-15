@@ -56,6 +56,7 @@ export const DraftList = () => {
       const transformedDrafts: Request[] = (data || []).map((req: any) => ({
         id: req.id,
         requestNumber: req.request_number,
+        title: req.title,
         description: req.description,
         asset: req.asset,
         location: req.location,
@@ -69,6 +70,9 @@ export const DraftList = () => {
         status: req.status,
         createdAt: req.created_at,
         createdBy: req.created_by,
+        createdByUserId: req.created_by_user_id,
+        createdByName: req.created_by_name,
+        createdByEmail: req.created_by_email,
         priority: req.priority,
         clientName: req.client_name,
         clientBranch: req.client_branch,
@@ -76,8 +80,10 @@ export const DraftList = () => {
         city: req.city,
         store: req.store,
         branch: req.branch,
+        branchId: req.branch_id,
         requiresVisit: req.requires_visit,
         visitDate: req.visit_date,
+        minQuotes: req.min_quotes ?? 3,
       }));
 
       setDrafts(transformedDrafts);
@@ -123,9 +129,11 @@ export const DraftList = () => {
         const { error: requestError } = await supabase
           .from('requests')
           .update({
+            title: request.title || null,
             description: request.description,
             service_type: request.serviceType,
             deadline: request.deadline,
+            branch_id: request.branchId || null,
             city: request.city,
             store: request.store,
             branch: request.branch,
@@ -135,6 +143,7 @@ export const DraftList = () => {
             asset: request.asset,
             status: isDraft ? 'draft' : 'sent',
             is_public: request.isPublic,
+            min_quotes: request.minQuotes ?? 3,
           })
           .eq('id', request.id);
 
@@ -152,9 +161,11 @@ export const DraftList = () => {
           .insert({
             id: request.id,
             request_number: request.requestNumber,
+            title: request.title || null,
             description: request.description,
             service_type: request.serviceType,
             deadline: request.deadline,
+            branch_id: request.branchId || null,
             city: request.city,
             store: request.store,
             branch: request.branch,
@@ -164,10 +175,14 @@ export const DraftList = () => {
             asset: request.asset,
             status: isDraft ? 'draft' : 'sent',
             created_by: user?.email || '',
+            created_by_user_id: user?.id || null,
+            created_by_name: user?.name || null,
+            created_by_email: user?.email || null,
             is_public: request.isPublic,
             client_name: request.clientName,
             client_branch: request.clientBranch,
             priority: request.priority,
+            min_quotes: request.minQuotes ?? 3,
           });
 
         if (insertError) throw insertError;
