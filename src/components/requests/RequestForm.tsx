@@ -512,22 +512,6 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   />
                 </div>
               )}
-
-              <div className="space-y-2">
-                <Label htmlFor="minQuotes">Cotizaciones mínimas requeridas *</Label>
-                <Input
-                  id="minQuotes"
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={minQuotes}
-                  onChange={(e) => setMinQuotes(Math.max(1, parseInt(e.target.value) || 3))}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Los precios se mostrarán al alcanzar este número de cotizaciones
-                </p>
-              </div>
             </div>
           </div>
 
