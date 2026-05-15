@@ -60,7 +60,7 @@ interface Assignment {
   team_member_name: string;
 }
 
-type ColumnKey = 'ticket' | 'estado' | 'equipo' | 'operacion' | 'ubicacion' | 'prioridad' | 'coordinador' | 'ingresado' | 'programado' | 'comentarios' | 'acciones';
+type ColumnKey = 'ticket' | 'estado' | 'equipo' | 'operacion' | 'ubicacion' | 'prioridad' | 'coordinador' | 'ingresado' | 'programado' | 'comentarios' | 'cotizacion' | 'acciones';
 
 interface ColumnConfig {
   key: ColumnKey;
@@ -80,7 +80,8 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
   { key: 'ingresado', label: 'Ingresado', visible: true, order: 7 },
   { key: 'programado', label: 'Programado Para', visible: true, order: 8 },
   { key: 'comentarios', label: 'Comentarios', visible: true, order: 9 },
-  { key: 'acciones', label: 'Acciones', visible: true, order: 10 },
+  { key: 'cotizacion', label: 'Estado cotización', visible: true, order: 10 },
+  { key: 'acciones', label: 'Acciones', visible: true, order: 11 },
 ];
 
 export const ProviderRequestList = () => {
@@ -105,6 +106,9 @@ export const ProviderRequestList = () => {
   const [showQuoteDialog, setShowQuoteDialog] = useState(false);
   const [selectedRequestForDetail, setSelectedRequestForDetail] = useState<RequestData | null>(null);
   const [selectedRequestForQuote, setSelectedRequestForQuote] = useState<RequestData | null>(null);
+  const [showQuoteForm, setShowQuoteForm] = useState(false);
+  const [selectedRequestForForm, setSelectedRequestForForm] = useState<RequestData | null>(null);
+  const [existingQuoteForForm, setExistingQuoteForForm] = useState<any>(null);
 
   useEffect(() => {
     const savedColumns = localStorage.getItem('providerRequestColumns');
