@@ -12,6 +12,7 @@ import { seedDatabase } from '@/lib/seedData';
 import { Search, Settings2, ArrowUpDown, Download, GripVertical, Eye, FileText, UserCog } from 'lucide-react';
 import { RequestDetailDialog } from './RequestDetailDialog';
 import { QuoteDetailDialog } from './QuoteDetailDialog';
+import { QuoteForm } from './QuoteForm';
 import { 
   Table, 
   TableBody, 
