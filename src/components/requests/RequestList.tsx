@@ -110,34 +110,29 @@ export const RequestList = () => {
   const defaultColumnOrder: ColumnKey[] = ['requestNumber', 'title', 'serviceType', 'status', 'branch', 'createdAt', 'store', 'createdBy', 'deadline', 'quotesProgress', 'actions'];
 
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
+    const defaults: Record<ColumnKey, boolean> = {
+      requestNumber: true, title: true, serviceType: true, status: true, branch: true,
+      createdAt: true, store: true, createdBy: true, deadline: true, quotesProgress: true, actions: true,
+    };
     const saved = localStorage.getItem('requestListVisibleColumns');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        return { ...defaults, ...JSON.parse(saved) };
       } catch {
         // Si hay error, usar valores por defecto
       }
     }
-    return {
-      requestNumber: true,
-      title: true,
-      serviceType: true,
-      status: true,
-      branch: true,
-      createdAt: true,
-      store: true,
-      createdBy: true,
-      deadline: true,
-      quotesProgress: true,
-      actions: true,
-    };
+    return defaults;
   });
 
   const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(() => {
     const saved = localStorage.getItem('requestListColumnOrder');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved) as ColumnKey[];
+        // Asegurar que toda nueva columna (ej: title) esté presente
+        const missing = defaultColumnOrder.filter(k => !parsed.includes(k));
+        return [...parsed, ...missing];
       } catch {
         // Si hay error, usar valores por defecto
       }
