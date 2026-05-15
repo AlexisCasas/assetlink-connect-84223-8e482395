@@ -1,82 +1,174 @@
 ## Objetivo
 
-Reemplazar la pantalla "Mi Perfil" del proveedor (`ProviderProfile.tsx`) por una experiencia completa con 3 secciones (Mi información, Empresa, Información Comercial), persistiendo los datos en Supabase. Solo afecta al rol `proveedor`.
+Mejorar el flujo de cotización del proveedor en One Facility manteniendo la base actual (`QuoteForm`, `QuoteSummary`, `QuoteDetailDialog`, `ProviderRequestList`, tabla `quotes`), evolucionándola hacia secciones estandar, cálculo en cascada (Gastos Generales → Utilidades → IGV), condiciones de venta y modos resumen/detalle.
 
-## 1. Base de datos (migración nueva)
+## 1. Migración de base de datos
 
-**Tabla `provider_profiles`** (1:1 con `providers`, dueño = `auth.uid()` del proveedor):
-- `provider_id uuid PK` (= profiles.provider_id del usuario)
-- `owner_user_id uuid` (auth.uid del proveedor dueño, para RLS)
-- Mi info: `contact_name`, `contact_email`, `phone`, `whatsapp_phone`, `position`
-- Empresa: `business_name`, `commercial_name`, `tax_id`, `country`, `currency`, `timezone`, `fiscal_address`, `city`, `region`, `website`, `industry`, `logo_url`
-- Comercial: `company_description`, `foundation_year`, `employee_range`, `coverage_area`, `presentation_letter_url`, `presentation_letter_name`, `receive_all_invitations boolean default false`
-- `certification_status` enum (`not_started`,`in_review`,`certified`,`rejected`) default `not_started`
-- `created_at`, `updated_at` + trigger `touch_updated_at`
-- RLS: dueño (`owner_user_id = auth.uid()`) puede CRUD; otros autenticados solo SELECT (clientes pueden ver perfil público).
+Ampliar la tabla `quotes` (ALTER TABLE / ADD COLUMN IF NOT EXISTS) sin romper datos existentes:
 
-**Tabla `provider_commercial_clients`**:
-- `id`, `provider_id`, `business_name`, `contact_person`, `email`, `phone`, `extension`, timestamps
-- RLS: dueño del provider puede CRUD (vía join a `provider_profiles.owner_user_id`); SELECT abierto a authenticated.
+- `quote_sections jsonb default '[]'`
+- `base_subtotal numeric default 0`
+- `general_expenses_percentage numeric default 0`
+- `general_expenses_amount numeric default 0`
+- `utilities_percentage numeric default 0`
+- `utilities_amount numeric default 0`
+- `subtotal numeric default 0`
+- `igv_amount numeric default 0`
+- `total_amount numeric default 0`
+- `sales_conditions jsonb default '{}'`
+- `sent_at timestamptz null`
+- `emailed_at timestamptz null`
+- `updated_at timestamptz default now()`
 
-**Tabla `provider_documents`**:
-- `id`, `provider_id`, `document_type` text (`logo|presentation_letter|certification_document`), `file_name`, `file_url`, `status`, timestamps
-- RLS: igual que clientes comerciales.
+Trigger `touch_updated_at` reusado para mantener `updated_at`.
 
-**Storage buckets** (privados, con policies dueño = carpeta `{provider_id}/...`):
-- `provider-logos`
-- `provider-documents`
+`amount` y `description` permanecen como legacy. `amount = total_amount` siempre.
 
-**Seed**: insertar `provider_profiles` demo para `provider-1` (proveedor@test.com) con datos ROMAX y 3 clientes comerciales — vía tool `supabase--insert` después de la migración.
+## 2. Tipos TypeScript
 
-## 2. Tipos
+Nuevo bloque en `src/types/request.ts` (sin romper lo anterior):
 
-`src/types/provider.ts` (nuevo):
-- `ProviderProfile`, `ProviderCommercialClient`, `CertificationStatus`, `EmployeeRange`.
+```ts
+export type QuoteSectionType = 'line_items' | 'percentage';
 
-## 3. Componente principal
+export interface QuoteSectionItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitMeasure: string;
+  totalPrice: number;
+}
 
-Reemplazar `src/components/requests/ProviderProfile.tsx` con un wrapper que:
-- Si `user.role !== 'proveedor'` → muestra "Acceso no permitido" + botón a Dashboard.
-- Carga `provider_profiles` por `owner_user_id = user.id` (crea fila vacía si no existe).
-- Renderiza header "Mi Perfil / Gestiona tu información como proveedor".
-- 3 cards en columna (sin tabs para mantenerlo simple; cada card maneja su propio modo lectura/edición).
+export interface QuoteSection {
+  id: string;
+  name: string;
+  type: 'line_items';
+  order: number;
+  enabled: boolean;
+  items: QuoteSectionItem[];
+  subtotal: number;
+}
 
-## 4. Sub-componentes nuevos en `src/components/provider/`
+export interface QuoteSalesConditions {
+  validityDays: number;
+  warrantyMonths: number;
+  deliveryDays: number;
+  paymentTerms: string;
+  additionalNotes?: string;
+}
 
-- `MyInfoCard.tsx` — campos mi info, modo lectura/edición, diálogos `ChangeEmailDialog` y `ChangePasswordDialog` (mockup, solo toast).
-- `CompanyCard.tsx` — datos empresa + upload logo (a `provider-logos` bucket), preview, validaciones requeridas.
-- `CommercialInfoCard.tsx` — datos comerciales + sub-bloques:
-  - `CommercialClientsTable.tsx` — CRUD inline contra `provider_commercial_clients`.
-  - `PresentationLetterUpload.tsx` — un solo archivo activo en `provider-documents`.
-  - Switch `receive_all_invitations`.
-  - `CertificationBlock.tsx` — refactor del actual: 0/5 docs, badge (No certificado / En revisión / Certificado), enviar → `certification_status='in_review'`.
-
-## 5. Visibilidad por rol
-
-- `Dashboard.tsx` case `'profile'`: si `user.role !== 'proveedor'` redirigir a `dashboard`.
-- Sidebar ya muestra "Mi Perfil" solo a proveedor — no se toca.
-
-## 6. Compatibilidad
-
-- No tocar `MOCK_PROVIDERS`, `Provider` interface, ni flujos de cliente/equipo.
-- `providers.certified` se mantiene; espejamos vía `certification_status='certified'` cuando aplique para no romper consultas existentes.
-
-## Archivos
-
+export interface QuoteCalculationSummary {
+  baseSubtotal: number;
+  generalExpensesPercentage: number;
+  generalExpensesAmount: number;
+  utilitiesPercentage: number;
+  utilitiesAmount: number;
+  subtotal: number;
+  igvAmount: number;
+  totalAmount: number;
+}
 ```
-supabase/migrations/<new>.sql       (tablas, enum, RLS, buckets+policies, trigger)
-src/types/provider.ts               (nuevo)
-src/components/requests/ProviderProfile.tsx   (reescrito como wrapper)
-src/components/provider/MyInfoCard.tsx
-src/components/provider/CompanyCard.tsx
-src/components/provider/CommercialInfoCard.tsx
-src/components/provider/CommercialClientsTable.tsx
-src/components/provider/PresentationLetterUpload.tsx
-src/components/provider/CertificationBlock.tsx
-src/components/provider/ChangePasswordDialog.tsx
-src/pages/Dashboard.tsx             (guard de rol en case 'profile')
-```
+
+Se extiende `Quote` con `sections?`, `salesConditions?`, `calculation?`, `emailedAt?`, `sentAt?`.
+
+## 3. Helpers nuevos
+
+`src/lib/quoteCalculations.ts`:
+
+- `DEFAULT_SECTIONS` (Actividades, Materiales, Equipos, Movilización).
+- `GENERAL_SECTION` factory.
+- `calculateSectionSubtotal`, `calculateQuote(sections, gPct, uPct)`.
+- `formatSoles(value)` → `S/ 0.00`, robusto a `NaN`.
+
+## 4. QuoteForm.tsx (rewrite del cuerpo)
+
+- Botón principal: **"Agregar sección"** (no "Agregar campo").
+- Botón **"Usar sección general"** → reemplaza secciones por una sola sección `General`.
+- Botón **"Restaurar secciones por defecto"**.
+- Cada sección de líneas con:
+  - Nombre editable
+  - Filas: Descripción · Cantidad · Unidad · **Precio total** (sin precio unitario)
+  - Agregar / eliminar fila, eliminar sección
+- Toggles independientes para **Gastos Generales** y **Utilidades** con input de % (no tabla).
+- Al guardar/enviar usa `upsert` en `quotes` por `(request_id, provider_id)` para no duplicar borradores. Si ya existía borrador, actualiza.
+- Validaciones:
+  - Enviar requiere ≥1 línea con descripción y `totalPrice > 0`.
+  - No permitir negativos.
+  - Borrador permitido con datos parciales.
+- Carga inicial: si llega `existingQuote` (prop opcional) hidrata todo; si no, usa secciones default.
+
+Acepta nueva prop opcional `existingQuote?: any` para edición de borrador.
+
+## 5. QuoteSummary.tsx
+
+Reescribir para mostrar:
+
+- Lista de secciones con subtotal por sección (solo `enabled` y `line_items`).
+- Subtotal base.
+- Gastos Generales % y monto.
+- Utilidades % y monto.
+- Subtotal.
+- IGV 18%.
+- **Total** en `S/`.
+- Mantiene props compatibles: nueva forma `QuoteSummary({ sections, generalExpensesPercentage, utilitiesPercentage, salesConditions })`. Las llamadas existentes con `data` se siguen soportando con guard.
+
+## 6. Botones de acción
+
+En el footer del `QuoteForm`:
+
+- **Guardar borrador** → `status='draft'`, sin notificación.
+- **Enviar cotización** → `status='submitted'`, `sent_at=now()`, notificación `quote_received`.
+- **Enviar por correo** (mock) → `status='submitted'`, `emailed_at=now()`, notificación + toast `"Cotización enviada por correo"`.
+- **Cancelar** → cierra.
+
+Actualiza `requests.status` a `'quoted'` solo si aún está en `'sent'` (no cierra para otros).
+
+## 7. ProviderRequestList.tsx
+
+- Carga `quotes` del proveedor para todas las solicitudes visibles.
+- Nueva columna **Estado cotización** con badge:
+  - Sin cotizar / Borrador / Enviada / Enviada por correo / Aprobada / Rechazada.
+- Acciones por fila:
+  - Sin cotizar → **Cotizar**
+  - Borrador → **Editar borrador** (abre `QuoteForm` con `existingQuote`)
+  - Enviada / por correo → **Ver cotización** (abre `QuoteDetailDialog` en modo proveedor)
+
+## 8. QuoteDetailDialog.tsx
+
+Reescribir con tabs **Resumen / Detalle**:
+
+- **Resumen**: nombre proveedor, descripción, elaborado por, lista secciones con subtotal, GG, Utilidades, Subtotal, IGV, Total.
+- **Detalle**: cada sección con tabla de líneas, subtotal de sección, luego GG/Utilidades/Subtotal/IGV/Total y bloque de Condiciones de Venta + notas.
+- Mantiene compatibilidad: si la cotización legacy no tiene `quote_sections`, cae al render anterior (mostrando `description` y `amount`).
+
+## 9. Notificaciones
+
+Helper `createQuoteReceivedNotification(request, quote, providerName, viaEmail)` insertando en `notifications` con `type='quote_received'`, asociando `request_id` + `quote_id`.
+
+## 10. Datos demo
+
+Insertar (mediante insert tool, post-migración) una cotización demo para ROMAX en una solicitud existente del seed (si existe) con la estructura del enunciado. Si no hay solicitud apta, omitir sin romper.
+
+## 11. Impacto en otros archivos
+
+- `PublicRequestList.tsx` y `TeamMemberView.tsx`: solo se ajusta el **payload** al guardar (incluir nuevos campos = 0/[] cuando aplique). No se modifica su UI.
+- `QuoteListDialog.tsx` y `RequestList.tsx`: sin cambios estructurales; siguen leyendo `amount` (= `total_amount`).
+
+## Archivos a crear
+
+- `src/lib/quoteCalculations.ts`
+- `supabase/migrations/<timestamp>_quote_sections.sql`
+
+## Archivos a editar
+
+- `src/types/request.ts`
+- `src/components/requests/QuoteForm.tsx`
+- `src/components/requests/QuoteSummary.tsx`
+- `src/components/requests/QuoteDetailDialog.tsx`
+- `src/components/requests/ProviderRequestList.tsx`
+- `src/components/requests/PublicRequestList.tsx` (solo payload)
+- `src/components/requests/TeamMemberView.tsx` (solo payload)
 
 ## Criterios de aceptación
 
-Los 9 puntos: 3 secciones, edición/guardado por card, upload de logo, CRUD de clientes comerciales, carta de presentación reemplazable, switch de invitaciones, certificación con estado "En revisión", solo afecta a proveedor, login demo y demás flujos intactos, responsive shadcn/Tailwind.
+Cubre todos los puntos de la sección 15 del enunciado, sin romper los flujos de cliente y equipo.
