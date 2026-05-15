@@ -559,38 +559,77 @@ export type Database = {
         Row: {
           amount: number
           approval_reason: string | null
+          base_subtotal: number
           client_observation: string | null
           created_at: string
           description: string
+          emailed_at: string | null
+          general_expenses_amount: number
+          general_expenses_percentage: number
           id: string
+          igv_amount: number
           provider_id: string
+          quote_sections: Json
           request_id: string
+          sales_conditions: Json
+          sent_at: string | null
           status: string
+          subtotal: number
           team_member_id: string
+          total_amount: number
+          updated_at: string
+          utilities_amount: number
+          utilities_percentage: number
         }
         Insert: {
           amount: number
           approval_reason?: string | null
+          base_subtotal?: number
           client_observation?: string | null
           created_at?: string
           description: string
+          emailed_at?: string | null
+          general_expenses_amount?: number
+          general_expenses_percentage?: number
           id?: string
+          igv_amount?: number
           provider_id: string
+          quote_sections?: Json
           request_id: string
+          sales_conditions?: Json
+          sent_at?: string | null
           status?: string
+          subtotal?: number
           team_member_id: string
+          total_amount?: number
+          updated_at?: string
+          utilities_amount?: number
+          utilities_percentage?: number
         }
         Update: {
           amount?: number
           approval_reason?: string | null
+          base_subtotal?: number
           client_observation?: string | null
           created_at?: string
           description?: string
+          emailed_at?: string | null
+          general_expenses_amount?: number
+          general_expenses_percentage?: number
           id?: string
+          igv_amount?: number
           provider_id?: string
+          quote_sections?: Json
           request_id?: string
+          sales_conditions?: Json
+          sent_at?: string | null
           status?: string
+          subtotal?: number
           team_member_id?: string
+          total_amount?: number
+          updated_at?: string
+          utilities_amount?: number
+          utilities_percentage?: number
         }
         Relationships: [
           {
