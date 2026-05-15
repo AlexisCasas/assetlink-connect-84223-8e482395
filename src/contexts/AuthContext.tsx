@@ -29,8 +29,9 @@ const DEMO_PASSWORD = 'demo-password-2024';
 
 const DEMO_ACCOUNTS: Record<string, { role: UserRole; name: string; providerId?: string }> = {
   'cliente@test.com': { role: 'cliente', name: 'Cliente Demo' },
-  'proveedor@test.com': { role: 'proveedor', name: 'Proveedor Demo', providerId: 'provider-1' },
-  'equipo@test.com': { role: 'team_member', name: 'Juan Pérez', providerId: 'provider-1' },
+  // Note: providerId intentionally omitted — resolved lazily by email (UUID) in ProviderProfile.
+  'proveedor@test.com': { role: 'proveedor', name: 'Proveedor Demo' },
+  'equipo@test.com': { role: 'team_member', name: 'Juan Pérez' },
 };
 
 async function loadProfile(session: Session): Promise<User | null> {
@@ -49,12 +50,17 @@ async function loadProfile(session: Session): Promise<User | null> {
   const demo = DEMO_ACCOUNTS[email];
   if (demo) role = demo.role;
 
+  // Only accept UUID provider ids; ignore legacy mock strings like "provider-1".
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const rawPid = profile?.provider_id ?? demo?.providerId;
+  const providerId = typeof rawPid === 'string' && UUID_RE.test(rawPid) ? rawPid : undefined;
+
   return {
     id: uid,
     email,
     role,
     name: profile?.name ?? session.user.user_metadata?.name ?? email.split('@')[0],
-    providerId: profile?.provider_id ?? demo?.providerId,
+    providerId,
   };
 }
 
