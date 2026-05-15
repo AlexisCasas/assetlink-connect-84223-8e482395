@@ -58,6 +58,16 @@ const Dashboard = () => {
       case 'public-requests':
         return <PublicRequestList />;
       case 'profile':
+        if (user?.role !== 'proveedor') {
+          return (
+            <div className="p-6">
+              <div className="rounded-lg border bg-card p-8 text-center">
+                <h2 className="text-xl font-semibold mb-2">Acceso no permitido</h2>
+                <p className="text-muted-foreground">Esta sección está disponible solo para usuarios proveedor.</p>
+              </div>
+            </div>
+          );
+        }
         return <ProviderProfile />;
       case 'notifications':
         return <NotificationList />;
