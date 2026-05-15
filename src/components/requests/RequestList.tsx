@@ -1072,7 +1072,14 @@ export const RequestList = () => {
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalle de Solicitud {selectedRequest?.requestNumber}</DialogTitle>
+            <DialogTitle className="text-2xl">
+              {selectedRequest?.title || 'Solicitud sin título'}
+            </DialogTitle>
+            {selectedRequest && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {selectedRequest.requestNumber}
+              </p>
+            )}
           </DialogHeader>
           
           {selectedRequest && (
@@ -1095,15 +1102,22 @@ export const RequestList = () => {
                   </div>
                   <div>
                     <span className="text-muted-foreground">Creador:</span>
-                    <p className="font-medium">{selectedRequest.createdBy}</p>
+                    <p className="font-medium">
+                      {selectedRequest.createdByName
+                        ? `${selectedRequest.createdByName}`
+                        : selectedRequest.createdBy}
+                    </p>
+                    {selectedRequest.createdByEmail && selectedRequest.createdByName && (
+                      <p className="text-xs text-muted-foreground">{selectedRequest.createdByEmail}</p>
+                    )}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Ciudad:</span>
                     <p className="font-medium">{selectedRequest.city || '-'}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Tienda:</span>
-                    <p className="font-medium">{selectedRequest.store || '-'}</p>
+                    <span className="text-muted-foreground">Sucursal:</span>
+                    <p className="font-medium">{selectedRequest.clientName || selectedRequest.store || '-'}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Sede:</span>
