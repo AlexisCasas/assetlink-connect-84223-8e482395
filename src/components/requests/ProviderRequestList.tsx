@@ -468,7 +468,6 @@ export const ProviderRequestList = () => {
           const isDraft = q && q.status === 'draft';
           const isSubmitted = q && (q.status === 'submitted' || q.emailed_at);
           return (
-        return (
           <TableCell key={key}>
             <div className="flex gap-2">
               <Button
