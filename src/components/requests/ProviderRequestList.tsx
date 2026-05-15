@@ -805,6 +805,37 @@ export const ProviderRequestList = () => {
            }}
          />
        )}
+
+       {showQuoteForm && selectedRequestForForm && (
+         <QuoteForm
+           request={{
+             id: selectedRequestForForm.id,
+             requestNumber: selectedRequestForForm.request_number,
+             description: selectedRequestForForm.description,
+             asset: selectedRequestForForm.asset,
+             location: selectedRequestForForm.location,
+             serviceType: selectedRequestForForm.service_type as any,
+             deadline: selectedRequestForForm.deadline,
+             selectedProviders: [],
+             status: 'sent',
+             createdAt: selectedRequestForForm.created_at,
+             createdBy: (selectedRequestForForm as any).created_by || '',
+             priority: selectedRequestForForm.priority,
+           } as any}
+           existingQuote={existingQuoteForForm}
+           onClose={() => {
+             setShowQuoteForm(false);
+             setSelectedRequestForForm(null);
+             setExistingQuoteForForm(null);
+           }}
+           onSave={() => {
+             setShowQuoteForm(false);
+             setSelectedRequestForForm(null);
+             setExistingQuoteForForm(null);
+             initializeAndLoadRequests();
+           }}
+         />
+       )}
      </div>
    );
  };
