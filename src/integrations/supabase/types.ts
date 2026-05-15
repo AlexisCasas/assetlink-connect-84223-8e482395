@@ -330,6 +330,171 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_commercial_clients: {
+        Row: {
+          business_name: string
+          contact_person: string | null
+          created_at: string
+          email: string | null
+          extension: string | null
+          id: string
+          phone: string | null
+          provider_id: string
+          updated_at: string
+        }
+        Insert: {
+          business_name: string
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          extension?: string | null
+          id?: string
+          phone?: string | null
+          provider_id: string
+          updated_at?: string
+        }
+        Update: {
+          business_name?: string
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          extension?: string | null
+          id?: string
+          phone?: string | null
+          provider_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      provider_documents: {
+        Row: {
+          created_at: string
+          document_type: string
+          file_name: string
+          file_url: string
+          id: string
+          provider_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          document_type: string
+          file_name: string
+          file_url: string
+          id?: string
+          provider_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          document_type?: string
+          file_name?: string
+          file_url?: string
+          id?: string
+          provider_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      provider_profiles: {
+        Row: {
+          business_name: string | null
+          certification_status: Database["public"]["Enums"]["certification_status"]
+          city: string | null
+          commercial_name: string | null
+          company_description: string | null
+          contact_email: string | null
+          contact_name: string | null
+          country: string | null
+          coverage_area: string | null
+          created_at: string
+          currency: string | null
+          employee_range: string | null
+          fiscal_address: string | null
+          foundation_year: number | null
+          industry: string | null
+          logo_url: string | null
+          owner_user_id: string
+          phone: string | null
+          position: string | null
+          presentation_letter_name: string | null
+          presentation_letter_url: string | null
+          provider_id: string
+          receive_all_invitations: boolean
+          region: string | null
+          tax_id: string | null
+          timezone: string | null
+          updated_at: string
+          website: string | null
+          whatsapp_phone: string | null
+        }
+        Insert: {
+          business_name?: string | null
+          certification_status?: Database["public"]["Enums"]["certification_status"]
+          city?: string | null
+          commercial_name?: string | null
+          company_description?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          country?: string | null
+          coverage_area?: string | null
+          created_at?: string
+          currency?: string | null
+          employee_range?: string | null
+          fiscal_address?: string | null
+          foundation_year?: number | null
+          industry?: string | null
+          logo_url?: string | null
+          owner_user_id: string
+          phone?: string | null
+          position?: string | null
+          presentation_letter_name?: string | null
+          presentation_letter_url?: string | null
+          provider_id: string
+          receive_all_invitations?: boolean
+          region?: string | null
+          tax_id?: string | null
+          timezone?: string | null
+          updated_at?: string
+          website?: string | null
+          whatsapp_phone?: string | null
+        }
+        Update: {
+          business_name?: string | null
+          certification_status?: Database["public"]["Enums"]["certification_status"]
+          city?: string | null
+          commercial_name?: string | null
+          company_description?: string | null
+          contact_email?: string | null
+          contact_name?: string | null
+          country?: string | null
+          coverage_area?: string | null
+          created_at?: string
+          currency?: string | null
+          employee_range?: string | null
+          fiscal_address?: string | null
+          foundation_year?: number | null
+          industry?: string | null
+          logo_url?: string | null
+          owner_user_id?: string
+          phone?: string | null
+          position?: string | null
+          presentation_letter_name?: string | null
+          presentation_letter_url?: string | null
+          provider_id?: string
+          receive_all_invitations?: boolean
+          region?: string | null
+          tax_id?: string | null
+          timezone?: string | null
+          updated_at?: string
+          website?: string | null
+          whatsapp_phone?: string | null
+        }
+        Relationships: []
+      }
       providers: {
         Row: {
           certified: boolean | null
@@ -846,6 +1011,11 @@ export type Database = {
     Enums: {
       app_role: "cliente" | "proveedor" | "team_member"
       assignment_status: "pending" | "accepted" | "rejected"
+      certification_status:
+        | "not_started"
+        | "in_review"
+        | "certified"
+        | "rejected"
       notification_type:
         | "technical_visit"
         | "quote_received"
@@ -982,6 +1152,12 @@ export const Constants = {
     Enums: {
       app_role: ["cliente", "proveedor", "team_member"],
       assignment_status: ["pending", "accepted", "rejected"],
+      certification_status: [
+        "not_started",
+        "in_review",
+        "certified",
+        "rejected",
+      ],
       notification_type: [
         "technical_visit",
         "quote_received",

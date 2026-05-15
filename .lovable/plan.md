@@ -1,76 +1,82 @@
 ## Objetivo
 
-Rehacer el formulario de Nueva Solicitud del módulo Cliente para soportar título de la solicitud, metadata real del creador, y reemplazar "Tienda" por "Sucursal" con autocompletado de Ciudad y Sede a partir de una tabla administrable de sucursales.
+Reemplazar la pantalla "Mi Perfil" del proveedor (`ProviderProfile.tsx`) por una experiencia completa con 3 secciones (Mi información, Empresa, Información Comercial), persistiendo los datos en Supabase. Solo afecta al rol `proveedor`.
 
-## 1. Base de datos
+## 1. Base de datos (migración nueva)
 
-**Nueva tabla `client_branches`** (sucursales administrables):
-- `id`, `client_email` (dueña), `name`, `city`, `site` (sede), `address`, `is_active`, `created_at`, `updated_at`
-- RLS: el cliente dueño (por `client_email = auth.email()`) puede CRUD; otros autenticados solo SELECT (para que un cliente que ve una solicitud pueda ver el nombre de la sucursal aunque no sea suya — opcional). De momento aplicamos solo dueño con SELECT abierto a `authenticated` para mockup.
+**Tabla `provider_profiles`** (1:1 con `providers`, dueño = `auth.uid()` del proveedor):
+- `provider_id uuid PK` (= profiles.provider_id del usuario)
+- `owner_user_id uuid` (auth.uid del proveedor dueño, para RLS)
+- Mi info: `contact_name`, `contact_email`, `phone`, `whatsapp_phone`, `position`
+- Empresa: `business_name`, `commercial_name`, `tax_id`, `country`, `currency`, `timezone`, `fiscal_address`, `city`, `region`, `website`, `industry`, `logo_url`
+- Comercial: `company_description`, `foundation_year`, `employee_range`, `coverage_area`, `presentation_letter_url`, `presentation_letter_name`, `receive_all_invitations boolean default false`
+- `certification_status` enum (`not_started`,`in_review`,`certified`,`rejected`) default `not_started`
+- `created_at`, `updated_at` + trigger `touch_updated_at`
+- RLS: dueño (`owner_user_id = auth.uid()`) puede CRUD; otros autenticados solo SELECT (clientes pueden ver perfil público).
 
-**Tabla `requests`** — agregar columnas (no destructivo):
-- `title text` (nullable por compatibilidad; el form lo exigirá)
-- `branch_id uuid` (referencia lógica a `client_branches.id`, nullable)
-- `created_by_user_id uuid` (auth.uid del creador)
-- `created_by_name text`
-- `created_by_email text` (espejo de `created_by` por claridad; mantener `created_by` existente)
+**Tabla `provider_commercial_clients`**:
+- `id`, `provider_id`, `business_name`, `contact_person`, `email`, `phone`, `extension`, timestamps
+- RLS: dueño del provider puede CRUD (vía join a `provider_profiles.owner_user_id`); SELECT abierto a authenticated.
 
-Mantenemos `city`, `store`, `branch` actuales como snapshot histórico. `store` queda en BD por compatibilidad pero ya no se llena desde la UI (se mantiene igual a `site` para compatibilidad con vistas viejas), o se deja vacío.
+**Tabla `provider_documents`**:
+- `id`, `provider_id`, `document_type` text (`logo|presentation_letter|certification_document`), `file_name`, `file_url`, `status`, timestamps
+- RLS: igual que clientes comerciales.
 
-**Seed**: insertar 4 sucursales demo para el cliente `cliente@demo.com` (Plaza Vea Marina/Tacna/Marina, Plaza Vea Centro/Lima/Centro, Plaza Vea Norte/Lima/Norte, Tienda Arequipa Principal/Arequipa/Principal).
+**Storage buckets** (privados, con policies dueño = carpeta `{provider_id}/...`):
+- `provider-logos`
+- `provider-documents`
+
+**Seed**: insertar `provider_profiles` demo para `provider-1` (proveedor@test.com) con datos ROMAX y 3 clientes comerciales — vía tool `supabase--insert` después de la migración.
 
 ## 2. Tipos
 
-`src/types/request.ts`:
-- Añadir a `Request`: `title?`, `branchId?`, `createdByUserId?`, `createdByName?`, `createdByEmail?`
-- Nuevo tipo `ClientBranch { id, name, city, site, address?, isActive }`
+`src/types/provider.ts` (nuevo):
+- `ProviderProfile`, `ProviderCommercialClient`, `CertificationStatus`, `EmployeeRange`.
 
-## 3. Formulario `RequestForm.tsx`
+## 3. Componente principal
 
-- Reemplazar arrays hardcoded `CITIES/STORES/BRANCHES` por carga desde `client_branches` (filtradas por `client_email = user.email` y `is_active = true`).
-- Estado: `title`, `branchId`. Eliminar selectores manuales de Ciudad y Sede; pasarlos a inputs `readOnly bg-muted` autocompletados por `branchId`.
-- Reordenar grid de Cabecera según UX especificado (3 filas).
-- Validaciones: `title`, `branchId`, `description`, `deadline` obligatorios. Si la sucursal seleccionada no tiene `city`/`site`, mostrar warning toast.
-- En submit, mapear: `city = branch.city`, `branch (sede) = branch.site`, `store = branch.site` (compatibilidad), guardar `title`, `branchId`, `createdByUserId = user.id`, `createdByName = user.name`, `createdByEmail = user.email`.
-- Quitar el campo "Tienda".
+Reemplazar `src/components/requests/ProviderProfile.tsx` con un wrapper que:
+- Si `user.role !== 'proveedor'` → muestra "Acceso no permitido" + botón a Dashboard.
+- Carga `provider_profiles` por `owner_user_id = user.id` (crea fila vacía si no existe).
+- Renderiza header "Mi Perfil / Gestiona tu información como proveedor".
+- 3 cards en columna (sin tabs para mantenerlo simple; cada card maneja su propio modo lectura/edición).
 
-## 4. Listado `RequestList.tsx`
+## 4. Sub-componentes nuevos en `src/components/provider/`
 
-- Mostrar columna "Título" justo después de "Nro. Solicitud" (visible por defecto).
-- Etiqueta de columna "Tienda" → "Sucursal" (mantener key interna para compatibilidad de localStorage de columnas, solo cambiar label).
-- En filtros: renombrar "Tienda" a "Sucursal" en UI.
-- Preview inline / título destacado.
+- `MyInfoCard.tsx` — campos mi info, modo lectura/edición, diálogos `ChangeEmailDialog` y `ChangePasswordDialog` (mockup, solo toast).
+- `CompanyCard.tsx` — datos empresa + upload logo (a `provider-logos` bucket), preview, validaciones requeridas.
+- `CommercialInfoCard.tsx` — datos comerciales + sub-bloques:
+  - `CommercialClientsTable.tsx` — CRUD inline contra `provider_commercial_clients`.
+  - `PresentationLetterUpload.tsx` — un solo archivo activo en `provider-documents`.
+  - Switch `receive_all_invitations`.
+  - `CertificationBlock.tsx` — refactor del actual: 0/5 docs, badge (No certificado / En revisión / Certificado), enviar → `certification_status='in_review'`.
 
-## 5. Detalle `RequestDetailDialog.tsx`
+## 5. Visibilidad por rol
 
-- Encabezado principal: `request.title` grande; `request.requestNumber` como subtítulo.
-- Bloque metadata: Creado por (`created_by_name` / `created_by_email`), Fecha de creación, Sucursal, Ciudad, Sede.
+- `Dashboard.tsx` case `'profile'`: si `user.role !== 'proveedor'` redirigir a `dashboard`.
+- Sidebar ya muestra "Mi Perfil" solo a proveedor — no se toca.
 
-## 6. Nueva pantalla "Sucursales"
+## 6. Compatibilidad
 
-- `src/components/branches/BranchesList.tsx`: tabla con CRUD (crear/editar/desactivar) sobre `client_branches` del usuario actual.
-- Agregar entrada en `Sidebar` (solo cliente).
-- Agregar ruta/sección en `Index.tsx` o `Dashboard.tsx` (donde estén las secciones del cliente).
+- No tocar `MOCK_PROVIDERS`, `Provider` interface, ni flujos de cliente/equipo.
+- `providers.certified` se mantiene; espejamos vía `certification_status='certified'` cuando aplique para no romper consultas existentes.
 
-## 7. Compatibilidad
-
-- Solicitudes existentes sin `title` → mostrar `requestNumber` como fallback en listado/detalle.
-- Sin `branchId` → mostrar los valores existentes de `city`/`store`/`branch` tal cual.
-- No borrar columnas existentes en BD.
-
-## Archivos a tocar
+## Archivos
 
 ```
-supabase/migrations/<new>.sql        (nueva tabla, columnas, RLS, seed)
-src/types/request.ts                  (campos nuevos + ClientBranch)
-src/components/requests/RequestForm.tsx
-src/components/requests/RequestList.tsx
-src/components/requests/RequestDetailDialog.tsx
-src/components/branches/BranchesList.tsx  (nuevo)
-src/components/layout/Sidebar.tsx
-src/pages/Index.tsx (o donde se ruteen las secciones cliente)
+supabase/migrations/<new>.sql       (tablas, enum, RLS, buckets+policies, trigger)
+src/types/provider.ts               (nuevo)
+src/components/requests/ProviderProfile.tsx   (reescrito como wrapper)
+src/components/provider/MyInfoCard.tsx
+src/components/provider/CompanyCard.tsx
+src/components/provider/CommercialInfoCard.tsx
+src/components/provider/CommercialClientsTable.tsx
+src/components/provider/PresentationLetterUpload.tsx
+src/components/provider/CertificationBlock.tsx
+src/components/provider/ChangePasswordDialog.tsx
+src/pages/Dashboard.tsx             (guard de rol en case 'profile')
 ```
 
 ## Criterios de aceptación
 
-Los 11 puntos de la especificación: crear con título, mostrarlo en listado/detalle, creador automático, sin "Tienda", autocompletar Ciudad/Sede desde Sucursal, pantalla de admin de sucursales, sin perder detalles ni romper el flujo existente.
+Los 9 puntos: 3 secciones, edición/guardado por card, upload de logo, CRUD de clientes comerciales, carta de presentación reemplazable, switch de invitaciones, certificación con estado "En revisión", solo afecta a proveedor, login demo y demás flujos intactos, responsive shadcn/Tailwind.
