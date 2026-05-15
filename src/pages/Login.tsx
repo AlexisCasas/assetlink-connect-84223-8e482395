@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 
 const Login = () => {
@@ -14,51 +14,51 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const { login, register } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
+  const { login, register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
+    try {
+      if (isLogin) {
+        const ok = await login(email, password, selectedRole);
+        if (ok) {
+          toast({ title: 'Inicio de sesión exitoso' });
+          navigate('/');
+        } else {
+          toast({ title: 'Error', description: 'Credenciales incorrectas', variant: 'destructive' });
+        }
+      } else {
+        if (!name) {
+          toast({ title: 'Error', description: 'Ingresa tu nombre', variant: 'destructive' });
+          return;
+        }
+        const ok = await register(email, password, name, selectedRole);
+        if (ok) {
+          toast({ title: 'Registro exitoso', description: 'Iniciando sesión...' });
+          await login(email, password, selectedRole);
+          navigate('/');
+        } else {
+          toast({ title: 'Error', description: 'No se pudo registrar (¿usuario existente?)', variant: 'destructive' });
+        }
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-    if (isLogin) {
-      const success = await login(email, password, selectedRole);
-      if (success) {
-        toast({
-          title: "Inicio de sesión exitoso",
-          description: `Bienvenido ${selectedRole}`,
-        });
-        navigate('/');
-      } else {
-        toast({
-          title: "Error",
-          description: "Credenciales incorrectas",
-          variant: "destructive",
-        });
-      }
+  const handleDemo = async (demoEmail: string, role: UserRole) => {
+    setSubmitting(true);
+    const ok = await login(demoEmail, 'ignored', role);
+    setSubmitting(false);
+    if (ok) {
+      toast({ title: 'Acceso demo' });
+      navigate('/');
     } else {
-      if (!name) {
-        toast({
-          title: "Error",
-          description: "Por favor ingresa tu nombre",
-          variant: "destructive",
-        });
-        return;
-      }
-      const success = await register(email, password, name, selectedRole);
-      if (success) {
-        toast({
-          title: "Registro exitoso",
-          description: "Tu cuenta ha sido creada",
-        });
-        navigate('/');
-      } else {
-        toast({
-          title: "Error",
-          description: "El usuario ya existe",
-          variant: "destructive",
-        });
-      }
+      toast({ title: 'Error', description: 'No se pudo iniciar sesión demo', variant: 'destructive' });
     }
   };
 
@@ -84,73 +84,50 @@ const Login = () => {
             {!isLogin && (
               <div className="space-y-2">
                 <Label htmlFor="name">Nombre</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Tu nombre"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required={!isLogin}
-                />
+                <Input id="name" type="text" placeholder="Tu nombre" value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
             )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="tu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <Input id="email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
             </div>
-            <Button type="submit" className="w-full">
+            <Button type="submit" className="w-full" disabled={submitting}>
               {isLogin ? 'Iniciar Sesión' : 'Registrarse'}
             </Button>
           </form>
 
+          <div className="my-4 flex items-center gap-2">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">o</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          <Button type="button" variant="outline" className="w-full" onClick={loginWithGoogle} disabled={submitting}>
+            Continuar con Google
+          </Button>
+
           <div className="mt-4 text-center text-sm">
-            <button
-              type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-primary hover:underline"
-            >
+            <button type="button" onClick={() => setIsLogin(!isLogin)} className="text-primary hover:underline">
               {isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
             </button>
           </div>
 
           {isLogin && (
-            <div className="mt-6 p-4 bg-muted rounded-lg space-y-3">
-              <h3 className="text-sm font-semibold text-center mb-2">Cuentas de Prueba</h3>
-              <div className="space-y-2 text-xs">
-                <div className="p-2 bg-background rounded border">
-                  <p className="font-medium">Cliente:</p>
-                  <p>Email: cliente@test.com</p>
-                  <p>Password: cualquiera</p>
-                </div>
-                <div className="p-2 bg-background rounded border">
-                  <p className="font-medium">Proveedor:</p>
-                  <p>Email: proveedor@test.com</p>
-                  <p>Password: cualquiera</p>
-                </div>
-                <div className="p-2 bg-background rounded border">
-                  <p className="font-medium">Equipo:</p>
-                  <p>Email: equipo@test.com</p>
-                  <p>Password: cualquiera</p>
-                </div>
-              </div>
+            <div className="mt-6 p-4 bg-muted rounded-lg space-y-2">
+              <h3 className="text-sm font-semibold text-center">Cuentas Demo (un clic)</h3>
+              <Button variant="secondary" size="sm" className="w-full" disabled={submitting} onClick={() => handleDemo('cliente@test.com', 'cliente')}>
+                Entrar como Cliente
+              </Button>
+              <Button variant="secondary" size="sm" className="w-full" disabled={submitting} onClick={() => handleDemo('proveedor@test.com', 'proveedor')}>
+                Entrar como Proveedor
+              </Button>
+              <Button variant="secondary" size="sm" className="w-full" disabled={submitting} onClick={() => handleDemo('equipo@test.com', 'team_member')}>
+                Entrar como Equipo
+              </Button>
             </div>
           )}
         </CardContent>
