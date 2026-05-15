@@ -1,69 +1,76 @@
 ## Objetivo
 
-Reemplazar el login simulado (localStorage) por autenticación real de Lovable Cloud (Supabase Auth) manteniendo el comportamiento de mockup: cuentas demo de un solo clic, datos sembrados, y los tres roles existentes (`cliente`, `proveedor`, `team_member`). Esto habilita cerrar las políticas RLS abiertas detectadas por el escaneo de seguridad.
+Rehacer el formulario de Nueva Solicitud del módulo Cliente para soportar título de la solicitud, metadata real del creador, y reemplazar "Tienda" por "Sucursal" con autocompletado de Ciudad y Sede a partir de una tabla administrable de sucursales.
 
-## Alcance
+## 1. Base de datos
 
-### 1. Base de datos (migración)
+**Nueva tabla `client_branches`** (sucursales administrables):
+- `id`, `client_email` (dueña), `name`, `city`, `site` (sede), `address`, `is_active`, `created_at`, `updated_at`
+- RLS: el cliente dueño (por `client_email = auth.email()`) puede CRUD; otros autenticados solo SELECT (para que un cliente que ve una solicitud pueda ver el nombre de la sucursal aunque no sea suya — opcional). De momento aplicamos solo dueño con SELECT abierto a `authenticated` para mockup.
 
-- Crear enum `public.app_role` con valores `cliente`, `proveedor`, `team_member`.
-- Crear tabla `public.profiles` (`id` = `auth.users.id`, `email`, `name`, `provider_id`).
-- Crear tabla `public.user_roles` (`user_id`, `role`) — roles **siempre** en tabla aparte (nunca en `profiles`).
-- Función `SECURITY DEFINER` `public.has_role(_user_id uuid, _role app_role)`.
-- Función `SECURITY DEFINER` `public.get_user_email(_user_id uuid)` para usar en políticas (lee `auth.users.email`).
-- Trigger `on_auth_user_created` que inserta en `profiles` y asigna rol por defecto desde `raw_user_meta_data`.
-- RLS en `profiles` y `user_roles` (cada usuario lee lo suyo; nadie puede auto-asignarse roles).
+**Tabla `requests`** — agregar columnas (no destructivo):
+- `title text` (nullable por compatibilidad; el form lo exigirá)
+- `branch_id uuid` (referencia lógica a `client_branches.id`, nullable)
+- `created_by_user_id uuid` (auth.uid del creador)
+- `created_by_name text`
+- `created_by_email text` (espejo de `created_by` por claridad; mantener `created_by` existente)
 
-### 2. Reemplazar políticas RLS abiertas
+Mantenemos `city`, `store`, `branch` actuales como snapshot histórico. `store` queda en BD por compatibilidad pero ya no se llena desde la UI (se mantiene igual a `site` para compatibilidad con vistas viejas), o se deja vacío.
 
-Sustituir todas las políticas `USING (true)` por reglas basadas en `auth.uid()` y `has_role()`:
+**Seed**: insertar 4 sucursales demo para el cliente `cliente@demo.com` (Plaza Vea Marina/Tacna/Marina, Plaza Vea Centro/Lima/Centro, Plaza Vea Norte/Lima/Norte, Tienda Arequipa Principal/Arequipa/Principal).
 
-- `requests`, `request_details`, `request_providers`: lectura pública para autenticados; insert/update/delete restringido a dueño (`created_by = email del usuario`) o a proveedores asignados.
-- `quotes`, `quote_templates`, `assignments`: el proveedor solo gestiona las suyas; el cliente solo ve las de sus solicitudes.
-- `chat_messages`, `request_chat_participants`: solo participantes del chat.
-- `providers`, `team_members`: lectura pública autenticada; escritura solo dueño.
-- `client_approved_providers`, `client_specialties`: solo el cliente dueño (`client_email = email del usuario`).
-- `notifications`: solo destinatario.
-- `technical_visits`, `technical_visit_documents`: cliente dueño + proveedor involucrado.
-- Buckets de storage (`request-documents`, `request-images`, `request-detail-attachments`): solo autenticados; escritura restringida por carpeta-usuario.
+## 2. Tipos
 
-### 3. Auth de Supabase
+`src/types/request.ts`:
+- Añadir a `Request`: `title?`, `branchId?`, `createdByUserId?`, `createdByName?`, `createdByEmail?`
+- Nuevo tipo `ClientBranch { id, name, city, site, address?, isActive }`
 
-- Habilitar email/password con `auto_confirm_email = true` (es mockup, sin verificación de correo).
-- Habilitar Google OAuth gestionado.
-- Deshabilitar signup anónimo.
+## 3. Formulario `RequestForm.tsx`
 
-### 4. Refactor de `AuthContext`
+- Reemplazar arrays hardcoded `CITIES/STORES/BRANCHES` por carga desde `client_branches` (filtradas por `client_email = user.email` y `is_active = true`).
+- Estado: `title`, `branchId`. Eliminar selectores manuales de Ciudad y Sede; pasarlos a inputs `readOnly bg-muted` autocompletados por `branchId`.
+- Reordenar grid de Cabecera según UX especificado (3 filas).
+- Validaciones: `title`, `branchId`, `description`, `deadline` obligatorios. Si la sucursal seleccionada no tiene `city`/`site`, mostrar warning toast.
+- En submit, mapear: `city = branch.city`, `branch (sede) = branch.site`, `store = branch.site` (compatibilidad), guardar `title`, `branchId`, `createdByUserId = user.id`, `createdByName = user.name`, `createdByEmail = user.email`.
+- Quitar el campo "Tienda".
 
-- Usar `supabase.auth.signUp` / `signInWithPassword` / `signInWithOAuth` / `signOut`.
-- Patrón estándar: registrar `onAuthStateChange` **antes** de `getSession()`.
-- Cargar rol desde `user_roles` después de obtener sesión.
-- Mantener API actual (`user`, `login`, `register`, `logout`, `isAuthenticated`) para no romper consumidores.
-- Las cuentas demo (`cliente@test.com`, `proveedor@test.com`, `equipo@test.com`) se auto-registran la primera vez con su rol y datos sembrados.
+## 4. Listado `RequestList.tsx`
 
-### 5. Sembrado de datos demo
+- Mostrar columna "Título" justo después de "Nro. Solicitud" (visible por defecto).
+- Etiqueta de columna "Tienda" → "Sucursal" (mantener key interna para compatibilidad de localStorage de columnas, solo cambiar label).
+- En filtros: renombrar "Tienda" a "Sucursal" en UI.
+- Preview inline / título destacado.
 
-- Mover `initializeClientTestData` / `initializeProviderTestData` / `initializeTeamMemberTestData` a inserts en Supabase (idempotentes) en lugar de localStorage.
-- Ejecutarse después del primer login de cada cuenta demo.
+## 5. Detalle `RequestDetailDialog.tsx`
 
-### 6. UI
+- Encabezado principal: `request.title` grande; `request.requestNumber` como subtítulo.
+- Bloque metadata: Creado por (`created_by_name` / `created_by_email`), Fecha de creación, Sucursal, Ciudad, Sede.
 
-- `Login.tsx`: añadir botón "Continuar con Google" y mantener tabs de rol solo como hint para signup (el rol real viene de `user_roles`).
-- `ProviderProfile.tsx` y otros que leen `localStorage.getItem('providers')`: migrar a leer de la tabla `providers` (cambio mínimo para que no rompa).
+## 6. Nueva pantalla "Sucursales"
 
-### 7. Cerrar hallazgos de seguridad
+- `src/components/branches/BranchesList.tsx`: tabla con CRUD (crear/editar/desactivar) sobre `client_branches` del usuario actual.
+- Agregar entrada en `Sidebar` (solo cliente).
+- Agregar ruta/sección en `Index.tsx` o `Dashboard.tsx` (donde estén las secciones del cliente).
 
-Marcar como `mark_as_fixed` los findings de RLS abierta una vez aplicadas las políticas nuevas; actualizar `security-memory` documentando que la app es mockup pero ya usa auth real.
+## 7. Compatibilidad
 
-## Detalles técnicos
+- Solicitudes existentes sin `title` → mostrar `requestNumber` como fallback en listado/detalle.
+- Sin `branchId` → mostrar los valores existentes de `city`/`store`/`branch` tal cual.
+- No borrar columnas existentes en BD.
 
-- Storage del cliente Supabase: ya configurado en `client.ts`, no tocar.
-- `redirectTo` en signup/OAuth: `window.location.origin`.
-- `created_by` en `requests` actualmente es `text` (email). Conservarlo y usar `auth.email()` en las políticas para evitar migración de datos.
-- Para tablas que referencian `provider_id` / `team_member_id` (uuid), las políticas usarán joins vía `EXISTS (SELECT 1 FROM providers WHERE id = ... AND email = auth.email())`.
+## Archivos a tocar
 
-## Fuera de alcance
+```
+supabase/migrations/<new>.sql        (nueva tabla, columnas, RLS, seed)
+src/types/request.ts                  (campos nuevos + ClientBranch)
+src/components/requests/RequestForm.tsx
+src/components/requests/RequestList.tsx
+src/components/requests/RequestDetailDialog.tsx
+src/components/branches/BranchesList.tsx  (nuevo)
+src/components/layout/Sidebar.tsx
+src/pages/Index.tsx (o donde se ruteen las secciones cliente)
+```
 
-- Pantalla de roles administrables (vendrá después según el usuario).
-- Verificación de email real, recuperación de contraseña.
-- Migración de datos existentes en localStorage de los navegadores de los usuarios actuales.
+## Criterios de aceptación
+
+Los 11 puntos de la especificación: crear con título, mostrarlo en listado/detalle, creador automático, sin "Tienda", autocompletar Ciudad/Sede desde Sucursal, pantalla de admin de sucursales, sin perder detalles ni romper el flujo existente.
