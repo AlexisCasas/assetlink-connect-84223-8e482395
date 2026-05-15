@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Request, ServiceType } from '@/types/request';
+import { Request, ServiceType, ClientBranch } from '@/types/request';
 import { Badge } from '@/components/ui/badge';
 import { X, Upload, Search, CheckCircle2, Plus, Trash2, Pencil, CheckCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,9 +39,6 @@ interface RequestDetail {
   attachments: File[];
 }
 
-const CITIES = ['Tacna', 'Ilo', 'Arequipa'];
-const STORES = ['Plaza Vea', 'Makro'];
-const BRANCHES = ['Tacna', 'Marina', 'Ilo', 'Ejercito'];
 const EQUIPMENT_OPTIONS = ['CÁMARA CONGELADOS PESCADOS 01', 'ESCALERA DE AVIÓN 03', 'ESCALERA DE AVIÓN # 01'];
 const SUB_EQUIPMENT_OPTIONS = ['EXTRACTOR 02', 'EXTRACTOR 03'];
 const AREA_OPTIONS = ['Transtienda', 'Almacén', 'Sala de Ventas'];
@@ -79,12 +76,14 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   };
   
   // Cabecera
+  const [title, setTitle] = useState(editingRequest?.title || '');
   const [description, setDescription] = useState(editingRequest?.description || '');
   const [serviceType, setServiceType] = useState<ServiceType>(editingRequest?.serviceType || 'correctivo');
   const [deadline, setDeadline] = useState(formatDateForInput(editingRequest?.deadline));
+  const [branchId, setBranchId] = useState<string>(editingRequest?.branchId || '');
   const [city, setCity] = useState(editingRequest?.city || '');
-  const [store, setStore] = useState(editingRequest?.store || '');
-  const [branch, setBranch] = useState(editingRequest?.branch || '');
+  const [site, setSite] = useState(editingRequest?.branch || '');
+  const [branches, setBranches] = useState<ClientBranch[]>([]);
   const [requiresVisit, setRequiresVisit] = useState(editingRequest?.requiresVisit || false);
   const [visitDate, setVisitDate] = useState(formatDateForInput(editingRequest?.visitDate));
   const [minQuotes, setMinQuotes] = useState<number>(editingRequest?.minQuotes ?? 3);
@@ -126,9 +125,41 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
 
   useEffect(() => {
     fetchProviders();
+    fetchBranches();
     // Simular usuarios del cliente (en producción vendría de la base de datos)
     setClientUsers(['Juan Pérez', 'María García', 'Carlos López', 'Ana Rodríguez']);
   }, []);
+
+  const fetchBranches = async () => {
+    const { data } = await supabase
+      .from('client_branches')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
+    const list: ClientBranch[] = (data || []).map((b: any) => ({
+      id: b.id, name: b.name, city: b.city, site: b.site, address: b.address, isActive: b.is_active,
+    }));
+    setBranches(list);
+  };
+
+  const handleBranchChange = (id: string) => {
+    setBranchId(id);
+    const b = branches.find(x => x.id === id);
+    if (b) {
+      setCity(b.city || '');
+      setSite(b.site || '');
+      if (!b.city || !b.site) {
+        toast({
+          title: 'Sucursal incompleta',
+          description: 'Esta sucursal no tiene Ciudad o Sede configurada. Edítala desde Sucursales.',
+          variant: 'destructive',
+        });
+      }
+    } else {
+      setCity('');
+      setSite('');
+    }
+  };
 
   const fetchProviders = async () => {
     const { data } = await supabase.from('providers').select('*').order('name');
@@ -234,10 +265,18 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   };
 
   const handleSubmit = async (isDraft: boolean) => {
-    if (!description || !deadline || !city || !store || !branch) {
+    if (!title.trim()) {
+      toast({ title: 'Falta el título', description: 'Ingresa el título de la solicitud', variant: 'destructive' });
+      return;
+    }
+    if (!branchId) {
+      toast({ title: 'Falta la sucursal', description: 'Selecciona una sucursal', variant: 'destructive' });
+      return;
+    }
+    if (!description || !deadline) {
       toast({
         title: "Error",
-        description: "Por favor completa los campos obligatorios de la cabecera",
+        description: "Completa la descripción y la fecha de entrega",
         variant: "destructive",
       });
       return;
@@ -271,9 +310,10 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
     const request: Request = {
       id: editingRequest?.id || crypto.randomUUID(),
       requestNumber,
+      title: title.trim(),
       description,
       asset: details[0]?.equipment || '',
-      location: `${city} - ${store} - ${branch}`,
+      location: `${city} - ${site}`,
       serviceType,
       observations: '',
       deadline,
@@ -282,17 +322,21 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       status: isDraft ? 'draft' : 'sent',
       createdAt: editingRequest?.createdAt || new Date().toISOString(),
       createdBy: user?.email || '',
+      createdByUserId: editingRequest?.createdByUserId || user?.id,
+      createdByName: editingRequest?.createdByName || user?.name,
+      createdByEmail: editingRequest?.createdByEmail || user?.email,
       priority: priorityMap[serviceType],
       assignments: editingRequest?.assignments || {},
       technicalVisitRequested: editingRequest?.technicalVisitRequested || {},
       quotes: editingRequest?.quotes || [],
-      clientName: store,
-      clientBranch: branch,
+      clientName: branches.find(b => b.id === branchId)?.name || '',
+      clientBranch: site,
       isPublic: selectedProviders.length === 0,
       // Nuevos campos
       city,
-      store,
-      branch,
+      store: site,
+      branch: site,
+      branchId,
       requiresVisit,
       visitDate: requiresVisit ? visitDate : undefined,
       minQuotes,
@@ -337,22 +381,31 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-primary">Datos de Cabecera</h3>
             
+            {/* Fila 1: Título / Nro / Tipo */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
+                <Label htmlFor="title">Título de la solicitud *</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Ej: Mantenimiento preventivo equipos tienda Marina"
+                  maxLength={200}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>Nro de solicitud</Label>
-                <Input 
-                  value={editingRequest?.requestNumber || `SOL-${Date.now().toString().slice(-6)}`} 
-                  disabled 
+                <Input
+                  value={editingRequest?.requestNumber || `SOL-${Date.now().toString().slice(-6)}`}
+                  disabled
                   className="bg-muted"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="serviceType">Tipo de servicio *</Label>
                 <Select value={serviceType} onValueChange={(value) => setServiceType(value as ServiceType)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-popover">
                     <SelectItem value="emergencia">Emergencia</SelectItem>
                     <SelectItem value="correctivo">Correctivo</SelectItem>
@@ -361,9 +414,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   </SelectContent>
                 </Select>
               </div>
+            </div>
 
+            {/* Fila 2: Fecha entrega / Sucursal / Ciudad */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="deadline">Fecha de Entrega de Solicitudes de Cotización *</Label>
+                <Label htmlFor="deadline">Fecha de Entrega de Cotizaciones *</Label>
                 <Input
                   id="deadline"
                   type="date"
@@ -372,75 +428,68 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   required
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="branchId">Sucursal *</Label>
+                <Select value={branchId} onValueChange={handleBranchChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={branches.length === 0 ? 'No hay sucursales' : 'Selecciona sucursal'} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="city">Ciudad</Label>
+                <Input id="city" value={city} readOnly className="bg-muted" placeholder="Auto desde sucursal" />
+              </div>
             </div>
 
+            {/* Fila 3: Sede / Creador / Min cotizaciones */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
+                <Label htmlFor="site">Sede</Label>
+                <Input id="site" value={site} readOnly className="bg-muted" placeholder="Auto desde sucursal" />
+              </div>
+              <div className="space-y-2">
                 <Label>Creador</Label>
-                <Input 
-                  value={user?.email || ''} 
-                  disabled 
+                <Input
+                  value={user?.name ? `${user.name} (${user.email})` : (user?.email || '')}
+                  disabled
                   className="bg-muted"
                 />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="city">Ciudad *</Label>
-                <Select value={city} onValueChange={setCity}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona ciudad" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {CITIES.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="store">Tienda *</Label>
-                <Select value={store} onValueChange={setStore}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona tienda" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {STORES.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="branch">Sede *</Label>
-                <Select value={branch} onValueChange={setBranch}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona sede" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {BRANCHES.map((b) => (
-                      <SelectItem key={b} value={b}>{b}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="description">Descripción *</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe el servicio requerido"
-                  rows={2}
+                <Label htmlFor="minQuotes">Cotizaciones mínimas requeridas *</Label>
+                <Input
+                  id="minQuotes"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={minQuotes}
+                  onChange={(e) => setMinQuotes(Math.max(1, parseInt(e.target.value) || 3))}
                   required
                 />
+                <p className="text-xs text-muted-foreground">Los precios se mostrarán al alcanzar este número</p>
               </div>
             </div>
 
+            {/* Descripción */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Descripción *</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describe el servicio requerido"
+                rows={2}
+                required
+              />
+            </div>
+
+            {/* Visita técnica */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -463,22 +512,6 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   />
                 </div>
               )}
-
-              <div className="space-y-2">
-                <Label htmlFor="minQuotes">Cotizaciones mínimas requeridas *</Label>
-                <Input
-                  id="minQuotes"
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={minQuotes}
-                  onChange={(e) => setMinQuotes(Math.max(1, parseInt(e.target.value) || 3))}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Los precios se mostrarán al alcanzar este número de cotizaciones
-                </p>
-              </div>
             </div>
           </div>
 

@@ -16,12 +16,13 @@ import {
   Globe,
   Bell,
   MessageSquare,
-  Users
+  Users,
+  Building2
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -190,6 +191,18 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
                 !collapsed && "mr-2"
               )} />
               {!collapsed && 'Proveedores Homologados'}
+            </Button>
+
+            <Button
+              variant={currentView === 'branches' ? "default" : "ghost"}
+              className={cn(
+                "w-full justify-start",
+                collapsed && "justify-center px-2"
+              )}
+              onClick={() => onViewChange?.('branches')}
+            >
+              <Building2 className={cn("h-4 w-4", !collapsed && "mr-2")} />
+              {!collapsed && 'Sucursales'}
             </Button>
 
             <Button

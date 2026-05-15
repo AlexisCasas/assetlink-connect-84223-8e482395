@@ -91,51 +91,48 @@ export const RequestList = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Configuración de columnas visibles
-  type ColumnKey = 'requestNumber' | 'serviceType' | 'status' | 'branch' | 'createdAt' | 'store' | 'createdBy' | 'deadline' | 'quotesProgress' | 'actions';
+  type ColumnKey = 'requestNumber' | 'title' | 'serviceType' | 'status' | 'branch' | 'createdAt' | 'store' | 'createdBy' | 'deadline' | 'quotesProgress' | 'actions';
   
   const columnLabels: Record<ColumnKey, string> = {
     requestNumber: 'Nro. Solicitud',
+    title: 'Título',
     serviceType: 'Tipo de Servicio',
     status: 'Estado',
     branch: 'Sede',
     createdAt: 'Fecha de Registro',
-    store: 'Tienda',
+    store: 'Sucursal',
     createdBy: 'Usuario',
     deadline: 'Fecha Entrega Cotizaciones',
     quotesProgress: 'Cotizaciones',
     actions: 'Acciones',
   };
 
-  const defaultColumnOrder: ColumnKey[] = ['requestNumber', 'serviceType', 'status', 'branch', 'createdAt', 'store', 'createdBy', 'deadline', 'quotesProgress', 'actions'];
+  const defaultColumnOrder: ColumnKey[] = ['requestNumber', 'title', 'serviceType', 'status', 'branch', 'createdAt', 'store', 'createdBy', 'deadline', 'quotesProgress', 'actions'];
 
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
+    const defaults: Record<ColumnKey, boolean> = {
+      requestNumber: true, title: true, serviceType: true, status: true, branch: true,
+      createdAt: true, store: true, createdBy: true, deadline: true, quotesProgress: true, actions: true,
+    };
     const saved = localStorage.getItem('requestListVisibleColumns');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        return { ...defaults, ...JSON.parse(saved) };
       } catch {
         // Si hay error, usar valores por defecto
       }
     }
-    return {
-      requestNumber: true,
-      serviceType: true,
-      status: true,
-      branch: true,
-      createdAt: true,
-      store: true,
-      createdBy: true,
-      deadline: true,
-      quotesProgress: true,
-      actions: true,
-    };
+    return defaults;
   });
 
   const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(() => {
     const saved = localStorage.getItem('requestListColumnOrder');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved) as ColumnKey[];
+        // Asegurar que toda nueva columna (ej: title) esté presente
+        const missing = defaultColumnOrder.filter(k => !parsed.includes(k));
+        return [...parsed, ...missing];
       } catch {
         // Si hay error, usar valores por defecto
       }
@@ -166,6 +163,7 @@ export const RequestList = () => {
   const resetColumns = () => {
     const allVisible: Record<ColumnKey, boolean> = {
       requestNumber: true,
+      title: true,
       serviceType: true,
       status: true,
       branch: true,
@@ -232,6 +230,7 @@ export const RequestList = () => {
       const transformedRequests: Request[] = (requestsData || []).map((req: any) => ({
         id: req.id,
         requestNumber: req.request_number,
+        title: req.title,
         description: req.description,
         asset: req.asset,
         location: req.location,
@@ -245,6 +244,9 @@ export const RequestList = () => {
         status: req.status,
         createdAt: req.created_at,
         createdBy: req.created_by,
+        createdByUserId: req.created_by_user_id,
+        createdByName: req.created_by_name,
+        createdByEmail: req.created_by_email,
         priority: req.priority,
         clientName: req.client_name,
         clientBranch: req.client_branch,
@@ -253,6 +255,7 @@ export const RequestList = () => {
         city: req.city,
         store: req.store,
         branch: req.branch,
+        branchId: req.branch_id,
         requiresVisit: req.requires_visit,
         visitDate: req.visit_date,
         minQuotes: req.min_quotes ?? 3,
@@ -358,9 +361,11 @@ export const RequestList = () => {
         const { error: requestError } = await supabase
           .from('requests')
           .update({
+            title: request.title || null,
             description: request.description,
             service_type: request.serviceType,
             deadline: request.deadline,
+            branch_id: request.branchId || null,
             city: request.city,
             store: request.store,
             branch: request.branch,
@@ -388,9 +393,11 @@ export const RequestList = () => {
           .insert({
             id: request.id,
             request_number: request.requestNumber,
+            title: request.title || null,
             description: request.description,
             service_type: request.serviceType,
             deadline: request.deadline,
+            branch_id: request.branchId || null,
             city: request.city,
             store: request.store,
             branch: request.branch,
@@ -400,6 +407,9 @@ export const RequestList = () => {
             asset: request.asset,
             status: isDraft ? 'draft' : 'sent',
             created_by: user?.email || '',
+            created_by_user_id: user?.id || null,
+            created_by_name: user?.name || null,
+            created_by_email: user?.email || null,
             is_public: request.isPublic,
             client_name: request.clientName,
             client_branch: request.clientBranch,
@@ -662,13 +672,13 @@ export const RequestList = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Tienda</Label>
+            <Label className="text-xs text-muted-foreground">Sucursal</Label>
             <Select value={filterStore} onValueChange={setFilterStore}>
               <SelectTrigger>
-                <SelectValue placeholder="Todas las tiendas" />
+                <SelectValue placeholder="Todas las sucursales" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas las tiendas</SelectItem>
+                <SelectItem value="all">Todas las sucursales</SelectItem>
                 {uniqueStores.map((store) => (
                   <SelectItem key={store} value={store}>{store}</SelectItem>
                 ))}
@@ -850,6 +860,12 @@ export const RequestList = () => {
                             return (
                               <TableCell key={column} className="font-medium">
                                 {request.requestNumber}
+                              </TableCell>
+                            );
+                          case 'title':
+                            return (
+                              <TableCell key={column} className="font-medium max-w-[260px] truncate" title={request.title || ''}>
+                                {request.title || <span className="text-muted-foreground italic">Sin título</span>}
                               </TableCell>
                             );
                           case 'serviceType':
@@ -1056,7 +1072,14 @@ export const RequestList = () => {
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalle de Solicitud {selectedRequest?.requestNumber}</DialogTitle>
+            <DialogTitle className="text-2xl">
+              {selectedRequest?.title || 'Solicitud sin título'}
+            </DialogTitle>
+            {selectedRequest && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {selectedRequest.requestNumber}
+              </p>
+            )}
           </DialogHeader>
           
           {selectedRequest && (
@@ -1079,15 +1102,22 @@ export const RequestList = () => {
                   </div>
                   <div>
                     <span className="text-muted-foreground">Creador:</span>
-                    <p className="font-medium">{selectedRequest.createdBy}</p>
+                    <p className="font-medium">
+                      {selectedRequest.createdByName
+                        ? `${selectedRequest.createdByName}`
+                        : selectedRequest.createdBy}
+                    </p>
+                    {selectedRequest.createdByEmail && selectedRequest.createdByName && (
+                      <p className="text-xs text-muted-foreground">{selectedRequest.createdByEmail}</p>
+                    )}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Ciudad:</span>
                     <p className="font-medium">{selectedRequest.city || '-'}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Tienda:</span>
-                    <p className="font-medium">{selectedRequest.store || '-'}</p>
+                    <span className="text-muted-foreground">Sucursal:</span>
+                    <p className="font-medium">{selectedRequest.clientName || selectedRequest.store || '-'}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Sede:</span>

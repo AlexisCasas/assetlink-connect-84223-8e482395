@@ -91,6 +91,7 @@ export interface RequestDetailData {
 export interface Request {
   id: string;
   requestNumber: string;
+  title?: string;
   description: string;
   asset: string;
   location: string;
@@ -104,6 +105,9 @@ export interface Request {
   status: 'draft' | 'sent' | 'quoted' | 'completed' | 'anulado';
   createdAt: string;
   createdBy: string;
+  createdByUserId?: string;
+  createdByName?: string;
+  createdByEmail?: string;
   priority: number; // 1 = emergencia (más alta), 4 = proyecto (más baja)
   assignments?: { [providerId: string]: Assignment };
   technicalVisitRequested?: { [providerId: string]: boolean };
@@ -116,11 +120,21 @@ export interface Request {
   city?: string;
   store?: string;
   branch?: string;
+  branchId?: string;
   requiresVisit?: boolean;
   visitDate?: string;
   minQuotes?: number; // Cantidad mínima de cotizaciones requeridas (default: 3)
   // Detalle (1 a muchos)
   details?: RequestDetailData[];
+}
+
+export interface ClientBranch {
+  id: string;
+  name: string;
+  city: string;
+  site: string;
+  address?: string;
+  isActive: boolean;
 }
 
 export const MOCK_PROVIDERS: Provider[] = [

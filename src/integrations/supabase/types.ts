@@ -195,6 +195,42 @@ export type Database = {
         }
         Relationships: []
       }
+      client_branches: {
+        Row: {
+          address: string | null
+          city: string
+          client_email: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          site: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          city: string
+          client_email: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          site: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string
+          client_email?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          site?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       client_specialties: {
         Row: {
           client_email: string
@@ -555,11 +591,15 @@ export type Database = {
         Row: {
           asset: string
           branch: string | null
+          branch_id: string | null
           city: string | null
           client_branch: string | null
           client_name: string | null
           created_at: string
           created_by: string
+          created_by_email: string | null
+          created_by_name: string | null
+          created_by_user_id: string | null
           deadline: string
           description: string
           document_urls: string[] | null
@@ -578,16 +618,21 @@ export type Database = {
           start_time: string | null
           status: Database["public"]["Enums"]["request_status"]
           store: string | null
+          title: string | null
           visit_date: string | null
         }
         Insert: {
           asset: string
           branch?: string | null
+          branch_id?: string | null
           city?: string | null
           client_branch?: string | null
           client_name?: string | null
           created_at?: string
           created_by: string
+          created_by_email?: string | null
+          created_by_name?: string | null
+          created_by_user_id?: string | null
           deadline: string
           description: string
           document_urls?: string[] | null
@@ -606,16 +651,21 @@ export type Database = {
           start_time?: string | null
           status?: Database["public"]["Enums"]["request_status"]
           store?: string | null
+          title?: string | null
           visit_date?: string | null
         }
         Update: {
           asset?: string
           branch?: string | null
+          branch_id?: string | null
           city?: string | null
           client_branch?: string | null
           client_name?: string | null
           created_at?: string
           created_by?: string
+          created_by_email?: string | null
+          created_by_name?: string | null
+          created_by_user_id?: string | null
           deadline?: string
           description?: string
           document_urls?: string[] | null
@@ -634,6 +684,7 @@ export type Database = {
           start_time?: string | null
           status?: Database["public"]["Enums"]["request_status"]
           store?: string | null
+          title?: string | null
           visit_date?: string | null
         }
         Relationships: []
