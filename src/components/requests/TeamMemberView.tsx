@@ -526,37 +526,10 @@ export const TeamMemberView = () => {
 
   const handleSaveQuote = async (quote: any) => {
     if (!selectedAssignment) return;
-
-    try {
-      const { error } = await supabase
-        .from('quotes')
-        .insert({
-          request_id: selectedAssignment.request_id,
-          provider_id: selectedAssignment.provider_id,
-          team_member_id: selectedAssignment.team_member_id,
-          description: quote.description || '',
-          amount: quote.total || 0,
-          status: 'draft'
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: 'Cotización guardada',
-        description: 'La cotización ha sido enviada exitosamente',
-      });
-
-      setShowQuoteForm(false);
-      setSelectedAssignment(null);
-      loadAssignments();
-    } catch (error) {
-      console.error('Error saving quote:', error);
-      toast({
-        title: 'Error',
-        description: 'No se pudo guardar la cotización',
-        variant: 'destructive',
-      });
-    }
+    // QuoteForm now persists the quote internally with all new fields.
+    setShowQuoteForm(false);
+    setSelectedAssignment(null);
+    loadAssignments();
   };
 
   const getServiceTypeColor = (type: string) => {

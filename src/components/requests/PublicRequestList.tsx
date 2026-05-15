@@ -91,27 +91,10 @@ export const PublicRequestList = () => {
   };
 
   const handleSaveQuote = async (quote: any) => {
-    try {
-      const { error } = await supabase.from('quotes').insert({
-        request_id: quote.requestId,
-        provider_id: quote.providerId,
-        team_member_id: quote.teamMemberId,
-        amount: quote.amount,
-        description: quote.description,
-        status: quote.status
-      });
-
-      if (error) {
-        console.error('Error saving quote:', error);
-        return;
-      }
-
-      setShowQuoteForm(false);
-      setSelectedRequest(null);
-      loadPublicRequests();
-    } catch (error) {
-      console.error('Error:', error);
-    }
+    // QuoteForm now persists the quote internally with all new fields.
+    setShowQuoteForm(false);
+    setSelectedRequest(null);
+    loadPublicRequests();
   };
 
   // Convert database request to the format QuoteForm expects

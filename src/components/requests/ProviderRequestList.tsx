@@ -9,9 +9,10 @@ import { AssignmentDialog } from './AssignmentDialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { seedDatabase } from '@/lib/seedData';
-import { Search, Settings2, ArrowUpDown, Download, GripVertical, Eye, FileText, UserCog } from 'lucide-react';
+import { Search, Settings2, ArrowUpDown, Download, GripVertical, Eye, FileText, UserCog, Pencil, FilePlus } from 'lucide-react';
 import { RequestDetailDialog } from './RequestDetailDialog';
 import { QuoteDetailDialog } from './QuoteDetailDialog';
+import { QuoteForm } from './QuoteForm';
 import { 
   Table, 
   TableBody, 
@@ -59,7 +60,7 @@ interface Assignment {
   team_member_name: string;
 }
 
-type ColumnKey = 'ticket' | 'estado' | 'equipo' | 'operacion' | 'ubicacion' | 'prioridad' | 'coordinador' | 'ingresado' | 'programado' | 'comentarios' | 'acciones';
+type ColumnKey = 'ticket' | 'estado' | 'equipo' | 'operacion' | 'ubicacion' | 'prioridad' | 'coordinador' | 'ingresado' | 'programado' | 'comentarios' | 'cotizacion' | 'acciones';
 
 interface ColumnConfig {
   key: ColumnKey;
@@ -79,7 +80,8 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
   { key: 'ingresado', label: 'Ingresado', visible: true, order: 7 },
   { key: 'programado', label: 'Programado Para', visible: true, order: 8 },
   { key: 'comentarios', label: 'Comentarios', visible: true, order: 9 },
-  { key: 'acciones', label: 'Acciones', visible: true, order: 10 },
+  { key: 'cotizacion', label: 'Estado cotización', visible: true, order: 10 },
+  { key: 'acciones', label: 'Acciones', visible: true, order: 11 },
 ];
 
 export const ProviderRequestList = () => {
@@ -104,6 +106,9 @@ export const ProviderRequestList = () => {
   const [showQuoteDialog, setShowQuoteDialog] = useState(false);
   const [selectedRequestForDetail, setSelectedRequestForDetail] = useState<RequestData | null>(null);
   const [selectedRequestForQuote, setSelectedRequestForQuote] = useState<RequestData | null>(null);
+  const [showQuoteForm, setShowQuoteForm] = useState(false);
+  const [selectedRequestForForm, setSelectedRequestForForm] = useState<RequestData | null>(null);
+  const [existingQuoteForForm, setExistingQuoteForForm] = useState<any>(null);
 
   useEffect(() => {
     const savedColumns = localStorage.getItem('providerRequestColumns');
@@ -182,21 +187,24 @@ export const ProviderRequestList = () => {
           setAssignments(assignmentsMap);
         }
 
-        // Cargar cotizaciones aprobadas/enviadas
-        const { data: quotesData } = await supabase
-          .from('quotes')
-          .select('*')
-          .in('request_id', requestIds)
-          .in('status', ['submitted', 'approved']);
-        
-        if (quotesData) {
-          const quotesMap: Record<string, any> = {};
-          quotesData.forEach(q => {
-            if (!quotesMap[q.request_id]) {
-              quotesMap[q.request_id] = q;
-            }
-          });
-          setQuotes(quotesMap);
+        // Cargar cotizaciones del proveedor actual para todas las solicitudes
+        const providerIdToUse = providerData?.id;
+        if (providerIdToUse) {
+          const { data: quotesData } = await supabase
+            .from('quotes')
+            .select('*')
+            .in('request_id', requestIds)
+            .eq('provider_id', providerIdToUse);
+          if (quotesData) {
+            const quotesMap: Record<string, any> = {};
+            quotesData.forEach((q: any) => {
+              const existing = quotesMap[q.request_id];
+              const qDate = new Date(q.updated_at || q.created_at).getTime();
+              const eDate = existing ? new Date(existing.updated_at || existing.created_at).getTime() : 0;
+              if (!existing || qDate > eDate) quotesMap[q.request_id] = q;
+            });
+            setQuotes(quotesMap);
+          }
         }
       }
     } catch (error) {
@@ -437,8 +445,29 @@ export const ProviderRequestList = () => {
             </div>
           </TableCell>
         );
-      case 'acciones':
+      case 'cotizacion': {
+        const q = quotes[request.id];
+        let label = 'Sin cotizar';
+        let cls = 'bg-muted text-muted-foreground';
+        if (q) {
+          if (q.status === 'approved') { label = 'Aprobada'; cls = 'bg-green-600 text-white'; }
+          else if (q.status === 'rejected') { label = 'Rechazada'; cls = 'bg-red-600 text-white'; }
+          else if (q.emailed_at) { label = 'Enviada por correo'; cls = 'bg-blue-600 text-white'; }
+          else if (q.status === 'submitted') { label = 'Enviada'; cls = 'bg-primary text-primary-foreground'; }
+          else if (q.status === 'draft') { label = 'Borrador'; cls = 'bg-yellow-500 text-white'; }
+        }
         return (
+          <TableCell key={key}>
+            <Badge className={cls}>{label}</Badge>
+          </TableCell>
+        );
+      }
+      case 'acciones':
+        {
+          const q = quotes[request.id];
+          const isDraft = q && q.status === 'draft';
+          const isSubmitted = q && (q.status === 'submitted' || q.emailed_at);
+          return (
           <TableCell key={key}>
             <div className="flex gap-2">
               <Button
@@ -454,7 +483,7 @@ export const ProviderRequestList = () => {
                 <Eye className="h-4 w-4" />
               </Button>
 
-              {quotes[request.id] && (
+              {isSubmitted && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -469,8 +498,37 @@ export const ProviderRequestList = () => {
                 </Button>
               )}
 
+              {!q && (
+                <Button
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedRequestForForm(request);
+                    setExistingQuoteForForm(null);
+                    setShowQuoteForm(true);
+                  }}
+                >
+                  <FilePlus className="h-4 w-4 mr-1" /> Cotizar
+                </Button>
+              )}
+              {isDraft && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedRequestForForm(request);
+                    setExistingQuoteForForm(q);
+                    setShowQuoteForm(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 mr-1" /> Editar borrador
+                </Button>
+              )}
+
               <Button
                 size="sm"
+                variant="outline"
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedRequests([request.id]);
@@ -483,6 +541,7 @@ export const ProviderRequestList = () => {
             </div>
           </TableCell>
         );
+        }
       default:
         return null;
     }
@@ -743,6 +802,37 @@ export const ProviderRequestList = () => {
            onClose={() => {
              setShowQuoteDialog(false);
              setSelectedRequestForQuote(null);
+           }}
+         />
+       )}
+
+       {showQuoteForm && selectedRequestForForm && (
+         <QuoteForm
+           request={{
+             id: selectedRequestForForm.id,
+             requestNumber: selectedRequestForForm.request_number,
+             description: selectedRequestForForm.description,
+             asset: selectedRequestForForm.asset,
+             location: selectedRequestForForm.location,
+             serviceType: selectedRequestForForm.service_type as any,
+             deadline: selectedRequestForForm.deadline,
+             selectedProviders: [],
+             status: 'sent',
+             createdAt: selectedRequestForForm.created_at,
+             createdBy: (selectedRequestForForm as any).created_by || '',
+             priority: selectedRequestForForm.priority,
+           } as any}
+           existingQuote={existingQuoteForForm}
+           onClose={() => {
+             setShowQuoteForm(false);
+             setSelectedRequestForForm(null);
+             setExistingQuoteForForm(null);
+           }}
+           onSave={() => {
+             setShowQuoteForm(false);
+             setSelectedRequestForForm(null);
+             setExistingQuoteForForm(null);
+             initializeAndLoadRequests();
            }}
          />
        )}

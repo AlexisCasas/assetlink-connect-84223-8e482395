@@ -69,6 +69,53 @@ export interface Quote {
   elaboradoPor?: string;
   revisadoPor?: string;
   validoPor?: string;
+  // Estructura nueva por secciones (proveedor)
+  sections?: QuoteSection[];
+  salesConditions?: QuoteSalesConditions;
+  calculation?: QuoteCalculationSummary;
+  generalExpensesEnabled?: boolean;
+  utilitiesEnabled?: boolean;
+  sentAt?: string;
+  emailedAt?: string;
+}
+
+export type QuoteSectionType = 'line_items' | 'percentage';
+
+export interface QuoteSectionItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitMeasure: string;
+  totalPrice: number;
+}
+
+export interface QuoteSection {
+  id: string;
+  name: string;
+  type: QuoteSectionType;
+  order: number;
+  enabled: boolean;
+  items: QuoteSectionItem[];
+  subtotal: number;
+}
+
+export interface QuoteSalesConditions {
+  validityDays: number;
+  warrantyMonths: number;
+  deliveryDays: number;
+  paymentTerms: string;
+  additionalNotes?: string;
+}
+
+export interface QuoteCalculationSummary {
+  baseSubtotal: number;
+  generalExpensesPercentage: number;
+  generalExpensesAmount: number;
+  utilitiesPercentage: number;
+  utilitiesAmount: number;
+  subtotal: number;
+  igvAmount: number;
+  totalAmount: number;
 }
 
 export type ServiceType = 'emergencia' | 'correctivo' | 'preventivo' | 'proyecto';
