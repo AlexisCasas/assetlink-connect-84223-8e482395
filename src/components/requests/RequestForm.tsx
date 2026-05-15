@@ -381,22 +381,31 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-primary">Datos de Cabecera</h3>
             
+            {/* Fila 1: Título / Nro / Tipo */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
+                <Label htmlFor="title">Título de la solicitud *</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Ej: Mantenimiento preventivo equipos tienda Marina"
+                  maxLength={200}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>Nro de solicitud</Label>
-                <Input 
-                  value={editingRequest?.requestNumber || `SOL-${Date.now().toString().slice(-6)}`} 
-                  disabled 
+                <Input
+                  value={editingRequest?.requestNumber || `SOL-${Date.now().toString().slice(-6)}`}
+                  disabled
                   className="bg-muted"
                 />
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="serviceType">Tipo de servicio *</Label>
                 <Select value={serviceType} onValueChange={(value) => setServiceType(value as ServiceType)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-popover">
                     <SelectItem value="emergencia">Emergencia</SelectItem>
                     <SelectItem value="correctivo">Correctivo</SelectItem>
@@ -405,9 +414,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   </SelectContent>
                 </Select>
               </div>
+            </div>
 
+            {/* Fila 2: Fecha entrega / Sucursal / Ciudad */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="deadline">Fecha de Entrega de Solicitudes de Cotización *</Label>
+                <Label htmlFor="deadline">Fecha de Entrega de Cotizaciones *</Label>
                 <Input
                   id="deadline"
                   type="date"
@@ -416,75 +428,68 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   required
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="branchId">Sucursal *</Label>
+                <Select value={branchId} onValueChange={handleBranchChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={branches.length === 0 ? 'No hay sucursales' : 'Selecciona sucursal'} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="city">Ciudad</Label>
+                <Input id="city" value={city} readOnly className="bg-muted" placeholder="Auto desde sucursal" />
+              </div>
             </div>
 
+            {/* Fila 3: Sede / Creador / Min cotizaciones */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
+                <Label htmlFor="site">Sede</Label>
+                <Input id="site" value={site} readOnly className="bg-muted" placeholder="Auto desde sucursal" />
+              </div>
+              <div className="space-y-2">
                 <Label>Creador</Label>
-                <Input 
-                  value={user?.email || ''} 
-                  disabled 
+                <Input
+                  value={user?.name ? `${user.name} (${user.email})` : (user?.email || '')}
+                  disabled
                   className="bg-muted"
                 />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="city">Ciudad *</Label>
-                <Select value={city} onValueChange={setCity}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona ciudad" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {CITIES.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="store">Tienda *</Label>
-                <Select value={store} onValueChange={setStore}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona tienda" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {STORES.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="branch">Sede *</Label>
-                <Select value={branch} onValueChange={setBranch}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona sede" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {BRANCHES.map((b) => (
-                      <SelectItem key={b} value={b}>{b}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="description">Descripción *</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe el servicio requerido"
-                  rows={2}
+                <Label htmlFor="minQuotes">Cotizaciones mínimas requeridas *</Label>
+                <Input
+                  id="minQuotes"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={minQuotes}
+                  onChange={(e) => setMinQuotes(Math.max(1, parseInt(e.target.value) || 3))}
                   required
                 />
+                <p className="text-xs text-muted-foreground">Los precios se mostrarán al alcanzar este número</p>
               </div>
             </div>
 
+            {/* Descripción */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Descripción *</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describe el servicio requerido"
+                rows={2}
+                required
+              />
+            </div>
+
+            {/* Visita técnica */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex items-center space-x-2">
                 <Checkbox
