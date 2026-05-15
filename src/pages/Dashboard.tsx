@@ -13,20 +13,21 @@ import { PublicRequestList } from '@/components/requests/PublicRequestList';
 import { NotificationList } from '@/components/notifications/NotificationList';
 import { ContactList } from '@/components/contact/ContactList';
 import { ApprovedProvidersList } from '@/components/providers/ApprovedProvidersList';
+import { BranchesList } from '@/components/branches/BranchesList';
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches'>('dashboard');
   const [selectedAsset, setSelectedAsset] = useState<AssetNode | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
-    if (hash === 'assets' || hash === 'requests' || hash === 'drafts' || hash === 'public-requests' || hash === 'profile' || hash === 'notifications' || hash === 'approved-providers') {
+    if (['assets','requests','drafts','public-requests','profile','notifications','approved-providers','branches','contact'].includes(hash)) {
       setCurrentView(hash as any);
     }
   }, []);
 
-  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers') => {
+  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches') => {
     setCurrentView(view);
     window.location.hash = view;
   };
@@ -64,6 +65,8 @@ const Dashboard = () => {
         return <ContactList />;
       case 'approved-providers':
         return <ApprovedProvidersList />;
+      case 'branches':
+        return <BranchesList />;
       default:
         return <StatsCards />;
     }
