@@ -862,6 +862,12 @@ export const RequestList = () => {
                                 {request.requestNumber}
                               </TableCell>
                             );
+                          case 'title':
+                            return (
+                              <TableCell key={column} className="font-medium max-w-[260px] truncate" title={request.title || ''}>
+                                {request.title || <span className="text-muted-foreground italic">Sin título</span>}
+                              </TableCell>
+                            );
                           case 'serviceType':
                             return (
                               <TableCell key={column}>
