@@ -445,7 +445,29 @@ export const ProviderRequestList = () => {
             </div>
           </TableCell>
         );
+      case 'cotizacion': {
+        const q = quotes[request.id];
+        let label = 'Sin cotizar';
+        let cls = 'bg-muted text-muted-foreground';
+        if (q) {
+          if (q.status === 'approved') { label = 'Aprobada'; cls = 'bg-green-600 text-white'; }
+          else if (q.status === 'rejected') { label = 'Rechazada'; cls = 'bg-red-600 text-white'; }
+          else if (q.emailed_at) { label = 'Enviada por correo'; cls = 'bg-blue-600 text-white'; }
+          else if (q.status === 'submitted') { label = 'Enviada'; cls = 'bg-primary text-primary-foreground'; }
+          else if (q.status === 'draft') { label = 'Borrador'; cls = 'bg-yellow-500 text-white'; }
+        }
+        return (
+          <TableCell key={key}>
+            <Badge className={cls}>{label}</Badge>
+          </TableCell>
+        );
+      }
       case 'acciones':
+        {
+          const q = quotes[request.id];
+          const isDraft = q && q.status === 'draft';
+          const isSubmitted = q && (q.status === 'submitted' || q.emailed_at);
+          return (
         return (
           <TableCell key={key}>
             <div className="flex gap-2">
@@ -462,7 +484,7 @@ export const ProviderRequestList = () => {
                 <Eye className="h-4 w-4" />
               </Button>
 
-              {quotes[request.id] && (
+              {isSubmitted && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -477,8 +499,37 @@ export const ProviderRequestList = () => {
                 </Button>
               )}
 
+              {!q && (
+                <Button
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedRequestForForm(request);
+                    setExistingQuoteForForm(null);
+                    setShowQuoteForm(true);
+                  }}
+                >
+                  <FilePlus className="h-4 w-4 mr-1" /> Cotizar
+                </Button>
+              )}
+              {isDraft && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedRequestForForm(request);
+                    setExistingQuoteForForm(q);
+                    setShowQuoteForm(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 mr-1" /> Editar borrador
+                </Button>
+              )}
+
               <Button
                 size="sm"
+                variant="outline"
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedRequests([request.id]);
@@ -491,6 +542,7 @@ export const ProviderRequestList = () => {
             </div>
           </TableCell>
         );
+        }
       default:
         return null;
     }
