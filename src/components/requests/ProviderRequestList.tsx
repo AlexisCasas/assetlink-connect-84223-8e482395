@@ -187,21 +187,24 @@ export const ProviderRequestList = () => {
           setAssignments(assignmentsMap);
         }
 
-        // Cargar cotizaciones aprobadas/enviadas
-        const { data: quotesData } = await supabase
-          .from('quotes')
-          .select('*')
-          .in('request_id', requestIds)
-          .in('status', ['submitted', 'approved']);
-        
-        if (quotesData) {
-          const quotesMap: Record<string, any> = {};
-          quotesData.forEach(q => {
-            if (!quotesMap[q.request_id]) {
-              quotesMap[q.request_id] = q;
-            }
-          });
-          setQuotes(quotesMap);
+        // Cargar cotizaciones del proveedor actual para todas las solicitudes
+        const providerIdToUse = providerData?.id;
+        if (providerIdToUse) {
+          const { data: quotesData } = await supabase
+            .from('quotes')
+            .select('*')
+            .in('request_id', requestIds)
+            .eq('provider_id', providerIdToUse);
+          if (quotesData) {
+            const quotesMap: Record<string, any> = {};
+            quotesData.forEach((q: any) => {
+              const existing = quotesMap[q.request_id];
+              const qDate = new Date(q.updated_at || q.created_at).getTime();
+              const eDate = existing ? new Date(existing.updated_at || existing.created_at).getTime() : 0;
+              if (!existing || qDate > eDate) quotesMap[q.request_id] = q;
+            });
+            setQuotes(quotesMap);
+          }
         }
       }
     } catch (error) {
