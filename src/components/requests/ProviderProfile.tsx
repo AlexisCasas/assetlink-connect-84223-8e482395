@@ -1,163 +1,82 @@
-import { useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { MOCK_PROVIDERS } from '@/types/request';
-import { Upload, CheckCircle, X } from 'lucide-react';
+import type { ProviderProfileRow } from '@/types/provider';
+import { MyInfoCard } from '@/components/provider/MyInfoCard';
+import { CompanyCard } from '@/components/provider/CompanyCard';
+import { CommercialInfoCard } from '@/components/provider/CommercialInfoCard';
+import { Card } from '@/components/ui/card';
+import { Loader2 } from 'lucide-react';
 
 export const ProviderProfile = () => {
   const { user } = useAuth();
-  const { toast } = useToast();
-  const provider = MOCK_PROVIDERS.find(p => p.email === user?.email);
-  
-  const [certificationDocuments, setCertificationDocuments] = useState<File[]>([]);
-  const [isCertified, setIsCertified] = useState(provider?.certified || false);
+  const [profile, setProfile] = useState<ProviderProfileRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [specialties, setSpecialties] = useState<string[]>([]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      if (certificationDocuments.length + newFiles.length > 5) {
-        toast({
-          title: "Límite excedido",
-          description: "Solo puedes subir un máximo de 5 documentos",
-          variant: "destructive",
-        });
-        return;
+  useEffect(() => {
+    if (!user || user.role !== 'proveedor') { setLoading(false); return; }
+    (async () => {
+      // Resolve provider_id: prefer providers.email match, else profiles.provider_id, else first provider
+      let providerId: string | null = null;
+      const { data: byEmail } = await supabase.from('providers').select('id, specialties').eq('email', user.email).maybeSingle();
+      if (byEmail) { providerId = byEmail.id; setSpecialties(byEmail.specialties ?? []); }
+      if (!providerId && user.providerId) {
+        providerId = user.providerId;
+        const { data: p } = await supabase.from('providers').select('specialties').eq('id', user.providerId).maybeSingle();
+        setSpecialties(p?.specialties ?? []);
       }
-      setCertificationDocuments([...certificationDocuments, ...newFiles]);
-    }
-  };
+      if (!providerId) {
+        const { data: any1 } = await supabase.from('providers').select('id, specialties').limit(1).maybeSingle();
+        if (any1) { providerId = any1.id; setSpecialties(any1.specialties ?? []); }
+      }
+      if (!providerId) { setLoading(false); return; }
 
-  const removeDocument = (index: number) => {
-    setCertificationDocuments(certificationDocuments.filter((_, i) => i !== index));
-  };
+      const { data: existing } = await supabase.from('provider_profiles').select('*').eq('provider_id', providerId).maybeSingle();
+      if (existing) {
+        setProfile(existing as ProviderProfileRow);
+      } else {
+        const { data: created } = await supabase.from('provider_profiles').insert({
+          provider_id: providerId,
+          owner_user_id: user.id,
+          contact_email: user.email,
+          contact_name: user.name ?? null,
+        }).select().single();
+        if (created) setProfile(created as ProviderProfileRow);
+      }
+      setLoading(false);
+    })();
+  }, [user]);
 
-  const handleSubmitCertification = () => {
-    if (certificationDocuments.length !== 5) {
-      toast({
-        title: "Documentos incompletos",
-        description: "Debes subir exactamente 5 documentos para la certificación",
-        variant: "destructive",
-      });
-      return;
-    }
+  if (!user || user.role !== 'proveedor') {
+    return (
+      <div className="p-6">
+        <Card className="p-8 text-center">
+          <h2 className="text-xl font-semibold mb-2">Acceso no permitido</h2>
+          <p className="text-muted-foreground">Esta sección está disponible solo para usuarios proveedor.</p>
+        </Card>
+      </div>
+    );
+  }
 
-    // Guardar en localStorage
-    const providers = JSON.parse(localStorage.getItem('providers') || JSON.stringify(MOCK_PROVIDERS));
-    const providerIndex = providers.findIndex((p: any) => p.email === user?.email);
-    if (providerIndex !== -1) {
-      providers[providerIndex].certified = true;
-      providers[providerIndex].certificationDocuments = certificationDocuments.map(f => f.name);
-      localStorage.setItem('providers', JSON.stringify(providers));
-      setIsCertified(true);
-      
-      toast({
-        title: "Certificación enviada",
-        description: "Tu solicitud de certificación ha sido enviada exitosamente",
-      });
-    }
-  };
+  if (loading || !profile) {
+    return <div className="p-6 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold">Mi Perfil</h1>
-        <p className="text-muted-foreground">Configuración de proveedor</p>
+        <p className="text-muted-foreground">Gestiona tu información como proveedor</p>
       </div>
 
-      <Card className="p-6">
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-xl font-semibold mb-2">Información del Proveedor</h2>
-            <div className="space-y-2">
-              <p><strong>Nombre:</strong> {provider?.name}</p>
-              <p><strong>Email:</strong> {provider?.email}</p>
-              <p><strong>Calificación:</strong> {provider?.rating} ⭐</p>
-              <p><strong>Especialidades:</strong> {provider?.specialties.join(', ')}</p>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <Card className="p-6">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Certificación de Proveedor</h2>
-            {isCertified && (
-              <Badge variant="default" className="flex items-center gap-1">
-                <CheckCircle className="h-4 w-4" />
-                Certificado
-              </Badge>
-            )}
-          </div>
-
-          <p className="text-sm text-muted-foreground">
-            Obtén la certificación subiendo 5 documentos que acrediten tu empresa. 
-            Los proveedores certificados son más visibles para los clientes.
-          </p>
-
-          {!isCertified && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="certification-docs">
-                  Documentos de Certificación ({certificationDocuments.length}/5)
-                </Label>
-                <Input
-                  id="certification-docs"
-                  type="file"
-                  multiple
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  onChange={handleFileChange}
-                  disabled={certificationDocuments.length >= 5}
-                />
-              </div>
-
-              {certificationDocuments.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Documentos subidos:</Label>
-                  <div className="space-y-1">
-                    {certificationDocuments.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
-                        <span className="text-sm">{file.name}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeDocument(index)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <Button
-                onClick={handleSubmitCertification}
-                disabled={certificationDocuments.length !== 5}
-                className="w-full"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Enviar Solicitud de Certificación
-              </Button>
-            </>
-          )}
-
-          {isCertified && (
-            <div className="text-center p-4 bg-muted rounded-lg">
-              <CheckCircle className="h-12 w-12 mx-auto mb-2 text-green-600" />
-              <p className="font-semibold">¡Eres un proveedor certificado!</p>
-              <p className="text-sm text-muted-foreground">
-                Los clientes pueden ver tu badge de certificación
-              </p>
-            </div>
-          )}
-        </div>
-      </Card>
+      <MyInfoCard profile={profile} onUpdated={setProfile} />
+      <CompanyCard profile={profile} onUpdated={setProfile} />
+      <CommercialInfoCard profile={profile} onUpdated={setProfile} specialties={specialties} />
     </div>
   );
 };
+
+// Keep MOCK_PROVIDERS imported to preserve type linkage
+void MOCK_PROVIDERS;
