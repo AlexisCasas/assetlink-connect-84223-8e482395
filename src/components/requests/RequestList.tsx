@@ -361,9 +361,11 @@ export const RequestList = () => {
         const { error: requestError } = await supabase
           .from('requests')
           .update({
+            title: request.title || null,
             description: request.description,
             service_type: request.serviceType,
             deadline: request.deadline,
+            branch_id: request.branchId || null,
             city: request.city,
             store: request.store,
             branch: request.branch,
@@ -391,9 +393,11 @@ export const RequestList = () => {
           .insert({
             id: request.id,
             request_number: request.requestNumber,
+            title: request.title || null,
             description: request.description,
             service_type: request.serviceType,
             deadline: request.deadline,
+            branch_id: request.branchId || null,
             city: request.city,
             store: request.store,
             branch: request.branch,
@@ -403,6 +407,9 @@ export const RequestList = () => {
             asset: request.asset,
             status: isDraft ? 'draft' : 'sent',
             created_by: user?.email || '',
+            created_by_user_id: user?.id || null,
+            created_by_name: user?.name || null,
+            created_by_email: user?.email || null,
             is_public: request.isPublic,
             client_name: request.clientName,
             client_branch: request.clientBranch,
