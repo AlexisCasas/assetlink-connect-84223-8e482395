@@ -3,11 +3,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { RequestForm } from './RequestForm';
+import { OrderForm } from './OrderForm';
 import { QuoteListDialog } from './QuoteListDialog';
 import { ForumQADialog } from './ForumQADialog';
-import { Request, MOCK_PROVIDERS } from '@/types/request';
-import { Plus, FileText, DollarSign, MessageSquare, Eye, Pencil, Filter, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Columns3, GripVertical, ChevronDown, ChevronRight } from 'lucide-react';
+import { Request } from '@/types/request';
+import { Plus, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/lib/seedData';
 import { supabase } from '@/integrations/supabase/client';
@@ -38,24 +38,20 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
-import { Input } from '@/components/ui/input';
+import { OrderFilters } from './OrderFilters';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
+  OrderTable,
+  ColumnKey,
+  SortKey,
+  COLUMN_LABELS,
+  DEFAULT_COLUMN_ORDER,
+} from './OrderTable';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuTrigger,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
-import { Checkbox } from '@/components/ui/checkbox';
+  ServiceTypeBadge,
+  getServiceTypeText,
+  getStatusText,
+  getServiceTypeColor,
+} from './StatusBadge';
 
 export const RequestList = () => {
   const { user } = useAuth();
@@ -71,11 +67,11 @@ export const RequestList = () => {
   const [requestDetails, setRequestDetails] = useState<any[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [requestToDelete, setRequestToDelete] = useState<string | null>(null);
-  
+
   // Preview inline
   const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
   const [expandedDetails, setExpandedDetails] = useState<any[]>([]);
-  
+
   // Conteo de cotizaciones por solicitud
   const [quoteCounts, setQuoteCounts] = useState<Record<string, number>>({});
 
@@ -86,29 +82,10 @@ export const RequestList = () => {
   const [filterServiceType, setFilterServiceType] = useState<string>('all');
 
   // Ordenamiento
-  type SortKey = 'requestNumber' | 'serviceType' | 'status' | 'branch' | 'createdAt' | 'store' | 'createdBy' | 'deadline' | 'quotesProgress';
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  // Configuración de columnas visibles
-  type ColumnKey = 'requestNumber' | 'title' | 'serviceType' | 'status' | 'branch' | 'createdAt' | 'store' | 'createdBy' | 'deadline' | 'quotesProgress' | 'actions';
-  
-  const columnLabels: Record<ColumnKey, string> = {
-    requestNumber: 'Nro. Solicitud',
-    title: 'Título',
-    serviceType: 'Tipo de Servicio',
-    status: 'Estado',
-    branch: 'Sede',
-    createdAt: 'Fecha de Registro',
-    store: 'Sucursal',
-    createdBy: 'Usuario',
-    deadline: 'Fecha Entrega Cotizaciones',
-    quotesProgress: 'Cotizaciones',
-    actions: 'Acciones',
-  };
-
-  const defaultColumnOrder: ColumnKey[] = ['requestNumber', 'title', 'serviceType', 'status', 'branch', 'createdAt', 'store', 'createdBy', 'deadline', 'quotesProgress', 'actions'];
-
+  // Columnas
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const defaults: Record<ColumnKey, boolean> = {
       requestNumber: true, title: true, serviceType: true, status: true, branch: true,
@@ -116,11 +93,7 @@ export const RequestList = () => {
     };
     const saved = localStorage.getItem('requestListVisibleColumns');
     if (saved) {
-      try {
-        return { ...defaults, ...JSON.parse(saved) };
-      } catch {
-        // Si hay error, usar valores por defecto
-      }
+      try { return { ...defaults, ...JSON.parse(saved) }; } catch { /* noop */ }
     }
     return defaults;
   });
@@ -130,21 +103,16 @@ export const RequestList = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as ColumnKey[];
-        // Asegurar que toda nueva columna (ej: title) esté presente
-        const missing = defaultColumnOrder.filter(k => !parsed.includes(k));
+        const missing = DEFAULT_COLUMN_ORDER.filter((k) => !parsed.includes(k));
         return [...parsed, ...missing];
-      } catch {
-        // Si hay error, usar valores por defecto
-      }
+      } catch { /* noop */ }
     }
-    return defaultColumnOrder;
+    return DEFAULT_COLUMN_ORDER;
   });
 
-  // Estado para drag and drop
   const [draggedColumn, setDraggedColumn] = useState<ColumnKey | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<ColumnKey | null>(null);
 
-  // Guardar configuración de columnas en localStorage
   useEffect(() => {
     localStorage.setItem('requestListVisibleColumns', JSON.stringify(visibleColumns));
   }, [visibleColumns]);
@@ -154,61 +122,37 @@ export const RequestList = () => {
   }, [columnOrder]);
 
   const toggleColumn = (column: ColumnKey) => {
-    setVisibleColumns(prev => ({
-      ...prev,
-      [column]: !prev[column],
-    }));
+    setVisibleColumns((prev) => ({ ...prev, [column]: !prev[column] }));
   };
 
   const resetColumns = () => {
-    const allVisible: Record<ColumnKey, boolean> = {
-      requestNumber: true,
-      title: true,
-      serviceType: true,
-      status: true,
-      branch: true,
-      createdAt: true,
-      store: true,
-      createdBy: true,
-      deadline: true,
-      quotesProgress: true,
-      actions: true,
-    };
-    setVisibleColumns(allVisible);
-    setColumnOrder(defaultColumnOrder);
+    setVisibleColumns({
+      requestNumber: true, title: true, serviceType: true, status: true, branch: true,
+      createdAt: true, store: true, createdBy: true, deadline: true, quotesProgress: true, actions: true,
+    });
+    setColumnOrder(DEFAULT_COLUMN_ORDER);
   };
 
-  // Funciones de drag and drop
-  const handleDragStart = (column: ColumnKey) => {
-    setDraggedColumn(column);
-  };
-
+  const handleDragStart = (column: ColumnKey) => setDraggedColumn(column);
   const handleDragOver = (e: React.DragEvent, column: ColumnKey) => {
     e.preventDefault();
-    if (draggedColumn && draggedColumn !== column) {
-      setDragOverColumn(column);
-    }
+    if (draggedColumn && draggedColumn !== column) setDragOverColumn(column);
   };
-
   const handleDrop = (targetColumn: ColumnKey) => {
     if (!draggedColumn || draggedColumn === targetColumn) {
       setDraggedColumn(null);
       setDragOverColumn(null);
       return;
     }
-
     const newOrder = [...columnOrder];
     const draggedIndex = newOrder.indexOf(draggedColumn);
     const targetIndex = newOrder.indexOf(targetColumn);
-
     newOrder.splice(draggedIndex, 1);
     newOrder.splice(targetIndex, 0, draggedColumn);
-
     setColumnOrder(newOrder);
     setDraggedColumn(null);
     setDragOverColumn(null);
   };
-
   const handleDragEnd = () => {
     setDraggedColumn(null);
     setDragOverColumn(null);
@@ -218,15 +162,13 @@ export const RequestList = () => {
     try {
       setLoading(true);
       await seedDatabase();
-      
       const { data: requestsData, error: requestsError } = await supabase
         .from('requests')
         .select('*')
         .eq('status', 'sent')
         .order('created_at', { ascending: false });
-      
       if (requestsError) throw requestsError;
-      
+
       const transformedRequests: Request[] = (requestsData || []).map((req: any) => ({
         id: req.id,
         requestNumber: req.request_number,
@@ -260,19 +202,17 @@ export const RequestList = () => {
         visitDate: req.visit_date,
         minQuotes: req.min_quotes ?? 3,
       }));
-      
+
       setRequests(transformedRequests);
-      
-      // Cargar conteo de cotizaciones para cada solicitud
+
       if (transformedRequests.length > 0) {
-        const requestIds = transformedRequests.map(r => r.id);
+        const requestIds = transformedRequests.map((r) => r.id);
         const { data: quotesData } = await supabase
           .from('quotes')
           .select('request_id')
           .in('request_id', requestIds)
           .eq('status', 'submitted');
-        
-        // Contar cotizaciones por solicitud
+
         const counts: Record<string, number> = {};
         (quotesData || []).forEach((q: any) => {
           counts[q.request_id] = (counts[q.request_id] || 0) + 1;
@@ -287,9 +227,7 @@ export const RequestList = () => {
     }
   };
 
-  useEffect(() => {
-    loadRequests();
-  }, [user]);
+  useEffect(() => { loadRequests(); }, [user]);
 
   const loadRequestDetails = async (requestId: string) => {
     const { data } = await supabase
@@ -320,12 +258,11 @@ export const RequestList = () => {
   };
 
   const handleEditRequest = async (request: Request) => {
-    // Cargar detalles primero y esperar resultado
     const { data: detailsData } = await supabase
       .from('request_details')
       .select('*')
       .eq('request_id', request.id);
-    
+
     const details = (detailsData || []).map((d: any) => ({
       equipment: d.equipment || '',
       subEquipment: d.sub_equipment || '',
@@ -340,16 +277,12 @@ export const RequestList = () => {
       delegateType: d.delegate_type || '',
     }));
 
-    setEditingRequest({
-      ...request,
-      details,
-    });
+    setEditingRequest({ ...request, details });
     setShowForm(true);
   };
 
   const handleSaveRequest = async (request: Request, isDraft: boolean) => {
     try {
-      // Verificar si el request ya existe
       const { data: existing } = await supabase
         .from('requests')
         .select('id')
@@ -357,7 +290,6 @@ export const RequestList = () => {
         .maybeSingle();
 
       if (existing) {
-        // Actualizar registro existente
         const { error: requestError } = await supabase
           .from('requests')
           .update({
@@ -378,51 +310,41 @@ export const RequestList = () => {
             min_quotes: request.minQuotes ?? 3,
           })
           .eq('id', request.id);
-
         if (requestError) throw requestError;
 
-        // Eliminar detalles antiguos
-        await supabase
-          .from('request_details')
-          .delete()
-          .eq('request_id', request.id);
+        await supabase.from('request_details').delete().eq('request_id', request.id);
       } else {
-        // Insertar nuevo registro
-        const { error: insertError } = await supabase
-          .from('requests')
-          .insert({
-            id: request.id,
-            request_number: request.requestNumber,
-            title: request.title || null,
-            description: request.description,
-            service_type: request.serviceType,
-            deadline: request.deadline,
-            branch_id: request.branchId || null,
-            city: request.city,
-            store: request.store,
-            branch: request.branch,
-            location: request.location,
-            requires_visit: request.requiresVisit,
-            visit_date: request.visitDate || null,
-            asset: request.asset,
-            status: isDraft ? 'draft' : 'sent',
-            created_by: user?.email || '',
-            created_by_user_id: user?.id || null,
-            created_by_name: user?.name || null,
-            created_by_email: user?.email || null,
-            is_public: request.isPublic,
-            client_name: request.clientName,
-            client_branch: request.clientBranch,
-            priority: request.priority,
-            min_quotes: request.minQuotes ?? 3,
-          });
-
+        const { error: insertError } = await supabase.from('requests').insert({
+          id: request.id,
+          request_number: request.requestNumber,
+          title: request.title || null,
+          description: request.description,
+          service_type: request.serviceType,
+          deadline: request.deadline,
+          branch_id: request.branchId || null,
+          city: request.city,
+          store: request.store,
+          branch: request.branch,
+          location: request.location,
+          requires_visit: request.requiresVisit,
+          visit_date: request.visitDate || null,
+          asset: request.asset,
+          status: isDraft ? 'draft' : 'sent',
+          created_by: user?.email || '',
+          created_by_user_id: user?.id || null,
+          created_by_name: user?.name || null,
+          created_by_email: user?.email || null,
+          is_public: request.isPublic,
+          client_name: request.clientName,
+          client_branch: request.clientBranch,
+          priority: request.priority,
+          min_quotes: request.minQuotes ?? 3,
+        });
         if (insertError) throw insertError;
       }
 
-      // Insertar detalles nuevos
       if (request.details && request.details.length > 0) {
-        const detailsToInsert = request.details.map(d => ({
+        const detailsToInsert = request.details.map((d) => ({
           request_id: request.id,
           equipment: d.equipment || null,
           sub_equipment: d.subEquipment || null,
@@ -436,30 +358,26 @@ export const RequestList = () => {
           responsible_user: d.responsibleUser || null,
           delegate_type: d.delegateType || null,
         }));
-
-        const { error: detailsError } = await supabase
-          .from('request_details')
-          .insert(detailsToInsert);
-
+        const { error: detailsError } = await supabase.from('request_details').insert(detailsToInsert);
         if (detailsError) throw detailsError;
       }
 
       toast({
-        title: isDraft ? "Borrador guardado" : "Solicitud actualizada",
-        description: isDraft 
-          ? "Tu solicitud ha sido guardada como borrador" 
-          : "Los cambios han sido guardados correctamente",
+        title: isDraft ? 'Borrador guardado' : 'Solicitud actualizada',
+        description: isDraft
+          ? 'Tu solicitud ha sido guardada como borrador'
+          : 'Los cambios han sido guardados correctamente',
       });
-      
+
       setShowForm(false);
       setEditingRequest(null);
       loadRequests();
     } catch (error) {
       console.error('Error saving request:', error);
       toast({
-        title: "Error",
-        description: "No se pudo guardar la solicitud",
-        variant: "destructive",
+        title: 'Error',
+        description: 'No se pudo guardar la solicitud',
+        variant: 'destructive',
       });
     }
   };
@@ -471,181 +389,78 @@ export const RequestList = () => {
 
   const handleDeleteRequest = async () => {
     if (!requestToDelete) return;
-
     try {
-      // Cambiar estado a anulado en lugar de eliminar
       const { error } = await supabase
         .from('requests')
         .update({ status: 'anulado' })
         .eq('id', requestToDelete);
-
       if (error) throw error;
-
-      toast({
-        title: "Solicitud anulada",
-        description: "La solicitud ha sido anulada correctamente",
-      });
-      
+      toast({ title: 'Solicitud anulada', description: 'La solicitud ha sido anulada correctamente' });
       loadRequests();
     } catch (error) {
       console.error('Error anulando solicitud:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo anular la solicitud",
-        variant: "destructive",
-      });
+      toast({ title: 'Error', description: 'No se pudo anular la solicitud', variant: 'destructive' });
     } finally {
       setDeleteDialogOpen(false);
       setRequestToDelete(null);
     }
   };
 
-  const getServiceTypeColor = (type: string) => {
-    const colors = {
-      emergencia: 'bg-red-500/10 text-red-500 border-red-500/20',
-      correctivo: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-      preventivo: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-      proyecto: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-    };
-    return colors[type as keyof typeof colors] || '';
-  };
-
-  const getServiceTypeText = (type: string) => {
-    const texts = {
-      emergencia: 'Emergencia',
-      correctivo: 'Correctivo',
-      preventivo: 'Preventivo',
-      proyecto: 'Proyecto',
-    };
-    return texts[type as keyof typeof texts] || type;
-  };
-
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      draft: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
-      sent: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-      quoted: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-      completed: 'bg-green-500/10 text-green-500 border-green-500/20',
-      anulado: 'bg-red-500/10 text-red-500 border-red-500/20',
-    };
-    return colors[status] || '';
-  };
-
-  const getStatusText = (status: string) => {
-    const texts: Record<string, string> = {
-      draft: 'Borrador',
-      sent: 'Enviado',
-      quoted: 'Cotizado',
-      completed: 'Completado',
-      anulado: 'Anulado',
-    };
-    return texts[status] || status;
-  };
-
-  // Obtener valores únicos para los filtros
   const uniqueStores = useMemo(() => {
-    const stores = requests.map(r => r.store).filter(Boolean) as string[];
+    const stores = requests.map((r) => r.store).filter(Boolean) as string[];
     return [...new Set(stores)];
   }, [requests]);
 
   const uniqueBranches = useMemo(() => {
-    const branches = requests.map(r => r.branch || r.clientBranch).filter(Boolean) as string[];
+    const branches = requests.map((r) => r.branch || r.clientBranch).filter(Boolean) as string[];
     return [...new Set(branches)];
   }, [requests]);
 
-  // Función para manejar el ordenamiento
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
+    if (sortKey === key) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    else {
       setSortKey(key);
       setSortOrder('asc');
     }
   };
 
-  // Renderizar icono de ordenamiento
-  const renderSortIcon = (key: SortKey) => {
-    if (sortKey !== key) {
-      return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />;
-    }
-    return sortOrder === 'asc' 
-      ? <ArrowUp className="ml-1 h-3 w-3" /> 
-      : <ArrowDown className="ml-1 h-3 w-3" />;
-  };
-
-  // Aplicar filtros y ordenamiento
   const filteredRequests = useMemo(() => {
-    let result = requests.filter(request => {
-      // Filtro por tienda
+    let result = requests.filter((request) => {
       if (filterStore !== 'all' && request.store !== filterStore) return false;
-      
-      // Filtro por sede
       const requestBranch = request.branch || request.clientBranch;
       if (filterBranch !== 'all' && requestBranch !== filterBranch) return false;
-      
-      // Filtro por fecha de registro
       if (filterDate) {
-        const requestDate = request.createdAt 
+        const requestDate = request.createdAt
           ? format(new Date(request.createdAt), 'yyyy-MM-dd')
           : '';
         if (requestDate !== filterDate) return false;
       }
-      
-      // Filtro por tipo de servicio
       if (filterServiceType !== 'all' && request.serviceType !== filterServiceType) return false;
-      
       return true;
     });
 
-    // Aplicar ordenamiento
     if (sortKey) {
       result = [...result].sort((a, b) => {
-        let aVal: string | number | null = null;
-        let bVal: string | number | null = null;
-
+        let aVal: string | number = '';
+        let bVal: string | number = '';
         switch (sortKey) {
-          case 'requestNumber':
-            aVal = a.requestNumber || '';
-            bVal = b.requestNumber || '';
-            break;
-          case 'serviceType':
-            aVal = getServiceTypeText(a.serviceType);
-            bVal = getServiceTypeText(b.serviceType);
-            break;
-          case 'status':
-            aVal = getStatusText(a.status);
-            bVal = getStatusText(b.status);
-            break;
-          case 'branch':
-            aVal = a.branch || a.clientBranch || '';
-            bVal = b.branch || b.clientBranch || '';
-            break;
-          case 'createdAt':
-            aVal = a.createdAt || '';
-            bVal = b.createdAt || '';
-            break;
-          case 'store':
-            aVal = a.store || '';
-            bVal = b.store || '';
-            break;
-          case 'createdBy':
-            aVal = a.createdBy || '';
-            bVal = b.createdBy || '';
-            break;
-          case 'deadline':
-            aVal = a.deadline || '';
-            bVal = b.deadline || '';
-            break;
+          case 'requestNumber': aVal = a.requestNumber || ''; bVal = b.requestNumber || ''; break;
+          case 'serviceType': aVal = getServiceTypeText(a.serviceType); bVal = getServiceTypeText(b.serviceType); break;
+          case 'status': aVal = getStatusText(a.status); bVal = getStatusText(b.status); break;
+          case 'branch': aVal = a.branch || a.clientBranch || ''; bVal = b.branch || b.clientBranch || ''; break;
+          case 'createdAt': aVal = a.createdAt || ''; bVal = b.createdAt || ''; break;
+          case 'store': aVal = a.store || ''; bVal = b.store || ''; break;
+          case 'createdBy': aVal = a.createdBy || ''; bVal = b.createdBy || ''; break;
+          case 'deadline': aVal = a.deadline || ''; bVal = b.deadline || ''; break;
+          case 'quotesProgress': aVal = quoteCounts[a.id] || 0; bVal = quoteCounts[b.id] || 0; break;
         }
-
         if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
         if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
         return 0;
       });
     }
-
     return result;
-  }, [requests, filterStore, filterBranch, filterDate, filterServiceType, sortKey, sortOrder]);
+  }, [requests, filterStore, filterBranch, filterDate, filterServiceType, sortKey, sortOrder, quoteCounts]);
 
   const clearFilters = () => {
     setFilterStore('all');
@@ -664,103 +479,23 @@ export const RequestList = () => {
         </Button>
       </div>
 
-      {/* Filtros */}
-      <Card className="p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Filtros</span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Sucursal</Label>
-            <Select value={filterStore} onValueChange={setFilterStore}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todas las sucursales" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las sucursales</SelectItem>
-                {uniqueStores.map((store) => (
-                  <SelectItem key={store} value={store}>{store}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Sede</Label>
-            <Select value={filterBranch} onValueChange={setFilterBranch}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todas las sedes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las sedes</SelectItem>
-                {uniqueBranches.map((branch) => (
-                  <SelectItem key={branch} value={branch}>{branch}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Fecha de Registro</Label>
-            <Input
-              type="date"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-              className="h-10"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Tipo de Servicio</Label>
-            <Select value={filterServiceType} onValueChange={setFilterServiceType}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todos los tipos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los tipos</SelectItem>
-                <SelectItem value="emergencia">Emergencia</SelectItem>
-                <SelectItem value="correctivo">Correctivo</SelectItem>
-                <SelectItem value="preventivo">Preventivo</SelectItem>
-                <SelectItem value="proyecto">Proyecto</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-end gap-2">
-            <Button variant="outline" size="sm" onClick={clearFilters} className="flex-1">
-              Limpiar filtros
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Columns3 className="h-4 w-4 mr-2" />
-                  Columnas
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Columnas visibles</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {(Object.keys(columnLabels) as ColumnKey[]).map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column}
-                    checked={visibleColumns[column]}
-                    onCheckedChange={() => toggleColumn(column)}
-                  >
-                    {columnLabels[column]}
-                  </DropdownMenuCheckboxItem>
-                ))}
-                <DropdownMenuSeparator />
-                <div className="px-2 py-1.5">
-                  <Button variant="ghost" size="sm" onClick={resetColumns} className="w-full text-xs">
-                    Mostrar todas
-                  </Button>
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </Card>
+      <OrderFilters
+        filterStore={filterStore}
+        filterBranch={filterBranch}
+        filterDate={filterDate}
+        filterServiceType={filterServiceType}
+        uniqueStores={uniqueStores}
+        uniqueBranches={uniqueBranches}
+        onFilterStoreChange={setFilterStore}
+        onFilterBranchChange={setFilterBranch}
+        onFilterDateChange={setFilterDate}
+        onFilterServiceTypeChange={setFilterServiceType}
+        onClearFilters={clearFilters}
+        columnLabels={COLUMN_LABELS}
+        visibleColumns={visibleColumns}
+        onToggleColumn={toggleColumn}
+        onResetColumns={resetColumns}
+      />
 
       {loading ? (
         <Card>
@@ -773,8 +508,8 @@ export const RequestList = () => {
           <CardContent className="py-12 text-center">
             <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
             <p className="text-muted-foreground">
-              {requests.length === 0 
-                ? 'No tienes solicitudes enviadas' 
+              {requests.length === 0
+                ? 'No tienes solicitudes enviadas'
                 : 'No hay solicitudes que coincidan con los filtros'}
             </p>
             {requests.length === 0 && (
@@ -785,260 +520,33 @@ export const RequestList = () => {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {/* Columna para el botón de preview */}
-                  <TableHead className="w-10 px-2"></TableHead>
-                  {columnOrder.filter(col => visibleColumns[col]).map((column) => {
-                    if (column === 'actions') {
-                      return (
-                        <TableHead 
-                          key={column}
-                          className={`text-right transition-colors ${dragOverColumn === column ? 'bg-primary/10' : ''}`}
-                          draggable
-                          onDragStart={() => handleDragStart(column)}
-                          onDragOver={(e) => handleDragOver(e, column)}
-                          onDrop={() => handleDrop(column)}
-                          onDragEnd={handleDragEnd}
-                        >
-                          <div className="flex items-center justify-end gap-1">
-                            <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab" />
-                            {columnLabels[column]}
-                          </div>
-                        </TableHead>
-                      );
-                    }
-
-                    const sortableColumn = column as SortKey;
-                    return (
-                      <TableHead 
-                        key={column}
-                        className={`cursor-pointer hover:bg-muted/50 select-none transition-colors ${dragOverColumn === column ? 'bg-primary/10' : ''}`}
-                        draggable
-                        onDragStart={() => handleDragStart(column)}
-                        onDragOver={(e) => handleDragOver(e, column)}
-                        onDrop={() => handleDrop(column)}
-                        onDragEnd={handleDragEnd}
-                        onClick={() => handleSort(sortableColumn)}
-                      >
-                        <div className="flex items-center gap-1">
-                          <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab" />
-                          {columnLabels[column]}
-                          {renderSortIcon(sortableColumn)}
-                        </div>
-                      </TableHead>
-                    );
-                  })}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRequests.map((request) => (
-                  <>
-                    <TableRow key={request.id}>
-                      {/* Botón de preview como primera celda */}
-                      <TableCell className="w-10 px-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => togglePreview(request.id)}
-                          title="Previsualizar detalles"
-                        >
-                          {expandedRequestId === request.id ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableCell>
-                      {columnOrder.filter(col => visibleColumns[col]).map((column) => {
-                        switch (column) {
-                          case 'requestNumber':
-                            return (
-                              <TableCell key={column} className="font-medium">
-                                {request.requestNumber}
-                              </TableCell>
-                            );
-                          case 'title':
-                            return (
-                              <TableCell key={column} className="font-medium max-w-[260px] truncate" title={request.title || ''}>
-                                {request.title || <span className="text-muted-foreground italic">Sin título</span>}
-                              </TableCell>
-                            );
-                          case 'serviceType':
-                            return (
-                              <TableCell key={column}>
-                                <Badge className={getServiceTypeColor(request.serviceType)}>
-                                  {getServiceTypeText(request.serviceType)}
-                                </Badge>
-                              </TableCell>
-                            );
-                          case 'status':
-                            return (
-                              <TableCell key={column}>
-                                <Badge variant="outline" className={getStatusColor(request.status)}>
-                                  {getStatusText(request.status)}
-                                </Badge>
-                              </TableCell>
-                            );
-                          case 'branch':
-                            return (
-                              <TableCell key={column}>{request.branch || request.clientBranch || '-'}</TableCell>
-                            );
-                          case 'createdAt':
-                            return (
-                              <TableCell key={column}>
-                                {request.createdAt 
-                                  ? format(new Date(request.createdAt), 'dd/MM/yyyy', { locale: es })
-                                  : '-'}
-                              </TableCell>
-                            );
-                          case 'store':
-                            return (
-                              <TableCell key={column}>{request.store || '-'}</TableCell>
-                            );
-                          case 'createdBy':
-                            return (
-                              <TableCell key={column}>{request.createdBy}</TableCell>
-                            );
-                          case 'deadline':
-                            return (
-                              <TableCell key={column}>
-                                {request.deadline 
-                                  ? format(new Date(request.deadline), 'dd/MM/yyyy', { locale: es })
-                                  : '-'}
-                              </TableCell>
-                            );
-                          case 'quotesProgress':
-                            const received = quoteCounts[request.id] || 0;
-                            const minRequired = request.minQuotes ?? 3;
-                            const isComplete = received >= minRequired;
-                            return (
-                              <TableCell key={column}>
-                                <Badge 
-                                  variant="outline" 
-                                  className={isComplete 
-                                    ? 'bg-green-500/10 text-green-600 border-green-500/20' 
-                                    : 'bg-orange-500/10 text-orange-600 border-orange-500/20'
-                                  }
-                                >
-                                  {received}/{minRequired}
-                                </Badge>
-                              </TableCell>
-                            );
-                          case 'actions':
-                            return (
-                              <TableCell key={column} className="text-right">
-                                <div className="flex justify-end gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleViewRequest(request)}
-                                    title="Ver solicitud"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleEditRequest(request)}
-                                    title="Editar solicitud"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => {
-                                      setSelectedRequest(request);
-                                      setShowChatDialog(true);
-                                    }}
-                                    title="Foro de Preguntas"
-                                  >
-                                    <MessageSquare className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => {
-                                      setSelectedRequest(request);
-                                      setShowQuotesDialog(true);
-                                    }}
-                                    title="Ver cotizaciones"
-                                  >
-                                    <DollarSign className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => confirmDeleteRequest(request.id)}
-                                    title="Eliminar solicitud"
-                                    className="text-destructive hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            );
-                          default:
-                            return null;
-                        }
-                      })}
-                    </TableRow>
-                    {/* Fila expandida con detalles */}
-                    {expandedRequestId === request.id && (
-                      <TableRow className="bg-muted/30">
-                        <TableCell colSpan={columnOrder.filter(col => visibleColumns[col]).length + 1} className="p-0">
-                          <div className="overflow-x-auto">
-                            <Table className="text-sm">
-                              <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                  <TableHead className="min-w-[120px]">Equipo</TableHead>
-                                  <TableHead className="min-w-[120px]">Subequipo</TableHead>
-                                  <TableHead className="min-w-[100px]">Área</TableHead>
-                                  <TableHead className="min-w-[200px]">Actividades</TableHead>
-                                  <TableHead className="min-w-[80px]">Cantidad</TableHead>
-                                  <TableHead className="min-w-[80px]">U.M</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {expandedDetails.length > 0 ? (
-                                  expandedDetails.map((detail, idx) => (
-                                    <TableRow key={idx}>
-                                      <TableCell>{detail.equipment || '-'}</TableCell>
-                                      <TableCell>{detail.sub_equipment || '-'}</TableCell>
-                                      <TableCell>{detail.area || '-'}</TableCell>
-                                      <TableCell>{detail.activities || '-'}</TableCell>
-                                      <TableCell>{detail.quantity ?? '-'}</TableCell>
-                                      <TableCell>{detail.unit_measure || '-'}</TableCell>
-                                    </TableRow>
-                                  ))
-                                ) : (
-                                  <TableRow>
-                                    <TableCell colSpan={6} className="text-center text-muted-foreground py-4">
-                                      Sin detalles registrados
-                                    </TableCell>
-                                  </TableRow>
-                                )}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <OrderTable
+          requests={filteredRequests}
+          quoteCounts={quoteCounts}
+          expandedRequestId={expandedRequestId}
+          expandedDetails={expandedDetails}
+          columnOrder={columnOrder}
+          visibleColumns={visibleColumns}
+          sortKey={sortKey}
+          sortOrder={sortOrder}
+          draggedColumn={draggedColumn}
+          dragOverColumn={dragOverColumn}
+          onSort={handleSort}
+          onTogglePreview={togglePreview}
+          onView={handleViewRequest}
+          onEdit={handleEditRequest}
+          onOpenChat={(r) => { setSelectedRequest(r); setShowChatDialog(true); }}
+          onOpenQuotes={(r) => { setSelectedRequest(r); setShowQuotesDialog(true); }}
+          onDelete={confirmDeleteRequest}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onDragEnd={handleDragEnd}
+        />
       )}
 
       {showForm && (
-        <RequestForm
+        <OrderForm
           onClose={() => { setShowForm(false); setEditingRequest(null); }}
           onSave={handleSaveRequest}
           editingRequest={editingRequest || undefined}
@@ -1048,10 +556,7 @@ export const RequestList = () => {
       {showQuotesDialog && selectedRequest && (
         <QuoteListDialog
           open={showQuotesDialog}
-          onClose={() => {
-            setShowQuotesDialog(false);
-            setSelectedRequest(null);
-          }}
+          onClose={() => { setShowQuotesDialog(false); setSelectedRequest(null); }}
           request={selectedRequest}
         />
       )}
@@ -1059,16 +564,12 @@ export const RequestList = () => {
       {showChatDialog && selectedRequest && (
         <ForumQADialog
           open={showChatDialog}
-          onClose={() => {
-            setShowChatDialog(false);
-            setSelectedRequest(null);
-          }}
+          onClose={() => { setShowChatDialog(false); setSelectedRequest(null); }}
           requestId={selectedRequest.id}
           requestNumber={selectedRequest.requestNumber}
         />
       )}
 
-      {/* Diálogo para ver detalle de solicitud */}
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
@@ -1081,10 +582,9 @@ export const RequestList = () => {
               </p>
             )}
           </DialogHeader>
-          
+
           {selectedRequest && (
             <div className="space-y-6">
-              {/* Cabecera */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-primary">Datos de Cabecera</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
@@ -1094,18 +594,12 @@ export const RequestList = () => {
                   </div>
                   <div>
                     <span className="text-muted-foreground">Tipo de Servicio:</span>
-                    <p>
-                      <Badge className={getServiceTypeColor(selectedRequest.serviceType)}>
-                        {getServiceTypeText(selectedRequest.serviceType)}
-                      </Badge>
-                    </p>
+                    <p><ServiceTypeBadge type={selectedRequest.serviceType} /></p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Creador:</span>
                     <p className="font-medium">
-                      {selectedRequest.createdByName
-                        ? `${selectedRequest.createdByName}`
-                        : selectedRequest.createdBy}
+                      {selectedRequest.createdByName || selectedRequest.createdBy}
                     </p>
                     {selectedRequest.createdByEmail && selectedRequest.createdByName && (
                       <p className="text-xs text-muted-foreground">{selectedRequest.createdByEmail}</p>
@@ -1126,7 +620,7 @@ export const RequestList = () => {
                   <div>
                     <span className="text-muted-foreground">Fecha de Registro:</span>
                     <p className="font-medium">
-                      {selectedRequest.createdAt 
+                      {selectedRequest.createdAt
                         ? format(new Date(selectedRequest.createdAt), 'dd/MM/yyyy HH:mm', { locale: es })
                         : '-'}
                     </p>
@@ -1134,7 +628,7 @@ export const RequestList = () => {
                   <div>
                     <span className="text-muted-foreground">Fecha Entrega Cotizaciones:</span>
                     <p className="font-medium">
-                      {selectedRequest.deadline 
+                      {selectedRequest.deadline
                         ? format(new Date(selectedRequest.deadline), 'dd/MM/yyyy', { locale: es })
                         : '-'}
                     </p>
@@ -1160,9 +654,10 @@ export const RequestList = () => {
 
               <Separator />
 
-              {/* Detalles */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-primary">Detalle de la Solicitud ({requestDetails.length} {requestDetails.length === 1 ? 'fila' : 'filas'})</h3>
+                <h3 className="text-lg font-semibold text-primary">
+                  Detalle de la Solicitud ({requestDetails.length} {requestDetails.length === 1 ? 'fila' : 'filas'})
+                </h3>
                 {requestDetails.length === 0 ? (
                   <p className="text-muted-foreground text-sm">No hay detalles registrados</p>
                 ) : (
@@ -1213,7 +708,6 @@ export const RequestList = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo de confirmación para anular */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
