@@ -1,5 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
+export const isDemoSeedEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_SEED !== 'false';
+
 // Sample providers data (without manual IDs - let DB generate UUIDs)
 const PROVIDERS_DATA = [
   { name: 'Servicios Técnicos Integrales S.A.', email: 'contacto@sti.com', specialties: ['Mantenimiento Preventivo', 'Mantenimiento Correctivo'], rating: 4.8, certified: true },
@@ -335,6 +337,8 @@ const SAMPLE_REQUESTS = [
 ];
 
 export const seedDatabase = async (): Promise<{ success: boolean; error?: any }> => {
+  if (!isDemoSeedEnabled) return { success: true };
+
   try {
     console.log('Starting database seeding...');
 

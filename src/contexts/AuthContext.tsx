@@ -2,10 +2,11 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable';
 import type { Session } from '@supabase/supabase-js';
+import type { Organization, OrganizationMember, OrganizationMemberRole } from '@/types/organization';
 
 export type UserRole = 'cliente' | 'proveedor' | 'team_member';
 
-interface User {
+export interface User {
   id: string;
   email: string;
   role: UserRole;
@@ -13,8 +14,21 @@ interface User {
   providerId?: string;
 }
 
+export interface Profile {
+  id: string;
+  email: string;
+  name: string | null;
+  providerId: string | null;
+}
+
 interface AuthContextType {
   user: User | null;
+  profile: Profile | null;
+  organizations: Organization[];
+  memberships: OrganizationMember[];
+  currentOrganization: Organization | null;
+  currentMembership: OrganizationMember | null;
+  setCurrentOrganization: (organizationId: string | null) => void;
   loading: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<boolean>;
   register: (email: string, password: string, name: string, role: UserRole) => Promise<boolean>;
@@ -64,27 +78,128 @@ async function loadProfile(session: Session): Promise<User | null> {
   };
 }
 
+interface OrganizationRow {
+  id: string;
+  name: string;
+  legal_name: string | null;
+  organization_type: Organization['organizationType'];
+  tax_id: string | null;
+  status: Organization['status'];
+  settings: Record<string, unknown> | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface MembershipRow {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  role: OrganizationMemberRole;
+  is_active: boolean;
+  invited_by: string | null;
+  joined_at: string;
+  updated_at: string;
+  organizations: OrganizationRow | null;
+}
+
+interface OrganizationMembershipQuery {
+  select: (columns: string) => OrganizationMembershipQuery;
+  eq: (column: string, value: string | boolean) => OrganizationMembershipQuery;
+  then: PromiseLike<{ data: MembershipRow[] | null; error: unknown }>['then'];
+}
+
+const toOrganization = (organization: OrganizationRow): Organization => ({
+  id: organization.id,
+  name: organization.name,
+  legalName: organization.legal_name ?? null,
+  organizationType: organization.organization_type,
+  taxId: organization.tax_id ?? null,
+  status: organization.status,
+  settings: organization.settings ?? {},
+  createdBy: organization.created_by ?? null,
+  createdAt: organization.created_at,
+  updatedAt: organization.updated_at,
+});
+
+const toMembership = (membership: MembershipRow): OrganizationMember => ({
+  id: membership.id,
+  organizationId: membership.organization_id,
+  userId: membership.user_id,
+  role: membership.role as OrganizationMemberRole,
+  isActive: membership.is_active,
+  invitedBy: membership.invited_by ?? null,
+  joinedAt: membership.joined_at,
+  updatedAt: membership.updated_at,
+});
+
+async function loadOrganizations(userId: string) {
+  // Keep the current mockup usable until its generated database types are refreshed.
+  const database = supabase as unknown as { from: (table: string) => OrganizationMembershipQuery };
+  const { data, error } = await database
+    .from('organization_members')
+    .select('id, organization_id, user_id, role, is_active, invited_by, joined_at, updated_at, organizations(*)')
+    .eq('user_id', userId)
+    .eq('is_active', true);
+
+  if (error || !data) return { organizations: [] as Organization[], memberships: [] as OrganizationMember[] };
+
+  return {
+    organizations: data
+      .map((membership) => membership.organizations)
+      .filter((organization): organization is OrganizationRow => organization !== null)
+      .map(toOrganization),
+    memberships: data.map(toMembership),
+  };
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [memberships, setMemberships] = useState<OrganizationMember[]>([]);
+  const [currentOrganization, setCurrentOrganizationState] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const setAuthState = (nextUser: User | null, organizationData: { organizations: Organization[]; memberships: OrganizationMember[] }) => {
+    setUser(nextUser);
+    setProfile(nextUser ? {
+      id: nextUser.id,
+      email: nextUser.email,
+      name: nextUser.name ?? null,
+      providerId: nextUser.providerId ?? null,
+    } : null);
+    setOrganizations(organizationData.organizations);
+    setMemberships(organizationData.memberships);
+    setCurrentOrganizationState((current) => (
+      organizationData.organizations.find((organization) => organization.id === current?.id)
+      ?? organizationData.organizations[0]
+      ?? null
+    ));
+  };
 
   useEffect(() => {
     // Listener FIRST
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         setUser(null);
+        setProfile(null);
+        setOrganizations([]);
+        setMemberships([]);
+        setCurrentOrganizationState(null);
         return;
       }
       // Defer Supabase calls to avoid deadlock inside the callback
       setTimeout(() => {
-        loadProfile(session).then(setUser);
+        Promise.all([loadProfile(session), loadOrganizations(session.user.id)])
+          .then(([nextUser, organizationData]) => setAuthState(nextUser, organizationData));
       }, 0);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        loadProfile(session).then((u) => {
-          setUser(u);
+        Promise.all([loadProfile(session), loadOrganizations(session.user.id)]).then(([u, organizationData]) => {
+          setAuthState(u, organizationData);
           setLoading(false);
         });
       } else {
@@ -140,10 +255,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
   };
 
+  const setCurrentOrganization = (organizationId: string | null) => {
+    if (!organizationId) {
+      setCurrentOrganizationState(null);
+      return;
+    }
+    const organization = organizations.find((candidate) => candidate.id === organizationId);
+    if (organization) setCurrentOrganizationState(organization);
+  };
+
+  const currentMembership = currentOrganization
+    ? memberships.find((membership) => membership.organizationId === currentOrganization.id) ?? null
+    : null;
+
   return (
     <AuthContext.Provider
       value={{
         user,
+        profile,
+        organizations,
+        memberships,
+        currentOrganization,
+        currentMembership,
+        setCurrentOrganization,
         loading,
         login,
         register,

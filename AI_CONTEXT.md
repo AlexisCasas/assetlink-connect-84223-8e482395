@@ -104,3 +104,17 @@ Implementar la base multi-tenant productiva:
 
 ## Última actualización
 Inicio de la rama `productization/mvp`.
+
+## Base multi-tenant implementada
+
+- Se agregó una migración de base con `organizations`, `organization_members`,
+  `organization_relationships`, `activity_logs` y `audit_logs`.
+- La identidad real de proveedor y facility manager es una organización. La tabla
+  `providers` se conserva temporalmente para el mockup y admite `organization_id` nullable.
+- Se añadieron columnas de transición para organizaciones en `providers`,
+  `client_branches`, `requests` y `quotes`.
+- Las nuevas tablas usan RLS y helpers de membresía. El alta de organizaciones y
+  las invitaciones deben realizarse desde un backend/Edge Function administrativo.
+- `AuthContext` expone organizaciones, membresía y organización activa sin usar
+  localStorage como fuente de permisos.
+- `VITE_ENABLE_DEMO_SEED=false` desactiva el seeding demo automático.
