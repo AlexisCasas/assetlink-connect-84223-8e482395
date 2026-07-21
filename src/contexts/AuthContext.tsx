@@ -40,6 +40,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const DEMO_PASSWORD = 'demo-password-2024';
+const CURRENT_ORGANIZATION_STORAGE_KEY = 'onefacility.currentOrganizationId';
 
 const DEMO_ACCOUNTS: Record<string, { role: UserRole; name: string; providerId?: string }> = {
   'cliente@test.com': { role: 'cliente', name: 'Cliente Demo' },
@@ -153,6 +154,20 @@ async function loadOrganizations(userId: string) {
   };
 }
 
+const getPreferredOrganization = (organizations: Organization[], currentOrganizationId?: string) => {
+  if (typeof window === 'undefined') return organizations[0] ?? null;
+
+  const savedOrganizationId = window.localStorage.getItem(CURRENT_ORGANIZATION_STORAGE_KEY);
+  const savedOrganization = organizations.find((organization) => organization.id === savedOrganizationId);
+
+  if (savedOrganization) return savedOrganization;
+  if (savedOrganizationId) window.localStorage.removeItem(CURRENT_ORGANIZATION_STORAGE_KEY);
+
+  return organizations.find((organization) => organization.id === currentOrganizationId)
+    ?? organizations[0]
+    ?? null;
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -171,11 +186,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } : null);
     setOrganizations(organizationData.organizations);
     setMemberships(organizationData.memberships);
-    setCurrentOrganizationState((current) => (
-      organizationData.organizations.find((organization) => organization.id === current?.id)
-      ?? organizationData.organizations[0]
-      ?? null
-    ));
+    setCurrentOrganizationState((current) => {
+      const nextOrganization = getPreferredOrganization(organizationData.organizations, current?.id);
+      if (typeof window !== 'undefined') {
+        if (nextOrganization) window.localStorage.setItem(CURRENT_ORGANIZATION_STORAGE_KEY, nextOrganization.id);
+        else window.localStorage.removeItem(CURRENT_ORGANIZATION_STORAGE_KEY);
+      }
+      return nextOrganization;
+    });
   };
 
   useEffect(() => {
@@ -253,15 +271,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    setProfile(null);
+    setOrganizations([]);
+    setMemberships([]);
+    setCurrentOrganizationState(null);
+    if (typeof window !== 'undefined') window.localStorage.removeItem(CURRENT_ORGANIZATION_STORAGE_KEY);
   };
 
   const setCurrentOrganization = (organizationId: string | null) => {
     if (!organizationId) {
       setCurrentOrganizationState(null);
+      if (typeof window !== 'undefined') window.localStorage.removeItem(CURRENT_ORGANIZATION_STORAGE_KEY);
       return;
     }
     const organization = organizations.find((candidate) => candidate.id === organizationId);
-    if (organization) setCurrentOrganizationState(organization);
+    if (organization) {
+      setCurrentOrganizationState(organization);
+      if (typeof window !== 'undefined') window.localStorage.setItem(CURRENT_ORGANIZATION_STORAGE_KEY, organization.id);
+    }
   };
 
   const currentMembership = currentOrganization
