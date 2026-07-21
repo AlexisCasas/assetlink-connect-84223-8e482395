@@ -54,6 +54,7 @@ interface RequestData {
   client_name: string | null;
   client_branch: string | null;
   observations: string | null;
+  is_public?: boolean | null;
 }
 
 interface Assignment {
@@ -85,7 +86,7 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
 ];
 
 export const ProviderRequestList = () => {
-  const { user } = useAuth();
+  const { currentOrganization } = useAuth();
   const { toast } = useToast();
   const [requests, setRequests] = useState<RequestData[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<RequestData[]>([]);
@@ -109,6 +110,8 @@ export const ProviderRequestList = () => {
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [selectedRequestForForm, setSelectedRequestForForm] = useState<RequestData | null>(null);
   const [existingQuoteForForm, setExistingQuoteForForm] = useState<any>(null);
+  const canViewProviderRequests = currentOrganization?.organizationType === 'provider_company'
+    || currentOrganization?.organizationType === 'facility_manager';
 
   useEffect(() => {
     const savedColumns = localStorage.getItem('providerRequestColumns');
@@ -123,53 +126,41 @@ export const ProviderRequestList = () => {
 
   useEffect(() => {
     initializeAndLoadRequests();
-  }, [user]);
+  }, [currentOrganization?.id, canViewProviderRequests]);
 
   useEffect(() => {
     filterAndSortRequests();
   }, [requests, searchQuery, sortBy, sortOrder, statusFilter, priorityFilter]);
 
   const initializeAndLoadRequests = async () => {
+    if (!currentOrganization || !canViewProviderRequests) {
+      setRequests([]);
+      setFilteredRequests([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      
-      // Seed database with example data if empty
-      await seedDatabase();
-      
-      // Get current provider - ensure we always have one
-      let { data: providerData } = await supabase
-        .from('providers')
-        .select('*')
-        .eq('email', user?.email)
-        .maybeSingle();
+      setCurrentProvider(null);
 
-      // If user doesn't have a provider, use the first available one
-      if (!providerData) {
-        const { data: firstProvider } = await supabase
-          .from('providers')
-          .select('*')
-          .limit(1)
-          .maybeSingle();
-        
-        providerData = firstProvider;
-      }
+      const { data: accessData } = await supabase
+        .from('request_provider_access')
+        .select('request_id')
+        .eq('provider_organization_id', currentOrganization.id)
+        .eq('status', 'active');
+      const accessRequestIds = new Set((accessData || []).map((access) => access.request_id));
 
-      // Set provider (should always exist after seeding)
-      if (providerData) {
-        setCurrentProvider(providerData);
-      }
-
-      // Fetch ALL requests with status 'sent' - visible to all providers
       const { data: requestsData, error } = await supabase
         .from('requests')
         .select('*')
-        .eq('status', 'sent')
+        .neq('status', 'draft')
         .order('priority', { ascending: true })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      setRequests(requestsData || []);
+      setRequests((requestsData || []).filter((request) => request.is_public || accessRequestIds.has(request.id)));
 
       // Fetch assignments for these requests
       if (requestsData && requestsData.length > 0) {
@@ -188,7 +179,7 @@ export const ProviderRequestList = () => {
         }
 
         // Cargar cotizaciones del proveedor actual para todas las solicitudes
-        const providerIdToUse = providerData?.id;
+        const providerIdToUse = currentProvider?.id;
         if (providerIdToUse) {
           const { data: quotesData } = await supabase
             .from('quotes')
@@ -498,7 +489,7 @@ export const ProviderRequestList = () => {
                 </Button>
               )}
 
-              {!q && (
+              {false && !q && (
                 <Button
                   size="sm"
                   onClick={(e) => {
@@ -511,7 +502,7 @@ export const ProviderRequestList = () => {
                   <FilePlus className="h-4 w-4 mr-1" /> Cotizar
                 </Button>
               )}
-              {isDraft && (
+              {false && isDraft && (
                 <Button
                   size="sm"
                   variant="secondary"
@@ -526,7 +517,7 @@ export const ProviderRequestList = () => {
                 </Button>
               )}
 
-              <Button
+              {false && <Button
                 size="sm"
                 variant="outline"
                 onClick={(e) => {
@@ -537,7 +528,7 @@ export const ProviderRequestList = () => {
               >
                 <UserCog className="h-4 w-4 mr-1" />
                 Asignar
-              </Button>
+              </Button>}
             </div>
           </TableCell>
         );
@@ -553,6 +544,18 @@ export const ProviderRequestList = () => {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Cargando solicitudes...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!canViewProviderRequests) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Selecciona una organización proveedora para ver solicitudes disponibles</p>
           </CardContent>
         </Card>
       </div>
@@ -727,10 +730,10 @@ export const ProviderRequestList = () => {
                       key={request.id} 
                       className="hover:bg-muted/50 cursor-pointer"
                       onDoubleClick={() => {
-                        setSelectedRequests([request.id]);
-                        setShowAssignmentDialog(true);
+                        setSelectedRequestForDetail(request);
+                        setShowDetailDialog(true);
                       }}
-                      title="Doble click para asignar"
+                      title="Doble click para ver detalle"
                     >
                       <TableCell>
                         <Checkbox
