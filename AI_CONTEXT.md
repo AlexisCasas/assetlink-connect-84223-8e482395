@@ -178,4 +178,14 @@ Inicio de la rama `productization/mvp`.
   las invitaciones deben realizarse desde un backend/Edge Function administrativo.
 - `AuthContext` expone organizaciones, membresía y organización activa sin usar
   localStorage como fuente de permisos.
+
+## Solicitudes por tenant
+
+- `requests.organization_id` define el tenant de cada solicitud. Sus policies
+  RLS se basan en membresia y rol de organizacion, no en `localStorage` ni email.
+- `RequestList` y `DraftList` cargan solo la organizacion activa. `RequestForm`
+  exige una organizacion activa y persiste `organization_id` y `created_by_user_id`.
+- La migracion de visibilidad para `PublicRequestList`, `ProviderRequestList`,
+  cotizaciones, asignaciones, detalle y chat sigue pendiente; no se deben abrir
+  policies de `requests` como solucion temporal.
 - `VITE_ENABLE_DEMO_SEED=false` desactiva el seeding demo automático.

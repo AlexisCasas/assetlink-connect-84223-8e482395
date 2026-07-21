@@ -137,6 +137,7 @@ export interface RequestDetailData {
 
 export interface Request {
   id: string;
+  organizationId?: string;
   requestNumber: string;
   title?: string;
   description: string;

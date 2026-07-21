@@ -271,6 +271,15 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   };
 
   const handleSubmit = async (isDraft: boolean) => {
+    if (!currentOrganization) {
+      toast({
+        title: 'Organización requerida',
+        description: 'Selecciona una organización activa antes de guardar la solicitud.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!title.trim()) {
       toast({ title: 'Falta el título', description: 'Ingresa el título de la solicitud', variant: 'destructive' });
       return;
@@ -315,6 +324,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
     
     const request: Request = {
       id: editingRequest?.id || crypto.randomUUID(),
+      organizationId: editingRequest?.organizationId || currentOrganization.id,
       requestNumber,
       title: title.trim(),
       description,
