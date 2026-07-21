@@ -179,6 +179,15 @@ Inicio de la rama `productization/mvp`.
 - `AuthContext` expone organizaciones, membresía y organización activa sin usar
   localStorage como fuente de permisos.
 
+## Detalles de solicitudes por tenant
+
+- `request_details` hereda el tenant desde `request_id` hacia
+  `requests.organization_id`; no duplica `organization_id`.
+- Sus policies RLS validan membresia y rol contra la solicitud padre para
+  lectura, insercion, actualizacion y eliminacion.
+- Storage de `attachment_urls`, `request_providers`, providers, cotizaciones y
+  chats siguen pendientes de migracion tenant-aware.
+
 ## Solicitudes por tenant
 
 - `requests.organization_id` define el tenant de cada solicitud. Sus policies
