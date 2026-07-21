@@ -5,11 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
-import { FileText, Clock, CheckCircle, User, MessageSquare, MessageCircle, ThumbsUp, Lock } from 'lucide-react';
+import { FileText, Clock, CheckCircle, User, MessageSquare, MessageCircle, ThumbsUp, Lock, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Request } from '@/types/request';
 import { QuoteChatDialog } from './QuoteChatDialog';
-import { ApprovalDialog } from './ApprovalDialog';
 
 interface QuoteListDialogProps {
   open: boolean;
@@ -30,6 +30,9 @@ interface Quote {
   provider_name?: string;
   client_observation?: string;
   approval_reason?: string;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
 }
 
 export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps) => {
@@ -41,10 +44,19 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
   const [editingObservation, setEditingObservation] = useState<string | null>(null);
   const [observationText, setObservationText] = useState('');
   const [chatQuote, setChatQuote] = useState<{ id: string; providerName: string } | null>(null);
-  const [approvalQuote, setApprovalQuote] = useState<{ id: string; providerName: string } | null>(null);
   const [quotesClosed, setQuotesClosed] = useState(false);
   const [closingQuotes, setClosingQuotes] = useState(false);
   const { toast } = useToast();
+  const { currentOrganization, currentMembership } = useAuth();
+  const clientApprovalRoles = ['owner', 'admin', 'manager', 'requester'];
+  const canApproveForClient = currentOrganization?.organizationType === 'client_company'
+    && currentOrganization.id === request.organizationId
+    && !!currentMembership
+    && clientApprovalRoles.includes(currentMembership.role);
+  const canApproveForPlatform = currentOrganization?.organizationType === 'platform_admin'
+    && !!currentMembership
+    && ['owner', 'admin'].includes(currentMembership.role);
+  const canDecideQuotes = canApproveForClient || canApproveForPlatform;
 
   useEffect(() => {
     if (open && request.id) {
@@ -82,24 +94,28 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
         .from('quotes')
         .select('*')
         .eq('request_id', request.id)
-        .eq('status', 'submitted')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const transformedQuotes = (quotesData || []).map((q: any) => ({
-        id: q.id,
-        provider_id: q.provider_id,
-        provider_organization_id: q.provider_organization_id,
-        team_member_id: q.team_member_id,
-        amount: q.amount,
-        description: q.description,
-        status: q.status,
-        created_at: q.created_at,
-        provider_name: 'Proveedor',
-        client_observation: q.client_observation,
-        approval_reason: q.approval_reason,
-      }));
+      const transformedQuotes = (quotesData || [])
+        .filter((q: any) => ['submitted', 'approved', 'rejected'].includes(q.status))
+        .map((q: any) => ({
+          id: q.id,
+          provider_id: q.provider_id,
+          provider_organization_id: q.provider_organization_id,
+          team_member_id: q.team_member_id,
+          amount: q.amount,
+          description: q.description,
+          status: q.status,
+          created_at: q.created_at,
+          provider_name: 'Proveedor',
+          client_observation: q.client_observation,
+          approval_reason: q.approval_reason,
+          approved_at: q.approved_at,
+          rejected_at: q.rejected_at,
+          rejection_reason: q.rejection_reason,
+        }));
 
       setQuotes(transformedQuotes);
 
@@ -179,23 +195,12 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
     }
   };
 
-  const handleApproveQuote = async (quoteId: string, approvalReason: string) => {
+  const handleApproveQuote = async (quoteId: string) => {
     try {
-      const { error } = await supabase
-        .from('quotes')
-        .update({ 
-          status: 'approved',
-          approval_reason: approvalReason 
-        })
-        .eq('id', quoteId);
+      const { error } = await supabase.rpc('approve_quote', { target_quote_id: quoteId });
 
       if (error) throw error;
-
-      setQuotes(quotes.map(q => 
-        q.id === quoteId ? { ...q, status: 'approved', approval_reason: approvalReason } : q
-      ));
-
-      setApprovalQuote(null);
+      await loadQuotes();
 
       toast({
         title: 'Cotización aprobada',
@@ -208,6 +213,21 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
         description: 'No se pudo aprobar la cotización.',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleRejectQuote = async (quoteId: string) => {
+    try {
+      const { error } = await supabase.rpc('reject_quote', {
+        target_quote_id: quoteId,
+        reason: null,
+      });
+      if (error) throw error;
+      await loadQuotes();
+      toast({ title: 'Cotizacion rechazada', description: 'La cotizacion fue rechazada.' });
+    } catch (error) {
+      console.error('Error rejecting quote:', error);
+      toast({ title: 'Error', description: 'No se pudo rechazar la cotizacion.', variant: 'destructive' });
     }
   };
 
@@ -308,6 +328,9 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                           month: 'short',
                         })}
                       </Badge>
+                      <Badge variant={quote.status === 'approved' ? 'default' : quote.status === 'rejected' ? 'destructive' : 'secondary'}>
+                        {quote.status === 'approved' ? 'Aprobada' : quote.status === 'rejected' ? 'Rechazada' : 'En revision'}
+                      </Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -353,8 +376,14 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                         </div>
                       </div>
                     )}
+                    {quote.status === 'rejected' && quote.rejection_reason && (
+                      <div className="pt-3 border-t text-sm text-muted-foreground">
+                        Motivo de rechazo: {quote.rejection_reason}
+                      </div>
+                    )}
 
                     {/* Action Buttons */}
+                    {canDecideQuotes && quote.status === 'submitted' && (
                     <div className="pt-3 border-t flex gap-2">
                       <Button
                         variant="outline"
@@ -368,14 +397,23 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                       </Button>
                       <Button
                         size="sm"
-                        onClick={() => setApprovalQuote({ id: quote.id, providerName: quote.provider_name || 'Proveedor' })}
-                        disabled
+                        onClick={() => handleApproveQuote(quote.id)}
                         className="flex-1"
                       >
                         <ThumbsUp className="h-4 w-4 mr-2" />
                         {quote.status === 'approved' ? 'Aprobada' : 'Aprobar'}
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleRejectQuote(quote.id)}
+                        className="flex-1"
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Rechazar
+                      </Button>
                     </div>
+                    )}
 
                     {/* Client Observations Section */}
                     <div className="pt-3 border-t">
@@ -448,15 +486,6 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
             onClose={() => setChatQuote(null)}
             quoteId={chatQuote.id}
             providerName={chatQuote.providerName}
-          />
-        )}
-
-        {approvalQuote && (
-          <ApprovalDialog
-            open={!!approvalQuote}
-            onClose={() => setApprovalQuote(null)}
-            onApprove={(reason) => handleApproveQuote(approvalQuote.id, reason)}
-            providerName={approvalQuote.providerName}
           />
         )}
       </DialogContent>

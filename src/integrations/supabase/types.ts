@@ -870,6 +870,8 @@ export type Database = {
         Row: {
           amount: number
           approval_reason: string | null
+          approved_at: string | null
+          approved_by_user_id: string | null
           base_subtotal: number
           client_observation: string | null
           created_at: string
@@ -883,6 +885,9 @@ export type Database = {
           provider_id: string | null
           provider_organization_id: string | null
           quote_sections: Json
+          rejected_at: string | null
+          rejected_by_user_id: string | null
+          rejection_reason: string | null
           request_id: string
           sales_conditions: Json
           sent_at: string | null
@@ -897,6 +902,8 @@ export type Database = {
         Insert: {
           amount: number
           approval_reason?: string | null
+          approved_at?: string | null
+          approved_by_user_id?: string | null
           base_subtotal?: number
           client_observation?: string | null
           created_at?: string
@@ -910,6 +917,9 @@ export type Database = {
           provider_id?: string | null
           provider_organization_id?: string | null
           quote_sections?: Json
+          rejected_at?: string | null
+          rejected_by_user_id?: string | null
+          rejection_reason?: string | null
           request_id: string
           sales_conditions?: Json
           sent_at?: string | null
@@ -924,6 +934,8 @@ export type Database = {
         Update: {
           amount?: number
           approval_reason?: string | null
+          approved_at?: string | null
+          approved_by_user_id?: string | null
           base_subtotal?: number
           client_observation?: string | null
           created_at?: string
@@ -937,6 +949,9 @@ export type Database = {
           provider_id?: string | null
           provider_organization_id?: string | null
           quote_sections?: Json
+          rejected_at?: string | null
+          rejected_by_user_id?: string | null
+          rejection_reason?: string | null
           request_id?: string
           sales_conditions?: Json
           sent_at?: string | null
@@ -1428,6 +1443,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_quote: { Args: { target_quote_id: string }; Returns: undefined }
       can_provider_quote_request: {
         Args: {
           target_provider_organization_id: string
@@ -1487,6 +1503,10 @@ export type Database = {
       is_provider_facing_organization: {
         Args: { _organization_id: string }
         Returns: boolean
+      }
+      reject_quote: {
+        Args: { reason?: string; target_quote_id: string }
+        Returns: undefined
       }
       storage_request_id_from_name: {
         Args: { object_name: string }
