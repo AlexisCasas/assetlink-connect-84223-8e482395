@@ -1,1 +1,10 @@
 project_id = "yckadvxpxkqmpvfdlhaz"
+
+[functions.admin-create-organization]
+verify_jwt = true
+
+[functions.admin-invite-organization-member]
+verify_jwt = true
+
+[functions.admin-add-existing-member]
+verify_jwt = true
