@@ -61,6 +61,18 @@ para crear organizaciones y membresías. Las invitaciones se guardan en
 `organization_invitations`; su aceptación y el correo se implementarán en una
 feature posterior.
 
+## Cotizaciones por tenant
+
+- `quotes.provider_organization_id` es la identidad productiva de una
+  cotización. `provider_id` y `team_member_id` se conservan como campos legacy
+  nullable para compatibilidad visual y futuras tareas de backfill.
+- `QuoteForm`, `ProviderRequestList` y `PublicRequestList` usan la
+  organización activa. Un proveedor o facility manager autorizado solo puede
+  cotizar solicitudes no-draft, publicas o con `request_provider_access` activo.
+- RLS permite a la organización proveedora ver solo sus propias cotizaciones y
+  al tenant cliente leer las cotizaciones de sus solicitudes. Aprobaciones,
+  chats, notificaciones y ordenes de trabajo siguen pendientes de migración.
+
 ## Proyecto
 One Facility / Assetlink Connect.
 

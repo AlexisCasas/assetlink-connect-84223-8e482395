@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { AssignmentDialog } from './AssignmentDialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { seedDatabase } from '@/lib/seedData';
 import { Search, Settings2, ArrowUpDown, Download, GripVertical, Eye, FileText, UserCog, Pencil, FilePlus } from 'lucide-react';
 import { RequestDetailDialog } from './RequestDetailDialog';
 import { QuoteDetailDialog } from './QuoteDetailDialog';
@@ -160,11 +159,13 @@ export const ProviderRequestList = () => {
 
       if (error) throw error;
 
-      setRequests((requestsData || []).filter((request) => request.is_public || accessRequestIds.has(request.id)));
+      const visibleRequests = (requestsData || []).filter((request) => request.is_public || accessRequestIds.has(request.id));
+      setRequests(visibleRequests);
+      setQuotes({});
 
       // Fetch assignments for these requests
-      if (requestsData && requestsData.length > 0) {
-        const requestIds = requestsData.map(r => r.id);
+      if (visibleRequests.length > 0) {
+        const requestIds = visibleRequests.map(r => r.id);
         const { data: assignmentsData } = await supabase
           .from('assignments')
           .select('request_id, team_member_name')
@@ -178,25 +179,22 @@ export const ProviderRequestList = () => {
           setAssignments(assignmentsMap);
         }
 
-        // Cargar cotizaciones del proveedor actual para todas las solicitudes
-        const providerIdToUse = currentProvider?.id;
-        if (providerIdToUse) {
-          const { data: quotesData } = await supabase
-            .from('quotes')
-            .select('*')
-            .in('request_id', requestIds)
-            .eq('provider_id', providerIdToUse);
-          if (quotesData) {
-            const quotesMap: Record<string, any> = {};
-            quotesData.forEach((q: any) => {
-              const existing = quotesMap[q.request_id];
-              const qDate = new Date(q.updated_at || q.created_at).getTime();
-              const eDate = existing ? new Date(existing.updated_at || existing.created_at).getTime() : 0;
-              if (!existing || qDate > eDate) quotesMap[q.request_id] = q;
-            });
-            setQuotes(quotesMap);
-          }
-        }
+        // A provider only loads its active organization's quotes. provider_id
+        // remains legacy data and is never used to authorize this view.
+        const { data: quotesData, error: quotesError } = await supabase
+          .from('quotes')
+          .select('*')
+          .in('request_id', requestIds)
+          .eq('provider_organization_id', currentOrganization.id);
+        if (quotesError) throw quotesError;
+        const quotesMap: Record<string, any> = {};
+        (quotesData || []).forEach((q: any) => {
+          const existing = quotesMap[q.request_id];
+          const qDate = new Date(q.updated_at || q.created_at).getTime();
+          const eDate = existing ? new Date(existing.updated_at || existing.created_at).getTime() : 0;
+          if (!existing || qDate > eDate) quotesMap[q.request_id] = q;
+        });
+        setQuotes(quotesMap);
       }
     } catch (error) {
       console.error('Error fetching requests:', error);
@@ -489,7 +487,7 @@ export const ProviderRequestList = () => {
                 </Button>
               )}
 
-              {false && !q && (
+              {!q && (
                 <Button
                   size="sm"
                   onClick={(e) => {
@@ -502,7 +500,7 @@ export const ProviderRequestList = () => {
                   <FilePlus className="h-4 w-4 mr-1" /> Cotizar
                 </Button>
               )}
-              {false && isDraft && (
+              {isDraft && (
                 <Button
                   size="sm"
                   variant="secondary"

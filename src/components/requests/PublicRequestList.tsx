@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Building2, MapPin, Calendar, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { QuoteForm } from './QuoteForm';
 
 interface Request {
   id: string;
@@ -30,6 +31,7 @@ export const PublicRequestList = () => {
   const { currentOrganization } = useAuth();
   const [publicRequests, setPublicRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRequestForQuote, setSelectedRequestForQuote] = useState<Request | null>(null);
 
   const canViewMarketplace = currentOrganization?.organizationType === 'provider_company'
     || currentOrganization?.organizationType === 'facility_manager';
@@ -182,13 +184,24 @@ export const PublicRequestList = () => {
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" disabled>
+                <Button variant="outline" onClick={() => setSelectedRequestForQuote(request)}>
                   Enviar Cotización
                 </Button>
               </div>
             </Card>
           ))}
         </div>
+      )}
+
+      {selectedRequestForQuote && (
+        <QuoteForm
+          request={selectedRequestForQuote as any}
+          onClose={() => setSelectedRequestForQuote(null)}
+          onSave={() => {
+            setSelectedRequestForQuote(null);
+            loadPublicRequests();
+          }}
+        />
       )}
 
     </div>
