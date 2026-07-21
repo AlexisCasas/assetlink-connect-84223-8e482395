@@ -61,8 +61,9 @@ const createEmptyDetail = (): RequestDetail => ({
 });
 
 export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProps) => {
-  const { user } = useAuth();
+  const { user, currentOrganization } = useAuth();
   const { toast } = useToast();
+  const currentOrganizationId = currentOrganization?.id;
   
   // Formatear fecha para input date
   const formatDateForInput = (dateString: string | undefined) => {
@@ -125,15 +126,20 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
 
   useEffect(() => {
     fetchProviders();
-    fetchBranches();
+    if (currentOrganizationId) {
+      fetchBranches(currentOrganizationId);
+    } else {
+      setBranches([]);
+    }
     // Simular usuarios del cliente (en producción vendría de la base de datos)
     setClientUsers(['Juan Pérez', 'María García', 'Carlos López', 'Ana Rodríguez']);
-  }, []);
+  }, [currentOrganizationId]);
 
-  const fetchBranches = async () => {
+  const fetchBranches = async (organizationId: string) => {
     const { data } = await supabase
       .from('client_branches')
       .select('*')
+      .eq('organization_id', organizationId)
       .eq('is_active', true)
       .order('name');
     const list: ClientBranch[] = (data || []).map((b: any) => ({
