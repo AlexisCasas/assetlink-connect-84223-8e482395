@@ -82,6 +82,21 @@ feature posterior.
 - Permanecen pendientes notificaciones, chat, ordenes de trabajo y aprobacion
   avanzada por limites.
 
+## Notificaciones de cotizaciones por tenant
+
+- `organization_notifications` es la tabla productiva de notificaciones por
+  organizacion. La tabla legacy `notifications`, basada en email, no participa
+  en este flujo.
+- Los triggers de `quotes` crean eventos para cotizacion enviada, aprobada y no
+  seleccionada. Las notificaciones se crean en base de datos, no desde el
+  frontend, y cubren los rechazos automaticos de cotizaciones alternativas.
+- RLS permite leer y marcar como leidas solo a miembros del tenant (o a
+  platform admins). No hay policies de insercion o eliminacion para frontend.
+- `NotificationBell`, integrado debajo del selector de organizacion del
+  Sidebar, y `NotificationList` usan la organizacion activa. La lista se
+  refresca al abrir el indicador; realtime queda pendiente si se requiere una
+  actualizacion inmediata entre sesiones.
+
 ## Proyecto
 One Facility / Assetlink Connect.
 

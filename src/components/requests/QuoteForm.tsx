@@ -205,26 +205,8 @@ export const QuoteForm = ({ request, onClose, onSave, existingQuote }: QuoteForm
         savedId = data.id;
       }
 
-      // Deferred: notifications and request workflow transitions are legacy modules.
-      if (false && (mode === 'submit' || mode === 'email')) {
-        const providerName = user?.name || 'Proveedor';
-        const reqNumber = (request as any).requestNumber || (request as any).request_number || '';
-        await supabase.from('notifications').insert({
-          user_email: (request as any).createdBy || (request as any).created_by,
-          type: 'quote_received',
-          title: mode === 'email' ? 'Cotización recibida por correo' : 'Nueva cotización recibida',
-          message: `El proveedor ${providerName} envió una cotización para la solicitud ${reqNumber}.`,
-          request_id: request.id,
-          quote_id: savedId,
-        });
-
-        // Update request status to 'quoted' only if currently 'sent'
-        await supabase
-          .from('requests')
-          .update({ status: 'quoted' })
-          .eq('id', request.id)
-          .eq('status', 'sent');
-      }
+      // Database triggers create tenant notifications when the quote reaches a
+      // notification-worthy status. The frontend never inserts notifications.
 
       toast({
         title: mode === 'draft' ? 'Borrador guardado' : mode === 'email' ? 'Cotización enviada por correo' : 'Cotización enviada',
