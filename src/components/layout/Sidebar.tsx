@@ -4,6 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { OrganizationSwitcher } from '@/components/organization/OrganizationSwitcher';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { useOrganizationNotifications } from '@/hooks/useOrganizationNotifications';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   LayoutDashboard,
@@ -30,30 +32,17 @@ interface SidebarProps {
 
 export function Sidebar({ className, onViewChange, currentView = 'dashboard', userRole }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [unreadContactCount, setUnreadContactCount] = useState(0);
   const { user, logout } = useAuth();
+  const { unreadCount } = useOrganizationNotifications(1);
 
   useEffect(() => {
     if (user?.email) {
-      loadUnreadCount();
       loadUnreadContactCount();
+    } else {
+      setUnreadContactCount(0);
     }
   }, [user]);
-
-  const loadUnreadCount = async () => {
-    try {
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_email', user?.email)
-        .eq('read', false);
-
-      setUnreadCount(count || 0);
-    } catch (error) {
-      console.error('Error loading unread count:', error);
-    }
-  };
 
   const loadUnreadContactCount = async () => {
     try {
@@ -115,6 +104,9 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
 
       <div className="py-3">
         <OrganizationSwitcher collapsed={collapsed} />
+      </div>
+      <div className="px-3 pb-3">
+        <NotificationBell collapsed={collapsed} />
       </div>
 
       {/* Navigation */}

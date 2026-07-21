@@ -516,6 +516,76 @@ export type Database = {
           },
         ]
       }
+      organization_notifications: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          is_read: boolean
+          message: string
+          organization_id: string
+          read_at: string | null
+          related_quote_id: string | null
+          related_request_id: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          is_read?: boolean
+          message: string
+          organization_id: string
+          read_at?: string | null
+          related_quote_id?: string | null
+          related_request_id?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          is_read?: boolean
+          message?: string
+          organization_id?: string
+          read_at?: string | null
+          related_quote_id?: string | null
+          related_request_id?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_notifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_notifications_related_quote_id_fkey"
+            columns: ["related_quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_notifications_related_request_id_fkey"
+            columns: ["related_request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_relationships: {
         Row: {
           created_at: string
@@ -1460,6 +1530,20 @@ export type Database = {
         Returns: boolean
       }
       can_user_read_request: { Args: { _request_id: string }; Returns: boolean }
+      create_organization_notification: {
+        Args: {
+          target_actor_user_id: string
+          target_entity_id: string
+          target_entity_type: string
+          target_message: string
+          target_organization_id: string
+          target_quote_id: string
+          target_request_id: string
+          target_title: string
+          target_type: string
+        }
+        Returns: string
+      }
       get_user_organizations: {
         Args: never
         Returns: {
