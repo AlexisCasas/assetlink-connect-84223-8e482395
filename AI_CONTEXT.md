@@ -97,6 +97,21 @@ feature posterior.
   refresca al abrir el indicador; realtime queda pendiente si se requiere una
   actualizacion inmediata entre sesiones.
 
+## Ordenes de trabajo desde cotizaciones aprobadas
+
+- `work_orders` es la tabla productiva tenant-aware para formalizar una
+  cotizacion aprobada. No reutiliza `assignments`, que permanece legacy.
+- La RPC `create_work_order_from_quote` valida autenticacion, la cotizacion
+  aprobada, tenant cliente y rol `owner`, `admin`, `manager` o `requester`;
+  platform admins tambien pueden crearla.
+- `quote_id` es unico y la RPC es idempotente: una llamada repetida devuelve la
+  orden existente sin duplicar registros ni notificaciones.
+- Cliente y proveedor pueden leer la orden segun su membresia. El proveedor
+  recibe `work_order_created` en `organization_notifications`.
+- `QuoteListDialog` permite crearla desde la cotizacion aprobada. Siguen
+  pendientes la vista completa de ordenes, estados operativos, evidencias,
+  cierre y chat.
+
 ## Proyecto
 One Facility / Assetlink Connect.
 
