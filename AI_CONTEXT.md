@@ -1,5 +1,46 @@
 # AI_CONTEXT.md
 
+## Backend administrativo de organizaciones
+
+Las operaciones administrativas se realizan sólo mediante Edge Functions con JWT
+válido y autorización comprobada en backend. `SUPABASE_SERVICE_ROLE_KEY` se usa
+únicamente dentro de las funciones y nunca se expone al frontend.
+
+- `admin-create-organization`: sólo `platform_admin`; crea una organización y,
+  opcionalmente, un owner existente o una invitación pendiente de owner.
+- `admin-invite-organization-member`: `platform_admin` u `owner`/`admin` del
+  tenant; registra una invitación pendiente. No gestiona organizaciones de tipo
+  `platform_admin` ni envía correo todavía.
+- `admin-add-existing-member`: `platform_admin` u `owner`/`admin` del tenant;
+  asigna o reactiva una membresía para un usuario Auth ya existente.
+
+### Bootstrap temporal del primer platform admin
+
+Ejecutar **solamente en local o staging** desde SQL Editor con una cuenta de
+operador. No existe endpoint público para bootstrap. Reemplazar los UUIDs:
+
+```sql
+-- El usuario debe existir en auth.users. Esta sentencia es segura si el trigger
+-- ya creó el profile.
+insert into public.profiles (id, email, name)
+select id, email, coalesce(raw_user_meta_data->>'name', split_part(email, '@', 1))
+from auth.users
+where id = '<AUTH_USER_UUID>'::uuid
+on conflict (id) do nothing;
+
+insert into public.organizations (name, organization_type, created_by)
+values ('One Facility Platform', 'platform_admin', '<AUTH_USER_UUID>')
+returning id;
+
+insert into public.organization_members (organization_id, user_id, role)
+values ('<PLATFORM_ORGANIZATION_UUID>', '<AUTH_USER_UUID>', 'owner');
+```
+
+Después de este bootstrap, las funciones administrativas son la ruta prevista
+para crear organizaciones y membresías. Las invitaciones se guardan en
+`organization_invitations`; su aceptación y el correo se implementarán en una
+feature posterior.
+
 ## Proyecto
 One Facility / Assetlink Connect.
 

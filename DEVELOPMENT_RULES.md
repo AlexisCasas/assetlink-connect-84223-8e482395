@@ -1,5 +1,9 @@
 # DEVELOPMENT_RULES.md
 
+> Las altas de organizaciones, invitaciones y membresías privilegiadas deben
+> pasar por Edge Functions o backend administrativo. `SUPABASE_SERVICE_ROLE_KEY`
+> está prohibida en frontend y sólo se permite en secretos de funciones/backend.
+
 ## Principios de desarrollo
 
 1. Multi-tenant primero.
