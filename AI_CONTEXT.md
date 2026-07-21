@@ -112,6 +112,16 @@ feature posterior.
   pendientes la vista completa de ordenes, estados operativos, evidencias,
   cierre y chat.
 
+## Hardening de grants authenticated
+
+- RLS define que filas puede usar un usuario, pero PostgREST tambien requiere
+  grants sobre esquema, tablas y funciones antes de evaluar esas policies.
+- La migracion `authenticated_grants_hardening` formaliza los grants minimos
+  para el flujo tenant-aware de organizaciones, solicitudes, cotizaciones,
+  notificaciones y ordenes de trabajo.
+- `providers`, `profiles`, `user_roles` y chats permanecen legacy o pendientes;
+  esta migracion no amplia sus permisos.
+
 ## Proyecto
 One Facility / Assetlink Connect.
 
