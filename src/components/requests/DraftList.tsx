@@ -29,7 +29,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export const DraftList = () => {
-  const { user } = useAuth();
+  const { user, currentOrganization } = useAuth();
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editingDraft, setEditingDraft] = useState<Request | undefined>();
@@ -42,19 +42,26 @@ export const DraftList = () => {
   const [draftDetails, setDraftDetails] = useState<any[]>([]);
 
   const loadDrafts = async () => {
+    if (!currentOrganization) {
+      setDrafts([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('requests')
         .select('*')
         .eq('status', 'draft')
-        .eq('created_by', user?.email || '')
+        .eq('organization_id', currentOrganization.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       const transformedDrafts: Request[] = (data || []).map((req: any) => ({
         id: req.id,
+        organizationId: req.organization_id,
         requestNumber: req.request_number,
         title: req.title,
         description: req.description,
@@ -95,11 +102,7 @@ export const DraftList = () => {
     }
   };
 
-  useEffect(() => {
-    if (user?.email) {
-      loadDrafts();
-    }
-  }, [user]);
+  useEffect(() => { loadDrafts(); }, [user, currentOrganization?.id]);
 
   const loadDraftDetails = async (requestId: string) => {
     const { data } = await supabase
@@ -116,12 +119,22 @@ export const DraftList = () => {
   };
 
   const handleSaveRequest = async (request: Request, isDraft: boolean) => {
+    if (!currentOrganization) {
+      toast({ title: 'Organización requerida', description: 'Selecciona una organización activa antes de guardar.', variant: 'destructive' });
+      return;
+    }
+
+    if (request.organizationId && request.organizationId !== currentOrganization.id) {
+      throw new Error('La solicitud no pertenece a la organización activa.');
+    }
+
     try {
       // Verificar si existe
       const { data: existing } = await supabase
         .from('requests')
         .select('id')
         .eq('id', request.id)
+        .eq('organization_id', currentOrganization.id)
         .maybeSingle();
 
       if (existing) {
@@ -145,7 +158,8 @@ export const DraftList = () => {
             is_public: request.isPublic,
             min_quotes: request.minQuotes ?? 3,
           })
-          .eq('id', request.id);
+          .eq('id', request.id)
+          .eq('organization_id', currentOrganization.id);
 
         if (requestError) throw requestError;
 
@@ -160,6 +174,7 @@ export const DraftList = () => {
           .from('requests')
           .insert({
             id: request.id,
+            organization_id: currentOrganization.id,
             request_number: request.requestNumber,
             title: request.title || null,
             description: request.description,
@@ -244,7 +259,8 @@ export const DraftList = () => {
       const { error } = await supabase
         .from('requests')
         .delete()
-        .eq('id', draftToDelete);
+        .eq('id', draftToDelete)
+        .eq('organization_id', currentOrganization.id);
 
       if (error) throw error;
 
@@ -336,7 +352,11 @@ export const DraftList = () => {
         <Card>
           <CardContent className="py-12 text-center">
             <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground">No tienes borradores guardados</p>
+            <p className="text-muted-foreground">
+              {currentOrganization
+                ? 'No tienes borradores guardados'
+                : 'Selecciona una organización activa para ver tus borradores'}
+            </p>
           </CardContent>
         </Card>
       ) : (

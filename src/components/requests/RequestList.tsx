@@ -54,7 +54,7 @@ import {
 } from './StatusBadge';
 
 export const RequestList = () => {
-  const { user } = useAuth();
+  const { user, currentOrganization } = useAuth();
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [requests, setRequests] = useState<Request[]>([]);
@@ -159,18 +159,27 @@ export const RequestList = () => {
   };
 
   const loadRequests = async () => {
+    if (!currentOrganization) {
+      setRequests([]);
+      setQuoteCounts({});
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       await seedDatabase();
       const { data: requestsData, error: requestsError } = await supabase
         .from('requests')
         .select('*')
+        .eq('organization_id', currentOrganization.id)
         .eq('status', 'sent')
         .order('created_at', { ascending: false });
       if (requestsError) throw requestsError;
 
       const transformedRequests: Request[] = (requestsData || []).map((req: any) => ({
         id: req.id,
+        organizationId: req.organization_id,
         requestNumber: req.request_number,
         title: req.title,
         description: req.description,
@@ -227,7 +236,7 @@ export const RequestList = () => {
     }
   };
 
-  useEffect(() => { loadRequests(); }, [user]);
+  useEffect(() => { loadRequests(); }, [user, currentOrganization?.id]);
 
   const loadRequestDetails = async (requestId: string) => {
     const { data } = await supabase
@@ -282,11 +291,21 @@ export const RequestList = () => {
   };
 
   const handleSaveRequest = async (request: Request, isDraft: boolean) => {
+    if (!currentOrganization) {
+      toast({ title: 'Organización requerida', description: 'Selecciona una organización activa antes de guardar.', variant: 'destructive' });
+      return;
+    }
+
+    if (request.organizationId && request.organizationId !== currentOrganization.id) {
+      throw new Error('La solicitud no pertenece a la organización activa.');
+    }
+
     try {
       const { data: existing } = await supabase
         .from('requests')
         .select('id')
         .eq('id', request.id)
+        .eq('organization_id', currentOrganization.id)
         .maybeSingle();
 
       if (existing) {
@@ -309,13 +328,15 @@ export const RequestList = () => {
             is_public: request.isPublic,
             min_quotes: request.minQuotes ?? 3,
           })
-          .eq('id', request.id);
+          .eq('id', request.id)
+          .eq('organization_id', currentOrganization.id);
         if (requestError) throw requestError;
 
         await supabase.from('request_details').delete().eq('request_id', request.id);
       } else {
         const { error: insertError } = await supabase.from('requests').insert({
           id: request.id,
+          organization_id: currentOrganization.id,
           request_number: request.requestNumber,
           title: request.title || null,
           description: request.description,
@@ -393,7 +414,8 @@ export const RequestList = () => {
       const { error } = await supabase
         .from('requests')
         .update({ status: 'anulado' })
-        .eq('id', requestToDelete);
+        .eq('id', requestToDelete)
+        .eq('organization_id', currentOrganization.id);
       if (error) throw error;
       toast({ title: 'Solicitud anulada', description: 'La solicitud ha sido anulada correctamente' });
       loadRequests();
@@ -473,7 +495,7 @@ export const RequestList = () => {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Mis Solicitudes</h2>
-        <Button onClick={() => { setEditingRequest(null); setShowForm(true); }}>
+        <Button disabled={!currentOrganization} onClick={() => { setEditingRequest(null); setShowForm(true); }}>
           <Plus className="w-4 h-4 mr-2" />
           Nueva solicitud
         </Button>
@@ -508,11 +530,13 @@ export const RequestList = () => {
           <CardContent className="py-12 text-center">
             <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
             <p className="text-muted-foreground">
-              {requests.length === 0
+              {!currentOrganization
+                ? 'Selecciona una organización activa para ver y crear solicitudes'
+                : requests.length === 0
                 ? 'No tienes solicitudes enviadas'
                 : 'No hay solicitudes que coincidan con los filtros'}
             </p>
-            {requests.length === 0 && (
+            {currentOrganization && requests.length === 0 && (
               <Button onClick={() => { setEditingRequest(null); setShowForm(true); }} className="mt-4">
                 Crear primera solicitud
               </Button>
