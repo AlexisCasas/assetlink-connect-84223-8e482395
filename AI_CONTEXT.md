@@ -188,6 +188,16 @@ Inicio de la rama `productization/mvp`.
 - Storage de `attachment_urls`, `request_providers`, providers, cotizaciones y
   chats siguen pendientes de migracion tenant-aware.
 
+## Storage de anexos de detalle
+
+- El bucket privado `request-detail-attachments` usa RLS que hereda el tenant
+  desde `storage.objects.name` hacia `requests.organization_id`.
+- El path reservado para nuevas cargas es
+  `request-details/{request_id}/{safe-random-filename}`; el UUID de solicitud
+  se valida en base de datos, no en datos del frontend.
+- La subida y persistencia real de `attachment_urls`, junto con storage de otros
+  modulos, permanece pendiente.
+
 ## Solicitudes por tenant
 
 - `requests.organization_id` define el tenant de cada solicitud. Sus policies
