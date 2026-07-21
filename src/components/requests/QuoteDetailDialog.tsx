@@ -44,9 +44,9 @@ export const QuoteDetailDialog = ({ quote, request, onClose }: QuoteDetailDialog
               {isEmailed && (
                 <Badge variant="secondary"><Mail className="h-3 w-3 mr-1" />Enviada por correo</Badge>
               )}
-              <Badge className="bg-green-600 hover:bg-green-700">
+              <Badge className={quote.status === 'approved' ? 'bg-green-600 hover:bg-green-700' : quote.status === 'rejected' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-primary'}>
                 <CheckCircle className="h-3 w-3 mr-1" />
-                {quote.status === 'submitted' ? 'ENVIADA' : (quote.status || '').toUpperCase()}
+                {quote.status === 'approved' ? 'APROBADA' : quote.status === 'rejected' ? 'RECHAZADA' : quote.status === 'submitted' ? 'EN REVISION' : (quote.status || '').toUpperCase()}
               </Badge>
             </div>
           </div>

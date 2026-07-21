@@ -73,6 +73,15 @@ feature posterior.
   al tenant cliente leer las cotizaciones de sus solicitudes. Aprobaciones,
   chats, notificaciones y ordenes de trabajo siguen pendientes de migración.
 
+## Aprobacion de cotizaciones por tenant
+
+- El cliente dueno de la solicitud usa las RPC `approve_quote` y
+  `reject_quote`; ambas validan tenant y roles en base de datos.
+- El proveedor no puede aprobar ni rechazar. El cliente tampoco recibe una
+  policy `UPDATE` general sobre importes ni detalles de la cotizacion.
+- Permanecen pendientes notificaciones, chat, ordenes de trabajo y aprobacion
+  avanzada por limites.
+
 ## Proyecto
 One Facility / Assetlink Connect.
 
