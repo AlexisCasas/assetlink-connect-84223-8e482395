@@ -19,8 +19,9 @@ interface QuoteListDialogProps {
 
 interface Quote {
   id: string;
-  provider_id: string;
-  team_member_id: string;
+  provider_id: string | null;
+  provider_organization_id: string | null;
+  team_member_id: string | null;
   amount: number;
   description: string;
   status: string;
@@ -66,22 +67,20 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
       const reqMinQuotes = requestData?.min_quotes ?? 3;
       setMinQuotes(reqMinQuotes);
 
-      // Get total number of providers invited to this request
+      // request_provider_access is the tenant-aware replacement for the
+      // legacy request_providers table in this progress count.
       const { count: providerCount } = await supabase
-        .from('request_providers')
+        .from('request_provider_access')
         .select('*', { count: 'exact', head: true })
-        .eq('request_id', request.id);
+        .eq('request_id', request.id)
+        .eq('status', 'active');
 
       setTotalProviders(providerCount || 0);
 
       // Load all submitted quotes for this request
       const { data: quotesData, error } = await supabase
         .from('quotes')
-        .select(`
-          *,
-          team_members!inner(name, provider_id),
-          providers!inner(name)
-        `)
+        .select('*')
         .eq('request_id', request.id)
         .eq('status', 'submitted')
         .order('created_at', { ascending: false });
@@ -91,13 +90,13 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
       const transformedQuotes = (quotesData || []).map((q: any) => ({
         id: q.id,
         provider_id: q.provider_id,
+        provider_organization_id: q.provider_organization_id,
         team_member_id: q.team_member_id,
         amount: q.amount,
         description: q.description,
         status: q.status,
         created_at: q.created_at,
-        team_member_name: q.team_members?.name,
-        provider_name: q.providers?.name,
+        provider_name: 'Proveedor',
         client_observation: q.client_observation,
         approval_reason: q.approval_reason,
       }));
@@ -361,6 +360,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                         variant="outline"
                         size="sm"
                         onClick={() => setChatQuote({ id: quote.id, providerName: quote.provider_name || 'Proveedor' })}
+                        disabled
                         className="flex-1"
                       >
                         <MessageCircle className="h-4 w-4 mr-2" />
@@ -369,7 +369,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                       <Button
                         size="sm"
                         onClick={() => setApprovalQuote({ id: quote.id, providerName: quote.provider_name || 'Proveedor' })}
-                        disabled={quote.status === 'approved'}
+                        disabled
                         className="flex-1"
                       >
                         <ThumbsUp className="h-4 w-4 mr-2" />
@@ -426,6 +426,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                             variant="outline"
                             size="sm"
                             onClick={() => handleStartEditObservation(quote.id, quote.client_observation)}
+                            disabled
                             className="w-full"
                           >
                             <MessageSquare className="h-4 w-4 mr-2" />

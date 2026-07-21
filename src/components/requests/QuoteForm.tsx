@@ -32,9 +32,9 @@ interface QuoteFormProps {
 
 export const QuoteForm = ({ request, onClose, onSave, existingQuote }: QuoteFormProps) => {
   const { toast } = useToast();
-  const { user } = useAuth();
-  const providerId = user?.providerId || '';
-  const teamMemberId = user?.id || '';
+  const { user, currentOrganization } = useAuth();
+  const isProviderOrganization = currentOrganization?.organizationType === 'provider_company'
+    || currentOrganization?.organizationType === 'facility_manager';
 
   const initial = useMemo(() => {
     if (existingQuote?.quote_sections && Array.isArray(existingQuote.quote_sections) && existingQuote.quote_sections.length > 0) {
@@ -144,6 +144,11 @@ export const QuoteForm = ({ request, onClose, onSave, existingQuote }: QuoteForm
   const handleSave = async (mode: Mode) => {
     if (mode !== 'draft' && !validateForSubmit()) return;
 
+    if (!user || !currentOrganization || !isProviderOrganization) {
+      toast({ title: 'Organization required', description: 'Select a provider or facility manager organization before quoting.', variant: 'destructive' });
+      return;
+    }
+
     setSaving(true);
     try {
       const sectionsWithSubtotals = sections.map(s => ({ ...s, subtotal: calcSectionSubtotal(s) }));
@@ -152,8 +157,8 @@ export const QuoteForm = ({ request, onClose, onSave, existingQuote }: QuoteForm
       const status = mode === 'draft' ? 'draft' : 'submitted';
       const payload: any = {
         request_id: request.id,
-        provider_id: providerId,
-        team_member_id: teamMemberId || providerId,
+        provider_organization_id: currentOrganization.id,
+        created_by_user_id: user.id,
         amount: calc.totalAmount,
         description: summaryDesc,
         status,
@@ -176,14 +181,16 @@ export const QuoteForm = ({ request, onClose, onSave, existingQuote }: QuoteForm
         payload.emailed_at = new Date().toISOString();
       }
 
-      // Find existing quote for this request+provider to avoid duplicates
+      // The UI keeps one editable quote per request and provider organization.
       let quoteId = existingQuote?.id;
       if (!quoteId) {
         const { data: existing } = await supabase
           .from('quotes')
           .select('id')
           .eq('request_id', request.id)
-          .eq('provider_id', providerId)
+          .eq('provider_organization_id', currentOrganization.id)
+          .order('updated_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
         if (existing) quoteId = existing.id;
       }
@@ -198,8 +205,8 @@ export const QuoteForm = ({ request, onClose, onSave, existingQuote }: QuoteForm
         savedId = data.id;
       }
 
-      // Notification + request status update on submit / email
-      if (mode === 'submit' || mode === 'email') {
+      // Deferred: notifications and request workflow transitions are legacy modules.
+      if (false && (mode === 'submit' || mode === 'email')) {
         const providerName = user?.name || 'Proveedor';
         const reqNumber = (request as any).requestNumber || (request as any).request_number || '';
         await supabase.from('notifications').insert({
