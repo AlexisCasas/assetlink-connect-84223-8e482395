@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,31 +14,24 @@ import {
 import { Plus, Pencil, Power } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ClientBranch } from '@/types/request';
+import { useBranches } from '@/hooks/useBranches';
 
 export const BranchesList = () => {
-  const { user } = useAuth();
+  const { currentOrganization, currentMembership } = useAuth();
   const { toast } = useToast();
-  const [branches, setBranches] = useState<ClientBranch[]>([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', city: '', site: '', address: '' });
 
-  const load = async () => {
-    if (!user?.email) return;
-    setLoading(true);
-    const { data } = await supabase
-      .from('client_branches')
-      .select('*')
-      .eq('client_email', user.email)
-      .order('name');
-    setBranches((data || []).map((b: any) => ({
-      id: b.id, name: b.name, city: b.city, site: b.site, address: b.address, isActive: b.is_active,
-    })));
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, [user?.email]);
+  const {
+    branches,
+    loading,
+    error,
+    canManageBranches,
+    createBranch,
+    updateBranch,
+    setBranchActive,
+  } = useBranches(currentOrganization?.id, currentMembership?.role);
 
   const openNew = () => {
     setEditingId(null);
@@ -58,30 +50,24 @@ export const BranchesList = () => {
       toast({ title: 'Datos incompletos', description: 'Nombre, Ciudad y Sede son obligatorios', variant: 'destructive' });
       return;
     }
+    const branchData = {
+      name: form.name.trim(), city: form.city.trim(), site: form.site.trim(), address: form.address.trim() || undefined,
+    };
     if (editingId) {
-      const { error } = await supabase.from('client_branches').update({
-        name: form.name.trim(), city: form.city.trim(), site: form.site.trim(), address: form.address.trim() || null,
-      }).eq('id', editingId);
-      if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+      const { error } = await updateBranch(editingId, branchData);
+      if (error) { toast({ title: 'Error', description: error, variant: 'destructive' }); return; }
       toast({ title: 'Sucursal actualizada' });
     } else {
-      const { error } = await supabase.from('client_branches').insert({
-        client_email: user!.email,
-        name: form.name.trim(), city: form.city.trim(), site: form.site.trim(),
-        address: form.address.trim() || null, is_active: true,
-      });
-      if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+      const { error } = await createBranch(branchData);
+      if (error) { toast({ title: 'Error', description: error, variant: 'destructive' }); return; }
       toast({ title: 'Sucursal creada' });
     }
     setDialogOpen(false);
-    await load();
   };
 
   const toggleActive = async (b: ClientBranch) => {
-    const { error } = await supabase.from('client_branches')
-      .update({ is_active: !b.isActive })
-      .eq('id', b.id);
-    if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
+    const { error } = await setBranchActive(b.id, !b.isActive);
+    if (error) { toast({ title: 'Error', description: error, variant: 'destructive' }); return; }
     toast({ title: b.isActive ? 'Sucursal desactivada' : 'Sucursal activada' });
     await load();
   };
@@ -90,15 +76,21 @@ export const BranchesList = () => {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Sucursales</h2>
-        <Button onClick={openNew}>
-          <Plus className="w-4 h-4 mr-2" /> Nueva sucursal
-        </Button>
+        {canManageBranches && (
+          <Button onClick={openNew}>
+            <Plus className="w-4 h-4 mr-2" /> Nueva sucursal
+          </Button>
+        )}
       </div>
 
       <Card>
         <CardContent className="p-0">
-          {loading ? (
+          {!currentOrganization ? (
+            <p className="p-8 text-center text-muted-foreground">Selecciona una organización para administrar sucursales</p>
+          ) : loading ? (
             <p className="p-8 text-center text-muted-foreground">Cargando...</p>
+          ) : error ? (
+            <p className="p-8 text-center text-destructive">No se pudieron cargar las sucursales: {error}</p>
           ) : branches.length === 0 ? (
             <p className="p-8 text-center text-muted-foreground">Aún no tienes sucursales registradas</p>
           ) : (
@@ -110,7 +102,7 @@ export const BranchesList = () => {
                   <TableHead>Sede</TableHead>
                   <TableHead>Dirección</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  {canManageBranches && <TableHead className="text-right">Acciones</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -125,14 +117,16 @@ export const BranchesList = () => {
                         {b.isActive ? 'Activa' : 'Inactiva'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(b)} title="Editar">
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => toggleActive(b)} title={b.isActive ? 'Desactivar' : 'Activar'}>
-                        <Power className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
+                    {canManageBranches && (
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(b)} title="Editar">
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => toggleActive(b)} title={b.isActive ? 'Desactivar' : 'Activar'}>
+                          <Power className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

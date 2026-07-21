@@ -1,5 +1,14 @@
 # AI_CONTEXT.md
 
+## Sucursales por tenant
+
+- `client_branches` usa `organization_id` para su aislamiento tenant-aware;
+  `client_email` permanece sólo como campo legacy temporal.
+- BranchesList usa `currentOrganization` y owner/admin/manager pueden administrar;
+  los demás roles mantienen acceso de sólo lectura, respaldado por RLS.
+- RequestForm filtra sus sucursales activas por la organización actual, sin migrar
+  aún las solicitudes a tenant-aware.
+
 ## Selector de organización activa
 
 - Se creó `OrganizationSwitcher` y se integró debajo del encabezado de Sidebar.
