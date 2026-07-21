@@ -1508,6 +1508,89 @@ export type Database = {
         }
         Relationships: []
       }
+      work_orders: {
+        Row: {
+          cancelled_at: string | null
+          client_organization_id: string
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          id: string
+          provider_organization_id: string
+          quote_id: string
+          request_id: string
+          started_at: string | null
+          status: string
+          title: string | null
+          total_amount: number | null
+          updated_at: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          client_organization_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          provider_organization_id: string
+          quote_id: string
+          request_id: string
+          started_at?: string | null
+          status?: string
+          title?: string | null
+          total_amount?: number | null
+          updated_at?: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          client_organization_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          provider_organization_id?: string
+          quote_id?: string
+          request_id?: string
+          started_at?: string | null
+          status?: string
+          title?: string | null
+          total_amount?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_orders_client_organization_id_fkey"
+            columns: ["client_organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_provider_organization_id_fkey"
+            columns: ["provider_organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: true
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1543,6 +1626,32 @@ export type Database = {
           target_type: string
         }
         Returns: string
+      }
+      create_work_order_from_quote: {
+        Args: { target_quote_id: string }
+        Returns: {
+          cancelled_at: string | null
+          client_organization_id: string
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          id: string
+          provider_organization_id: string
+          quote_id: string
+          request_id: string
+          started_at: string | null
+          status: string
+          title: string | null
+          total_amount: number | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       get_user_organizations: {
         Args: never

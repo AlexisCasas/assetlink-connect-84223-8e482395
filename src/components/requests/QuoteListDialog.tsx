@@ -33,6 +33,7 @@ interface Quote {
   approved_at?: string | null;
   rejected_at?: string | null;
   rejection_reason?: string | null;
+  work_order_id?: string | null;
 }
 
 export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps) => {
@@ -46,6 +47,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
   const [chatQuote, setChatQuote] = useState<{ id: string; providerName: string } | null>(null);
   const [quotesClosed, setQuotesClosed] = useState(false);
   const [closingQuotes, setClosingQuotes] = useState(false);
+  const [creatingWorkOrderId, setCreatingWorkOrderId] = useState<string | null>(null);
   const { toast } = useToast();
   const { currentOrganization, currentMembership } = useAuth();
   const clientApprovalRoles = ['owner', 'admin', 'manager', 'requester'];
@@ -98,8 +100,24 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
 
       if (error) throw error;
 
-      const transformedQuotes = (quotesData || [])
+      const visibleQuotes = (quotesData || [])
         .filter((q: any) => ['submitted', 'approved', 'rejected'].includes(q.status))
+      const approvedQuoteIds = visibleQuotes
+        .filter((quote: any) => quote.status === 'approved')
+        .map((quote: any) => quote.id);
+      const { data: workOrdersData, error: workOrdersError } = approvedQuoteIds.length > 0
+        ? await supabase
+          .from('work_orders')
+          .select('id, quote_id')
+          .in('quote_id', approvedQuoteIds)
+        : { data: [], error: null };
+
+      if (workOrdersError) throw workOrdersError;
+
+      const workOrderByQuoteId = new Map(
+        (workOrdersData || []).map((workOrder) => [workOrder.quote_id, workOrder.id])
+      );
+      const transformedQuotes = visibleQuotes
         .map((q: any) => ({
           id: q.id,
           provider_id: q.provider_id,
@@ -115,6 +133,7 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
           approved_at: q.approved_at,
           rejected_at: q.rejected_at,
           rejection_reason: q.rejection_reason,
+          work_order_id: workOrderByQuoteId.get(q.id) || null,
         }));
 
       setQuotes(transformedQuotes);
@@ -228,6 +247,34 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
     } catch (error) {
       console.error('Error rejecting quote:', error);
       toast({ title: 'Error', description: 'No se pudo rechazar la cotizacion.', variant: 'destructive' });
+    }
+  };
+
+  const handleCreateWorkOrder = async (quoteId: string) => {
+    try {
+      setCreatingWorkOrderId(quoteId);
+      const { data, error } = await supabase.rpc('create_work_order_from_quote', {
+        target_quote_id: quoteId,
+      });
+
+      if (error) throw error;
+
+      setQuotes((current) => current.map((quote) => (
+        quote.id === quoteId ? { ...quote, work_order_id: data.id } : quote
+      )));
+      toast({
+        title: 'Orden creada',
+        description: 'La orden de trabajo fue creada para la cotizacion aprobada.',
+      });
+    } catch (error) {
+      console.error('Error creating work order:', error);
+      toast({
+        title: 'Error',
+        description: 'No se pudo crear la orden de trabajo.',
+        variant: 'destructive',
+      });
+    } finally {
+      setCreatingWorkOrderId(null);
     }
   };
 
@@ -379,6 +426,25 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
                     {quote.status === 'rejected' && quote.rejection_reason && (
                       <div className="pt-3 border-t text-sm text-muted-foreground">
                         Motivo de rechazo: {quote.rejection_reason}
+                      </div>
+                    )}
+
+                    {quote.status === 'approved' && (
+                      <div className="flex items-center justify-between gap-3 border-t pt-3">
+                        {quote.work_order_id ? (
+                          <Badge variant="secondary">Orden creada</Badge>
+                        ) : canDecideQuotes ? (
+                          <Button
+                            size="sm"
+                            onClick={() => void handleCreateWorkOrder(quote.id)}
+                            disabled={creatingWorkOrderId === quote.id}
+                          >
+                            <FileText className="mr-2 h-4 w-4" />
+                            {creatingWorkOrderId === quote.id ? 'Creando orden...' : 'Crear orden'}
+                          </Button>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Cotizacion aprobada</p>
+                        )}
                       </div>
                     )}
 
