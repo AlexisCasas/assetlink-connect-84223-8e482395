@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { QuoteForm } from './QuoteForm';
 import { Building2, MapPin, Calendar, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { seedDatabase } from '@/lib/seedData';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Request {
   id: string;
@@ -28,19 +27,22 @@ interface Request {
 }
 
 export const PublicRequestList = () => {
+  const { currentOrganization } = useAuth();
   const [publicRequests, setPublicRequests] = useState<Request[]>([]);
-  const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
-  const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    initializeAndLoadRequests();
-  }, []);
+  const canViewMarketplace = currentOrganization?.organizationType === 'provider_company'
+    || currentOrganization?.organizationType === 'facility_manager';
 
-  const initializeAndLoadRequests = async () => {
-    await seedDatabase();
+  useEffect(() => {
+    if (!canViewMarketplace) {
+      setPublicRequests([]);
+      setLoading(false);
+      return;
+    }
+
     loadPublicRequests();
-  };
+  }, [currentOrganization?.id, canViewMarketplace]);
 
   const loadPublicRequests = async () => {
     try {
@@ -85,33 +87,6 @@ export const PublicRequestList = () => {
     }
   };
 
-  const handleQuote = (request: Request) => {
-    setSelectedRequest(request);
-    setShowQuoteForm(true);
-  };
-
-  const handleSaveQuote = async (quote: any) => {
-    // QuoteForm now persists the quote internally with all new fields.
-    setShowQuoteForm(false);
-    setSelectedRequest(null);
-    loadPublicRequests();
-  };
-
-  // Convert database request to the format QuoteForm expects
-  const convertToLegacyRequest = (dbRequest: Request) => ({
-    ...dbRequest,
-    requestNumber: dbRequest.request_number,
-    serviceType: dbRequest.service_type,
-    selectedProviders: [],
-    createdAt: dbRequest.created_at,
-    createdBy: dbRequest.created_by,
-    clientName: dbRequest.client_name,
-    clientBranch: dbRequest.client_branch,
-    isPublic: dbRequest.is_public,
-    notifiedAt: dbRequest.notified_at,
-    startTime: dbRequest.start_time
-  });
-
   if (loading) {
     return (
       <div className="p-6 space-y-6">
@@ -137,7 +112,11 @@ export const PublicRequestList = () => {
         </p>
       </div>
 
-      {publicRequests.length === 0 ? (
+      {!canViewMarketplace ? (
+        <Card className="p-8 text-center">
+          <p className="text-muted-foreground">Selecciona una organización proveedora para ver solicitudes disponibles</p>
+        </Card>
+      ) : publicRequests.length === 0 ? (
         <Card className="p-8 text-center">
           <p className="text-muted-foreground">No hay solicitudes públicas disponibles</p>
         </Card>
@@ -203,7 +182,7 @@ export const PublicRequestList = () => {
               </div>
 
               <div className="flex gap-2">
-                <Button onClick={() => handleQuote(request)}>
+                <Button variant="outline" disabled>
                   Enviar Cotización
                 </Button>
               </div>
@@ -212,16 +191,6 @@ export const PublicRequestList = () => {
         </div>
       )}
 
-      {showQuoteForm && selectedRequest && (
-        <QuoteForm
-          request={convertToLegacyRequest(selectedRequest) as any}
-          onClose={() => {
-            setShowQuoteForm(false);
-            setSelectedRequest(null);
-          }}
-          onSave={handleSaveQuote}
-        />
-      )}
     </div>
   );
 };

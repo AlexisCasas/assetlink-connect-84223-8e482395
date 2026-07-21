@@ -198,6 +198,18 @@ Inicio de la rama `productization/mvp`.
 - La subida y persistencia real de `attachment_urls`, junto con storage de otros
   modulos, permanece pendiente.
 
+## Visibilidad de solicitudes para proveedores
+
+- `request_provider_access` formaliza invitaciones y accesos activos por
+  organizacion proveedora o facility manager; no usa `request_providers` legacy
+  como fuente de autorizacion.
+- Se reutiliza `requests.is_public` para marketplace. Las solicitudes draft no
+  son visibles para proveedores, quienes solo pueden leer solicitudes, detalles
+  y anexos autorizados por RLS.
+- `PublicRequestList` y `ProviderRequestList` requieren una organizacion activa
+  de tipo proveedor o facility manager. La migracion de quotes tenant-aware
+  sigue pendiente.
+
 ## Solicitudes por tenant
 
 - `requests.organization_id` define el tenant de cada solicitud. Sus policies
