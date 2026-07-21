@@ -1,5 +1,16 @@
 # AI_CONTEXT.md
 
+## Selector de organización activa
+
+- Se creó `OrganizationSwitcher` y se integró debajo del encabezado de Sidebar.
+- Muestra organización actual, tipo y rol; permite cambiar entre organizaciones
+  reales del usuario cuando tiene más de una membresía.
+- La preferencia visual se guarda en `onefacility.currentOrganizationId` y se
+  valida siempre contra las organizaciones cargadas desde Supabase. No es fuente
+  de permisos, tenants ni autorización.
+- Hasta que existan organizaciones y memberships reales, el selector muestra un
+  estado discreto de “Sin organización asignada”.
+
 ## Backend administrativo de organizaciones
 
 Las operaciones administrativas se realizan sólo mediante Edge Functions con JWT

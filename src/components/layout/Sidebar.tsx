@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
+import { OrganizationSwitcher } from '@/components/organization/OrganizationSwitcher';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   LayoutDashboard,
@@ -110,6 +111,10 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
             <ChevronLeft className="h-4 w-4" />
           )}
         </Button>
+      </div>
+
+      <div className="py-3">
+        <OrganizationSwitcher collapsed={collapsed} />
       </div>
 
       {/* Navigation */}
