@@ -112,6 +112,12 @@ feature posterior.
   pendientes la vista completa de ordenes, estados operativos, evidencias,
   cierre y chat.
 
+## Listado tenant-aware de órdenes de trabajo
+
+- `useWorkOrders` filtra por la organización activa: cliente por `client_organization_id`, proveedor/facility manager por `provider_organization_id` y plataforma mediante el RLS existente.
+- El Sidebar muestra el módulo para organizaciones cliente, proveedor, facility manager y plataforma; sin organización activa, el módulo conserva un estado vacío seguro.
+- Este flujo es solo de lectura: lista, detalle y recarga. Cambios de estado, asignaciones y ejecución operativa quedan fuera de alcance.
+
 ## Hardening de grants authenticated
 
 - RLS define que filas puede usar un usuario, pero PostgREST tambien requiere
