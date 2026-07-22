@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import { supabaseConfigurationError } from "@/lib/env";
 
 const queryClient = new QueryClient();
 
@@ -16,7 +17,21 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
-const App = () => (
+const EnvironmentConfigurationError = () => (
+  <main className="flex min-h-screen items-center justify-center bg-background p-6">
+    <section className="w-full max-w-lg rounded-lg border bg-card p-6 text-center shadow-sm">
+      <h1 className="text-xl font-semibold">Configuración pendiente</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {supabaseConfigurationError}
+      </p>
+      <p className="mt-4 text-sm text-muted-foreground">
+        Configura las variables públicas de Supabase y vuelve a desplegar. No agregues secretos de backend al frontend.
+      </p>
+    </section>
+  </main>
+);
+
+const App = () => supabaseConfigurationError ? <EnvironmentConfigurationError /> : (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TooltipProvider>

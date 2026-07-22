@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
-export const isDemoSeedEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_SEED !== 'false';
+export const isDemoSeedEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_SEED === 'true';
 
 // Sample providers data (without manual IDs - let DB generate UUIDs)
 const PROVIDERS_DATA = [
