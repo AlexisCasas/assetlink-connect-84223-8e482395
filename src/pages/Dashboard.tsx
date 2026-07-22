@@ -14,20 +14,21 @@ import { NotificationList } from '@/components/notifications/NotificationList';
 import { ContactList } from '@/components/contact/ContactList';
 import { ApprovedProvidersList } from '@/components/providers/ApprovedProvidersList';
 import { BranchesList } from '@/components/branches/BranchesList';
+import { WorkOrdersList } from '@/components/work-orders/WorkOrdersList';
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders'>('dashboard');
   const [selectedAsset, setSelectedAsset] = useState<AssetNode | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
-    if (['assets','requests','drafts','public-requests','profile','notifications','approved-providers','branches','contact'].includes(hash)) {
+    if (['assets','requests','drafts','public-requests','profile','notifications','approved-providers','branches','work-orders','contact'].includes(hash)) {
       setCurrentView(hash as any);
     }
   }, []);
 
-  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches') => {
+  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders') => {
     setCurrentView(view);
     window.location.hash = view;
   };
@@ -77,6 +78,8 @@ const Dashboard = () => {
         return <ApprovedProvidersList />;
       case 'branches':
         return <BranchesList />;
+      case 'work-orders':
+        return <WorkOrdersList />;
       default:
         return <StatsCards />;
     }
