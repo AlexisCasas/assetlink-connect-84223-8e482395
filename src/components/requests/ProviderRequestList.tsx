@@ -163,21 +163,11 @@ export const ProviderRequestList = () => {
       setRequests(visibleRequests);
       setQuotes({});
 
-      // Fetch assignments for these requests
+      // Assignments remain a legacy module. Keep the provider list tenant-aware
+      // and show its existing empty-state placeholder instead of querying it.
+      setAssignments({});
       if (visibleRequests.length > 0) {
         const requestIds = visibleRequests.map(r => r.id);
-        const { data: assignmentsData } = await supabase
-          .from('assignments')
-          .select('request_id, team_member_name')
-          .in('request_id', requestIds);
-
-        if (assignmentsData) {
-          const assignmentsMap: Record<string, Assignment> = {};
-          assignmentsData.forEach(a => {
-            assignmentsMap[a.request_id] = { team_member_name: a.team_member_name };
-          });
-          setAssignments(assignmentsMap);
-        }
 
         // A provider only loads its active organization's quotes. provider_id
         // remains legacy data and is never used to authorize this view.

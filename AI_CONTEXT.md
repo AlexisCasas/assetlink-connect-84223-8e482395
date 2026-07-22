@@ -136,6 +136,17 @@ feature posterior.
 - Un proveedor autorizado puede crear una cotización y recibir su `id`; no se
   abrieron permisos legacy para providers, profiles, user_roles ni chats.
 
+## Limpieza de ruido legacy en UI
+
+- `RequestForm` ya no consulta `providers`; la selección directa de proveedores
+  queda pendiente de migración tenant-aware y las solicitudes continúan
+  publicándose como públicas.
+- La ruta legacy de asignaciones queda aislada con el estado “Asignación
+  pendiente”; no consulta `assignments` ni amplía permisos.
+- Chat y selector directo de proveedores siguen pendientes de migración
+  tenant-aware. El flujo público de solicitud, cotización, aprobación y orden
+  de trabajo permanece operativo.
+
 ## Sesion productiva sin auth legacy
 
 - `AuthContext` construye la identidad basica desde Supabase Auth (email y

@@ -23,6 +23,7 @@ import { es } from 'date-fns/locale';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -593,9 +594,9 @@ export const RequestList = () => {
               {selectedRequest?.title || 'Solicitud sin título'}
             </DialogTitle>
             {selectedRequest && (
-              <p className="text-sm text-muted-foreground mt-1">
+              <DialogDescription className="text-sm text-muted-foreground mt-1">
                 {selectedRequest.requestNumber}
-              </p>
+              </DialogDescription>
             )}
           </DialogHeader>
 
