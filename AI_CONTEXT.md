@@ -122,6 +122,18 @@ feature posterior.
 - `providers`, `profiles`, `user_roles` y chats permanecen legacy o pendientes;
   esta migracion no amplia sus permisos.
 
+## Sesion productiva sin auth legacy
+
+- `AuthContext` construye la identidad basica desde Supabase Auth (email y
+  metadata `name`) y ya no consulta automaticamente `profiles` ni `user_roles`.
+- Los permisos y roles productivos provienen de `organizations` y
+  `organization_members`; el `UserRole` legacy solo se deriva temporalmente de
+  la organizacion activa para rutas visuales antiguas.
+- El footer del Sidebar usa organizacion y membership actuales, evitando mostrar
+  un rol legacy que contradiga el selector de organizacion.
+- `DEMO_ACCOUNTS` solo participa cuando `VITE_ENABLE_DEMO_SEED=true`. Profiles,
+  user_roles, providers y chats siguen legacy o pendientes de migracion.
+
 ## Proyecto
 One Facility / Assetlink Connect.
 

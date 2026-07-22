@@ -30,11 +30,33 @@ interface SidebarProps {
   userRole?: UserRole;
 }
 
+const organizationTypeLabels = {
+  client_company: 'Cliente',
+  provider_company: 'Proveedor',
+  facility_manager: 'Facility Manager',
+  subcontractor_company: 'Subcontratista',
+  platform_admin: 'Administrador',
+} as const;
+
+const membershipRoleLabels = {
+  owner: 'Propietario',
+  admin: 'Administrador',
+  manager: 'Gestor',
+  requester: 'Solicitante',
+  quote_manager: 'Cotizador',
+  technician: 'Tecnico',
+  operator: 'Operador',
+  viewer: 'Lector',
+} as const;
+
 export function Sidebar({ className, onViewChange, currentView = 'dashboard', userRole }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [unreadContactCount, setUnreadContactCount] = useState(0);
-  const { user, logout } = useAuth();
+  const { user, logout, currentOrganization, currentMembership } = useAuth();
   const { unreadCount } = useOrganizationNotifications(1);
+  const visualRole = currentOrganization
+    ? `${organizationTypeLabels[currentOrganization.organizationType]}${currentMembership ? ` · ${membershipRoleLabels[currentMembership.role]}` : ''}`
+    : 'Sin organizacion asignada';
 
   useEffect(() => {
     if (user?.email) {
@@ -393,7 +415,7 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-foreground">{user?.name || user?.email}</p>
-              <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+              <p className="text-xs text-muted-foreground">{visualRole}</p>
             </div>
           )}
         </div>
