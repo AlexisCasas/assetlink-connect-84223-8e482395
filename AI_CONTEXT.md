@@ -134,6 +134,17 @@ feature posterior.
 - `DEMO_ACCOUNTS` solo participa cuando `VITE_ENABLE_DEMO_SEED=true`. Profiles,
   user_roles, providers y chats siguen legacy o pendientes de migracion.
 
+## Aislamiento temporal de chat legacy
+
+- Sidebar ya no consulta automaticamente `request_chat_participants` ni
+  `chat_messages` para contar mensajes al iniciar sesion o cargar Dashboard.
+- La entrada de chat queda deshabilitada y la ruta legacy de contacto muestra un
+  placeholder: "Chat pendiente de migracion tenant-aware".
+- El acceso al foro desde `RequestList` queda aislado con un mensaje informativo
+  y ya no monta el dialog que consulta `chat_messages`.
+- No se abrieron grants ni policies legacy, y no se crearon tablas nuevas. El
+  chat tenant-aware, participantes, realtime y storage quedan pendientes.
+
 ## Proyecto
 One Facility / Assetlink Connect.
 
