@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -6,7 +6,6 @@ import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { OrganizationSwitcher } from '@/components/organization/OrganizationSwitcher';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { useOrganizationNotifications } from '@/hooks/useOrganizationNotifications';
-import { supabase } from '@/integrations/supabase/client';
 import { 
   LayoutDashboard,
   Package,
@@ -51,50 +50,11 @@ const membershipRoleLabels = {
 
 export function Sidebar({ className, onViewChange, currentView = 'dashboard', userRole }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [unreadContactCount, setUnreadContactCount] = useState(0);
   const { user, logout, currentOrganization, currentMembership } = useAuth();
   const { unreadCount } = useOrganizationNotifications(1);
   const visualRole = currentOrganization
     ? `${organizationTypeLabels[currentOrganization.organizationType]}${currentMembership ? ` · ${membershipRoleLabels[currentMembership.role]}` : ''}`
     : 'Sin organizacion asignada';
-
-  useEffect(() => {
-    if (user?.email) {
-      loadUnreadContactCount();
-    } else {
-      setUnreadContactCount(0);
-    }
-  }, [user]);
-
-  const loadUnreadContactCount = async () => {
-    try {
-      const { data: participations } = await supabase
-        .from('request_chat_participants')
-        .select('request_id, last_read_at')
-        .eq('user_email', user?.email);
-
-      if (!participations || participations.length === 0) {
-        setUnreadContactCount(0);
-        return;
-      }
-
-      let totalUnread = 0;
-      for (const chat of participations) {
-        const { count } = await supabase
-          .from('chat_messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('request_id', chat.request_id)
-          .neq('sender_email', user?.email)
-          .gt('created_at', chat.last_read_at || '1970-01-01');
-        
-        totalUnread += count || 0;
-      }
-      
-      setUnreadContactCount(totalUnread);
-    } catch (error) {
-      console.error('Error loading unread contact count:', error);
-    }
-  };
 
   return (
     <div className={cn(
@@ -376,12 +336,13 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
         )}
         
         <Button
-          variant={currentView === 'contact' ? "default" : "ghost"}
+          variant="ghost"
           className={cn(
             "w-full justify-start",
             collapsed && "justify-center px-2"
           )}
-          onClick={() => onViewChange?.('contact')}
+          disabled
+          title="Chat pendiente de migracion tenant-aware"
         >
           <MessageSquare className={cn(
             "h-4 w-4",
@@ -389,16 +350,8 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
           )} />
           {!collapsed && (
             <>
-              <span>Contacto</span>
-              {unreadContactCount > 0 && (
-                <Badge variant="destructive" className="ml-auto">
-                  {unreadContactCount}
-                </Badge>
-              )}
+              <span>Chat pendiente</span>
             </>
-          )}
-          {collapsed && unreadContactCount > 0 && (
-            <Badge variant="destructive" className="absolute top-1 right-1 h-2 w-2 p-0" />
           )}
         </Button>
       </nav>

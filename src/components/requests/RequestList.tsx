@@ -5,7 +5,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { OrderForm } from './OrderForm';
 import { QuoteListDialog } from './QuoteListDialog';
-import { ForumQADialog } from './ForumQADialog';
 import { Request } from '@/types/request';
 import { Plus, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -60,7 +59,6 @@ export const RequestList = () => {
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [showQuotesDialog, setShowQuotesDialog] = useState(false);
-  const [showChatDialog, setShowChatDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [editingRequest, setEditingRequest] = useState<Request | null>(null);
@@ -559,7 +557,10 @@ export const RequestList = () => {
           onTogglePreview={togglePreview}
           onView={handleViewRequest}
           onEdit={handleEditRequest}
-          onOpenChat={(r) => { setSelectedRequest(r); setShowChatDialog(true); }}
+          onOpenChat={() => toast({
+            title: 'Chat pendiente de migracion tenant-aware',
+            description: 'El foro de mensajes no esta disponible todavia.',
+          })}
           onOpenQuotes={(r) => { setSelectedRequest(r); setShowQuotesDialog(true); }}
           onDelete={confirmDeleteRequest}
           onDragStart={handleDragStart}
@@ -582,15 +583,6 @@ export const RequestList = () => {
           open={showQuotesDialog}
           onClose={() => { setShowQuotesDialog(false); setSelectedRequest(null); }}
           request={selectedRequest}
-        />
-      )}
-
-      {showChatDialog && selectedRequest && (
-        <ForumQADialog
-          open={showChatDialog}
-          onClose={() => { setShowChatDialog(false); setSelectedRequest(null); }}
-          requestId={selectedRequest.id}
-          requestNumber={selectedRequest.requestNumber}
         />
       )}
 
