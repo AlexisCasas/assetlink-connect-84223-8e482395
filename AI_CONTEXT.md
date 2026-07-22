@@ -128,6 +128,14 @@ feature posterior.
 - `providers`, `profiles`, `user_roles` y chats permanecen legacy o pendientes;
   esta migracion no amplia sus permisos.
 
+## Corrección RLS de RETURNING en cotizaciones
+
+- La policy SELECT de `quotes` ahora evalúa la fila y su solicitud asociada sin
+  llamar a `can_user_read_quote(quotes.id)`, evitando una autolectura de
+  `quotes` durante `INSERT ... RETURNING` de PostgREST.
+- Un proveedor autorizado puede crear una cotización y recibir su `id`; no se
+  abrieron permisos legacy para providers, profiles, user_roles ni chats.
+
 ## Sesion productiva sin auth legacy
 
 - `AuthContext` construye la identidad basica desde Supabase Auth (email y
