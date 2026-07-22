@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface RequestFormProps {
   onClose: () => void;
@@ -113,8 +113,10 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [currentDetail, setCurrentDetail] = useState<RequestDetail | null>(null);
   
-  // Proveedores
-  const [selectedProviders, setSelectedProviders] = useState<string[]>(editingRequest?.selectedProviders || []);
+  // Direct provider selection remains legacy. Public requests are the
+  // tenant-aware default until the selector has been migrated.
+  const selectedProviders: string[] = [];
+  const setSelectedProviders = (_providerIds: string[]) => undefined;
   const [providers, setProviders] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCertified, setFilterCertified] = useState<'all' | 'certified' | 'non-certified'>('all');
@@ -125,7 +127,6 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [clientUsers, setClientUsers] = useState<string[]>([]);
 
   useEffect(() => {
-    fetchProviders();
     if (currentOrganizationId) {
       fetchBranches(currentOrganizationId);
     } else {
@@ -168,7 +169,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   };
 
   const fetchProviders = async () => {
-    const { data } = await supabase.from('providers').select('*').order('name');
+    const data: any[] = [];
     setProviders(data || []);
     
     const specialties = new Set<string>();
@@ -630,6 +631,9 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                 <DialogTitle>
                   {editingDetailId ? 'Editar Detalle' : 'Agregar Nuevo Detalle'}
                 </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Completa los datos del detalle de la solicitud.
+                </DialogDescription>
               </DialogHeader>
               
               {currentDetail && (
@@ -841,6 +845,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
 
           {/* PROVEEDORES */}
           <div className="space-y-4">
+            <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
+              Selección directa de proveedores pendiente de migración tenant-aware. Si no seleccionas proveedores, la solicitud se publicará como pública.
+            </div>
+
+            {false && (
+              <>
             <div className="flex items-center justify-between">
               <div>
                 <Label>Seleccionar proveedores (máximo 5, opcional)</Label>
@@ -966,6 +976,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                 ))
               )}
             </div>
+              </>
+            )}
           </div>
 
           {/* BOTONES */}

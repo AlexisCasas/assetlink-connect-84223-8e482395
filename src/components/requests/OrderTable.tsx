@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -222,7 +223,7 @@ export const OrderTable = ({
           </TableHeader>
           <TableBody>
             {requests.map((request) => (
-              <>
+              <Fragment key={request.id}>
                 <TableRow key={request.id}>
                   <TableCell className="w-10 px-2">
                     <Button
@@ -256,8 +257,8 @@ export const OrderTable = ({
                           </TableHeader>
                           <TableBody>
                             {expandedDetails.length > 0 ? (
-                              expandedDetails.map((detail, idx) => (
-                                <TableRow key={idx}>
+                              expandedDetails.map((detail) => (
+                                <TableRow key={detail.id ?? `${request.id}-${detail.equipment ?? ''}-${detail.sub_equipment ?? ''}-${detail.area ?? ''}-${detail.activities ?? ''}`}>
                                   <TableCell>{detail.equipment || '-'}</TableCell>
                                   <TableCell>{detail.sub_equipment || '-'}</TableCell>
                                   <TableCell>{detail.area || '-'}</TableCell>
@@ -279,7 +280,7 @@ export const OrderTable = ({
                     </TableCell>
                   </TableRow>
                 )}
-              </>
+              </Fragment>
             ))}
           </TableBody>
         </Table>

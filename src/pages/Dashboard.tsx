@@ -6,7 +6,6 @@ import { AssetDetail } from '@/components/assets/AssetDetail';
 import { RequestList } from '@/components/requests/RequestList';
 import { DraftList } from '@/components/requests/DraftList';
 import { ProviderRequestList } from '@/components/requests/ProviderRequestList';
-import { TeamMemberView } from '@/components/requests/TeamMemberView';
 import { StatsCards } from '@/components/dashboard/StatsCards';
 import { ProviderProfile } from '@/components/requests/ProviderProfile';
 import { PublicRequestList } from '@/components/requests/PublicRequestList';
@@ -51,7 +50,7 @@ const Dashboard = () => {
           return <RequestList />;
         }
         if (user?.role === 'team_member') {
-          return <TeamMemberView />;
+          return <LegacyAssignmentsPlaceholder />;
         }
         return <ProviderRequestList />;
       case 'drafts':
@@ -94,5 +93,16 @@ const Dashboard = () => {
     </div>
   );
 };
+
+const LegacyAssignmentsPlaceholder = () => (
+  <div className="p-6">
+    <div className="rounded-lg border bg-card p-8 text-center">
+      <h2 className="text-xl font-semibold mb-2">Asignación pendiente</h2>
+      <p className="text-muted-foreground">
+        El flujo de asignaciones está pendiente de migración tenant-aware.
+      </p>
+    </div>
+  </div>
+);
 
 export default Dashboard;
