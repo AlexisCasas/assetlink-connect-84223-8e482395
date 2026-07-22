@@ -147,6 +147,15 @@ feature posterior.
   tenant-aware. El flujo público de solicitud, cotización, aprobación y orden
   de trabajo permanece operativo.
 
+## Preparación para staging
+
+- El flujo MVP tenant-aware fue validado localmente: solicitud pública,
+  cotización, aprobación/rechazo y creación/consulta de orden de trabajo.
+- Se inicia la preparación de staging con Vercel para frontend y Supabase Cloud
+  para Auth, base de datos y Storage; R2 permanece opcional y pendiente.
+- Pendientes: chat tenant-aware, selector directo de proveedores, asignaciones
+  operativas, evidencias/cierre y realtime.
+
 ## Sesion productiva sin auth legacy
 
 - `AuthContext` construye la identidad basica desde Supabase Auth (email y
