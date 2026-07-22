@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable';
-import type { Session } from '@supabase/supabase-js';
 import type { Organization, OrganizationMember, OrganizationMemberRole } from '@/types/organization';
 
 export type UserRole = 'cliente' | 'proveedor' | 'team_member';
@@ -42,40 +41,39 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const DEMO_PASSWORD = 'demo-password-2024';
 const CURRENT_ORGANIZATION_STORAGE_KEY = 'onefacility.currentOrganizationId';
 
-const DEMO_ACCOUNTS: Record<string, { role: UserRole; name: string; providerId?: string }> = {
+const DEMO_ACCOUNTS: Record<string, { role: UserRole; name: string }> = {
   'cliente@test.com': { role: 'cliente', name: 'Cliente Demo' },
-  // Note: providerId intentionally omitted — resolved lazily by email (UUID) in ProviderProfile.
   'proveedor@test.com': { role: 'proveedor', name: 'Proveedor Demo' },
   'equipo@test.com': { role: 'team_member', name: 'Juan Pérez' },
 };
 
-async function loadProfile(session: Session): Promise<User | null> {
-  const uid = session.user.id;
+const isDemoAuthEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_SEED === 'true';
+
+const toLegacyUserRole = (organization: Organization | null): UserRole => {
+  switch (organization?.organizationType) {
+    case 'provider_company':
+    case 'facility_manager':
+    case 'subcontractor_company':
+      return 'proveedor';
+    case 'platform_admin':
+      return 'team_member';
+    default:
+      return 'cliente';
+  }
+};
+
+function loadProfile(session: { user: { id: string; email?: string; user_metadata?: { name?: unknown } } }): User {
   const email = session.user.email ?? '';
-
-  // Fetch profile + role
-  const [{ data: profile }, { data: roles }] = await Promise.all([
-    supabase.from('profiles').select('name, provider_id').eq('id', uid).maybeSingle(),
-    supabase.from('user_roles').select('role').eq('user_id', uid),
-  ]);
-
-  let role: UserRole = (roles?.[0]?.role as UserRole) ?? 'cliente';
-
-  // Demo overrides (so the seeded mockup works regardless)
-  const demo = DEMO_ACCOUNTS[email];
-  if (demo) role = demo.role;
-
-  // Only accept UUID provider ids; ignore legacy mock strings like "provider-1".
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const rawPid = profile?.provider_id ?? demo?.providerId;
-  const providerId = typeof rawPid === 'string' && UUID_RE.test(rawPid) ? rawPid : undefined;
+  const metadataName = session.user.user_metadata?.name;
 
   return {
-    id: uid,
+    id: session.user.id,
     email,
-    role,
-    name: profile?.name ?? session.user.user_metadata?.name ?? email.split('@')[0],
-    providerId,
+    // Compatibility value only. Product permissions are organization based.
+    role: 'cliente',
+    name: typeof metadataName === 'string' && metadataName.trim()
+      ? metadataName
+      : email.split('@')[0],
   };
 }
 
@@ -177,23 +175,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const setAuthState = (nextUser: User | null, organizationData: { organizations: Organization[]; memberships: OrganizationMember[] }) => {
-    setUser(nextUser);
-    setProfile(nextUser ? {
-      id: nextUser.id,
-      email: nextUser.email,
-      name: nextUser.name ?? null,
-      providerId: nextUser.providerId ?? null,
+    const nextOrganization = getPreferredOrganization(organizationData.organizations, currentOrganization?.id);
+    const organizationUser = nextUser
+      ? { ...nextUser, role: toLegacyUserRole(nextOrganization) }
+      : null;
+
+    setUser(organizationUser);
+    setProfile(organizationUser ? {
+      id: organizationUser.id,
+      email: organizationUser.email,
+      name: organizationUser.name ?? null,
+      providerId: null,
     } : null);
     setOrganizations(organizationData.organizations);
     setMemberships(organizationData.memberships);
-    setCurrentOrganizationState((current) => {
-      const nextOrganization = getPreferredOrganization(organizationData.organizations, current?.id);
-      if (typeof window !== 'undefined') {
-        if (nextOrganization) window.localStorage.setItem(CURRENT_ORGANIZATION_STORAGE_KEY, nextOrganization.id);
-        else window.localStorage.removeItem(CURRENT_ORGANIZATION_STORAGE_KEY);
-      }
-      return nextOrganization;
-    });
+    setCurrentOrganizationState(nextOrganization);
+    if (typeof window !== 'undefined') {
+      if (nextOrganization) window.localStorage.setItem(CURRENT_ORGANIZATION_STORAGE_KEY, nextOrganization.id);
+      else window.localStorage.removeItem(CURRENT_ORGANIZATION_STORAGE_KEY);
+    }
   };
 
   useEffect(() => {
@@ -209,15 +209,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
       // Defer Supabase calls to avoid deadlock inside the callback
       setTimeout(() => {
-        Promise.all([loadProfile(session), loadOrganizations(session.user.id)])
-          .then(([nextUser, organizationData]) => setAuthState(nextUser, organizationData));
+        loadOrganizations(session.user.id)
+          .then((organizationData) => setAuthState(loadProfile(session), organizationData));
       }, 0);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        Promise.all([loadProfile(session), loadOrganizations(session.user.id)]).then(([u, organizationData]) => {
-          setAuthState(u, organizationData);
+        loadOrganizations(session.user.id).then((organizationData) => {
+          setAuthState(loadProfile(session), organizationData);
           setLoading(false);
         });
       } else {
@@ -241,7 +241,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const login = async (email: string, password: string, role: UserRole): Promise<boolean> => {
-    const demo = DEMO_ACCOUNTS[email];
+    const demo = isDemoAuthEnabled ? DEMO_ACCOUNTS[email] : undefined;
     const pwd = demo ? DEMO_PASSWORD : password;
     const targetRole = demo?.role ?? role;
     const targetName = demo?.name ?? email.split('@')[0];
@@ -281,12 +281,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const setCurrentOrganization = (organizationId: string | null) => {
     if (!organizationId) {
       setCurrentOrganizationState(null);
+      setUser((current) => current ? { ...current, role: 'cliente' } : null);
       if (typeof window !== 'undefined') window.localStorage.removeItem(CURRENT_ORGANIZATION_STORAGE_KEY);
       return;
     }
     const organization = organizations.find((candidate) => candidate.id === organizationId);
     if (organization) {
       setCurrentOrganizationState(organization);
+      setUser((current) => current ? { ...current, role: toLegacyUserRole(organization) } : null);
       if (typeof window !== 'undefined') window.localStorage.setItem(CURRENT_ORGANIZATION_STORAGE_KEY, organization.id);
     }
   };
