@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.admin-update-organization-member]
 verify_jwt = true
+
+[functions.admin-archive-organization]
+verify_jwt = true
