@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 
 const Login = () => {
+  const isDemoUiEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_SEED === 'true';
   const [isLogin, setIsLogin] = useState(true);
   const [selectedRole, setSelectedRole] = useState<UserRole>('cliente');
   const [email, setEmail] = useState('');
@@ -27,7 +28,7 @@ const Login = () => {
         const ok = await login(email, password, selectedRole);
         if (ok) {
           toast({ title: 'Inicio de sesión exitoso' });
-          navigate('/');
+          navigate('/', { replace: true });
         } else {
           toast({ title: 'Error', description: 'Credenciales incorrectas', variant: 'destructive' });
         }
@@ -40,7 +41,7 @@ const Login = () => {
         if (ok) {
           toast({ title: 'Registro exitoso', description: 'Iniciando sesión...' });
           await login(email, password, selectedRole);
-          navigate('/');
+          navigate('/', { replace: true });
         } else {
           toast({ title: 'Error', description: 'No se pudo registrar (¿usuario existente?)', variant: 'destructive' });
         }
@@ -56,7 +57,7 @@ const Login = () => {
     setSubmitting(false);
     if (ok) {
       toast({ title: 'Acceso demo' });
-      navigate('/');
+      navigate('/', { replace: true });
     } else {
       toast({ title: 'Error', description: 'No se pudo iniciar sesión demo', variant: 'destructive' });
     }
@@ -116,7 +117,7 @@ const Login = () => {
             </button>
           </div>
 
-          {isLogin && (
+          {isLogin && isDemoUiEnabled && (
             <div className="mt-6 p-4 bg-muted rounded-lg space-y-2">
               <h3 className="text-sm font-semibold text-center">Cuentas Demo (un clic)</h3>
               <Button variant="secondary" size="sm" className="w-full" disabled={submitting} onClick={() => handleDemo('cliente@test.com', 'cliente')}>
