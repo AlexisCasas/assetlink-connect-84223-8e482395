@@ -24,7 +24,7 @@ export interface Organization {
   legalName: string | null;
   organizationType: OrganizationType;
   taxId: string | null;
-  status: 'active' | 'suspended';
+  status: 'active' | 'suspended' | 'archived';
   settings: Record<string, unknown>;
   createdBy: string | null;
   createdAt: string;
