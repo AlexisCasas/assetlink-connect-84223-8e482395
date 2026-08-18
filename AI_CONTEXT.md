@@ -160,6 +160,10 @@ feature posterior.
 
 - Existe un Admin Console para platform admins owner/admin y las Edge Functions `admin-list-organization-members`, `admin-create-user-and-add-member` y `admin-update-organization-member`.
 - El alta productiva de usuarios se realiza en backend/Edge Functions; no usa seedData ni tablas legacy.
+- `admin-create-user-and-add-member` admite una contraseña temporal opcional de
+  al menos 8 caracteres para staging/demo. Se usa sólo dentro de Supabase Auth
+  Admin, nunca se devuelve ni se registra; en producción se recomienda
+  invitación o recuperación de contraseña por email.
 
 ## Sesion productiva sin auth legacy
 
