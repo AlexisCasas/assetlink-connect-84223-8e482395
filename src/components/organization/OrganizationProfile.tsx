@@ -163,7 +163,7 @@ export function OrganizationProfile({ organizationId, readOnly = false }: Organi
         }).eq('id', targetOrganizationId);
         if (organizationError) throw organizationError;
       }
-      setMessage('Perfil empresarial guardado.');
+      setMessage('Perfil de organización guardado correctamente.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No se pudo guardar el perfil.');
     } finally {

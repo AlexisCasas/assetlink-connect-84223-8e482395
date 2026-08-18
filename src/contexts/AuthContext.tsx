@@ -246,20 +246,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const targetRole = demo?.role ?? role;
     const targetName = demo?.name ?? email.split('@')[0];
 
-    let { error } = await supabase.auth.signInWithPassword({ email, password: pwd });
+    let result = await supabase.auth.signInWithPassword({ email, password: pwd });
 
     // For demo accounts, auto-create on first use
-    if (error && demo) {
+    if (result.error && demo) {
       const { error: signUpErr } = await supabase.auth.signUp({
         email,
         password: pwd,
         options: { data: { name: targetName, role: targetRole } },
       });
       if (signUpErr) return false;
-      const retry = await supabase.auth.signInWithPassword({ email, password: pwd });
-      error = retry.error;
+      result = await supabase.auth.signInWithPassword({ email, password: pwd });
     }
-    return !error;
+
+    if (result.error || !result.data.session) return false;
+
+    // Do not wait only for onAuthStateChange: Login navigates immediately after
+    // this promise resolves, so the protected route must already know the user.
+    const organizationData = await loadOrganizations(result.data.session.user.id);
+    setAuthState(loadProfile(result.data.session), organizationData);
+    return true;
   };
 
   const loginWithGoogle = async () => {
