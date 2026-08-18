@@ -21,11 +21,12 @@ import {
   Users,
   Building2,
   ClipboardList
+  ,Shield
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'admin') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -51,7 +52,7 @@ const membershipRoleLabels = {
 
 export function Sidebar({ className, onViewChange, currentView = 'dashboard', userRole }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const { user, logout, currentOrganization, currentMembership } = useAuth();
+  const { user, logout, currentOrganization, currentMembership, memberships, organizations } = useAuth();
   const { unreadCount } = useOrganizationNotifications(1);
   const visualRole = currentOrganization
     ? `${organizationTypeLabels[currentOrganization.organizationType]}${currentMembership ? ` · ${membershipRoleLabels[currentMembership.role]}` : ''}`
@@ -62,6 +63,7 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
     'facility_manager',
     'platform_admin',
   ].includes(currentOrganization.organizationType);
+  const canManage = memberships.some(m => m.isActive && ['owner','admin'].includes(m.role) && organizations.some(o => o.id === m.organizationId && o.organizationType === 'platform_admin'));
 
   return (
     <div className={cn(
@@ -114,6 +116,8 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
           )} />
           {!collapsed && 'Dashboard'}
         </Button>
+
+        {canManage && <Button variant={currentView === 'admin' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('admin')}><Shield className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Administración'}</Button>}
 
         {canViewWorkOrders && (
           <Button
