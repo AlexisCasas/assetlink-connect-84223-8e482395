@@ -7,7 +7,7 @@ import { RequestList } from '@/components/requests/RequestList';
 import { DraftList } from '@/components/requests/DraftList';
 import { ProviderRequestList } from '@/components/requests/ProviderRequestList';
 import { StatsCards } from '@/components/dashboard/StatsCards';
-import { ProviderProfile } from '@/components/requests/ProviderProfile';
+import { OrganizationProfile } from '@/components/organization/OrganizationProfile';
 import { PublicRequestList } from '@/components/requests/PublicRequestList';
 import { NotificationList } from '@/components/notifications/NotificationList';
 import { ContactList } from '@/components/contact/ContactList';
@@ -59,17 +59,7 @@ const Dashboard = () => {
       case 'public-requests':
         return <PublicRequestList />;
       case 'profile':
-        if (user?.role !== 'proveedor') {
-          return (
-            <div className="p-6">
-              <div className="rounded-lg border bg-card p-8 text-center">
-                <h2 className="text-xl font-semibold mb-2">Acceso no permitido</h2>
-                <p className="text-muted-foreground">Esta sección está disponible solo para usuarios proveedor.</p>
-              </div>
-            </div>
-          );
-        }
-        return <ProviderProfile />;
+        return <OrganizationProfile />;
       case 'notifications':
         return <NotificationList />;
       case 'contact':

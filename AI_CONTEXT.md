@@ -165,6 +165,15 @@ feature posterior.
   Admin, nunca se devuelve ni se registra; en producción se recomienda
   invitación o recuperación de contraseña por email.
 
+## Perfil empresarial por organización
+
+- `organization_profiles` separa los datos empresariales de la organización del
+  perfil personal del usuario. Sus policies permiten lectura a miembros activos
+  y edición a owner/admin del tenant o a platform admins.
+- `OrganizationProfile` sustituye la vista legacy de perfil proveedor; no usa
+  `providers`, `profiles`, `user_roles`, asignaciones ni chat. Storage/R2 para
+  logo y documentos continúa pendiente.
+
 ## Sesion productiva sin auth legacy
 
 - `AuthContext` construye la identidad basica desde Supabase Auth (email y

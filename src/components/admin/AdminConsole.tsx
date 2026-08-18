@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { OrganizationProfile } from '@/components/organization/OrganizationProfile';
 import {
   Select,
   SelectContent,
@@ -61,6 +62,7 @@ export function AdminConsole() {
 
   const [items, setItems] = useState<Organization[]>([]);
   const [selected, setSelected] = useState<Organization | null>(null);
+  const [profileOrganization, setProfileOrganization] = useState<Organization | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [organizationName, setOrganizationName] = useState('');
   const [memberEmail, setMemberEmail] = useState('');
@@ -202,6 +204,19 @@ export function AdminConsole() {
     );
   }
 
+  if (profileOrganization) {
+    return (
+      <div>
+        <div className="p-6 pb-0">
+          <Button variant="outline" onClick={() => setProfileOrganization(null)}>
+            Volver a Administración
+          </Button>
+        </div>
+        <OrganizationProfile organizationId={profileOrganization.id} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 p-6">
       <Card>
@@ -259,13 +274,14 @@ export function AdminConsole() {
         <p>Cargando…</p>
       ) : (
         items.map((organization) => (
-          <Button
-            key={organization.id}
-            variant="outline"
-            onClick={() => void loadMembers(organization)}
-          >
-            {organization.name} · {organization.organizationType}
-          </Button>
+          <div key={organization.id} className="inline-flex gap-2">
+            <Button variant="outline" onClick={() => void loadMembers(organization)}>
+              {organization.name} · {organization.organizationType}
+            </Button>
+            <Button variant="secondary" onClick={() => setProfileOrganization(organization)}>
+              Perfil
+            </Button>
+          </div>
         ))
       )}
 
