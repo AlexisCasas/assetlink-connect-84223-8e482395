@@ -586,6 +586,92 @@ export type Database = {
           },
         ]
       }
+      organization_profiles: {
+        Row: {
+          certification_notes: string | null
+          certification_status: string
+          commercial_name: string | null
+          contact_email: string | null
+          country: string
+          created_at: string
+          currency: string
+          description: string | null
+          employee_range: string | null
+          founded_year: number | null
+          legal_name: string | null
+          logo_url: string | null
+          organization_id: string
+          phone: string | null
+          presentation_file_url: string | null
+          primary_clients: Json
+          service_regions: string | null
+          tax_id: string | null
+          timezone: string
+          updated_at: string
+          updated_by_user_id: string | null
+          website: string | null
+          whatsapp: string | null
+        }
+        Insert: {
+          certification_notes?: string | null
+          certification_status?: string
+          commercial_name?: string | null
+          contact_email?: string | null
+          country?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          employee_range?: string | null
+          founded_year?: number | null
+          legal_name?: string | null
+          logo_url?: string | null
+          organization_id: string
+          phone?: string | null
+          presentation_file_url?: string | null
+          primary_clients?: Json
+          service_regions?: string | null
+          tax_id?: string | null
+          timezone?: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+          website?: string | null
+          whatsapp?: string | null
+        }
+        Update: {
+          certification_notes?: string | null
+          certification_status?: string
+          commercial_name?: string | null
+          contact_email?: string | null
+          country?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          employee_range?: string | null
+          founded_year?: number | null
+          legal_name?: string | null
+          logo_url?: string | null
+          organization_id?: string
+          phone?: string | null
+          presentation_file_url?: string | null
+          primary_clients?: Json
+          service_regions?: string | null
+          tax_id?: string | null
+          timezone?: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+          website?: string | null
+          whatsapp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_relationships: {
         Row: {
           created_at: string
