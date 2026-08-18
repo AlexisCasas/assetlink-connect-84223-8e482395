@@ -156,6 +156,11 @@ feature posterior.
 - Pendientes: chat tenant-aware, selector directo de proveedores, asignaciones
   operativas, evidencias/cierre y realtime.
 
+## Administración de organizaciones y miembros
+
+- Existe un Admin Console para platform admins owner/admin y las Edge Functions `admin-list-organization-members`, `admin-create-user-and-add-member` y `admin-update-organization-member`.
+- El alta productiva de usuarios se realiza en backend/Edge Functions; no usa seedData ni tablas legacy.
+
 ## Sesion productiva sin auth legacy
 
 - `AuthContext` construye la identidad basica desde Supabase Auth (email y
