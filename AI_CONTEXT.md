@@ -10,6 +10,14 @@
 - Este cambio es exclusivamente visual: no modifica RLS, Edge Functions,
   Supabase, permisos, navegación ni lógica de negocio.
 
+## Limpieza de login y favicon
+
+- En la rama `feature/login-cleanup-and-favicon` se retiró el selector visual
+  Cliente / Proveedor / Equipo de Login. La identidad productiva permanece
+  determinada por la sesión autenticada, las organizaciones y sus membresías.
+- El favicon y el icono para Apple apuntan al isotipo oficial de OneFacility.
+- No se realizaron cambios de backend, Supabase, RLS ni permisos.
+
 ## Sucursales por tenant
 
 - `client_branches` usa `organization_id` para su aislamiento tenant-aware;
