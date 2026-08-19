@@ -6,13 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 
 const Login = () => {
   const isDemoUiEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_SEED === 'true';
   const [isLogin, setIsLogin] = useState(true);
-  const [selectedRole, setSelectedRole] = useState<UserRole>('cliente');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -26,7 +24,10 @@ const Login = () => {
     setSubmitting(true);
     try {
       if (isLogin) {
-        const ok = await login(email, password, selectedRole);
+        // The authenticated user's tenant and permissions are resolved from
+        // organization_members after sign-in. This legacy argument remains
+        // only for the existing AuthContext compatibility contract.
+        const ok = await login(email, password, 'cliente');
         if (ok) {
           toast({ title: 'Inicio de sesión exitoso' });
           navigate('/', { replace: true });
@@ -38,10 +39,10 @@ const Login = () => {
           toast({ title: 'Error', description: 'Ingresa tu nombre', variant: 'destructive' });
           return;
         }
-        const ok = await register(email, password, name, selectedRole);
+        const ok = await register(email, password, name, 'cliente');
         if (ok) {
           toast({ title: 'Registro exitoso', description: 'Iniciando sesión...' });
-          await login(email, password, selectedRole);
+          await login(email, password, 'cliente');
           navigate('/', { replace: true });
         } else {
           toast({ title: 'Error', description: 'No se pudo registrar (¿usuario existente?)', variant: 'destructive' });
@@ -113,14 +114,6 @@ const Login = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="px-7 pb-8 sm:px-9">
-              <Tabs value={selectedRole} onValueChange={(value) => setSelectedRole(value as UserRole)} className="mb-6">
-                <TabsList className="grid h-11 w-full grid-cols-3 rounded-lg bg-onefacility-surface p-1">
-                  <TabsTrigger className="rounded-md text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-onefacility-blue" value="cliente">Cliente</TabsTrigger>
-                  <TabsTrigger className="rounded-md text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-onefacility-blue" value="proveedor">Proveedor</TabsTrigger>
-                  <TabsTrigger className="rounded-md text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-onefacility-blue" value="team_member">Equipo</TabsTrigger>
-                </TabsList>
-              </Tabs>
-
               <form onSubmit={handleSubmit} className="space-y-4">
                 {!isLogin && <div className="space-y-2"><Label htmlFor="name">Nombre</Label><Input className="h-11 bg-white" id="name" type="text" placeholder="Tu nombre" value={name} onChange={(event) => setName(event.target.value)} required /></div>}
                 <div className="space-y-2"><Label htmlFor="email">Email</Label><Input className="h-11 bg-white" id="email" type="email" placeholder="tu@email.com" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>
