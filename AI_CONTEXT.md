@@ -1,5 +1,15 @@
 # AI_CONTEXT.md
 
+## Base visual OneFacility
+
+- La rama `feature/onefacility-design-system-foundation` incorpora los assets de
+  marca, tokens globales compatibles con shadcn/ui y el rediseño de Login y
+  Sidebar.
+- Se usa Inter y fallbacks del sistema; Proxima Nova no se incluye porque no hay
+  archivos ni licencia en el repositorio.
+- Este cambio es exclusivamente visual: no modifica RLS, Edge Functions,
+  Supabase, permisos, navegación ni lógica de negocio.
+
 ## Sucursales por tenant
 
 - `client_branches` usa `organization_id` para su aislamiento tenant-aware;

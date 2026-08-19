@@ -66,24 +66,29 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   const canManage = memberships.some(m => m.isActive && ['owner','admin'].includes(m.role) && organizations.some(o => o.id === m.organizationId && o.organizationType === 'platform_admin'));
 
   return (
-    <div className={cn(
-      "flex flex-col bg-card border-r border-border transition-all duration-300",
-      collapsed ? "w-16" : "w-64",
+    <aside className={cn(
+      "of-sidebar flex min-h-screen shrink-0 flex-col border-r border-white/10 bg-onefacility-navy text-white shadow-xl transition-all duration-300",
+      collapsed ? "w-[72px]" : "w-72",
       className
     )}>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border">
+      <div className={cn("relative flex h-[76px] items-center border-b border-white/10 px-3", collapsed ? "justify-center" : "justify-between")}>
         {!collapsed && (
-          <div className="flex items-center space-x-2">
-            <Package className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold text-foreground">One Facility</span>
+          <div className="flex h-11 items-center rounded-xl bg-white px-3 shadow-soft">
+            <img src="/brand/logo-primary.png" alt="OneFacility" className="h-7 w-auto" />
+          </div>
+        )}
+        {collapsed && (
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-soft">
+            <img src="/brand/isotipo-primary.png" alt="OneFacility" className="h-7 w-7 object-contain" />
           </div>
         )}
         <Button
           variant="ghost"
           size="sm"
           onClick={() => setCollapsed(!collapsed)}
-          className="h-8 w-8 p-0"
+          className={cn("of-sidebar-action h-8 w-8 p-0", collapsed && "absolute left-[54px] top-6 z-10 rounded-full border border-white/15 bg-onefacility-navy shadow-md")}
+          aria-label={collapsed ? 'Expandir navegación' : 'Colapsar navegación'}
         >
           {collapsed ? (
             <ChevronRight className="h-4 w-4" />
@@ -93,15 +98,15 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
         </Button>
       </div>
 
-      <div className="py-3">
+      <div className="of-sidebar-organization py-3">
         <OrganizationSwitcher collapsed={collapsed} />
       </div>
-      <div className="px-3 pb-3">
+      <div className="of-sidebar-utility px-3 pb-3">
         <NotificationBell collapsed={collapsed} />
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 pb-5">
         <Button
           variant={currentView === 'dashboard' ? "default" : "ghost"}
           className={cn(
@@ -385,26 +390,26 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
       </nav>
 
       {/* User Profile */}
-      <div className="p-4 border-t border-border space-y-2">
+      <div className="space-y-3 border-t border-white/10 bg-black/10 p-3">
         <div className={cn(
-          "flex items-center space-x-3",
+          "flex items-center gap-3 rounded-xl bg-white/[0.06] p-2.5",
           collapsed && "justify-center"
         )}>
-          <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-onefacility-blue text-sm font-semibold text-white ring-2 ring-white/15">
             {user?.name?.[0]?.toUpperCase() || 'U'}
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground">{user?.name || user?.email}</p>
-              <p className="text-xs text-muted-foreground">{visualRole}</p>
+              <p className="truncate text-sm font-medium text-white">{user?.name || user?.email}</p>
+              <p className="truncate text-xs text-white/55">{visualRole}</p>
             </div>
           )}
         </div>
         {!collapsed && (
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="w-full"
+            className="of-sidebar-action w-full border border-white/10 bg-white/[0.04] text-white/80 hover:text-white"
             onClick={logout}
           >
             <LogOut className="h-4 w-4 mr-2" />
@@ -412,6 +417,6 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
           </Button>
         )}
       </div>
-    </div>
+    </aside>
   );
 }
