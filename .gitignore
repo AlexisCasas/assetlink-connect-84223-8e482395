@@ -9,3 +9,5 @@ dist/
 supabase/.branches/
 supabase/.temp/
 .env.functions.local
+
+.vercel/

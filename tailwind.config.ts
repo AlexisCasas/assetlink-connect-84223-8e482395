@@ -17,7 +17,10 @@ export default {
 				'2xl': '1400px'
 			}
 		},
-		extend: {
+			extend: {
+			fontFamily: {
+				sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+			},
 			colors: {
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
@@ -60,6 +63,15 @@ export default {
 				success: 'hsl(var(--success))',
 				warning: 'hsl(var(--warning))',
 				info: 'hsl(var(--info))',
+				onefacility: {
+					navy: '#002E42',
+					blue: '#005A8C',
+					'brown-dark': '#4F2304',
+					brown: '#994608',
+					background: '#F6F9FB',
+					surface: '#EEF5F8',
+					border: '#D8E4EA',
+				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
@@ -75,6 +87,10 @@ export default {
 				lg: 'var(--radius)',
 				md: 'calc(var(--radius) - 2px)',
 				sm: 'calc(var(--radius) - 4px)'
+			},
+			boxShadow: {
+				soft: '0 8px 24px -16px rgba(0, 46, 66, 0.22)',
+				panel: '0 24px 60px -28px rgba(0, 46, 66, 0.38)',
 			},
 			keyframes: {
 				'accordion-down': {
