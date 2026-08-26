@@ -57,11 +57,11 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   const visualRole = currentOrganization
     ? `${organizationTypeLabels[currentOrganization.organizationType]}${currentMembership ? ` · ${membershipRoleLabels[currentMembership.role]}` : ''}`
     : 'Sin organizacion asignada';
-  const canViewWorkOrders = currentOrganization !== null && [
+  const isPlatformAdminOrg = currentOrganization?.organizationType === 'platform_admin';
+  const canViewWorkOrders = currentOrganization !== null && !isPlatformAdminOrg && [
     'client_company',
     'provider_company',
     'facility_manager',
-    'platform_admin',
   ].includes(currentOrganization.organizationType);
   const canManage = memberships.some(m => m.isActive && ['owner','admin'].includes(m.role) && organizations.some(o => o.id === m.organizationId && o.organizationType === 'platform_admin'));
 
@@ -107,20 +107,22 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 pb-5">
-        <Button
-          variant={currentView === 'dashboard' ? "default" : "ghost"}
-          className={cn(
-            "w-full justify-start",
-            collapsed && "justify-center px-2"
-          )}
-          onClick={() => onViewChange?.('dashboard')}
-        >
-          <LayoutDashboard className={cn(
-            "h-4 w-4",
-            !collapsed && "mr-2"
-          )} />
-          {!collapsed && 'Dashboard'}
-        </Button>
+        {!isPlatformAdminOrg && (
+          <Button
+            variant={currentView === 'dashboard' ? "default" : "ghost"}
+            className={cn(
+              "w-full justify-start",
+              collapsed && "justify-center px-2"
+            )}
+            onClick={() => onViewChange?.('dashboard')}
+          >
+            <LayoutDashboard className={cn(
+              "h-4 w-4",
+              !collapsed && "mr-2"
+            )} />
+            {!collapsed && 'Dashboard'}
+          </Button>
+        )}
 
         {canManage && <Button variant={currentView === 'admin' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('admin')}><Shield className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Administración'}</Button>}
 
@@ -324,20 +326,22 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
 
         {userRole === 'team_member' && (
           <>
-            <Button
-              variant={currentView === 'requests' ? "default" : "ghost"}
-              className={cn(
-                "w-full justify-start",
-                collapsed && "justify-center px-2"
-              )}
-              onClick={() => onViewChange?.('requests')}
-            >
-              <FileText className={cn(
-                "h-4 w-4",
-                !collapsed && "mr-2"
-              )} />
-              {!collapsed && 'Mis Asignaciones'}
-            </Button>
+            {!isPlatformAdminOrg && (
+              <Button
+                variant={currentView === 'requests' ? "default" : "ghost"}
+                className={cn(
+                  "w-full justify-start",
+                  collapsed && "justify-center px-2"
+                )}
+                onClick={() => onViewChange?.('requests')}
+              >
+                <FileText className={cn(
+                  "h-4 w-4",
+                  !collapsed && "mr-2"
+                )} />
+                {!collapsed && 'Mis Asignaciones'}
+              </Button>
+            )}
 
             <Button
               variant={currentView === 'notifications' ? "default" : "ghost"}

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { OrganizationProfileClient, OrganizationProfileForm } from '@/types/organizationProfile';
@@ -180,14 +181,44 @@ export function OrganizationProfile({ organizationId, readOnly = false }: Organi
   );
   const updateClient = (index: number, key: keyof OrganizationProfileClient, value: string) => setField('primary_clients', form.primary_clients.map((client, clientIndex) => clientIndex === index ? { ...client, [key]: value } : client));
 
+  const tabTriggerClass = 'data-[state=active]:bg-onefacility-blue data-[state=active]:text-white data-[state=active]:shadow-soft';
+
   return <div className="space-y-6 p-6">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold">Perfil organización</h1><p className="text-sm text-muted-foreground">Información empresarial de la organización activa.</p></div>{!canEdit && <Badge variant="secondary">Solo lectura</Badge>}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold text-onefacility-navy">Perfil organización</h1><p className="text-sm text-muted-foreground">Información empresarial de la organización activa.</p></div>{!canEdit && <Badge variant="secondary">Solo lectura</Badge>}</div>
     {message && <p className="text-sm text-muted-foreground">{message}</p>}
-    <Card><CardHeader><CardTitle>Mi información / Datos de contacto</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">{input('Nombre comercial', 'commercial_name')}{input('Razón social', 'legal_name')}{input('RUC / Código tributario', 'tax_id')}{input('Correo de contacto', 'contact_email', 'email')}{input('Teléfono', 'phone')}{input('WhatsApp', 'whatsapp')}{input('Website', 'website', 'url')}</CardContent></Card>
-    <Card><CardHeader><CardTitle>Empresa</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">{input('Logo URL', 'logo_url', 'url')}{form.logo_url && <img src={form.logo_url} alt="Logo de la organización" className="h-20 max-w-48 rounded border object-contain" />}{input('País', 'country')}{input('Moneda', 'currency')}{input('Zona horaria', 'timezone')}</CardContent></Card>
-    <Card><CardHeader><CardTitle>Información comercial</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">{input('Año de constitución', 'founded_year', 'number')}{input('Número de empleados', 'employee_range')}{input('Zona / Región de cobertura', 'service_regions')}<div className="space-y-2 md:col-span-2"><Label>Descripción empresarial</Label><Textarea value={form.description} disabled={disabled} onChange={(event) => setField('description', event.target.value)} /></div></CardContent></Card>
-    <Card><CardHeader><CardTitle>Principales clientes</CardTitle></CardHeader><CardContent className="space-y-3">{form.primary_clients.map((client, index) => <div key={`${client.razon_social}-${index}`} className="grid gap-2 rounded border p-3 md:grid-cols-3">{(['razon_social','contact_name','email','phone','annex'] as const).map((key) => <Input key={key} disabled={disabled} placeholder={key === 'razon_social' ? 'Razón social' : key} value={client[key]} onChange={(event) => updateClient(index, key, event.target.value)} />)}{canEdit && <Button variant="outline" onClick={() => setField('primary_clients', form.primary_clients.filter((_, clientIndex) => clientIndex !== index))}>Eliminar</Button>}</div>)}{canEdit && <Button variant="outline" onClick={() => setField('primary_clients', [...form.primary_clients, emptyClient()])}>Agregar cliente</Button>}</CardContent></Card>
-    <Card><CardHeader><CardTitle>Carta de presentación / Certificación</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">{input('URL carta de presentación', 'presentation_file_url', 'url')}<div className="space-y-2"><Label>Estado de certificación</Label><Input value={form.certification_status} disabled={disabled} onChange={(event) => setField('certification_status', event.target.value)} /></div><div className="space-y-2 md:col-span-2"><Label>Notas de certificación</Label><Textarea value={form.certification_notes} disabled={disabled} onChange={(event) => setField('certification_notes', event.target.value)} /></div><p className="text-sm text-muted-foreground md:col-span-2">La carga de documentos de certificación quedará pendiente para la integración con Storage/R2.</p></CardContent></Card>
-    {canEdit && <Button onClick={() => void save()} disabled={saving}>{saving ? 'Guardando…' : 'Guardar perfil'}</Button>}
+
+    <Tabs defaultValue="contact" className="space-y-4">
+      <div className="-mx-1 overflow-x-auto px-1">
+        <TabsList className="inline-flex w-max gap-1 rounded-lg border border-onefacility-border bg-onefacility-surface p-1">
+          <TabsTrigger value="contact" className={tabTriggerClass}>Datos de contacto</TabsTrigger>
+          <TabsTrigger value="company" className={tabTriggerClass}>Empresa</TabsTrigger>
+          <TabsTrigger value="commercial" className={tabTriggerClass}>Información comercial</TabsTrigger>
+          <TabsTrigger value="clients" className={tabTriggerClass}>Clientes</TabsTrigger>
+          <TabsTrigger value="documents" className={tabTriggerClass}>Documentos</TabsTrigger>
+        </TabsList>
+      </div>
+
+      <TabsContent value="contact">
+        <Card><CardHeader><CardTitle>Mi información / Datos de contacto</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">{input('Nombre comercial', 'commercial_name')}{input('Razón social', 'legal_name')}{input('RUC / Código tributario', 'tax_id')}{input('Correo de contacto', 'contact_email', 'email')}{input('Teléfono', 'phone')}{input('WhatsApp', 'whatsapp')}{input('Website', 'website', 'url')}</CardContent></Card>
+      </TabsContent>
+
+      <TabsContent value="company">
+        <Card><CardHeader><CardTitle>Empresa</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">{input('Logo URL', 'logo_url', 'url')}{form.logo_url && <img src={form.logo_url} alt="Logo de la organización" className="h-20 max-w-48 rounded border object-contain" />}{input('País', 'country')}{input('Moneda', 'currency')}{input('Zona horaria', 'timezone')}</CardContent></Card>
+      </TabsContent>
+
+      <TabsContent value="commercial">
+        <Card><CardHeader><CardTitle>Información comercial</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">{input('Año de constitución', 'founded_year', 'number')}{input('Número de empleados', 'employee_range')}{input('Zona / Región de cobertura', 'service_regions')}<div className="space-y-2 md:col-span-2"><Label>Descripción empresarial</Label><Textarea value={form.description} disabled={disabled} onChange={(event) => setField('description', event.target.value)} /></div></CardContent></Card>
+      </TabsContent>
+
+      <TabsContent value="clients">
+        <Card><CardHeader><CardTitle>Principales clientes</CardTitle></CardHeader><CardContent className="space-y-3">{form.primary_clients.map((client, index) => <div key={`${client.razon_social}-${index}`} className="grid gap-2 rounded border p-3 md:grid-cols-3">{(['razon_social','contact_name','email','phone','annex'] as const).map((key) => <Input key={key} disabled={disabled} placeholder={key === 'razon_social' ? 'Razón social' : key} value={client[key]} onChange={(event) => updateClient(index, key, event.target.value)} />)}{canEdit && <Button variant="outline" onClick={() => setField('primary_clients', form.primary_clients.filter((_, clientIndex) => clientIndex !== index))}>Eliminar</Button>}</div>)}{canEdit && <Button variant="outline" onClick={() => setField('primary_clients', [...form.primary_clients, emptyClient()])}>Agregar cliente</Button>}</CardContent></Card>
+      </TabsContent>
+
+      <TabsContent value="documents">
+        <Card><CardHeader><CardTitle>Carta de presentación / Certificación</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">{input('URL carta de presentación', 'presentation_file_url', 'url')}<div className="space-y-2"><Label>Estado de certificación</Label><Input value={form.certification_status} disabled={disabled} onChange={(event) => setField('certification_status', event.target.value)} /></div><div className="space-y-2 md:col-span-2"><Label>Notas de certificación</Label><Textarea value={form.certification_notes} disabled={disabled} onChange={(event) => setField('certification_notes', event.target.value)} /></div><p className="text-sm text-muted-foreground md:col-span-2">La carga de documentos de certificación quedará pendiente para la integración con Storage/R2.</p></CardContent></Card>
+      </TabsContent>
+    </Tabs>
+
+    {canEdit && <div className="flex justify-end border-t border-onefacility-border pt-4"><Button onClick={() => void save()} disabled={saving}>{saving ? 'Guardando…' : 'Guardar perfil'}</Button></div>}
   </div>;
 }

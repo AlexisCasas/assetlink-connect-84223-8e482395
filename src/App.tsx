@@ -1,6 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
@@ -11,10 +12,29 @@ import { supabaseConfigurationError } from "@/lib/env";
 
 const queryClient = new QueryClient();
 
+const NoOrganizationScreen = () => {
+  const { logout } = useAuth();
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-background p-6">
+      <section className="w-full max-w-lg rounded-lg border bg-card p-6 text-center shadow-sm">
+        <h1 className="text-xl font-semibold">Sin acceso asignado</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Tu cuenta aún no está asociada a una organización. Solicita al administrador que te asigne acceso.
+        </p>
+        <Button className="mt-6" variant="outline" onClick={logout}>
+          Cerrar sesión
+        </Button>
+      </section>
+    </main>
+  );
+};
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, organizations } = useAuth();
   if (loading) return null;
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (organizations.length === 0) return <NoOrganizationScreen />;
+  return <>{children}</>;
 };
 
 const EnvironmentConfigurationError = () => (

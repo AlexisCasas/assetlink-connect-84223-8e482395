@@ -30,7 +30,6 @@ interface AuthContextType {
   setCurrentOrganization: (organizationId: string | null) => void;
   loading: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<boolean>;
-  register: (email: string, password: string, name: string, role: UserRole) => Promise<boolean>;
   loginWithGoogle: () => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -228,18 +227,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const register = async (email: string, password: string, name: string, role: UserRole): Promise<boolean> => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: { name, role },
-      },
-    });
-    return !error;
-  };
-
   const login = async (email: string, password: string, role: UserRole): Promise<boolean> => {
     const demo = isDemoAuthEnabled ? DEMO_ACCOUNTS[email] : undefined;
     const pwd = demo ? DEMO_PASSWORD : password;
@@ -315,7 +302,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setCurrentOrganization,
         loading,
         login,
-        register,
         loginWithGoogle,
         logout,
         isAuthenticated: !!user,
