@@ -16,21 +16,37 @@ import { BranchesList } from '@/components/branches/BranchesList';
 import { WorkOrdersList } from '@/components/work-orders/WorkOrdersList';
 import { AdminConsole } from '@/components/admin/AdminConsole';
 
+type DashboardView = 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'admin';
+
+const ALL_VIEWS: DashboardView[] = ['dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications', 'approved-providers', 'branches', 'work-orders', 'contact', 'admin'];
+// A platform_admin organization only manages Administración; every other
+// operational view falls back to it, including direct hash navigation.
+const PLATFORM_ADMIN_ALLOWED_VIEWS: DashboardView[] = ['admin', 'notifications'];
+
 const Dashboard = () => {
-  const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'admin'>('dashboard');
+  const { user, currentOrganization } = useAuth();
+  const isPlatformAdminOrg = currentOrganization?.organizationType === 'platform_admin';
+  const [currentView, setCurrentView] = useState<DashboardView>(isPlatformAdminOrg ? 'admin' : 'dashboard');
   const [selectedAsset, setSelectedAsset] = useState<AssetNode | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
-    if (['assets','requests','drafts','public-requests','profile','notifications','approved-providers','branches','work-orders','contact','admin'].includes(hash)) {
-      setCurrentView(hash as any);
-    }
-  }, []);
+    const hashView = ALL_VIEWS.includes(hash as DashboardView) ? (hash as DashboardView) : null;
 
-  const handleViewChange = (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'admin') => {
-    setCurrentView(view);
-    window.location.hash = view;
+    if (isPlatformAdminOrg) {
+      const nextView = hashView && PLATFORM_ADMIN_ALLOWED_VIEWS.includes(hashView) ? hashView : 'admin';
+      setCurrentView(nextView);
+      if (hash !== nextView) window.location.hash = nextView;
+      return;
+    }
+
+    if (hashView) setCurrentView(hashView);
+  }, [isPlatformAdminOrg]);
+
+  const handleViewChange = (view: DashboardView) => {
+    const nextView = isPlatformAdminOrg && !PLATFORM_ADMIN_ALLOWED_VIEWS.includes(view) ? 'admin' : view;
+    setCurrentView(nextView);
+    window.location.hash = nextView;
   };
 
   const renderContent = () => {

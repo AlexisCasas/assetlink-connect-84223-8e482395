@@ -79,6 +79,103 @@ para crear organizaciones y membresías. Las invitaciones se guardan en
 `organization_invitations`; su aceptación y el correo se implementarán en una
 feature posterior.
 
+## Onboarding controlado en Login
+
+- Rama `feature/controlled-onboarding-login`: se retiró el flujo público de
+  registro (`/login` ya no crea cuentas Auth). El enlace de "Regístrate" se
+  reemplazó por un mensaje informativo: "¿Necesitas acceso? Solicítalo al
+  administrador de tu organización." `AuthContext` ya no expone `register`.
+- El alta real de usuarios se realiza desde Administración (Edge Functions
+  `admin-create-organization`, `admin-invite-organization-member`,
+  `admin-add-existing-member`) por un `platform_admin`, nunca desde el
+  formulario público.
+- Un usuario Auth sin `organization_members` activa puede autenticarse pero no
+  puede operar la plataforma: `ProtectedRoute` (en `App.tsx`) detecta
+  `organizations.length === 0` tras el login y muestra una pantalla de "Sin
+  acceso asignado" con la opción de cerrar sesión, en vez de renderizar el
+  Dashboard.
+- El mensaje de error de login genérico se aclaró sin exponer detalles
+  técnicos de Supabase Auth.
+- No se modificaron `supabase/migrations`, `supabase/functions`,
+  `supabase/config.toml` ni políticas RLS en esta rama.
+
+## Login solo email/password y navegación de platform_admin
+
+- Se retiró de `Login.tsx` el botón "Continuar con Google" y su separador
+  visual. `loginWithGoogle` sigue existiendo en `AuthContext` (configuración
+  del provider intacta); simplemente no se invoca desde la UI pública.
+- La organización activa se sigue determinando por `organizations` /
+  `currentOrganization` cargadas desde `organization_members`. Cuando
+  `currentOrganization.organizationType === 'platform_admin'`, `Sidebar.tsx`
+  oculta "Dashboard", "Órdenes de trabajo" y "Mis Asignaciones"; "Administración"
+  y "Notificaciones" permanecen visibles.
+- `Dashboard.tsx` inicia en la vista `admin` para organizaciones
+  `platform_admin` y redirige a `admin` cualquier navegación por hash hacia
+  vistas operativas no permitidas (`#dashboard`, `#work-orders`, etc.).
+- No se tocó backend, Supabase, RLS ni el modelo multi-tenant.
+
+## Perfil organización en pestañas
+
+- Rama `feature/organization-profile-tabs`: `OrganizationProfile.tsx` se
+  reorganizó con `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` de shadcn/ui
+  (ya presentes en el proyecto) en vez de mostrar todas las secciones
+  apiladas. Pestañas: Datos de contacto, Empresa, Información comercial,
+  Clientes, Documentos — una por cada sección real existente.
+- Cambio exclusivamente visual/frontend: mismo estado `form`, mismos nombres
+  de campos, mismo payload y lógica de `save()`, misma detección de
+  `canEdit`/solo lectura. El botón "Guardar perfil" quedó único, debajo de
+  las pestañas. No se tocó Supabase, RLS, Edge Functions ni migraciones.
+
+## Miembros en modal dentro de Administración
+
+- `AdminConsole.tsx`: el botón "Miembros" de la tabla de organizaciones abre
+  un `Dialog` de shadcn/ui (`isMembersDialogOpen`) en vez de expandir un panel
+  debajo de la tabla. El modal muestra nombre/tipo/estado de la organización,
+  la lista de miembros con sus acciones de rol y activo/inactivo, y el
+  formulario "Crear usuario" en una card interna.
+- Se separaron los estados de carga que antes compartía un único `loading`:
+  `loadingOrganizations` (tabla principal) y `loadingMembers` (modal); y los
+  de guardado: `saving` (organización) y `savingMember` (membresías/alta de
+  usuario). Abrir miembros ya no muestra "Cargando organizaciones…" en la
+  tabla principal, que permanece estable.
+- Misma lógica de negocio: mismas Edge Functions
+  (`admin-list-organization-members`, `admin-update-organization-member`,
+  `admin-create-user-and-add-member`), mismas validaciones (email válido,
+  contraseña temporal opcional ≥8 caracteres), mismos permisos. Cambio
+  exclusivamente de UI/frontend, sin tocar Supabase, RLS ni backend.
+
+## Organizaciones archivadas ocultas por defecto
+
+- `AdminConsole.tsx`: la tabla principal de organizaciones oculta por defecto
+  las de `status = 'archived'` (estado local `showArchived`, `false` por
+  defecto). El botón "Ver archivadas"/"Ocultar archivadas" junto al título
+  "Organizaciones" alterna la visibilidad filtrando en memoria sobre `items`
+  ya cargado, sin volver a consultar Supabase.
+- El filtro de estado sigue funcionando igual; si el usuario elige
+  explícitamente "Archivada" se activa `showArchived` automáticamente para
+  que el resultado sea coherente, y al desactivar "Ver archivadas" con ese
+  filtro puesto, el filtro de estado vuelve a "Todos los estados". Las
+  métricas superiores (conteo de archivadas) siguen calculándose sobre el
+  total de `items`, no sobre la lista filtrada.
+- Cambio exclusivamente de UI/frontend: no se tocaron Edge Functions, RLS,
+  Supabase config, migraciones ni el modelo multi-tenant.
+
+## Indicadores compactos y paginación en Administración
+
+- `AdminConsole.tsx`: las 5 cards de indicadores (Total, Clientes,
+  Proveedores, Administradores plataforma, Archivadas) se compactaron
+  (`p-3`, número en `text-lg`, etiqueta en `text-xs`) en una grilla de 1
+  columna en mobile, 2-3 en tablet y 5 en desktop.
+- La tabla de organizaciones ahora tiene paginación local
+  (`currentPage`/`pageSize`, 5/10/20 por página) aplicada después de
+  búsqueda, filtro de tipo, filtro de estado y `showArchived`. Muestra
+  "Mostrando X-Y de Z organizaciones" y botones Anterior/Siguiente,
+  deshabilitados en los extremos. `currentPage` se resetea a 1 al cambiar
+  cualquier filtro o el tamaño de página, y se corrige automáticamente si
+  queda fuera de rango (p. ej. tras archivar una organización).
+- Cambio exclusivamente de UI/frontend: no se tocaron Edge Functions, RLS,
+  Supabase config, migraciones ni el modelo multi-tenant.
+
 ## Cotizaciones por tenant
 
 - `quotes.provider_organization_id` es la identidad productiva de una
