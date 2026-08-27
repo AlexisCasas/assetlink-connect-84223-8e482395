@@ -19,6 +19,19 @@ export function useOrganizationNotifications(limit = 10) {
     }
 
     setLoading(true);
+
+    // No external scheduler in this phase (see docs/OPERATIONAL_NOTIFICATIONS.md)
+    // — due-soon/overdue work order notifications are generated here, on
+    // every notification load, instead. Idempotent server-side (dedup on
+    // organization + recipient + type + entity), so calling this
+    // repeatedly (e.g. every time the bell dropdown opens) never creates
+    // duplicates. Best-effort: never blocks the actual notification load.
+    try {
+      await supabase.rpc('generate_operational_due_notifications');
+    } catch (dueNotificationsError) {
+      console.error('Error generating due-date notifications:', dueNotificationsError);
+    }
+
     const [notificationsResult, unreadResult] = await Promise.all([
       supabase
         .from('organization_notifications')

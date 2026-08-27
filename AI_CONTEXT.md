@@ -1006,3 +1006,67 @@ Inicio de la rama `productization/mvp`.
   `inspection_created` reservado, sin tabla), checklist técnico,
   mantenimientos preventivos, métricas predictivas, upload real de
   evidencias (mismo pendiente que la fase anterior).
+
+## Notificaciones operativas in-app
+
+- Rama `feature/operational-notifications`. Detalle completo en
+  `docs/OPERATIONAL_NOTIFICATIONS.md`. Amplía el centro de notificaciones
+  ya existente (`organization_notifications` desde
+  `20260721184404_quote_notifications_tenant_flow.sql`,
+  `NotificationBell.tsx`/`NotificationList.tsx`/
+  `useOrganizationNotifications.ts`) con 7 eventos operativos —
+  **sin sistema paralelo**: misma tabla, mismo hook, mismos componentes.
+  Solo in-app (sin email/WhatsApp/push/scheduler real en esta fase).
+- Migración `20260829150000_operational_notifications.sql`. Extiende
+  `organization_notifications` con `recipient_member_id` (nullable —
+  `NULL` preserva exactamente el comportamiento "broadcast a toda la
+  organización" que ya tenían las notificaciones de cotizaciones, sin
+  tocar ninguna fila existente), `priority`, `metadata`.
+- **Idempotencia con dos índices únicos parciales** (uno para
+  `recipient_member_id IS NULL`, otro para no-nulo) — un solo índice no
+  alcanzaba porque `NULL` nunca es igual a `NULL` para unicidad.
+  `create_notification_once` elige el índice correcto según el
+  destinatario. Verificado: llamar `generate_operational_due_notifications()`
+  dos veces seguidas nunca duplica.
+- **Por qué targeted y no broadcast** para "notificar solo owner/admin/manager":
+  un broadcast (`recipient_member_id IS NULL`) es visible por RLS a
+  *cualquier* miembro de la organización sin importar su rol —
+  `notify_role_members` inserta una fila dirigida por cada miembro
+  calificado, no una sola fila compartida.
+- Helpers `create_notification_once`/`notify_role_members`/`notify_member`:
+  **no otorgados a `authenticated`**, mismo patrón que la
+  `create_organization_notification` preexistente y que
+  `resolve_asset_path` de la fase anterior — solo invocables desde otras
+  funciones `SECURITY DEFINER`. `generate_operational_due_notifications()`
+  sí se otorga a `authenticated` (no toma ninguna entrada libre que se
+  pueda abusar).
+- Los 7 eventos se disparan extendiendo 6 RPCs ya existentes
+  (`create_work_order_from_quote`, `create_internal_work_order_from_request`,
+  `update_work_order_operations`, `assign_work_order_technician`,
+  `upsert_work_order_activity`, `submit_activity_report`,
+  `technician_update_work_order_progress`) — todas con `CREATE OR REPLACE
+  FUNCTION` simple, sin `DROP FUNCTION`, porque ninguna firma cambió — más
+  un trigger nuevo en `requests` (`internal_request_created`, ya que las
+  solicitudes se insertan directo desde el frontend sin RPC de creación).
+  Único cambio de comportamiento en código ya desplegado: el
+  `work_order_created` de `create_work_order_from_quote` pasó de broadcast
+  a toda la organización proveedora a dirigido solo a owner/admin/manager
+  — decisión deliberada de esta fase, documentada.
+- **Visibilidad verificada con `SET ROLE authenticated`** (no como
+  superusuario, que ignora RLS): César solo ve su propia notificación de
+  "técnico asignado", Alexis solo las suyas, un owner de otra organización
+  no ve ninguna.
+- `generate_operational_due_notifications()`: sin cron/scheduler externo —
+  se llama desde `useOrganizationNotifications.ts` (cada carga del centro
+  de notificaciones) y `useWorkOrders.ts` (cada `refetch`), ambas
+  best-effort.
+- Frontend: `src/lib/notificationLabels.ts` (labels de tipo/prioridad,
+  filtro "operativa", referencia textual a OT/Solicitud/Actividad) +
+  cambios en `NotificationList.tsx`/`NotificationBell.tsx` (badge de
+  prioridad, referencia, filtro Todas/Operativas). `useOrganizationNotifications.ts`
+  **sin cambios en su API pública** — ya funcionaba correctamente para el
+  modelo nuevo sin tocar `notifications`/`unreadCount`/`markAsRead`/
+  `markAllAsRead`.
+- Pendiente documentado (no construido): email/WhatsApp/push, scheduler
+  real, preferencias de notificación, inspecciones próximas/vencidas
+  (tipos reservados sin tabla).

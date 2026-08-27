@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { useOrganizationNotifications } from '@/hooks/useOrganizationNotifications';
+import { NOTIFICATION_PRIORITY_COLORS, NOTIFICATION_PRIORITY_LABELS, notificationEntityReference } from '@/lib/notificationLabels';
 
 interface NotificationBellProps {
   collapsed?: boolean;
@@ -60,28 +61,35 @@ export function NotificationBell({ collapsed = false }: NotificationBellProps) {
           <p className="px-2 py-6 text-center text-sm text-muted-foreground">
             No hay notificaciones para esta organizacion.
           </p>
-        ) : notifications.map((notification) => (
-          <DropdownMenuItem
-            key={notification.id}
-            className="flex cursor-pointer flex-col items-start gap-1 whitespace-normal py-2"
-            onSelect={() => {
-              if (!notification.is_read) void markAsRead(notification.id);
-            }}
-          >
-            <div className="flex w-full items-center gap-2">
-              <span className={cn('font-medium', !notification.is_read && 'text-primary')}>
-                {notification.title}
+        ) : notifications.map((notification) => {
+          const reference = notificationEntityReference(notification.entity_type, notification.metadata);
+          return (
+            <DropdownMenuItem
+              key={notification.id}
+              className="flex cursor-pointer flex-col items-start gap-1 whitespace-normal py-2"
+              onSelect={() => {
+                if (!notification.is_read) void markAsRead(notification.id);
+              }}
+            >
+              <div className="flex w-full items-center gap-2">
+                <span className={cn('font-medium', !notification.is_read && 'text-primary')}>
+                  {notification.title}
+                </span>
+                <Badge variant="outline" className={cn('text-[10px]', NOTIFICATION_PRIORITY_COLORS[notification.priority])}>
+                  {NOTIFICATION_PRIORITY_LABELS[notification.priority] ?? notification.priority}
+                </Badge>
+                {!notification.is_read && <Badge className="ml-auto text-[10px]">Nueva</Badge>}
+              </div>
+              <span className="text-xs text-muted-foreground">{notification.message}</span>
+              {reference && <span className="text-[11px] text-muted-foreground">{reference}</span>}
+              <span className="text-[11px] text-muted-foreground">
+                {new Date(notification.created_at).toLocaleString('es-ES', {
+                  day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                })}
               </span>
-              {!notification.is_read && <Badge className="ml-auto text-[10px]">Nueva</Badge>}
-            </div>
-            <span className="text-xs text-muted-foreground">{notification.message}</span>
-            <span className="text-[11px] text-muted-foreground">
-              {new Date(notification.created_at).toLocaleString('es-ES', {
-                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-              })}
-            </span>
-          </DropdownMenuItem>
-        ))}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

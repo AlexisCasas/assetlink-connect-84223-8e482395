@@ -842,8 +842,11 @@ export type Database = {
           id: string
           is_read: boolean
           message: string
+          metadata: Json
           organization_id: string
+          priority: string
           read_at: string | null
+          recipient_member_id: string | null
           related_quote_id: string | null
           related_request_id: string | null
           title: string
@@ -857,8 +860,11 @@ export type Database = {
           id?: string
           is_read?: boolean
           message: string
+          metadata?: Json
           organization_id: string
+          priority?: string
           read_at?: string | null
+          recipient_member_id?: string | null
           related_quote_id?: string | null
           related_request_id?: string | null
           title: string
@@ -872,8 +878,11 @@ export type Database = {
           id?: string
           is_read?: boolean
           message?: string
+          metadata?: Json
           organization_id?: string
+          priority?: string
           read_at?: string | null
+          recipient_member_id?: string | null
           related_quote_id?: string | null
           related_request_id?: string | null
           title?: string
@@ -885,6 +894,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_notifications_recipient_member_id_fkey"
+            columns: ["recipient_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
             referencedColumns: ["id"]
           },
           {
@@ -2584,6 +2600,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_notification_once: {
+        Args: {
+          p_actor_user_id: string
+          p_entity_id: string
+          p_entity_type: string
+          p_message: string
+          p_metadata?: Json
+          p_organization_id: string
+          p_priority?: string
+          p_recipient_member_id: string
+          p_title: string
+          p_type: string
+        }
+        Returns: string
+      }
       create_organization_notification: {
         Args: {
           target_actor_user_id: string
@@ -2639,6 +2670,10 @@ export type Database = {
       }
       delete_work_order_material: {
         Args: { p_work_order_material_id: string }
+        Returns: undefined
+      }
+      generate_operational_due_notifications: {
+        Args: never
         Returns: undefined
       }
       get_activity_report_form_data: {
@@ -2820,6 +2855,35 @@ export type Database = {
       map_request_priority_to_work_order_priority: {
         Args: { request_priority: number }
         Returns: string
+      }
+      notify_member: {
+        Args: {
+          p_actor_user_id: string
+          p_entity_id: string
+          p_entity_type: string
+          p_member_id: string
+          p_message: string
+          p_metadata?: Json
+          p_priority?: string
+          p_title: string
+          p_type: string
+        }
+        Returns: undefined
+      }
+      notify_role_members: {
+        Args: {
+          p_actor_user_id: string
+          p_entity_id: string
+          p_entity_type: string
+          p_message: string
+          p_metadata?: Json
+          p_organization_id: string
+          p_priority?: string
+          p_roles: Database["public"]["Enums"]["organization_member_role"][]
+          p_title: string
+          p_type: string
+        }
+        Returns: undefined
       }
       reject_quote: {
         Args: { reason?: string; target_quote_id: string }
