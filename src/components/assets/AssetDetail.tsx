@@ -20,12 +20,17 @@ import {
   Archive,
   RotateCcw,
   Pencil,
+  Gauge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UseAssetsResult } from '@/hooks/useAssets';
 import type { Asset, AssetCriticality, AssetNodeType, AssetStatus } from '@/types/asset';
 import { ASSET_NODE_TYPE_ORDER, ASSET_NODE_TYPE_LABELS, ASSET_EDITABLE_STATUSES, ASSET_CRITICALITY_ORDER, ASSET_CRITICALITY_LABELS, getAssetStatusBadgeClass } from '@/lib/assetLabels';
 import { AssetHistory } from './AssetHistory';
+import { useCriticalityMatrix } from '@/hooks/useCriticalityMatrix';
+import { CriticalityAssessmentDialog } from '@/components/criticality/CriticalityAssessmentDialog';
+import { CriticalityAssessmentHistory } from '@/components/criticality/CriticalityAssessmentHistory';
+import type { CriticalityAssessment } from '@/types/criticalityMatrix';
 
 interface AssetDetailProps {
   state: UseAssetsResult;
@@ -75,12 +80,20 @@ const toEditForm = (asset: Asset): EditForm => ({
 });
 
 export function AssetDetail({ state }: AssetDetailProps) {
-  const { selectedAsset: asset, canManageAssets, categories, branches, error, saving, archiveAsset, restoreAsset, updateAsset } = state;
+  const { selectedAsset: asset, canManageAssets, categories, branches, error, saving, archiveAsset, restoreAsset, updateAsset, refreshAssets } = state;
   const { toast } = useToast();
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<EditForm | null>(null);
+  const [assessmentDialogOpen, setAssessmentDialogOpen] = useState(false);
+  const [latestAssessment, setLatestAssessment] = useState<CriticalityAssessment | null>(null);
+  const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
+
+  // Matrix is scoped to the asset's own organization — hook must be called
+  // unconditionally (asset can still be null here), so organizationId is
+  // undefined until an asset is selected.
+  const { activeParameters, calculateCriticality, loadAssessments, saving: assessmentSaving } = useCriticalityMatrix(asset?.organizationId);
 
   // Switching the selected asset (or losing selection) must drop any
   // in-progress edit instead of showing a stale form over different data.
@@ -88,6 +101,20 @@ export function AssetDetail({ state }: AssetDetailProps) {
     setIsEditing(false);
     setForm(null);
   }, [asset?.id]);
+
+  // Latest evaluation drives the "score" line next to Criticidad — refetched
+  // whenever the selected asset changes or a new evaluation is saved.
+  useEffect(() => {
+    if (!asset) {
+      setLatestAssessment(null);
+      return;
+    }
+    let cancelled = false;
+    loadAssessments(asset.id)
+      .then((assessments) => { if (!cancelled) setLatestAssessment(assessments[0] ?? null); })
+      .catch(() => { if (!cancelled) setLatestAssessment(null); });
+    return () => { cancelled = true; };
+  }, [asset?.id, historyRefreshToken, loadAssessments]);
 
   if (!asset) {
     return (
@@ -385,8 +412,23 @@ export function AssetDetail({ state }: AssetDetailProps) {
               <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.serialNumber || 'No especificado'}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Criticidad</label>
-              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.criticality ? ASSET_CRITICALITY_LABELS[asset.criticality] : 'No especificado'}</p>
+              <label className="text-sm font-medium text-muted-foreground">Criticidad (efectiva)</label>
+              <div className="mt-1 flex flex-wrap items-center gap-2 rounded bg-muted/30 p-2 text-sm">
+                <span>{asset.criticality ? ASSET_CRITICALITY_LABELS[asset.criticality] : 'No especificado'}</span>
+                {latestAssessment && latestAssessment.calculatedCriticality === asset.criticality && (
+                  <Badge variant="secondary">Score: {latestAssessment.score} (última evaluación)</Badge>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {latestAssessment && latestAssessment.calculatedCriticality === asset.criticality
+                  ? 'Calculada con la matriz de criticidad configurada.'
+                  : 'Valor manual — no hay una evaluación calculada vigente para este activo.'}
+              </p>
+              {canManageAssets && (
+                <Button variant="outline" size="sm" className="mt-2" onClick={() => setAssessmentDialogOpen(true)}>
+                  <Gauge className="h-3.5 w-3.5 mr-2" /> Evaluar criticidad
+                </Button>
+              )}
             </div>
           </div>
 
@@ -436,7 +478,9 @@ export function AssetDetail({ state }: AssetDetailProps) {
         </div>
           </TabsContent>
 
-          <TabsContent value="history">
+          <TabsContent value="history" className="space-y-6">
+            <CriticalityAssessmentHistory assetId={asset.id} refreshToken={historyRefreshToken} loadAssessments={loadAssessments} />
+            <Separator />
             <AssetHistory assetId={asset.id} />
           </TabsContent>
         </Tabs>
@@ -471,6 +515,21 @@ export function AssetDetail({ state }: AssetDetailProps) {
           )}
         </div>
       </CardContent>
+
+      <CriticalityAssessmentDialog
+        open={assessmentDialogOpen}
+        onOpenChange={setAssessmentDialogOpen}
+        assetId={asset.id}
+        assetName={asset.name}
+        activeParameters={activeParameters}
+        saving={assessmentSaving}
+        onSave={calculateCriticality}
+        onSaved={() => {
+          setHistoryRefreshToken((token) => token + 1);
+          void refreshAssets();
+          toast({ title: 'Criticidad evaluada', description: `Se guardó una nueva evaluación de criticidad para "${asset.name}".` });
+        }}
+      />
     </Card>
   );
 }

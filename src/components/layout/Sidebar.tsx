@@ -24,13 +24,14 @@ import {
   ClipboardList,
   Boxes,
   Wrench,
-  BarChart3
+  BarChart3,
+  Gauge
   ,Shield
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'admin') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'admin') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -77,6 +78,12 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   // comparison surface) nor to a platform_admin org (no operating-org
   // context to scope it to).
   const canViewEfficiency = isOperatingOrg && !!currentMembership?.isActive && ['owner', 'admin', 'manager'].includes(currentMembership.role);
+  // Criticidad configures the matrix behind assets.criticality, and assets
+  // only ever belong to client_company organizations in this codebase
+  // (same scope as canViewAssets, not the broader isOperatingOrg used by
+  // work-order-centric modules) — provider/facility_manager orgs have no
+  // assets to evaluate. Same owner/admin/manager gate as inventory/efficiency.
+  const canViewCriticality = canViewAssets && !!currentMembership?.isActive && ['owner', 'admin', 'manager'].includes(currentMembership.role);
 
   return (
     <aside className={cn(
@@ -221,6 +228,23 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               !collapsed && "mr-2"
             )} />
             {!collapsed && 'Activos'}
+          </Button>
+        )}
+
+        {canViewCriticality && (
+          <Button
+            variant={currentView === 'criticality' ? "default" : "ghost"}
+            className={cn(
+              "w-full justify-start",
+              collapsed && "justify-center px-2"
+            )}
+            onClick={() => onViewChange?.('criticality')}
+          >
+            <Gauge className={cn(
+              "h-4 w-4",
+              !collapsed && "mr-2"
+            )} />
+            {!collapsed && 'Criticidad'}
           </Button>
         )}
 
