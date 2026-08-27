@@ -75,6 +75,269 @@ export type Database = {
           },
         ]
       }
+      asset_categories: {
+        Row: {
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          parent_category_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          parent_category_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          parent_category_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_categories_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_categories_parent_category_id_fkey"
+            columns: ["parent_category_id"]
+            isOneToOne: false
+            referencedRelation: "asset_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_documents: {
+        Row: {
+          asset_id: string
+          created_at: string
+          document_type: string | null
+          file_url: string | null
+          id: string
+          name: string
+          organization_id: string
+          storage_path: string | null
+          uploaded_by_user_id: string | null
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          document_type?: string | null
+          file_url?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          storage_path?: string | null
+          uploaded_by_user_id?: string | null
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          document_type?: string | null
+          file_url?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          storage_path?: string | null
+          uploaded_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_documents_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_events: {
+        Row: {
+          asset_id: string
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          event_type: string
+          id: string
+          organization_id: string
+          payload: Json
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          event_type: string
+          id?: string
+          organization_id: string
+          payload?: Json
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          event_type?: string
+          id?: string
+          organization_id?: string
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assets: {
+        Row: {
+          asset_category_id: string | null
+          barcode: string | null
+          branch_id: string | null
+          code: string | null
+          created_at: string
+          created_by_user_id: string | null
+          criticality: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          location_text: string | null
+          manufacturer: string | null
+          metadata: Json
+          model: string | null
+          name: string
+          node_type: string
+          organization_id: string
+          parent_asset_id: string | null
+          purchase_date: string | null
+          qr_code: string | null
+          serial_number: string | null
+          status: string
+          technical_data: Json
+          updated_at: string
+          warranty_until: string | null
+        }
+        Insert: {
+          asset_category_id?: string | null
+          barcode?: string | null
+          branch_id?: string | null
+          code?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          criticality?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          location_text?: string | null
+          manufacturer?: string | null
+          metadata?: Json
+          model?: string | null
+          name: string
+          node_type?: string
+          organization_id: string
+          parent_asset_id?: string | null
+          purchase_date?: string | null
+          qr_code?: string | null
+          serial_number?: string | null
+          status?: string
+          technical_data?: Json
+          updated_at?: string
+          warranty_until?: string | null
+        }
+        Update: {
+          asset_category_id?: string | null
+          barcode?: string | null
+          branch_id?: string | null
+          code?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          criticality?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          location_text?: string | null
+          manufacturer?: string | null
+          metadata?: Json
+          model?: string | null
+          name?: string
+          node_type?: string
+          organization_id?: string
+          parent_asset_id?: string | null
+          purchase_date?: string | null
+          qr_code?: string | null
+          serial_number?: string | null
+          status?: string
+          technical_data?: Json
+          updated_at?: string
+          warranty_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assets_asset_category_id_fkey"
+            columns: ["asset_category_id"]
+            isOneToOne: false
+            referencedRelation: "asset_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "client_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_parent_asset_id_fkey"
+            columns: ["parent_asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assignments: {
         Row: {
           approver_id: string | null

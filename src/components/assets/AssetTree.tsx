@@ -2,339 +2,200 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  ChevronDown, 
-  ChevronRight, 
-  Building, 
-  Building2, 
-  Truck, 
+import {
+  ChevronDown,
+  Building,
+  Building2,
+  MapPin,
   Settings2,
+  Truck,
+  Wrench,
+  Cog,
+  CircleDot,
   Plus,
-  Minus
+  Minus,
+  Eye,
+  EyeOff,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { UseAssetsResult } from '@/hooks/useAssets';
+import type { AssetNodeType, AssetStatus, AssetTreeNode } from '@/types/asset';
 
-interface AssetNode {
-  id: string;
-  name: string;
-  type: 'society' | 'company' | 'asset_class' | 'asset' | 'sub_asset';
-  children?: AssetNode[];
-  status?: 'active' | 'maintenance' | 'inactive';
-  count?: number;
-  // Technical data for assets
-  manufacturer?: string;
-  model?: string;
-  serialNumber?: string;
-  year?: string;
-  assetType?: string;
-  classification1?: string;
-  classification2?: string;
-  provider?: string;
-  purchaseDate?: string;
-  dailyUsageHours?: string;
-  maintenancePlan?: string;
-  barCode?: string;
-  priority?: string;
-  imageUrl?: string;
-}
+const NODE_TYPE_ORDER: AssetNodeType[] = ['structure', 'site', 'area', 'system', 'fleet', 'equipment', 'component', 'subcomponent'];
 
-const mockAssets: AssetNode[] = [
-  {
-    id: '1',
-    name: 'EMPRESAS',
-    type: 'society',
-    children: [
-      {
-        id: '1-1',
-        name: 'EMPRESA SECTOR RETAIL',
-        type: 'company',
-        status: 'active',
-        children: []
-      },
-      {
-        id: '1-2',
-        name: 'EMPRESA SECTOR AGUA',
-        type: 'company',
-        status: 'active',
-        children: []
-      },
-      {
-        id: '1-3',
-        name: 'EMPRESA SECTOR ADMINISTRACIÓN DE EDIFICIOS/OFICINAS',
-        type: 'company',
-        status: 'active',
-        children: []
-      },
-      {
-        id: '1-4',
-        name: 'EMPRESA SECTOR TRANSPORTE/LOGÍSTICA',
-        type: 'company',
-        status: 'active',
-        children: [
-          {
-            id: '1-4-1',
-            name: 'FLOTA DE AUTOBUSES',
-            type: 'asset_class',
-            status: 'active',
-            children: [
-              {
-                id: '1-4-1-1',
-                name: 'BUS MERCEDES BENZ - 01',
-                type: 'asset',
-                status: 'active',
-                manufacturer: 'MERCEDES BENZ',
-                model: 'M2 106',
-                serialNumber: '0409E05ABB6C81',
-                year: '2010',
-                assetType: 'CAMION 10 TON',
-                classification1: 'BCI LEASING',
-                classification2: '3',
-                provider: 'MORGAN EMPRESAS',
-                purchaseDate: '2017-07-02',
-                dailyUsageHours: '24:00',
-                maintenancePlan: 'PLAN DE MANTENIMIENTO CAMIÓN FREIGHTLINER M102',
-                barCode: '0409E05ABB6C81',
-                priority: '3',
-                imageUrl: '/src/assets/bus-asset.jpg'
-              }
-            ]
-          },
-          {
-            id: '1-4-2',
-            name: 'FLOTA DE ACTIVOS',
-            type: 'asset_class',
-            status: 'active',
-            children: []
-          },
-          {
-            id: '1-4-3',
-            name: 'CENTROS DE ALMACENES',
-            type: 'asset_class',
-            status: 'active',
-            children: []
-          }
-        ]
-      }
-    ]
+const NODE_TYPE_LABELS: Record<AssetNodeType, string> = {
+  structure: 'Estructura / Unidad',
+  site: 'Sede',
+  area: 'Área / Sector',
+  system: 'Sistema / Línea',
+  fleet: 'Flota',
+  equipment: 'Equipo',
+  component: 'Componente',
+  subcomponent: 'Subcomponente',
+};
+
+const NODE_TYPE_ICONS: Record<AssetNodeType, typeof Building2> = {
+  structure: Building2,
+  site: Building,
+  area: MapPin,
+  system: Settings2,
+  fleet: Truck,
+  equipment: Wrench,
+  component: Cog,
+  subcomponent: CircleDot,
+};
+
+const STATUS_LABELS: Record<AssetStatus, string> = {
+  active: 'Activo',
+  maintenance: 'Mantenimiento',
+  inactive: 'Inactivo',
+  archived: 'Archivado',
+};
+
+const getStatusColor = (status: AssetStatus) => {
+  switch (status) {
+    case 'active':
+      return 'bg-success/10 text-success border-success/20';
+    case 'maintenance':
+      return 'bg-warning/10 text-warning border-warning/20';
+    case 'archived':
+      return 'bg-muted text-muted-foreground border-border';
+    default:
+      return 'bg-muted text-muted-foreground border-border';
   }
-];
+};
 
-export type { AssetNode };
+const suggestNextNodeType = (parentType?: AssetNodeType): AssetNodeType => {
+  if (!parentType) return 'structure';
+  const index = NODE_TYPE_ORDER.indexOf(parentType);
+  return NODE_TYPE_ORDER[Math.min(index + 1, NODE_TYPE_ORDER.length - 1)];
+};
 
 interface AssetTreeProps {
-  onAssetSelect?: (asset: AssetNode) => void;
+  state: UseAssetsResult;
 }
 
-export function AssetTree({ onAssetSelect }: AssetTreeProps) {
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['1', '1-4']));
-  const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
-  const [assets, setAssets] = useState<AssetNode[]>(mockAssets);
-  const [newItemDialog, setNewItemDialog] = useState<{ open: boolean; parentId?: string; parentType?: AssetNode['type'] }>({ open: false });
-  const [newItemForm, setNewItemForm] = useState<{ name: string; status: 'active' | 'maintenance' | 'inactive' }>({ name: '', status: 'active' });
+export function AssetTree({ state }: AssetTreeProps) {
+  const { assetTree, assets, categories, branches, loading, error, canManageAssets, showArchived, setShowArchived, selectedAssetId, selectAsset, createAsset } = state;
+
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogParentId, setDialogParentId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState<{ name: string; nodeType: AssetNodeType; status: AssetStatus; branchId: string; assetCategoryId: string }>({
+    name: '',
+    nodeType: 'structure',
+    status: 'active',
+    branchId: '',
+    assetCategoryId: '',
+  });
+
+  const findAssetById = (id: string) => assets.find((asset) => asset.id === id) ?? null;
+  const selectedParent = dialogParentId ? findAssetById(dialogParentId) : null;
 
   const toggleNode = (nodeId: string) => {
-    const newExpanded = new Set(expandedNodes);
-    if (newExpanded.has(nodeId)) {
-      newExpanded.delete(nodeId);
-    } else {
-      newExpanded.add(nodeId);
-    }
-    setExpandedNodes(newExpanded);
+    setExpandedNodes((current) => {
+      const next = new Set(current);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
   };
 
-  const getIcon = (type: AssetNode['type']) => {
-    switch (type) {
-      case 'society':
-        return Building2;
-      case 'company':
-        return Building;
-      case 'asset_class':
-        return Settings2;
-      case 'asset':
-        return Truck;
-      case 'sub_asset':
-        return Settings2;
-      default:
-        return Building2;
-    }
+  const openDialog = (parentId: string | null) => {
+    setDialogParentId(parentId);
+    const parent = parentId ? findAssetById(parentId) : null;
+    setForm({
+      name: '',
+      nodeType: suggestNextNodeType(parent?.nodeType),
+      status: 'active',
+      branchId: parent?.branchId ?? '',
+      assetCategoryId: '',
+    });
+    setDialogOpen(true);
   };
 
-  const getStatusColor = (status?: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-success/10 text-success border-success/20';
-      case 'maintenance':
-        return 'bg-warning/10 text-warning border-warning/20';
-      case 'inactive':
-        return 'bg-muted text-muted-foreground border-border';
-      default:
-        return 'bg-muted text-muted-foreground border-border';
-    }
-  };
-
-  const handleSelectAsset = (asset: AssetNode) => {
-    setSelectedAsset(asset.id);
-    onAssetSelect?.(asset);
-  };
-
-  const getNextType = (parentType: AssetNode['type']): AssetNode['type'] | null => {
-    switch (parentType) {
-      case 'society': return 'company';
-      case 'company': return 'asset_class';
-      case 'asset_class': return 'asset';
-      case 'asset': return 'sub_asset';
-      default: return null;
+  const submitDialog = async () => {
+    if (!form.name.trim()) return;
+    setSubmitting(true);
+    const created = await createAsset({
+      name: form.name.trim(),
+      nodeType: form.nodeType,
+      status: form.status,
+      parentAssetId: dialogParentId,
+      branchId: form.branchId || null,
+      assetCategoryId: form.assetCategoryId || null,
+    });
+    setSubmitting(false);
+    if (created) {
+      if (dialogParentId) setExpandedNodes((current) => new Set(current).add(dialogParentId));
+      setDialogOpen(false);
     }
   };
 
-  const generateId = () => {
-    return Math.random().toString(36).substr(2, 9);
-  };
-
-  const addNewItem = (parentId?: string) => {
-    if (!newItemForm.name.trim()) return;
-
-    const newItem: AssetNode = {
-      id: generateId(),
-      name: newItemForm.name,
-      type: parentId ? getNextType(findNodeById(assets, parentId)?.type || 'society') || 'society' : 'society',
-      status: newItemForm.status,
-      children: []
-    };
-
-    if (!parentId) {
-      // Add as root level (society)
-      setAssets([...assets, newItem]);
-    } else {
-      // Add as child
-      const updateTree = (nodes: AssetNode[]): AssetNode[] => {
-        return nodes.map(node => {
-          if (node.id === parentId) {
-            return {
-              ...node,
-              children: [...(node.children || []), newItem]
-            };
-          }
-          if (node.children) {
-            return {
-              ...node,
-              children: updateTree(node.children)
-            };
-          }
-          return node;
-        });
-      };
-      setAssets(updateTree(assets));
-      setExpandedNodes(new Set([...expandedNodes, parentId]));
-    }
-
-    setNewItemForm({ name: '', status: 'active' });
-    setNewItemDialog({ open: false });
-  };
-
-  const findNodeById = (nodes: AssetNode[], id: string): AssetNode | null => {
-    for (const node of nodes) {
-      if (node.id === id) return node;
-      if (node.children) {
-        const found = findNodeById(node.children, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-
-  const getTypeName = (type: AssetNode['type']) => {
-    switch (type) {
-      case 'society': return 'Sociedad';
-      case 'company': return 'Compañía';
-      case 'asset_class': return 'Clase de Activo';
-      case 'asset': return 'Activo';
-      case 'sub_asset': return 'Subactivo';
-      default: return 'Elemento';
-    }
-  };
-
-  const canAddChild = (type: AssetNode['type']) => {
-    return type !== 'sub_asset';
-  };
-
-  const renderNode = (node: AssetNode, level: number = 0) => {
-    const hasChildren = node.children && node.children.length > 0;
+  const renderNode = (node: AssetTreeNode, level: number = 0) => {
+    const hasChildren = node.children.length > 0;
     const isExpanded = expandedNodes.has(node.id);
-    const isSelected = selectedAsset === node.id;
-    const Icon = getIcon(node.type);
+    const isSelected = selectedAssetId === node.id;
+    const Icon = NODE_TYPE_ICONS[node.nodeType] ?? Building2;
 
     return (
       <div key={node.id} className="select-none">
         <div
           className={cn(
-            "group flex items-center py-2 px-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors",
-            isSelected && "bg-primary/10 border-l-2 border-l-primary",
-            level === 0 && "font-semibold"
+            'group flex items-center py-2 px-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors',
+            isSelected && 'bg-primary/10 border-l-2 border-l-primary',
+            level === 0 && 'font-semibold',
           )}
           style={{ paddingLeft: `${level * 20 + 8}px` }}
-          onClick={() => handleSelectAsset(node)}
+          onClick={() => selectAsset(node.id)}
         >
           {hasChildren && (
             <Button
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 mr-1"
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={(event) => {
+                event.stopPropagation();
                 toggleNode(node.id);
               }}
             >
-              {isExpanded ? (
-                <Minus className="h-3 w-3" />
-              ) : (
-                <Plus className="h-3 w-3" />
-              )}
+              {isExpanded ? <Minus className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
             </Button>
           )}
-          
-          <Icon className="h-4 w-4 mr-2 text-muted-foreground" />
-          
-          <span className="flex-1 text-sm">{node.name}</span>
-          
-          {node.status && (
-            <Badge 
-              variant="outline" 
-              className={cn("ml-2 text-xs", getStatusColor(node.status))}
-            >
-              {node.status}
-            </Badge>
-          )}
 
-          {canAddChild(node.type) && (
-            <Dialog 
-              open={newItemDialog.open && newItemDialog.parentId === node.id} 
-              onOpenChange={(open) => setNewItemDialog({ open, parentId: open ? node.id : undefined, parentType: node.type })}
+          <Icon className="h-4 w-4 mr-2 text-muted-foreground shrink-0" />
+
+          <span className="flex-1 text-sm truncate">{node.name}</span>
+
+          <Badge variant="outline" className={cn('ml-2 shrink-0 text-xs', getStatusColor(node.status))}>
+            {STATUS_LABELS[node.status]}
+          </Badge>
+
+          {canManageAssets && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 ml-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              onClick={(event) => {
+                event.stopPropagation();
+                openDialog(node.id);
+              }}
+              title="Agregar subactivo"
             >
-              <DialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setNewItemDialog({ open: true, parentId: node.id, parentType: node.type });
-                  }}
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </DialogTrigger>
-            </Dialog>
+              <Plus className="h-3 w-3" />
+            </Button>
           )}
         </div>
 
         {hasChildren && isExpanded && (
           <div className="ml-2">
-            {node.children?.map((child) => renderNode(child, level + 1))}
+            {node.children.map((child) => renderNode(child, level + 1))}
           </div>
         )}
       </div>
@@ -344,68 +205,82 @@ export function AssetTree({ onAssetSelect }: AssetTreeProps) {
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle className="flex items-center justify-between text-lg">
+        <CardTitle className="flex items-center justify-between gap-2 text-lg">
           <div className="flex items-center">
             <Building2 className="h-5 w-5 mr-2" />
             Estructura de Activos
           </div>
-          <Dialog 
-            open={newItemDialog.open && !newItemDialog.parentId} 
-            onOpenChange={(open) => setNewItemDialog({ open })}
-          >
-            <DialogTrigger asChild>
-              <Button 
-                variant="default" 
-                size="sm"
-                onClick={() => setNewItemDialog({ open: true })}
-              >
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowArchived(!showArchived)}>
+              {showArchived ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
+              {showArchived ? 'Ocultar archivados' : 'Ver archivados'}
+            </Button>
+            {canManageAssets && (
+              <Button variant="default" size="sm" onClick={() => openDialog(selectedAssetId)}>
                 <Plus className="h-4 w-4 mr-1" />
-                Agregar Sociedad
+                {selectedAssetId ? 'Agregar subactivo' : 'Agregar activo raíz'}
               </Button>
-            </DialogTrigger>
-          </Dialog>
+            )}
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4">
-        <div className="space-y-1">
-          {assets.map((node) => renderNode(node))}
-        </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-10 text-muted-foreground">
+            <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+            Cargando activos…
+          </div>
+        ) : error ? (
+          <p className="py-8 text-center text-sm text-destructive">{error}</p>
+        ) : assets.length === 0 ? (
+          <div className="py-12 text-center text-muted-foreground">
+            <Building2 className="mx-auto mb-3 h-8 w-8 opacity-50" />
+            <p className="font-medium">Aún no tienes activos registrados. Crea tu primera estructura.</p>
+          </div>
+        ) : assetTree.length === 0 ? (
+          <div className="py-12 text-center text-muted-foreground">
+            <ChevronDown className="mx-auto mb-3 h-8 w-8 opacity-50" />
+            <p>Todos tus activos están archivados.</p>
+            <Button variant="link" size="sm" onClick={() => setShowArchived(true)}>Ver archivados</Button>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {assetTree.map((node) => renderNode(node))}
+          </div>
+        )}
 
-        {/* Dialog for adding new items */}
-        <Dialog 
-          open={newItemDialog.open} 
-          onOpenChange={(open) => setNewItemDialog({ open: false })}
-        >
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                Agregar {newItemDialog.parentId 
-                  ? getTypeName(getNextType(findNodeById(assets, newItemDialog.parentId)?.type || 'society') || 'society')
-                  : 'Sociedad'
-                }
+                {dialogParentId ? `Agregar subactivo${selectedParent ? ` bajo "${selectedParent.name}"` : ''}` : 'Agregar activo raíz'}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="name">Nombre</Label>
+                <Label htmlFor="asset-name">Nombre</Label>
                 <Input
-                  id="name"
-                  value={newItemForm.name}
-                  onChange={(e) => setNewItemForm({ ...newItemForm, name: e.target.value })}
+                  id="asset-name"
+                  value={form.name}
+                  onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
                   placeholder="Ingrese el nombre"
                 />
               </div>
               <div>
-                <Label htmlFor="status">Estado</Label>
-                <Select 
-                  value={newItemForm.status} 
-                  onValueChange={(value: 'active' | 'maintenance' | 'inactive') => 
-                    setNewItemForm({ ...newItemForm, status: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                <Label>Tipo de nodo</Label>
+                <Select value={form.nodeType} onValueChange={(value: AssetNodeType) => setForm((current) => ({ ...current, nodeType: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {NODE_TYPE_ORDER.map((type) => (
+                      <SelectItem key={type} value={type}>{NODE_TYPE_LABELS[type]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Estado</Label>
+                <Select value={form.status} onValueChange={(value: AssetStatus) => setForm((current) => ({ ...current, status: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Activo</SelectItem>
                     <SelectItem value="maintenance">Mantenimiento</SelectItem>
@@ -413,21 +288,39 @@ export function AssetTree({ onAssetSelect }: AssetTreeProps) {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex justify-end space-x-2">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setNewItemDialog({ open: false })}
-                >
-                  Cancelar
-                </Button>
-                <Button 
-                  onClick={() => addNewItem(newItemDialog.parentId)}
-                  disabled={!newItemForm.name.trim()}
-                >
-                  Agregar
-                </Button>
+              <div>
+                <Label>Sucursal (opcional)</Label>
+                <Select value={form.branchId || 'none'} onValueChange={(value) => setForm((current) => ({ ...current, branchId: value === 'none' ? '' : value }))}>
+                  <SelectTrigger><SelectValue placeholder={branches.length === 0 ? 'Sin sucursales' : 'Selecciona sucursal'} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin sucursal</SelectItem>
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+              {categories.length > 0 && (
+                <div>
+                  <Label>Categoría (opcional)</Label>
+                  <Select value={form.assetCategoryId || 'none'} onValueChange={(value) => setForm((current) => ({ ...current, assetCategoryId: value === 'none' ? '' : value }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecciona categoría" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin categoría</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>Cancelar</Button>
+              <Button onClick={() => void submitDialog()} disabled={submitting || !form.name.trim()}>
+                {submitting ? 'Agregando…' : 'Agregar'}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </CardContent>
