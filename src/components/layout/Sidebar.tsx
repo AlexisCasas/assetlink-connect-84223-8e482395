@@ -25,13 +25,14 @@ import {
   Boxes,
   Wrench,
   BarChart3,
-  Gauge
+  Gauge,
+  ClipboardCheck
   ,Shield
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'admin') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'admin') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -84,6 +85,12 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   // work-order-centric modules) — provider/facility_manager orgs have no
   // assets to evaluate. Same owner/admin/manager gate as inventory/efficiency.
   const canViewCriticality = canViewAssets && !!currentMembership?.isActive && ['owner', 'admin', 'manager'].includes(currentMembership.role);
+  // Inspecciones hangs off activos/sedes, so same client_company-only scope
+  // as Activos/Criticidad — but unlike those, technician IS included here:
+  // a technician needs to see and execute their own assigned inspections,
+  // even though they cannot edit templates/plans (gated inside
+  // InspectionsView itself via canPlanWork, not at the nav level).
+  const canViewInspections = canViewAssets && !!currentMembership?.isActive && ['owner', 'admin', 'manager', 'technician'].includes(currentMembership.role);
 
   return (
     <aside className={cn(
@@ -245,6 +252,23 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               !collapsed && "mr-2"
             )} />
             {!collapsed && 'Criticidad'}
+          </Button>
+        )}
+
+        {canViewInspections && (
+          <Button
+            variant={currentView === 'inspections' ? "default" : "ghost"}
+            className={cn(
+              "w-full justify-start",
+              collapsed && "justify-center px-2"
+            )}
+            onClick={() => onViewChange?.('inspections')}
+          >
+            <ClipboardCheck className={cn(
+              "h-4 w-4",
+              !collapsed && "mr-2"
+            )} />
+            {!collapsed && 'Inspecciones'}
           </Button>
         )}
 
