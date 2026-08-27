@@ -2133,6 +2133,61 @@ export type Database = {
           },
         ]
       }
+      work_order_work_logs: {
+        Row: {
+          created_at: string
+          id: string
+          member_id: string
+          note: string
+          organization_id: string
+          status_from: string | null
+          status_to: string | null
+          work_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          member_id: string
+          note: string
+          organization_id: string
+          status_from?: string | null
+          status_to?: string | null
+          work_order_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          member_id?: string
+          note?: string
+          organization_id?: string
+          status_from?: string | null
+          status_to?: string | null
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_order_work_logs_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_work_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_work_logs_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       work_orders: {
         Row: {
           asset_id: string | null
@@ -2435,6 +2490,27 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: Json
       }
+      get_my_technician_work_orders: {
+        Args: never
+        Returns: {
+          activities: Json
+          asset_id: string
+          asset_name: string
+          asset_path: string
+          due_at: string
+          id: string
+          location: string
+          materials: Json
+          organization_id: string
+          priority: string
+          request_id: string
+          scheduled_at: string
+          status: string
+          title: string
+          work_order_number: string
+          work_order_type: string
+        }[]
+      }
       get_user_organizations: {
         Args: never
         Returns: {
@@ -2491,6 +2567,18 @@ export type Database = {
           warning_status: string
         }[]
       }
+      get_work_order_work_logs: {
+        Args: { p_work_order_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          member_email: string
+          member_name: string
+          note: string
+          status_from: string
+          status_to: string
+        }[]
+      }
       has_organization_role: {
         Args: {
           _organization_id: string
@@ -2522,6 +2610,7 @@ export type Database = {
         Args: { reason?: string; target_quote_id: string }
         Returns: undefined
       }
+      resolve_asset_path: { Args: { p_asset_id: string }; Returns: string }
       resolve_caller_planner_member: {
         Args: { p_organization_id: string }
         Returns: string
@@ -2529,6 +2618,41 @@ export type Database = {
       storage_request_id_from_name: {
         Args: { object_name: string }
         Returns: string
+      }
+      technician_update_work_order_progress: {
+        Args: { p_notes?: string; p_status?: string; p_work_order_id: string }
+        Returns: {
+          asset_id: string | null
+          assigned_member_id: string | null
+          cancelled_at: string | null
+          client_organization_id: string
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          due_at: string | null
+          id: string
+          observations: string | null
+          planner_member_id: string | null
+          priority: string
+          provider_organization_id: string
+          quote_id: string | null
+          request_id: string
+          scheduled_at: string | null
+          started_at: string | null
+          status: string
+          title: string | null
+          total_amount: number | null
+          updated_at: string
+          work_order_number: string
+          work_order_type: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       update_work_order_operations: {
         Args: {

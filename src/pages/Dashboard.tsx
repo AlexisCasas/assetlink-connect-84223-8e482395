@@ -14,18 +14,20 @@ import { ApprovedProvidersList } from '@/components/providers/ApprovedProvidersL
 import { BranchesList } from '@/components/branches/BranchesList';
 import { WorkOrdersList } from '@/components/work-orders/WorkOrdersList';
 import { InventoryView } from '@/components/inventory/InventoryView';
+import { TechnicianWorkView } from '@/components/technician/TechnicianWorkView';
 import { AdminConsole } from '@/components/admin/AdminConsole';
 
-type DashboardView = 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'inventory' | 'admin';
+type DashboardView = 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'admin';
 
-const ALL_VIEWS: DashboardView[] = ['dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications', 'approved-providers', 'branches', 'work-orders', 'inventory', 'contact', 'admin'];
+const ALL_VIEWS: DashboardView[] = ['dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications', 'approved-providers', 'branches', 'work-orders', 'my-work-orders', 'inventory', 'contact', 'admin'];
 // A platform_admin organization only manages Administración; every other
 // operational view falls back to it, including direct hash navigation.
 const PLATFORM_ADMIN_ALLOWED_VIEWS: DashboardView[] = ['admin', 'notifications'];
 
 const Dashboard = () => {
-  const { user, currentOrganization } = useAuth();
+  const { user, currentOrganization, currentMembership } = useAuth();
   const isPlatformAdminOrg = currentOrganization?.organizationType === 'platform_admin';
+  const isTechnicianRole = !!currentMembership?.isActive && currentMembership.role === 'technician';
   const [currentView, setCurrentView] = useState<DashboardView>(isPlatformAdminOrg ? 'admin' : 'dashboard');
 
   useEffect(() => {
@@ -80,7 +82,12 @@ const Dashboard = () => {
       case 'branches':
         return <BranchesList />;
       case 'work-orders':
+        // A technician only ever sees their own assigned work — even via
+        // direct hash navigation, never the organization's full list.
+        if (isTechnicianRole) return <TechnicianWorkView />;
         return <WorkOrdersList />;
+      case 'my-work-orders':
+        return <TechnicianWorkView />;
       case 'inventory':
         return <InventoryView />;
       case 'admin': return <AdminConsole />;

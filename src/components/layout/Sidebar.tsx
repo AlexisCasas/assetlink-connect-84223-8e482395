@@ -22,13 +22,14 @@ import {
   Users,
   Building2,
   ClipboardList,
-  Boxes
+  Boxes,
+  Wrench
   ,Shield
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'inventory' | 'admin') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'admin') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -49,18 +50,26 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
     ? `${organizationTypeLabels[currentOrganization.organizationType]}${currentMembership ? ` · ${ORGANIZATION_ROLE_LABELS[currentMembership.role]}` : ''}`
     : 'Sin organizacion asignada';
   const isPlatformAdminOrg = currentOrganization?.organizationType === 'platform_admin';
-  const canViewWorkOrders = currentOrganization !== null && !isPlatformAdminOrg && [
+  const isOperatingOrg = currentOrganization !== null && !isPlatformAdminOrg && [
     'client_company',
     'provider_company',
     'facility_manager',
   ].includes(currentOrganization.organizationType);
+  const isTechnicianRole = !!currentMembership?.isActive && currentMembership.role === 'technician';
+  // A technician gets their own filtered "Mis órdenes" instead of the
+  // general "Órdenes de trabajo" list — showing both would let them just
+  // click the general one and see the whole organization's work, defeating
+  // the point of a technician-scoped view. Every other role on an
+  // operating organization keeps "Órdenes de trabajo" unchanged.
+  const canViewWorkOrders = isOperatingOrg && !isTechnicianRole;
+  const canViewMyWorkOrders = isOperatingOrg && isTechnicianRole;
   const canManage = memberships.some(m => m.isActive && ['owner','admin'].includes(m.role) && organizations.some(o => o.id === m.organizationId && o.organizationType === 'platform_admin'));
   const canViewAssets = currentOrganization?.organizationType === 'client_company';
   // Inventory belongs to the organization that operates work (same set as
-  // canViewWorkOrders — client/provider/facility_manager, never
+  // isOperatingOrg — client/provider/facility_manager, never
   // platform_admin), and only to its planners (owner/admin/manager): they
   // are the ones who create warehouses/materials and assign them to OTs.
-  const canViewInventory = canViewWorkOrders && !!currentMembership?.isActive && ['owner', 'admin', 'manager'].includes(currentMembership.role);
+  const canViewInventory = isOperatingOrg && !!currentMembership?.isActive && ['owner', 'admin', 'manager'].includes(currentMembership.role);
 
   return (
     <aside className={cn(
@@ -137,6 +146,23 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               !collapsed && "mr-2"
             )} />
             {!collapsed && 'Órdenes de trabajo'}
+          </Button>
+        )}
+
+        {canViewMyWorkOrders && (
+          <Button
+            variant={currentView === 'my-work-orders' ? "default" : "ghost"}
+            className={cn(
+              "w-full justify-start",
+              collapsed && "justify-center px-2"
+            )}
+            onClick={() => onViewChange?.('my-work-orders')}
+          >
+            <Wrench className={cn(
+              "h-4 w-4",
+              !collapsed && "mr-2"
+            )} />
+            {!collapsed && 'Mis órdenes'}
           </Button>
         )}
 

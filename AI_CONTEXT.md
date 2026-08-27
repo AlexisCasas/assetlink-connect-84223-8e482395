@@ -846,3 +846,54 @@ Inicio de la rama `productization/mvp`.
   desactivado (la UI no lo expone todavía), descuento real de stock al
   ejecutar la OT, múltiples almacenes para el mismo material, y
   reservas/bloqueo duro por stock insuficiente.
+
+## "Mis órdenes de trabajo" — vista operativa del técnico
+
+- Rama `feature/technician-work-view`. Detalle completo en
+  `docs/TECHNICIAN_WORK_VIEW.md`. Un técnico ve únicamente su propio
+  trabajo, leyendo `work_orders` + `work_order_activities` +
+  `work_order_activity_technicians` + `work_order_materials` tal como ya
+  existen — **no se creó ninguna tabla de "OT del técnico"** — más una
+  tabla mínima nueva `work_order_work_logs` solo para notas de "Registrar
+  trabajo".
+- Migración `20260828170000_technician_work_view.sql`. RPC central
+  `get_my_technician_work_orders()` **sin parámetro de organización** —
+  se resuelve enteramente desde `auth.uid()`, agregando el trabajo del
+  llamador en todas las organizaciones donde tenga membresía `technician`
+  activa. Una OT se incluye si el llamador es su `assigned_member_id` o
+  está vinculado a alguna de sus actividades vía
+  `work_order_activity_technicians`. Verificado end-to-end vía `psql`:
+  técnico de Organización A ve su OT asignada; técnico de Organización B
+  ve `0` filas.
+- `resolve_asset_path(uuid)`: helper interno **sin `GRANT EXECUTE` a
+  `authenticated`** — solo invocable desde otra función `SECURITY
+  DEFINER` (la de arriba), nunca directo desde el frontend; resuelve
+  nombre/ruta de un activo bypaseando RLS de forma segura porque el
+  técnico de una OT externa no es miembro de la organización cliente
+  dueña del activo.
+- `technician_update_work_order_progress(p_work_order_id, p_status?,
+  p_notes?)`: única escritura permitida a un técnico sobre una OT.
+  Transiciones válidas: `pending`/`assigned → in_progress`,
+  `in_progress → completed` — **nunca `closed`** (verificado: rechazado
+  con error explícito). Nunca toca planner, técnico asignado, fechas,
+  prioridad ni materiales — esos siguen siendo de
+  `update_work_order_operations`.
+- `work_order_work_logs` (tabla real, no texto libre en
+  `observations`): nota + `status_from`/`status_to` opcionales + autor +
+  fecha. `get_work_order_work_logs` la expone en modo lectura a
+  planner/admin/técnico de la organización operadora — sin esto, las
+  notas de un técnico solo serían visibles para él mismo.
+- Frontend: `useTechnicianWorkOrders.ts` +
+  `TechnicianWorkView.tsx` (cards, no tabla — mucha información anidada
+  por OT) + `TechnicianWorkLogDialog.tsx` +
+  `TechnicianWorkOrderDetailDialog.tsx` (deliberadamente **no** reutiliza
+  `WorkOrderDetailDialog.tsx` — ese componente condiciona edición a que
+  `currentOrganization` coincida con la OT, poco fiable aquí porque un
+  técnico puede tener trabajo en más de una organización a la vez).
+- `Sidebar.tsx`: "Órdenes de trabajo" ahora excluye explícitamente el rol
+  `technician` (`canViewWorkOrders = isOperatingOrg && !isTechnicianRole`);
+  nuevo ítem "Mis órdenes" en su lugar. `Dashboard.tsx`: el propio `case
+  'work-orders'` redirige a `TechnicianWorkView` si el rol es
+  `technician`, cerrando el hueco de navegación directa por hash/URL.
+- Pendiente documentado (no construido): registro avanzado de tiempos,
+  evidencias/fotos, checklist técnico, y firma/cierre formal.
