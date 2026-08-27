@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -6,6 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import {
   RequestTypeBadge,
@@ -14,6 +15,7 @@ import {
   WorkOrderActivityStatusBadge,
   WorkOrderMaterialWarningBadge,
 } from '@/components/requests/StatusBadge';
+import { ActivityReportDialog } from './ActivityReportDialog';
 import type { TechnicianWorkLog, TechnicianWorkOrder } from '@/types/technicianWorkOrder';
 
 interface TechnicianWorkOrderDetailDialogProps {
@@ -39,6 +41,7 @@ const formatDate = (value: string | null) => value
 export function TechnicianWorkOrderDetailDialog({ open, onOpenChange, workOrder }: TechnicianWorkOrderDetailDialogProps) {
   const [logs, setLogs] = useState<TechnicianWorkLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [reportingActivityId, setReportingActivityId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !workOrder) return;
@@ -63,6 +66,7 @@ export function TechnicianWorkOrderDetailDialog({ open, onOpenChange, workOrder 
   if (!workOrder) return null;
 
   return (
+    <Fragment>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -109,8 +113,18 @@ export function TechnicianWorkOrderDetailDialog({ open, onOpenChange, workOrder 
             <div className="space-y-2">
               {workOrder.activities.map((activity) => (
                 <div key={activity.id} className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
-                  <span>{activity.sequence}. {activity.description}{activity.estimatedHours != null ? ` — ${activity.estimatedHours} h` : ''}</span>
-                  <WorkOrderActivityStatusBadge status={activity.status} />
+                  <div className="min-w-0">
+                    <p className="truncate">{activity.sequence}. {activity.description}{activity.estimatedHours != null ? ` — ${activity.estimatedHours} h` : ''}</p>
+                    {activity.reportsCount > 0 && (
+                      <p className="text-xs text-muted-foreground">Real: {activity.actualHoursTotal} h</p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <WorkOrderActivityStatusBadge status={activity.status} />
+                    <Button size="sm" variant="outline" className="h-6 px-2" onClick={() => setReportingActivityId(activity.id)}>
+                      Reportar
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -155,5 +169,13 @@ export function TechnicianWorkOrderDetailDialog({ open, onOpenChange, workOrder 
         </div>
       </DialogContent>
     </Dialog>
+
+    <ActivityReportDialog
+      open={reportingActivityId !== null}
+      onOpenChange={(open) => !open && setReportingActivityId(null)}
+      activityId={reportingActivityId}
+      onSaved={() => {}}
+    />
+    </Fragment>
   );
 }

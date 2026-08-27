@@ -28,6 +28,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toDatetimeLocalValue, fromDatetimeLocalValue } from '@/lib/dateTime';
 import { WorkOrderActivitiesSection } from './WorkOrderActivitiesSection';
 import { WorkOrderMaterialsSection } from './WorkOrderMaterialsSection';
+import { WorkOrderActivityReportsSummary } from './WorkOrderActivityReportsSummary';
 import type { WorkOrder } from '@/hooks/useWorkOrders';
 
 interface WorkOrderDetailDialogProps {
@@ -279,6 +280,10 @@ export function WorkOrderDetailDialog({ workOrder, open, onOpenChange, onUpdated
             organizationId={workOrder.provider_organization_id}
             canManage={isProviderPlanner}
           />
+        )}
+
+        {canViewOperatingDetails && (
+          <WorkOrderActivityReportsSummary workOrderId={workOrder.id} />
         )}
       </DialogContent>
     </Dialog>

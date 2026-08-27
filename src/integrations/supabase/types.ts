@@ -2036,6 +2036,179 @@ export type Database = {
           },
         ]
       }
+      work_order_activity_report_evidences: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string | null
+          file_url: string | null
+          id: string
+          mime_type: string | null
+          notes: string | null
+          report_id: string
+          size_bytes: number | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path?: string | null
+          file_url?: string | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          report_id: string
+          size_bytes?: number | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string | null
+          file_url?: string | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          report_id?: string
+          size_bytes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_order_activity_report_evidences_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "work_order_activity_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_order_activity_report_materials: {
+        Row: {
+          created_at: string
+          id: string
+          material_id: string
+          notes: string | null
+          quantity_used: number
+          report_id: string
+          unit: string
+          work_order_material_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          material_id: string
+          notes?: string | null
+          quantity_used?: number
+          report_id: string
+          unit: string
+          work_order_material_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          material_id?: string
+          notes?: string | null
+          quantity_used?: number
+          report_id?: string
+          unit?: string
+          work_order_material_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_order_activity_report_material_work_order_material_id_fkey"
+            columns: ["work_order_material_id"]
+            isOneToOne: false
+            referencedRelation: "work_order_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_activity_report_materials_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_activity_report_materials_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "work_order_activity_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_order_activity_reports: {
+        Row: {
+          activity_id: string
+          actual_hours: number
+          created_at: string
+          final_status: string
+          finished_at: string
+          id: string
+          member_id: string
+          observations: string | null
+          organization_id: string
+          started_at: string
+          updated_at: string
+          work_order_id: string
+        }
+        Insert: {
+          activity_id: string
+          actual_hours?: number
+          created_at?: string
+          final_status?: string
+          finished_at: string
+          id?: string
+          member_id: string
+          observations?: string | null
+          organization_id: string
+          started_at: string
+          updated_at?: string
+          work_order_id: string
+        }
+        Update: {
+          activity_id?: string
+          actual_hours?: number
+          created_at?: string
+          final_status?: string
+          finished_at?: string
+          id?: string
+          member_id?: string
+          observations?: string | null
+          organization_id?: string
+          started_at?: string
+          updated_at?: string
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_order_activity_reports_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "work_order_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_activity_reports_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_activity_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_activity_reports_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       work_order_activity_technicians: {
         Row: {
           activity_id: string
@@ -2468,6 +2641,31 @@ export type Database = {
         Args: { p_work_order_material_id: string }
         Returns: undefined
       }
+      get_activity_report_form_data: {
+        Args: { p_activity_id: string }
+        Returns: Json
+      }
+      get_activity_reports_for_work_order: {
+        Args: { p_work_order_id: string }
+        Returns: {
+          activity_description: string
+          activity_id: string
+          actual_hours: number
+          created_at: string
+          estimated_hours: number
+          evidences: Json
+          final_status: string
+          finished_at: string
+          hours_difference: number
+          id: string
+          materials: Json
+          member_id: string
+          observations: string
+          started_at: string
+          technician_email: string
+          technician_name: string
+        }[]
+      }
       get_assignable_planners: {
         Args: { p_organization_id: string }
         Returns: {
@@ -2618,6 +2816,37 @@ export type Database = {
       storage_request_id_from_name: {
         Args: { object_name: string }
         Returns: string
+      }
+      submit_activity_report: {
+        Args: {
+          p_activity_id: string
+          p_evidences?: Json
+          p_final_status?: string
+          p_finished_at: string
+          p_materials?: Json
+          p_observations?: string
+          p_started_at: string
+        }
+        Returns: {
+          activity_id: string
+          actual_hours: number
+          created_at: string
+          final_status: string
+          finished_at: string
+          id: string
+          member_id: string
+          observations: string | null
+          organization_id: string
+          started_at: string
+          updated_at: string
+          work_order_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_order_activity_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       technician_update_work_order_progress: {
         Args: { p_notes?: string; p_status?: string; p_work_order_id: string }

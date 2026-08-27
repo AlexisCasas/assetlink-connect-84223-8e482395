@@ -9,6 +9,8 @@ interface RawActivity {
   status: string;
   sequence: number;
   due_at: string | null;
+  actual_hours_total: number;
+  reports_count: number;
 }
 
 interface RawMaterial {
@@ -31,6 +33,8 @@ const toActivities = (value: unknown): TechnicianWorkOrderActivity[] => {
     status: row.status,
     sequence: row.sequence,
     dueAt: row.due_at,
+    actualHoursTotal: row.actual_hours_total,
+    reportsCount: row.reports_count,
   }));
 };
 

@@ -897,3 +897,57 @@ Inicio de la rama `productization/mvp`.
   `technician`, cerrando el hueco de navegación directa por hash/URL.
 - Pendiente documentado (no construido): registro avanzado de tiempos,
   evidencias/fotos, checklist técnico, y firma/cierre formal.
+
+## Reporte operativo del técnico por actividad
+
+- Rama `feature/technician-activity-report`. Detalle completo en
+  `docs/TECHNICIAN_ACTIVITY_REPORTS.md`. Agrega
+  `work_order_activities → work_order_activity_reports →
+  work_order_activity_report_materials`/`_evidences` — **extiende**
+  `work_order_activities`, no la reemplaza; sin módulo paralelo.
+- Migración `20260828220000_technician_activity_reports.sql`.
+  `actual_hours` se calcula por trigger
+  (`compute_work_order_activity_report_hours`), no por columna
+  `GENERATED ALWAYS AS` — la resta de dos `timestamptz` es `STABLE`, no
+  `IMMUTABLE`, en el catálogo de Postgres, y `GENERATED` exige
+  inmutabilidad (falla en la creación de la tabla si se intenta).
+- **Múltiples reportes por actividad, a propósito**: sin `UNIQUE`,
+  `submit_activity_report` siempre `INSERT`, nunca `UPDATE`. El total real
+  de una actividad es la suma de `actual_hours` de todos sus reportes.
+- Trigger de consistencia (`check_work_order_activity_report_consistency`)
+  valida que `member_id` sea técnico activo asignado a la actividad
+  (`work_order_activity_technicians`) o técnico principal de la OT
+  (`work_orders.assigned_member_id`) — misma regla que
+  `technician_update_work_order_progress`. Materiales del reporte nunca
+  descuentan `materials.stock` (sin kardex, sin costeo). Evidencias son
+  **metadata solamente** en esta fase (nombre + link opcional pegado a
+  mano) — el esquema (`file_path`/`mime_type`/`size_bytes`) ya está listo
+  para un upload real vía Supabase Storage, pendiente documentado.
+- RPCs: `get_activity_report_form_data` (actividad + OT + técnicos +
+  materiales disponibles + reportes previos del propio técnico, en una
+  llamada), `submit_activity_report` (único camino de escritura;
+  `final_status = completed` → actividad `completed`; `in_progress` o
+  `blocked` → actividad `in_progress`, `blocked` deliberadamente no
+  agregado al `CHECK` de `work_order_activities.status`; `pending` no
+  toca el estado; nunca cierra la OT), `get_activity_reports_for_work_order`
+  (reportes con `hours_difference` ya calculada — planner ve todos,
+  técnico ve solo los suyos, mismo split que las policies `SELECT`).
+- **`get_my_technician_work_orders` extendida sin editar su migración
+  original** (`20260828170000_technician_work_view.sql`, ya
+  mergeada/desplegada): un `CREATE OR REPLACE FUNCTION` con la misma
+  firma y columnas de salida (no requiere `DROP FUNCTION`, a diferencia
+  de un rename de parámetros) agrega `actual_hours_total`/`reports_count`
+  al jsonb de cada actividad.
+- **Verificado end-to-end vía `psql`** con el escenario exacto del
+  enunciado (2h estimado, 08:00–11:00 real) → `actual_hours = 3.00`,
+  `hours_difference = +1.00`, actividad `completed`, `materials.stock`
+  sin cambios, visible para el técnico y para el planner.
+- Frontend: `useActivityReports.ts` (un hook para las 3 RPCs) +
+  `ActivityReportDialog.tsx` (Desde/Hasta manual, sin cronómetro
+  obligatorio, botón "usar hora actual" opcional) integrado en
+  `TechnicianWorkView.tsx` y `TechnicianWorkOrderDetailDialog.tsx`;
+  `WorkOrderActivityReportsSummary.tsx` (resumen planificación vs. real
+  para planner/admin) integrado en `WorkOrderDetailDialog.tsx`.
+- Pendiente documentado (no construido): upload real de archivos
+  (evidencias), cronómetro real, cierre automático de OT, consolidado
+  avanzado de productividad.
