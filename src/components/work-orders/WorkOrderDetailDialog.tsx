@@ -25,6 +25,8 @@ import {
   WORK_ORDER_PRIORITY_LABELS,
 } from '@/components/requests/StatusBadge';
 import { supabase } from '@/integrations/supabase/client';
+import { toDatetimeLocalValue, fromDatetimeLocalValue } from '@/lib/dateTime';
+import { WorkOrderActivitiesSection } from './WorkOrderActivitiesSection';
 import type { WorkOrder } from '@/hooks/useWorkOrders';
 
 interface WorkOrderDetailDialogProps {
@@ -41,15 +43,6 @@ const formatDate = (value: string | null) => value
 const formatAmount = (value: number | null) => value === null
   ? '—'
   : new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(value);
-
-/** timestamptz (ISO) <-> <input type="datetime-local"> (local, no timezone). */
-const toDatetimeLocalValue = (iso: string | null): string => {
-  if (!iso) return '';
-  const date = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-};
-const fromDatetimeLocalValue = (value: string): string | null => value ? new Date(value).toISOString() : null;
 
 export function WorkOrderDetailDialog({ workOrder, open, onOpenChange, onUpdated }: WorkOrderDetailDialogProps) {
   const { currentOrganization } = useAuth();
@@ -72,6 +65,12 @@ export function WorkOrderDetailDialog({ workOrder, open, onOpenChange, onUpdated
   const isProviderPlanner = !!workOrder
     && currentOrganization?.id === workOrder.provider_organization_id
     && canPlanWork;
+
+  // Activities are an operating-organization-internal execution detail (see
+  // get_work_order_activities' authorization and docs/WORK_ORDER_ACTIVITIES.md)
+  // — a client viewing an external OT it doesn't operate never sees the
+  // section at all, rather than seeing it render an authorization error.
+  const canViewActivities = !!workOrder && currentOrganization?.id === workOrder.provider_organization_id;
 
   useEffect(() => {
     setPendingPlannerId(workOrder?.planner_member_id ?? null);
@@ -254,14 +253,22 @@ export function WorkOrderDetailDialog({ workOrder, open, onOpenChange, onUpdated
               <p><span className="text-muted-foreground">Técnico: </span>{workOrder.assigned_member_id ? 'Técnico asignado' : 'Sin técnico asignado'}</p>
               <p><span className="text-muted-foreground">Programada: </span>{formatDate(workOrder.scheduled_at)}</p>
               <p><span className="text-muted-foreground">Fecha límite: </span>{formatDate(workOrder.due_at)}</p>
-              <p className="flex items-center gap-2"><span className="text-muted-foreground">Prioridad:</span> <WorkOrderPriorityBadge priority={workOrder.priority} /></p>
-              <p className="flex items-center gap-2"><span className="text-muted-foreground">Estado:</span> <WorkOrderStatusBadge status={workOrder.status} /></p>
+              <div className="flex items-center gap-2"><span className="text-muted-foreground">Prioridad:</span> <WorkOrderPriorityBadge priority={workOrder.priority} /></div>
+              <div className="flex items-center gap-2"><span className="text-muted-foreground">Estado:</span> <WorkOrderStatusBadge status={workOrder.status} /></div>
               {workOrder.observations && (
                 <p className="sm:col-span-2"><span className="text-muted-foreground">Observaciones: </span>{workOrder.observations}</p>
               )}
             </div>
           )}
         </div>
+
+        {canViewActivities && (
+          <WorkOrderActivitiesSection
+            workOrderId={workOrder.id}
+            organizationId={workOrder.provider_organization_id}
+            canManage={isProviderPlanner}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

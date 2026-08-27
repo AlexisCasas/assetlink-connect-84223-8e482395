@@ -733,6 +733,56 @@ Inicio de la rama `productization/mvp`.
   (condición ya existente, generaliza sola a OT internas). Activo asociado
   reutiliza `RequestAssetSummary` tal cual.
 - Pendiente documentado (no construido): múltiples técnicos por OT
-  (`work_order_technicians` evaluado y diferido), `cancelled`/`suspended`
-  en el ciclo de vida de `status`, y que un técnico autogestione el estado
-  de su propia OT sin pasar por un planner.
+  (`work_order_technicians` evaluado y diferido — la fase siguiente
+  terminó implementando multi-técnico a nivel de **actividad**, no de OT
+  completa; ver más abajo), `cancelled`/`suspended` en el ciclo de vida de
+  `status`, y que un técnico autogestione el estado de su propia OT sin
+  pasar por un planner.
+
+## Actividades de la orden de trabajo
+
+- Rama `feature/work-order-activities`. Detalle completo en
+  `docs/WORK_ORDER_ACTIVITIES.md`. Agrega el nivel operativo
+  `work_orders → work_order_activities → work_order_activity_technicians`
+  — **una sola jerarquía**, sin distinguir actividades internas de
+  externas; cuelga de `work_orders` sin importar el origen de la OT.
+- Migración `20260827160000_work_order_activities.sql`: tabla
+  `work_order_activities` (`organization_id` = siempre
+  `work_orders.provider_organization_id`, fijado por trigger;
+  `due_at timestamptz`, misma convención que `work_orders.due_at`;
+  `status` con 4 valores — `pending, assigned, in_progress, completed`,
+  deliberadamente sin `closed`; `sequence` autoasignada) + tabla puente
+  `work_order_activity_technicians` (multi-técnico **desde el modelo**,
+  con `is_primary`; cada técnico se valida por trigger igual que
+  `assigned_member_id`/`planner_member_id` — misma organización, activo,
+  rol `technician`).
+- RPCs nuevas: `get_work_order_activities` (actividades + técnicos
+  resueltos como jsonb en una sola llamada), `upsert_work_order_activity`
+  (crear/editar, reemplazo completo del set de técnicos, mismo patrón que
+  `update_work_order_operations`), `delete_work_order_activity` (cascada
+  sobre el puente). **No se agregó ninguna policy INSERT/UPDATE/DELETE
+  genérica** en ninguna de las dos tablas.
+- Visibilidad deliberadamente más estricta que `work_orders`: solo la
+  organización **operadora** (`provider_organization_id`) o
+  `platform_admin` ven las actividades — no el cliente del otro lado de
+  una OT externa (el desglose técnico por técnico es detalle interno del
+  operador). `WorkOrderDetailDialog.tsx` oculta la sección entera en ese
+  caso en vez de mostrarla y fallar por autorización. Para una OT interna,
+  `provider_organization_id == client_organization_id`, así que el
+  cliente sí ve la sección con normalidad — mismo componente, sin branch
+  por origen.
+- Frontend nuevo: `src/types/workOrderActivity.ts`,
+  `src/hooks/useWorkOrderActivities.ts` (cada mutación refresca desde el
+  servidor en vez de parchear estado local), `WorkOrderActivitiesSection.tsx`
+  + `ActivityEditorDialog.tsx` (integrados dentro de
+  `WorkOrderDetailDialog.tsx`, no un módulo aparte), `src/lib/dateTime.ts`
+  (conversión timestamptz ↔ datetime-local extraída para reutilizarse
+  entre la cabecera de la OT y el formulario de actividad),
+  `WorkOrderActivityStatusBadge` en `StatusBadge.tsx`.
+- Reordenar (subir/bajar) reutiliza `upsert_work_order_activity` dos veces
+  para intercambiar `sequence` — sin RPC dedicada.
+- Pendiente documentado (no construido): elegir explícitamente un técnico
+  principal en el formulario (hoy es implícito, el primero marcado),
+  sincronización automática de estado entre actividades y la OT de
+  cabecera, autogestión de estado por el propio técnico, y reordenar por
+  drag-and-drop.
