@@ -672,3 +672,67 @@ Inicio de la rama `productization/mvp`.
 - `WorkOrdersList.tsx`/`WorkOrderDetailDialog.tsx`: badge "Solicitud
   interna" cuando `quote_id` es null; ninguna rama de código nueva asume
   `quote_id` no nulo.
+
+## Órdenes de trabajo operacionales
+
+- Rama `feature/operational-work-orders`. Detalle completo en
+  `docs/OPERATIONAL_WORK_ORDERS.md`. `work_orders` pasa a ser una única
+  entidad operacional real compartida por ambos orígenes (externo/interno)
+  — **no se creó ningún módulo paralelo**; sigue siendo una sola tabla, un
+  solo hook, una sola lista y un solo detalle.
+- Migración `20260827150000_operational_work_orders.sql` agrega:
+  `work_order_number` (correlativo `OT-<año>-<secuencia global>`, generado
+  siempre por un trigger de servidor, nunca por el frontend, `UNIQUE`);
+  `asset_id` (snapshot relacional, backfillado desde `requests.asset_id`,
+  no editable después de creada la OT); `work_order_type`
+  (`'internal'|'external'`, atado por CHECK a la nulidad de `quote_id` así
+  que no puede desincronizarse); `planner_member_id` (owner/admin/manager
+  de `provider_organization_id`, resuelto solo en el servidor vía
+  `resolve_caller_planner_member`, nunca confiando en un id del cliente);
+  `scheduled_at`/`due_at` (`timestamptz`, `due_at` backfillado desde
+  `requests.deadline`); `priority` (`low/medium/high/urgent`, backfillado
+  desde `requests.priority` 1–4 vía
+  `map_request_priority_to_work_order_priority`); `observations`.
+- `status` se amplía sin romper nada: el único valor que la app escribió
+  alguna vez fue el default `'created'` (confirmado por grep, ningún
+  RPC/UI escribía `status` antes de esta fase), así que se remapea
+  exhaustivamente a `pending`/`assigned` y el CHECK nuevo solo admite
+  `pending, assigned, in_progress, completed, closed` (`cancelled`/
+  `suspended` quedan fuera del CHECK a propósito, documentados como
+  pendientes).
+- RPC nueva `update_work_order_operations`: único camino de escritura para
+  los campos operacionales (planner, técnico, fechas, prioridad, estado,
+  observaciones) de una OT ya creada — reemplazo completo, mismo patrón
+  que `assign_work_order_technician`. Solo owner/admin/manager de
+  `provider_organization_id` o `platform_admin`. **No se agregó ninguna
+  policy `UPDATE` genérica** a `work_orders`. `assign_work_order_technician`
+  ahora también empuja `status` entre `pending`↔`assigned` alrededor de
+  una asignación (nunca toca `in_progress`/`completed`/`closed`).
+- RPC nueva `get_assignable_planners` (+ `useOrganizationPlanners.ts` +
+  `PlannerSelect.tsx`): espejo exacto de `get_assignable_technicians` /
+  `useOrganizationTechnicians.ts` / `TechnicianSelect.tsx` pero para el rol
+  owner/admin/manager.
+- `create_work_order_from_quote` y `create_internal_work_order_from_request`
+  (mismas firmas, sin cambios en sus call sites del frontend) ahora
+  pueblan todos los campos nuevos al crear la OT.
+- `WorkOrdersList.tsx`: Técnico/Planner ahora se resuelven siempre contra
+  la organización del propio viewer (antes el nombre de técnico solo se
+  resolvía viendo como proveedor) — esto es lo que permite que un cliente
+  vea el nombre real de su propio técnico/planner en sus OT internas, sin
+  que ninguna organización vea nunca el roster de otra (el fallback
+  genérico se activa solo cuando el miembro no está en la propia
+  organización). Columnas priorizadas si la tabla queda angosta:
+  Correlativo, Tipo, Activo, Técnico, Fecha límite, Prioridad, Estado,
+  Detalle; el resto se oculta con clases responsive de Tailwind, sin
+  construir un sistema de columnas configurables nuevo para esta lista.
+- `WorkOrderDetailDialog.tsx`: ficha operacional completa con un único
+  formulario editable (planner, técnico, fechas, prioridad, estado,
+  observaciones) que guarda todo con una sola llamada a
+  `update_work_order_operations`, visible solo si
+  `currentOrganization.id === provider_organization_id && canPlanWork`
+  (condición ya existente, generaliza sola a OT internas). Activo asociado
+  reutiliza `RequestAssetSummary` tal cual.
+- Pendiente documentado (no construido): múltiples técnicos por OT
+  (`work_order_technicians` evaluado y diferido), `cancelled`/`suspended`
+  en el ciclo de vida de `status`, y que un técnico autogestione el estado
+  de su propia OT sin pasar por un planner.

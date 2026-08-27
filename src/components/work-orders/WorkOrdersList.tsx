@@ -1,23 +1,20 @@
-import { useState } from 'react';
-import { ClipboardList, Eye, RefreshCw } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ClipboardList, Eye, Package, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkOrders, type WorkOrder } from '@/hooks/useWorkOrders';
 import { useOrganizationTechnicians } from '@/hooks/useOrganizationTechnicians';
-import { Badge } from '@/components/ui/badge';
+import { useOrganizationPlanners } from '@/hooks/useOrganizationPlanners';
+import { useAssets } from '@/hooks/useAssets';
+import { buildAssetPathMap } from '@/lib/assetTree';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { RequestTypeBadge, WorkOrderStatusBadge, WorkOrderPriorityBadge } from '@/components/requests/StatusBadge';
 import { WorkOrderDetailDialog } from './WorkOrderDetailDialog';
-
-const statusLabels: Record<string, string> = {
-  created: 'Creada',
-  in_progress: 'En progreso',
-  completed: 'Completada',
-  cancelled: 'Cancelada',
-};
 
 const shortId = (id: string) => id.slice(0, 8).toUpperCase();
 const formatDate = (value: string) => new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium' }).format(new Date(value));
+const formatDateOrDash = (value: string | null) => value ? formatDate(value) : '—';
 const formatAmount = (value: number | null) => value === null ? '—' : new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(value);
 
 export function WorkOrdersList() {
@@ -27,11 +24,18 @@ export function WorkOrdersList() {
 
   const isClientView = currentOrganization?.organizationType === 'client_company';
   const isPlatformView = currentOrganization?.organizationType === 'platform_admin';
-  const isProviderView = !isClientView && !isPlatformView;
-  // Only fetched (and only ever succeeds) when viewing as the provider
-  // organization with a planner-tier role — used purely to show the
-  // assigned technician's name next to each order, read-only here.
-  const { technicians } = useOrganizationTechnicians(isProviderView ? currentOrganization?.id : null);
+
+  // Resolved against the viewer's own organization. This is correct for
+  // both origins: for an external OT the technician/planner belong to the
+  // provider organization (unresolvable, and rightly so, for a client
+  // viewer — the list/RPC simply comes back empty for them); for an
+  // internal OT provider_organization_id === client_organization_id, so a
+  // client viewer resolves their own staff for their own internal OTs.
+  const { technicians } = useOrganizationTechnicians(currentOrganization?.id);
+  const { planners } = useOrganizationPlanners(currentOrganization?.id);
+  const { assets: linkedAssets, assetTree } = useAssets();
+  const assetsById = useMemo(() => new Map(linkedAssets.map((asset) => [asset.id, asset])), [linkedAssets]);
+  const assetPaths = useMemo(() => buildAssetPathMap(assetTree), [assetTree]);
 
   if (!currentOrganization) return <EmptyState message="Sin organización asignada" />;
   if (loading) return <EmptyState message="Cargando órdenes de trabajo…" />;
@@ -64,34 +68,63 @@ export function WorkOrdersList() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Orden</TableHead><TableHead>Estado</TableHead><TableHead>Solicitud</TableHead>
-                <TableHead>{isPlatformView ? 'Cliente / proveedor' : isClientView ? 'Proveedor' : 'Cliente'}</TableHead>
-                {isProviderView && <TableHead>Técnico</TableHead>}
-                <TableHead>Importe</TableHead><TableHead>Creada</TableHead><TableHead className="text-right">Detalle</TableHead>
+                <TableHead>Correlativo</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead className="hidden md:table-cell">Solicitud</TableHead>
+                <TableHead>Activo</TableHead>
+                <TableHead className="hidden lg:table-cell">Planner</TableHead>
+                <TableHead>Técnico</TableHead>
+                <TableHead className="hidden xl:table-cell">Programada</TableHead>
+                <TableHead>Fecha límite</TableHead>
+                <TableHead>Prioridad</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className="hidden lg:table-cell">{isPlatformView ? 'Cliente / proveedor' : isClientView ? 'Proveedor' : 'Cliente'}</TableHead>
+                <TableHead className="hidden lg:table-cell">Importe</TableHead>
+                <TableHead className="text-right">Detalle</TableHead>
               </TableRow></TableHeader>
-              <TableBody>{workOrders.map((workOrder) => (
-                <TableRow key={workOrder.id}>
-                  <TableCell>
-                    <p className="font-medium">{workOrder.title || 'Orden sin título'}</p>
-                    <p className="text-xs text-muted-foreground">#{shortId(workOrder.id)}</p>
-                    {workOrder.quote_id === null && (
-                      <Badge variant="outline" className="mt-1 bg-violet-500/10 text-violet-600 border-violet-500/20">Solicitud interna</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell><Badge variant="secondary">{statusLabels[workOrder.status] ?? workOrder.status}</Badge></TableCell>
-                  <TableCell className="font-mono text-xs">#{shortId(workOrder.request_id)}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {isPlatformView ? `${shortId(workOrder.client_organization_id)} / ${shortId(workOrder.provider_organization_id)}` : isClientView ? shortId(workOrder.provider_organization_id) : shortId(workOrder.client_organization_id)}
-                  </TableCell>
-                  {isProviderView && (
-                    <TableCell className="text-sm">
-                      {technicians.find((technician) => technician.memberId === workOrder.assigned_member_id)?.name ?? (workOrder.assigned_member_id ? 'Técnico asignado' : '—')}
+              <TableBody>{workOrders.map((workOrder) => {
+                const technicianName = workOrder.assigned_member_id
+                  ? (technicians.find((technician) => technician.memberId === workOrder.assigned_member_id)?.name ?? 'Técnico asignado')
+                  : '—';
+                const plannerName = workOrder.planner_member_id
+                  ? (planners.find((planner) => planner.memberId === workOrder.planner_member_id)?.name ?? 'Planner asignado')
+                  : '—';
+                const linkedAsset = workOrder.asset_id ? assetsById.get(workOrder.asset_id) : undefined;
+                const assetPath = workOrder.asset_id ? assetPaths.get(workOrder.asset_id) : undefined;
+
+                return (
+                  <TableRow key={workOrder.id}>
+                    <TableCell>
+                      <p className="font-medium">{workOrder.work_order_number}</p>
+                      <p className="text-xs text-muted-foreground truncate max-w-[180px]">{workOrder.title || 'Orden sin título'}</p>
                     </TableCell>
-                  )}
-                  <TableCell>{formatAmount(workOrder.total_amount)}</TableCell><TableCell>{formatDate(workOrder.created_at)}</TableCell>
-                  <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => setSelectedWorkOrder(workOrder)}><Eye className="h-4 w-4" /><span className="sr-only">Ver detalle</span></Button></TableCell>
-                </TableRow>
-              ))}</TableBody>
+                    <TableCell><RequestTypeBadge type={workOrder.work_order_type} /></TableCell>
+                    <TableCell className="hidden md:table-cell font-mono text-xs text-muted-foreground">#{shortId(workOrder.request_id)}</TableCell>
+                    <TableCell>
+                      {workOrder.asset_id ? (
+                        <div className="flex items-center gap-1.5 max-w-[200px]" title={assetPath || undefined}>
+                          <Package className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm">{linkedAsset?.name || 'Activo vinculado'}</p>
+                            {assetPath && <p className="truncate text-xs text-muted-foreground">{assetPath}</p>}
+                          </div>
+                        </div>
+                      ) : <span className="text-sm text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell text-sm">{plannerName}</TableCell>
+                    <TableCell className="text-sm">{technicianName}</TableCell>
+                    <TableCell className="hidden xl:table-cell">{formatDateOrDash(workOrder.scheduled_at)}</TableCell>
+                    <TableCell>{formatDateOrDash(workOrder.due_at)}</TableCell>
+                    <TableCell><WorkOrderPriorityBadge priority={workOrder.priority} /></TableCell>
+                    <TableCell><WorkOrderStatusBadge status={workOrder.status} /></TableCell>
+                    <TableCell className="hidden lg:table-cell font-mono text-xs text-muted-foreground">
+                      {isPlatformView ? `${shortId(workOrder.client_organization_id)} / ${shortId(workOrder.provider_organization_id)}` : isClientView ? shortId(workOrder.provider_organization_id) : shortId(workOrder.client_organization_id)}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">{formatAmount(workOrder.total_amount)}</TableCell>
+                    <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => setSelectedWorkOrder(workOrder)}><Eye className="h-4 w-4" /><span className="sr-only">Ver detalle</span></Button></TableCell>
+                  </TableRow>
+                );
+              })}</TableBody>
             </Table>
           </div>
         </CardContent>
@@ -100,7 +133,7 @@ export function WorkOrdersList() {
         workOrder={selectedWorkOrder}
         open={selectedWorkOrder !== null}
         onOpenChange={(open) => !open && setSelectedWorkOrder(null)}
-        onAssigned={(updated) => { setSelectedWorkOrder(updated); void refetch(); }}
+        onUpdated={(updated) => { setSelectedWorkOrder(updated); void refetch(); }}
       />
     </>
   );

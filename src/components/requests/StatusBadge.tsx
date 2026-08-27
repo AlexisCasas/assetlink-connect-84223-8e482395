@@ -91,3 +91,53 @@ export const RequestTypeBadge = ({ type }: RequestTypeBadgeProps) => (
     ? <Badge variant="outline" className="bg-violet-500/10 text-violet-600 border-violet-500/20">Interna</Badge>
     : <Badge variant="outline" className="bg-slate-500/10 text-slate-600 border-slate-500/20">Externa</Badge>
 );
+
+export const WORK_ORDER_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pendiente',
+  assigned: 'Asignada',
+  in_progress: 'En progreso',
+  completed: 'Completada',
+  closed: 'Cerrada',
+};
+
+const WORK_ORDER_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-slate-500/10 text-slate-600 border-slate-500/20',
+  assigned: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  in_progress: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  completed: 'bg-green-500/10 text-green-600 border-green-500/20',
+  closed: 'bg-gray-500/10 text-gray-600 border-gray-500/20',
+};
+
+interface WorkOrderStatusBadgeProps {
+  status: string;
+}
+
+export const WorkOrderStatusBadge = ({ status }: WorkOrderStatusBadgeProps) => (
+  <Badge variant="outline" className={WORK_ORDER_STATUS_COLORS[status] ?? ''}>
+    {WORK_ORDER_STATUS_LABELS[status] ?? status}
+  </Badge>
+);
+
+export const WORK_ORDER_PRIORITY_LABELS: Record<string, string> = {
+  low: 'Baja',
+  medium: 'Media',
+  high: 'Alta',
+  urgent: 'Urgente',
+};
+
+const WORK_ORDER_PRIORITY_COLORS: Record<string, string> = {
+  low: 'bg-slate-500/10 text-slate-600 border-slate-500/20',
+  medium: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  high: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
+  urgent: 'bg-red-500/10 text-red-600 border-red-500/20',
+};
+
+interface WorkOrderPriorityBadgeProps {
+  priority: string;
+}
+
+export const WorkOrderPriorityBadge = ({ priority }: WorkOrderPriorityBadgeProps) => (
+  <Badge variant="outline" className={WORK_ORDER_PRIORITY_COLORS[priority] ?? ''}>
+    {WORK_ORDER_PRIORITY_LABELS[priority] ?? priority}
+  </Badge>
+);
