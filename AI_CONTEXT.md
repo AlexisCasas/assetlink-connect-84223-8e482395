@@ -528,3 +528,30 @@ Inicio de la rama `productization/mvp`.
 - Se agregó `restoreAsset()` (`status = 'active'`, evento `restored`) y
   eventos `updated`/`archived`/`created` en `asset_events`. No se tocaron RLS,
   Edge Functions, migraciones ni `service_role`.
+
+## Activos: edición avanzada del detalle (sin migración)
+
+- Rama `feature/assets-detail-editing`: `public.assets` ya traía
+  `manufacturer`, `model`, `serial_number`, `barcode`, `purchase_date`,
+  `warranty_until`, `location_text` desde la migración de Fase 1 — **no hizo
+  falta ninguna migración nueva** para esta fase. Detalle completo en
+  `docs/ASSETS_DETAIL_EDITING.md`.
+- `AssetDetail.tsx` gana un modo de edición (botón "Editar", visible solo con
+  `canManageAssets` y activo no archivado) con formulario en pestañas
+  (General / Técnica / Ubicación y clasificación, shadcn `Tabs`) y botones
+  Guardar/Cancelar. Solo lectura si `!canManageAssets`; sin edición si el
+  activo está archivado (ahí solo aplica "Restaurar", ya existente).
+- `CreateAssetInput`/`UpdateAssetInput` (`src/types/asset.ts`) y
+  `useAssets().updateAsset()`/`createAsset()` ahora aceptan los 7 campos
+  técnicos reales; se agregó validación de fechas (`purchaseDate`/
+  `warrantyUntil` deben ser parseables si se envían).
+- Nuevo `src/lib/assetLabels.ts` centraliza las etiquetas/orden de
+  `AssetNodeType`/`AssetStatus`/`AssetCriticality` que antes estaban
+  duplicadas entre `AssetTree.tsx` y `AssetDetail.tsx`.
+- Guardar exitoso invalida las queries de TanStack Query (mismo mecanismo del
+  hook) y registra un evento `updated` en `asset_events` (best-effort, sin
+  loguear el payload). Feedback con `useToast` (patrón ya usado en 18+
+  archivos del proyecto) para éxito y error, más el mensaje de `state.error`
+  visible dentro del formulario si falla.
+- No se tocó RLS, Edge Functions, `service_role`, ni `requests`/
+  `RequestForm.tsx`.

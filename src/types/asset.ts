@@ -93,6 +93,13 @@ export interface CreateAssetInput {
   assetCategoryId?: string | null;
   code?: string | null;
   description?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  barcode?: string | null;
+  purchaseDate?: string | null;
+  warrantyUntil?: string | null;
+  locationText?: string | null;
 }
 
 export type UpdateAssetInput = Partial<CreateAssetInput>;
