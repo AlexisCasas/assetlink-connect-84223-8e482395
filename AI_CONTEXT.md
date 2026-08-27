@@ -597,3 +597,33 @@ Inicio de la rama `productization/mvp`.
   sigue recibiendo esas columnas (sin migración) con valores derivados
   uniformes por solicitud, no borrados. Detalle en
   `docs/ASSETS_REQUESTS_INTEGRATION.md`.
+
+## Roles operativos internos: Planner/Gestor y Técnico
+
+- Rama `feature/operation-members-roles`. Detalle completo en
+  `docs/OPERATION_MEMBERS_ROLES.md`. Sin enum nuevo: `technician` ya
+  existía en `organization_member_role`.
+- Modelo funcional mínimo, centralizado en `src/lib/organizationRoles.ts`
+  (reutilizado en `AdminConsole.tsx`, `Sidebar.tsx`,
+  `OrganizationSwitcher.tsx`, que antes duplicaban cada uno su propio mapa
+  de labels): `owner`/`admin` => **Administrador**, `manager` => **Planner
+  / Gestor**, `technician` => **Técnico**. `usePermissions()` (existía sin
+  usarse) ahora expone `canPlanWork`/`canExecuteWork`/`isPlanner`/
+  `isTechnician` y se usa en `WorkOrderDetailDialog.tsx`.
+- Selector de técnicos (`TechnicianSelect.tsx` +
+  `useOrganizationTechnicians.ts`) limitado por organización vía la RPC
+  `SECURITY DEFINER` `get_assignable_technicians(p_organization_id)`
+  (`organization_members` no tiene `name`/`email`, viven en `auth.users`);
+  valida que el llamador sea owner/admin/manager de esa organización o
+  platform_admin, y nunca devuelve técnicos de otro tenant.
+- Campo nuevo: `work_orders.assigned_member_id uuid null references
+  organization_members(id)` (migración
+  `20260827041707_operation_members_roles.sql`), con trigger que exige
+  mismo `provider_organization_id`, activo, y `role = 'technician'`. Se
+  escribe solo vía la RPC `SECURITY DEFINER` `assign_work_order_technician`
+  (owner/admin/manager de la organización proveedora, o platform_admin) —
+  **no se agregó ninguna policy `UPDATE` genérica** a `work_orders` (sigue
+  sin ellas, como en la fase anterior).
+- Pendiente documentado (no construido): no hay pantalla "Mis Asignaciones"
+  filtrada por técnico todavía; un `technician` ve el mismo "Órdenes de
+  trabajo" que el resto de su organización proveedora.

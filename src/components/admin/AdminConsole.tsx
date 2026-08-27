@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Organization, OrganizationMemberRole, OrganizationType } from '@/types/organization';
+import { ORGANIZATION_ROLE_LABELS } from '@/lib/organizationRoles';
 
 type Member = { id: string; user_id: string; email: string | null; name: string | null; role: OrganizationMemberRole; is_active: boolean; joined_at: string };
 const roles: OrganizationMemberRole[] = ['owner', 'admin', 'manager', 'requester', 'quote_manager', 'technician', 'operator', 'viewer'];
@@ -110,7 +111,7 @@ export function AdminConsole() {
               </div>
             ) : (
               <div className="space-y-2">
-                {members.map((member) => <div key={member.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-3 text-sm"><span>{member.name || '—'} · {member.email || '—'} · {member.is_active ? 'Activo' : 'Inactivo'}</span><div className="flex gap-2"><Select value={member.role} onValueChange={(value) => void updateMembership(member, { role: value })}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent>{roles.map((role) => <SelectItem key={role} value={role}>{role}</SelectItem>)}</SelectContent></Select><Button size="sm" variant="outline" disabled={savingMember} onClick={() => void updateMembership(member, { is_active: !member.is_active })}>{member.is_active ? 'Desactivar' : 'Activar'}</Button></div></div>)}
+                {members.map((member) => <div key={member.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-3 text-sm"><span>{member.name || '—'} · {member.email || '—'} · {member.is_active ? 'Activo' : 'Inactivo'}</span><div className="flex gap-2"><Select value={member.role} onValueChange={(value) => void updateMembership(member, { role: value })}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent>{roles.map((role) => <SelectItem key={role} value={role}>{ORGANIZATION_ROLE_LABELS[role]}</SelectItem>)}</SelectContent></Select><Button size="sm" variant="outline" disabled={savingMember} onClick={() => void updateMembership(member, { is_active: !member.is_active })}>{member.is_active ? 'Desactivar' : 'Activar'}</Button></div></div>)}
               </div>
             )}
           </div>
@@ -121,7 +122,7 @@ export function AdminConsole() {
               <div><Label>Correo electrónico</Label><Input value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="email@empresa.com" /></div>
               <div><Label>Nombre</Label><Input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nombre opcional" /></div>
               <div><Label>Contraseña temporal</Label><Input type="password" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} placeholder="Mínimo 8 caracteres" /></div>
-              <div><Label>Rol</Label><Select value={memberRole} onValueChange={(value) => setMemberRole(value as OrganizationMemberRole)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{roles.map((role) => <SelectItem key={role} value={role}>{role}</SelectItem>)}</SelectContent></Select></div>
+              <div><Label>Rol</Label><Select value={memberRole} onValueChange={(value) => setMemberRole(value as OrganizationMemberRole)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{roles.map((role) => <SelectItem key={role} value={role}>{ORGANIZATION_ROLE_LABELS[role]}</SelectItem>)}</SelectContent></Select></div>
               <Button className="md:col-span-2" disabled={savingMember || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(memberEmail) || (temporaryPassword.length > 0 && temporaryPassword.length < 8)} onClick={() => void createMember()}>{savingMember ? 'Creando…' : 'Crear usuario'}</Button>
             </CardContent>
           </Card>

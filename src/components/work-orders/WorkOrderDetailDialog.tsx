@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -6,12 +8,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useOrganizationTechnicians } from '@/hooks/useOrganizationTechnicians';
+import { TechnicianSelect } from '@/components/members/TechnicianSelect';
+import { supabase } from '@/integrations/supabase/client';
 import type { WorkOrder } from '@/hooks/useWorkOrders';
 
 interface WorkOrderDetailDialogProps {
   workOrder: WorkOrder | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onAssigned?: (workOrder: WorkOrder) => void;
 }
 
 const statusLabels: Record<string, string> = {
@@ -29,8 +38,54 @@ const formatAmount = (value: number | null) => value === null
   ? '—'
   : new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(value);
 
-export function WorkOrderDetailDialog({ workOrder, open, onOpenChange }: WorkOrderDetailDialogProps) {
+export function WorkOrderDetailDialog({ workOrder, open, onOpenChange, onAssigned }: WorkOrderDetailDialogProps) {
+  const { currentOrganization } = useAuth();
+  const { canPlanWork } = usePermissions();
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [pendingMemberId, setPendingMemberId] = useState<string | null>(null);
+
+  // Only the provider organization plans its own technicians' work; viewing
+  // this dialog as the client organization never shows the assign control.
+  const isProviderPlanner = !!workOrder
+    && currentOrganization?.id === workOrder.provider_organization_id
+    && canPlanWork;
+
+  const { technicians } = useOrganizationTechnicians(workOrder?.provider_organization_id);
+
+  useEffect(() => {
+    setPendingMemberId(workOrder?.assigned_member_id ?? null);
+  }, [workOrder?.id, workOrder?.assigned_member_id]);
+
   if (!workOrder) return null;
+
+  const assignedTechnician = technicians.find((technician) => technician.memberId === workOrder.assigned_member_id);
+
+  const handleSaveAssignment = async () => {
+    setSaving(true);
+    try {
+      const { data, error } = await supabase.rpc('assign_work_order_technician', {
+        target_work_order_id: workOrder.id,
+        target_member_id: pendingMemberId,
+      });
+      if (error) throw error;
+      toast({
+        title: pendingMemberId ? 'Técnico asignado' : 'Asignación removida',
+        description: pendingMemberId
+          ? 'El técnico fue asignado a la orden de trabajo.'
+          : 'La orden de trabajo quedó sin técnico asignado.',
+      });
+      if (data) onAssigned?.(data);
+    } catch (error) {
+      toast({
+        title: 'No se pudo asignar el técnico',
+        description: error instanceof Error ? error.message : 'Intenta nuevamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -63,6 +118,33 @@ export function WorkOrderDetailDialog({ workOrder, open, onOpenChange }: WorkOrd
             <p className="whitespace-pre-wrap text-muted-foreground">{workOrder.description}</p>
           </div>
         )}
+
+        <div className="rounded-lg border p-3">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Técnico asignado</p>
+          {isProviderPlanner ? (
+            <div className="space-y-3">
+              <TechnicianSelect
+                organizationId={workOrder.provider_organization_id}
+                value={pendingMemberId}
+                onChange={setPendingMemberId}
+                disabled={saving}
+              />
+              <Button
+                size="sm"
+                onClick={() => void handleSaveAssignment()}
+                disabled={saving || pendingMemberId === (workOrder.assigned_member_id ?? null)}
+              >
+                {saving ? 'Guardando…' : 'Guardar asignación'}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm">
+              {workOrder.assigned_member_id
+                ? (assignedTechnician ? `${assignedTechnician.name} (${assignedTechnician.email})` : 'Técnico asignado')
+                : 'Sin técnico asignado'}
+            </p>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
