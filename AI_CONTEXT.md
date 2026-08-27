@@ -591,3 +591,9 @@ Inicio de la rama `productization/mvp`.
 - Trazabilidad hasta `work_orders`: ya alcanzable sin cambios, vía
   `work_orders.request_id → requests.asset_id → assets`; no se agregó
   columna en `work_orders` porque no hace falta.
+- Limpieza posterior: el modal "Agregar Nuevo Detalle" dejó de pedir
+  Equipo/Subequipo/Área/Subárea (picklists hardcodeados eliminados); ese
+  contexto ahora viene del activo asociado en la cabecera. `request_details`
+  sigue recibiendo esas columnas (sin migración) con valores derivados
+  uniformes por solicitud, no borrados. Detalle en
+  `docs/ASSETS_REQUESTS_INTEGRATION.md`.

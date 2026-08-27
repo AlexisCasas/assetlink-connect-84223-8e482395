@@ -13,7 +13,9 @@ import type { Asset } from '@/types/asset';
 
 interface RequestAssetPickerProps {
   assetId: string;
-  onChange: (assetId: string, asset: Asset | null) => void;
+  /** `path` is the "›"-joined hierarchical breadcrumb of the picked asset,
+   * or '' when clearing the selection. */
+  onChange: (assetId: string, asset: Asset | null, path: string) => void;
 }
 
 /** Combobox to link a request to a real tenant-aware asset of the active
@@ -79,7 +81,7 @@ export function RequestAssetPicker({ assetId, onChange }: RequestAssetPickerProp
                 <CommandItem
                   value="__none__"
                   onSelect={() => {
-                    onChange('', null);
+                    onChange('', null, '');
                     setOpen(false);
                   }}
                 >
@@ -91,7 +93,7 @@ export function RequestAssetPicker({ assetId, onChange }: RequestAssetPickerProp
                     key={asset.id}
                     value={[asset.name, asset.code, asset.serialNumber, path].filter(Boolean).join(' ')}
                     onSelect={() => {
-                      onChange(asset.id, asset);
+                      onChange(asset.id, asset, path);
                       setOpen(false);
                     }}
                   >
@@ -112,7 +114,7 @@ export function RequestAssetPicker({ assetId, onChange }: RequestAssetPickerProp
           <span className="truncate">
             {options.find((option) => option.asset.id === selected.id)?.path ?? selected.name}
           </span>
-          <Button type="button" variant="ghost" size="sm" className="h-6 px-2" onClick={() => onChange('', null)}>
+          <Button type="button" variant="ghost" size="sm" className="h-6 px-2" onClick={() => onChange('', null, '')}>
             <X className="h-3 w-3 mr-1" />
             Quitar
           </Button>

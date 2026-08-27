@@ -273,10 +273,7 @@ export const OrderTable = ({
                         <Table className="text-sm">
                           <TableHeader>
                             <TableRow className="bg-muted/50">
-                              <TableHead className="min-w-[120px]">Equipo</TableHead>
-                              <TableHead className="min-w-[120px]">Subequipo</TableHead>
-                              <TableHead className="min-w-[100px]">Área</TableHead>
-                              <TableHead className="min-w-[200px]">Actividades</TableHead>
+                              <TableHead className="min-w-[220px]">Actividad / Partida</TableHead>
                               <TableHead className="min-w-[80px]">Cantidad</TableHead>
                               <TableHead className="min-w-[80px]">U.M</TableHead>
                             </TableRow>
@@ -285,17 +282,21 @@ export const OrderTable = ({
                             {expandedDetails.length > 0 ? (
                               expandedDetails.map((detail) => (
                                 <TableRow key={detail.id ?? `${request.id}-${detail.equipment ?? ''}-${detail.sub_equipment ?? ''}-${detail.area ?? ''}-${detail.activities ?? ''}`}>
-                                  <TableCell>{detail.equipment || '-'}</TableCell>
-                                  <TableCell>{detail.sub_equipment || '-'}</TableCell>
-                                  <TableCell>{detail.area || '-'}</TableCell>
-                                  <TableCell>{detail.activities || '-'}</TableCell>
+                                  <TableCell>
+                                    {detail.activities || '-'}
+                                    {(detail.equipment || detail.area) && (
+                                      <p className="mt-0.5 text-xs text-muted-foreground">
+                                        {[detail.equipment, detail.area].filter(Boolean).join(' · ')}
+                                      </p>
+                                    )}
+                                  </TableCell>
                                   <TableCell>{detail.quantity ?? '-'}</TableCell>
                                   <TableCell>{detail.unit_measure || '-'}</TableCell>
                                 </TableRow>
                               ))
                             ) : (
                               <TableRow>
-                                <TableCell colSpan={6} className="text-center text-muted-foreground py-4">
+                                <TableCell colSpan={3} className="text-center text-muted-foreground py-4">
                                   Sin detalles registrados
                                 </TableCell>
                               </TableRow>

@@ -700,11 +700,7 @@ export const RequestList = () => {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="min-w-[50px]">#</TableHead>
-                            <TableHead className="min-w-[200px]">Equipo</TableHead>
-                            <TableHead className="min-w-[150px]">Subequipo</TableHead>
-                            <TableHead className="min-w-[120px]">Área</TableHead>
-                            <TableHead className="min-w-[120px]">Subárea</TableHead>
-                            <TableHead className="min-w-[200px]">Actividades</TableHead>
+                            <TableHead className="min-w-[220px]">Actividad / Partida</TableHead>
                             <TableHead className="min-w-[180px]">Materiales</TableHead>
                             <TableHead className="min-w-[80px]">Cantidad</TableHead>
                             <TableHead className="min-w-[80px]">U.M</TableHead>
@@ -717,11 +713,14 @@ export const RequestList = () => {
                           {requestDetails.map((detail: any, index: number) => (
                             <TableRow key={detail.id}>
                               <TableCell className="font-medium">{index + 1}</TableCell>
-                              <TableCell>{detail.equipment || '-'}</TableCell>
-                              <TableCell>{detail.sub_equipment || '-'}</TableCell>
-                              <TableCell>{detail.area || '-'}</TableCell>
-                              <TableCell>{detail.sub_area || '-'}</TableCell>
-                              <TableCell>{detail.activities || '-'}</TableCell>
+                              <TableCell>
+                                {detail.activities || '-'}
+                                {(detail.equipment || detail.area) && (
+                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                    {[detail.equipment, detail.area].filter(Boolean).join(' · ')}
+                                  </p>
+                                )}
+                              </TableCell>
                               <TableCell>{detail.relevant_materials || '-'}</TableCell>
                               <TableCell>{detail.quantity || '-'}</TableCell>
                               <TableCell>{detail.unit_measure || '-'}</TableCell>

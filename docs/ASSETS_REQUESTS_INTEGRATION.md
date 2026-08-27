@@ -184,6 +184,42 @@ Se integró en `RequestList.tsx` (diálogo "Ver solicitud" del cliente, entre
 el campo "Equipo/Activo" duplicado de esa segunda card). Sin migración, sin
 cambios de RLS, sin tocar el flujo de guardado.
 
+## Limpieza del modal de detalle (Equipo/Subequipo/Área/Subárea)
+
+El modal "Agregar Nuevo Detalle" pedía manualmente Equipo/Subequipo/Área/
+Subárea desde picklists hardcodeados (`EQUIPMENT_OPTIONS`, etc., ya
+eliminados), redundante ahora que la solicitud tiene un activo real via
+`asset_id`. Cambios, todos en frontend, **sin migración nueva**
+(`request_details.equipment/sub_equipment/area/sub_area` siguen existiendo
+en la tabla, solo dejaron de pedirse en la UI):
+
+- **UI eliminada**: los 4 selects desaparecen del modal. Queda solo
+  Actividad/Partida, Materiales, Cantidad, U.M, Observación, Encargado,
+  Delegado, Anexos (estos últimos cuatro sin cambios, siguen en el modelo).
+- **Contexto de solo lectura**: si la solicitud tiene `assetId`, el modal
+  muestra arriba "Detalle asociado a" (reutiliza `RequestAssetSummary` con
+  `title` configurable) con nombre, badge de tipo y ruta — sin poder
+  cambiar el activo desde ahí (eso sigue siendo exclusivo del selector de
+  cabecera).
+- **Payload de compatibilidad**: al guardar, `RequestForm.tsx` calcula una
+  vez por solicitud `detailEquipmentFallback` (nombre del activo elegido, o
+  el texto legado `request.asset` si no se tocó el selector) y
+  `detailAreaFallback` (ruta jerárquica del activo recién elegido, o
+  vacío), y los aplica **uniformemente a cada fila** de `request.details`
+  en vez de pedirlos por fila. `sub_equipment`/`sub_area` siempre viajan
+  vacíos. `RequestList.tsx` no cambió su inserción a `request_details` —
+  ya recibe estos valores calculados desde `RequestForm`.
+- **Listados/detalles existentes**: las columnas Equipo/Subequipo/Área/
+  Subárea se quitaron de las tablas de detalle en `RequestForm.tsx`,
+  `RequestList.tsx`, `OrderTable.tsx` (fila expandible) y
+  `RequestDetailDialog.tsx`. Donde una fila antigua todavía tiene
+  `equipment`/`area` guardados, se muestran como texto secundario pequeño
+  bajo "Actividad", no como columnas — nada se borra ni se rompe.
+- **`RequestAssetPicker`**: confirmado que ya no estaba limitado a
+  `node_type = 'equipment'` (nunca filtró por tipo); solo se extendió su
+  `onChange` para exponer también la ruta jerárquica del activo elegido,
+  reutilizada en el cálculo de `detailAreaFallback`.
+
 ## Pendiente
 
 - `request_details` (multi-línea, texto libre `equipment`/`sub_equipment`)

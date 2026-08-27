@@ -11,6 +11,9 @@ interface RequestAssetSummaryProps {
   /** Legacy denormalized text (requests.asset) — the only thing a provider
    * (or anyone without RLS access to the full asset row) ever sees. */
   assetText?: string | null;
+  /** Card title. Defaults to "Activo asociado"; callers with a different
+   * framing (e.g. the request-detail dialog) can override it. */
+  title?: string;
 }
 
 /**
@@ -21,7 +24,7 @@ interface RequestAssetSummaryProps {
  * or insecure query is ever attempted, and the component falls back to the
  * safe denormalized `assetText` automatically.
  */
-export function RequestAssetSummary({ assetId, assetText }: RequestAssetSummaryProps) {
+export function RequestAssetSummary({ assetId, assetText, title = 'Activo asociado' }: RequestAssetSummaryProps) {
   const { assets, assetTree } = useAssets();
 
   const resolvedAsset = useMemo(
@@ -41,7 +44,7 @@ export function RequestAssetSummary({ assetId, assetText }: RequestAssetSummaryP
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Package className="h-4 w-4" />
-          Activo asociado
+          {title}
         </CardTitle>
       </CardHeader>
       <CardContent>

@@ -129,11 +129,7 @@ export const RequestDetailDialog = ({ request, assignment, onClose }: RequestDet
                       <TableHeader>
                         <TableRow>
                           <TableHead className="min-w-[50px]">#</TableHead>
-                          <TableHead className="min-w-[200px]">Equipo</TableHead>
-                          <TableHead className="min-w-[150px]">Subequipo</TableHead>
-                          <TableHead className="min-w-[120px]">Área</TableHead>
-                          <TableHead className="min-w-[120px]">Subárea</TableHead>
-                          <TableHead className="min-w-[200px]">Actividades</TableHead>
+                          <TableHead className="min-w-[220px]">Actividad / Partida</TableHead>
                           <TableHead className="min-w-[180px]">Materiales</TableHead>
                           <TableHead className="min-w-[80px]">Cantidad</TableHead>
                           <TableHead className="min-w-[80px]">U.M</TableHead>
@@ -146,11 +142,14 @@ export const RequestDetailDialog = ({ request, assignment, onClose }: RequestDet
                         {request.details.map((detail: any, index: number) => (
                           <TableRow key={index}>
                             <TableCell className="font-medium">{index + 1}</TableCell>
-                            <TableCell>{detail.equipment || '-'}</TableCell>
-                            <TableCell>{detail.subEquipment || detail.sub_equipment || '-'}</TableCell>
-                            <TableCell>{detail.area || '-'}</TableCell>
-                            <TableCell>{detail.subArea || detail.sub_area || '-'}</TableCell>
-                            <TableCell>{detail.activities || '-'}</TableCell>
+                            <TableCell>
+                              {detail.activities || '-'}
+                              {(detail.equipment || detail.area) && (
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  {[detail.equipment, detail.area].filter(Boolean).join(' · ')}
+                                </p>
+                              )}
+                            </TableCell>
                             <TableCell>{detail.relevantMaterials || detail.relevant_materials || '-'}</TableCell>
                             <TableCell>{detail.quantity || '-'}</TableCell>
                             <TableCell>{detail.unitMeasure || detail.unit_measure || '-'}</TableCell>
