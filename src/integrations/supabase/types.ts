@@ -1882,6 +1882,7 @@ export type Database = {
       }
       work_orders: {
         Row: {
+          asset_id: string | null
           assigned_member_id: string | null
           cancelled_at: string | null
           client_organization_id: string
@@ -1889,17 +1890,25 @@ export type Database = {
           created_at: string
           created_by_user_id: string | null
           description: string | null
+          due_at: string | null
           id: string
+          observations: string | null
+          planner_member_id: string | null
+          priority: string
           provider_organization_id: string
           quote_id: string | null
           request_id: string
+          scheduled_at: string | null
           started_at: string | null
           status: string
           title: string | null
           total_amount: number | null
           updated_at: string
+          work_order_number: string
+          work_order_type: string
         }
         Insert: {
+          asset_id?: string | null
           assigned_member_id?: string | null
           cancelled_at?: string | null
           client_organization_id: string
@@ -1907,17 +1916,25 @@ export type Database = {
           created_at?: string
           created_by_user_id?: string | null
           description?: string | null
+          due_at?: string | null
           id?: string
+          observations?: string | null
+          planner_member_id?: string | null
+          priority?: string
           provider_organization_id: string
           quote_id?: string | null
           request_id: string
+          scheduled_at?: string | null
           started_at?: string | null
           status?: string
           title?: string | null
           total_amount?: number | null
           updated_at?: string
+          work_order_number: string
+          work_order_type?: string
         }
         Update: {
+          asset_id?: string | null
           assigned_member_id?: string | null
           cancelled_at?: string | null
           client_organization_id?: string
@@ -1925,17 +1942,31 @@ export type Database = {
           created_at?: string
           created_by_user_id?: string | null
           description?: string | null
+          due_at?: string | null
           id?: string
+          observations?: string | null
+          planner_member_id?: string | null
+          priority?: string
           provider_organization_id?: string
           quote_id?: string | null
           request_id?: string
+          scheduled_at?: string | null
           started_at?: string | null
           status?: string
           title?: string | null
           total_amount?: number | null
           updated_at?: string
+          work_order_number?: string
+          work_order_type?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "work_orders_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "work_orders_assigned_member_id_fkey"
             columns: ["assigned_member_id"]
@@ -1948,6 +1979,13 @@ export type Database = {
             columns: ["client_organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_planner_member_id_fkey"
+            columns: ["planner_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
             referencedColumns: ["id"]
           },
           {
@@ -1982,6 +2020,7 @@ export type Database = {
       assign_work_order_technician: {
         Args: { target_member_id: string; target_work_order_id: string }
         Returns: {
+          asset_id: string | null
           assigned_member_id: string | null
           cancelled_at: string | null
           client_organization_id: string
@@ -1989,15 +2028,22 @@ export type Database = {
           created_at: string
           created_by_user_id: string | null
           description: string | null
+          due_at: string | null
           id: string
+          observations: string | null
+          planner_member_id: string | null
+          priority: string
           provider_organization_id: string
           quote_id: string | null
           request_id: string
+          scheduled_at: string | null
           started_at: string | null
           status: string
           title: string | null
           total_amount: number | null
           updated_at: string
+          work_order_number: string
+          work_order_type: string
         }
         SetofOptions: {
           from: "*"
@@ -2025,6 +2071,7 @@ export type Database = {
       create_internal_work_order_from_request: {
         Args: { target_assigned_member_id?: string; target_request_id: string }
         Returns: {
+          asset_id: string | null
           assigned_member_id: string | null
           cancelled_at: string | null
           client_organization_id: string
@@ -2032,15 +2079,22 @@ export type Database = {
           created_at: string
           created_by_user_id: string | null
           description: string | null
+          due_at: string | null
           id: string
+          observations: string | null
+          planner_member_id: string | null
+          priority: string
           provider_organization_id: string
           quote_id: string | null
           request_id: string
+          scheduled_at: string | null
           started_at: string | null
           status: string
           title: string | null
           total_amount: number | null
           updated_at: string
+          work_order_number: string
+          work_order_type: string
         }
         SetofOptions: {
           from: "*"
@@ -2066,6 +2120,7 @@ export type Database = {
       create_work_order_from_quote: {
         Args: { target_quote_id: string }
         Returns: {
+          asset_id: string | null
           assigned_member_id: string | null
           cancelled_at: string | null
           client_organization_id: string
@@ -2073,15 +2128,22 @@ export type Database = {
           created_at: string
           created_by_user_id: string | null
           description: string | null
+          due_at: string | null
           id: string
+          observations: string | null
+          planner_member_id: string | null
+          priority: string
           provider_organization_id: string
           quote_id: string | null
           request_id: string
+          scheduled_at: string | null
           started_at: string | null
           status: string
           title: string | null
           total_amount: number | null
           updated_at: string
+          work_order_number: string
+          work_order_type: string
         }
         SetofOptions: {
           from: "*"
@@ -2089,6 +2151,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_assignable_planners: {
+        Args: { p_organization_id: string }
+        Returns: {
+          email: string
+          member_id: string
+          name: string
+          user_id: string
+        }[]
       }
       get_assignable_technicians: {
         Args: { p_organization_id: string }
@@ -2143,13 +2214,65 @@ export type Database = {
         Args: { _organization_id: string }
         Returns: boolean
       }
+      map_request_priority_to_work_order_priority: {
+        Args: { request_priority: number }
+        Returns: string
+      }
       reject_quote: {
         Args: { reason?: string; target_quote_id: string }
         Returns: undefined
       }
+      resolve_caller_planner_member: {
+        Args: { p_organization_id: string }
+        Returns: string
+      }
       storage_request_id_from_name: {
         Args: { object_name: string }
         Returns: string
+      }
+      update_work_order_operations: {
+        Args: {
+          target_assigned_member_id: string
+          target_due_at: string
+          target_observations: string
+          target_planner_member_id: string
+          target_priority: string
+          target_scheduled_at: string
+          target_status: string
+          target_work_order_id: string
+        }
+        Returns: {
+          asset_id: string | null
+          assigned_member_id: string | null
+          cancelled_at: string | null
+          client_organization_id: string
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          due_at: string | null
+          id: string
+          observations: string | null
+          planner_member_id: string | null
+          priority: string
+          provider_organization_id: string
+          quote_id: string | null
+          request_id: string
+          scheduled_at: string | null
+          started_at: string | null
+          status: string
+          title: string | null
+          total_amount: number | null
+          updated_at: string
+          work_order_number: string
+          work_order_type: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
