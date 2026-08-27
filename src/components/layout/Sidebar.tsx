@@ -6,6 +6,7 @@ import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { OrganizationSwitcher } from '@/components/organization/OrganizationSwitcher';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { useOrganizationNotifications } from '@/hooks/useOrganizationNotifications';
+import { ORGANIZATION_ROLE_LABELS } from '@/lib/organizationRoles';
 import { 
   LayoutDashboard,
   Package,
@@ -39,23 +40,12 @@ const organizationTypeLabels = {
   platform_admin: 'Administrador',
 } as const;
 
-const membershipRoleLabels = {
-  owner: 'Propietario',
-  admin: 'Administrador',
-  manager: 'Gestor',
-  requester: 'Solicitante',
-  quote_manager: 'Cotizador',
-  technician: 'Tecnico',
-  operator: 'Operador',
-  viewer: 'Lector',
-} as const;
-
 export function Sidebar({ className, onViewChange, currentView = 'dashboard', userRole }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { user, logout, currentOrganization, currentMembership, memberships, organizations } = useAuth();
   const { unreadCount } = useOrganizationNotifications(1);
   const visualRole = currentOrganization
-    ? `${organizationTypeLabels[currentOrganization.organizationType]}${currentMembership ? ` · ${membershipRoleLabels[currentMembership.role]}` : ''}`
+    ? `${organizationTypeLabels[currentOrganization.organizationType]}${currentMembership ? ` · ${ORGANIZATION_ROLE_LABELS[currentMembership.role]}` : ''}`
     : 'Sin organizacion asignada';
   const isPlatformAdminOrg = currentOrganization?.organizationType === 'platform_admin';
   const canViewWorkOrders = currentOrganization !== null && !isPlatformAdminOrg && [

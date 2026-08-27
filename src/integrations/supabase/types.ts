@@ -1869,6 +1869,7 @@ export type Database = {
       }
       work_orders: {
         Row: {
+          assigned_member_id: string | null
           cancelled_at: string | null
           client_organization_id: string
           completed_at: string | null
@@ -1886,6 +1887,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_member_id?: string | null
           cancelled_at?: string | null
           client_organization_id: string
           completed_at?: string | null
@@ -1903,6 +1905,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_member_id?: string | null
           cancelled_at?: string | null
           client_organization_id?: string
           completed_at?: string | null
@@ -1920,6 +1923,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "work_orders_assigned_member_id_fkey"
+            columns: ["assigned_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "work_orders_client_organization_id_fkey"
             columns: ["client_organization_id"]
@@ -1956,6 +1966,33 @@ export type Database = {
     }
     Functions: {
       approve_quote: { Args: { target_quote_id: string }; Returns: undefined }
+      assign_work_order_technician: {
+        Args: { target_member_id: string; target_work_order_id: string }
+        Returns: {
+          assigned_member_id: string | null
+          cancelled_at: string | null
+          client_organization_id: string
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          id: string
+          provider_organization_id: string
+          quote_id: string
+          request_id: string
+          started_at: string | null
+          status: string
+          title: string | null
+          total_amount: number | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       can_provider_quote_request: {
         Args: {
           target_provider_organization_id: string
@@ -1989,6 +2026,7 @@ export type Database = {
       create_work_order_from_quote: {
         Args: { target_quote_id: string }
         Returns: {
+          assigned_member_id: string | null
           cancelled_at: string | null
           client_organization_id: string
           completed_at: string | null
@@ -2011,6 +2049,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_assignable_technicians: {
+        Args: { p_organization_id: string }
+        Returns: {
+          email: string
+          member_id: string
+          name: string
+          user_id: string
+        }[]
       }
       get_user_organizations: {
         Args: never

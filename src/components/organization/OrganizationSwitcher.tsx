@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import type { OrganizationMemberRole, OrganizationType } from '@/types/organization';
+import { ORGANIZATION_ROLE_LABELS as roleLabels } from '@/lib/organizationRoles';
+import type { OrganizationType } from '@/types/organization';
 
 const organizationTypeLabels: Record<OrganizationType, string> = {
   client_company: 'Cliente',
@@ -19,17 +20,6 @@ const organizationTypeLabels: Record<OrganizationType, string> = {
   facility_manager: 'Facility Manager',
   subcontractor_company: 'Subcontratista',
   platform_admin: 'Administrador Plataforma',
-};
-
-const roleLabels: Record<OrganizationMemberRole, string> = {
-  owner: 'Propietario',
-  admin: 'Administrador',
-  manager: 'Gestor',
-  requester: 'Solicitante',
-  quote_manager: 'Cotizador',
-  technician: 'Técnico',
-  operator: 'Operador',
-  viewer: 'Lector',
 };
 
 interface OrganizationSwitcherProps {

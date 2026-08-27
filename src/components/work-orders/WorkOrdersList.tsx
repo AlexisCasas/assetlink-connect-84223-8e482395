@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ClipboardList, Eye, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWorkOrders, type WorkOrder } from '@/hooks/useWorkOrders';
+import { useOrganizationTechnicians } from '@/hooks/useOrganizationTechnicians';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +25,14 @@ export function WorkOrdersList() {
   const { workOrders, loading, error, refetch } = useWorkOrders();
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
 
+  const isClientView = currentOrganization?.organizationType === 'client_company';
+  const isPlatformView = currentOrganization?.organizationType === 'platform_admin';
+  const isProviderView = !isClientView && !isPlatformView;
+  // Only fetched (and only ever succeeds) when viewing as the provider
+  // organization with a planner-tier role — used purely to show the
+  // assigned technician's name next to each order, read-only here.
+  const { technicians } = useOrganizationTechnicians(isProviderView ? currentOrganization?.id : null);
+
   if (!currentOrganization) return <EmptyState message="Sin organización asignada" />;
   if (loading) return <EmptyState message="Cargando órdenes de trabajo…" />;
 
@@ -41,9 +50,6 @@ export function WorkOrdersList() {
 
   if (workOrders.length === 0) return <EmptyState message="No hay órdenes de trabajo para esta organización" />;
 
-  const isClientView = currentOrganization.organizationType === 'client_company';
-  const isPlatformView = currentOrganization.organizationType === 'platform_admin';
-
   return (
     <>
       <Card>
@@ -60,6 +66,7 @@ export function WorkOrdersList() {
               <TableHeader><TableRow>
                 <TableHead>Orden</TableHead><TableHead>Estado</TableHead><TableHead>Solicitud</TableHead>
                 <TableHead>{isPlatformView ? 'Cliente / proveedor' : isClientView ? 'Proveedor' : 'Cliente'}</TableHead>
+                {isProviderView && <TableHead>Técnico</TableHead>}
                 <TableHead>Importe</TableHead><TableHead>Creada</TableHead><TableHead className="text-right">Detalle</TableHead>
               </TableRow></TableHeader>
               <TableBody>{workOrders.map((workOrder) => (
@@ -70,6 +77,11 @@ export function WorkOrdersList() {
                   <TableCell className="font-mono text-xs text-muted-foreground">
                     {isPlatformView ? `${shortId(workOrder.client_organization_id)} / ${shortId(workOrder.provider_organization_id)}` : isClientView ? shortId(workOrder.provider_organization_id) : shortId(workOrder.client_organization_id)}
                   </TableCell>
+                  {isProviderView && (
+                    <TableCell className="text-sm">
+                      {technicians.find((technician) => technician.memberId === workOrder.assigned_member_id)?.name ?? (workOrder.assigned_member_id ? 'Técnico asignado' : '—')}
+                    </TableCell>
+                  )}
                   <TableCell>{formatAmount(workOrder.total_amount)}</TableCell><TableCell>{formatDate(workOrder.created_at)}</TableCell>
                   <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => setSelectedWorkOrder(workOrder)}><Eye className="h-4 w-4" /><span className="sr-only">Ver detalle</span></Button></TableCell>
                 </TableRow>
@@ -78,7 +90,12 @@ export function WorkOrdersList() {
           </div>
         </CardContent>
       </Card>
-      <WorkOrderDetailDialog workOrder={selectedWorkOrder} open={selectedWorkOrder !== null} onOpenChange={(open) => !open && setSelectedWorkOrder(null)} />
+      <WorkOrderDetailDialog
+        workOrder={selectedWorkOrder}
+        open={selectedWorkOrder !== null}
+        onOpenChange={(open) => !open && setSelectedWorkOrder(null)}
+        onAssigned={(updated) => { setSelectedWorkOrder(updated); void refetch(); }}
+      />
     </>
   );
 }
