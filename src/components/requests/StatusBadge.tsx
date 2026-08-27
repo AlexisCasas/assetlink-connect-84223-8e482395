@@ -80,3 +80,14 @@ export const QuotesProgressBadge = ({ received, minRequired }: QuotesProgressBad
     </Badge>
   );
 };
+
+interface RequestTypeBadgeProps {
+  /** Legacy rows without request_type are always treated as external. */
+  type?: 'internal' | 'external' | string | null;
+}
+
+export const RequestTypeBadge = ({ type }: RequestTypeBadgeProps) => (
+  type === 'internal'
+    ? <Badge variant="outline" className="bg-violet-500/10 text-violet-600 border-violet-500/20">Interna</Badge>
+    : <Badge variant="outline" className="bg-slate-500/10 text-slate-600 border-slate-500/20">Externa</Badge>
+);

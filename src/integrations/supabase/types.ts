@@ -1619,6 +1619,7 @@ export type Database = {
           document_urls: string[] | null
           id: string
           image_urls: string[] | null
+          internal_responsible_member_id: string | null
           is_public: boolean | null
           location: string
           min_quotes: number
@@ -1628,6 +1629,7 @@ export type Database = {
           priority: number
           quotes_closed: boolean
           request_number: string
+          request_type: string
           requires_visit: boolean | null
           service_type: Database["public"]["Enums"]["service_type"]
           start_time: string | null
@@ -1655,6 +1657,7 @@ export type Database = {
           document_urls?: string[] | null
           id?: string
           image_urls?: string[] | null
+          internal_responsible_member_id?: string | null
           is_public?: boolean | null
           location: string
           min_quotes?: number
@@ -1664,6 +1667,7 @@ export type Database = {
           priority?: number
           quotes_closed?: boolean
           request_number: string
+          request_type?: string
           requires_visit?: boolean | null
           service_type: Database["public"]["Enums"]["service_type"]
           start_time?: string | null
@@ -1691,6 +1695,7 @@ export type Database = {
           document_urls?: string[] | null
           id?: string
           image_urls?: string[] | null
+          internal_responsible_member_id?: string | null
           is_public?: boolean | null
           location?: string
           min_quotes?: number
@@ -1700,6 +1705,7 @@ export type Database = {
           priority?: number
           quotes_closed?: boolean
           request_number?: string
+          request_type?: string
           requires_visit?: boolean | null
           service_type?: Database["public"]["Enums"]["service_type"]
           start_time?: string | null
@@ -1715,6 +1721,13 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requests_internal_responsible_member_id_fkey"
+            columns: ["internal_responsible_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
             referencedColumns: ["id"]
           },
           {
@@ -1878,7 +1891,7 @@ export type Database = {
           description: string | null
           id: string
           provider_organization_id: string
-          quote_id: string
+          quote_id: string | null
           request_id: string
           started_at: string | null
           status: string
@@ -1896,7 +1909,7 @@ export type Database = {
           description?: string | null
           id?: string
           provider_organization_id: string
-          quote_id: string
+          quote_id?: string | null
           request_id: string
           started_at?: string | null
           status?: string
@@ -1914,7 +1927,7 @@ export type Database = {
           description?: string | null
           id?: string
           provider_organization_id?: string
-          quote_id?: string
+          quote_id?: string | null
           request_id?: string
           started_at?: string | null
           status?: string
@@ -1978,7 +1991,7 @@ export type Database = {
           description: string | null
           id: string
           provider_organization_id: string
-          quote_id: string
+          quote_id: string | null
           request_id: string
           started_at: string | null
           status: string
@@ -2009,6 +2022,33 @@ export type Database = {
         Returns: boolean
       }
       can_user_read_request: { Args: { _request_id: string }; Returns: boolean }
+      create_internal_work_order_from_request: {
+        Args: { target_assigned_member_id?: string; target_request_id: string }
+        Returns: {
+          assigned_member_id: string | null
+          cancelled_at: string | null
+          client_organization_id: string
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          id: string
+          provider_organization_id: string
+          quote_id: string | null
+          request_id: string
+          started_at: string | null
+          status: string
+          title: string | null
+          total_amount: number | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_organization_notification: {
         Args: {
           target_actor_user_id: string
@@ -2035,7 +2075,7 @@ export type Database = {
           description: string | null
           id: string
           provider_organization_id: string
-          quote_id: string
+          quote_id: string | null
           request_id: string
           started_at: string | null
           status: string

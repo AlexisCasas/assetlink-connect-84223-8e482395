@@ -155,6 +155,7 @@ export const ProviderRequestList = () => {
         .from('requests')
         .select('*')
         .neq('status', 'draft')
+        .eq('request_type', 'external')
         .order('priority', { ascending: true })
         .order('created_at', { ascending: false });
 

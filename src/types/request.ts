@@ -120,6 +120,11 @@ export interface QuoteCalculationSummary {
 
 export type ServiceType = 'emergencia' | 'correctivo' | 'preventivo' | 'proyecto';
 
+/** 'external' (default) goes through providers/quotes/marketplace; 'internal'
+ * is executed directly by the client's own organization. Legacy rows without
+ * request_type are always treated as 'external'. */
+export type RequestType = 'external' | 'internal';
+
 export interface RequestDetailData {
   equipment?: string;
   subEquipment?: string;
@@ -143,6 +148,8 @@ export interface Request {
   description: string;
   asset: string;
   assetId?: string;
+  requestType?: RequestType;
+  internalResponsibleMemberId?: string;
   location: string;
   serviceType: ServiceType;
   observations?: string;

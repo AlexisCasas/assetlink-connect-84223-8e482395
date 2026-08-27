@@ -7,6 +7,8 @@ interface TechnicianSelectProps {
   value: string | null;
   onChange: (memberId: string | null) => void;
   disabled?: boolean;
+  /** Shown instead of the default "no technicians yet" copy when the list is empty. */
+  emptyMessage?: string;
 }
 
 /**
@@ -14,7 +16,7 @@ interface TechnicianSelectProps {
  * (useOrganizationTechnicians -> get_assignable_technicians RPC already
  * scopes this server-side; nothing here can leak another tenant's members).
  */
-export function TechnicianSelect({ organizationId, value, onChange, disabled }: TechnicianSelectProps) {
+export function TechnicianSelect({ organizationId, value, onChange, disabled, emptyMessage }: TechnicianSelectProps) {
   const { technicians, loading, error } = useOrganizationTechnicians(organizationId);
 
   return (
@@ -38,10 +40,14 @@ export function TechnicianSelect({ organizationId, value, onChange, disabled }: 
       </Select>
       {!loading && !error && organizationId && technicians.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          Esta organización todavía no tiene técnicos activos. Créalos desde Administración.
+          {emptyMessage ?? 'Esta organización todavía no tiene técnicos activos. Créalos desde Administración.'}
         </p>
       )}
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && (
+        emptyMessage
+          ? <p className="text-xs text-muted-foreground">{emptyMessage}</p>
+          : <p className="text-xs text-destructive">{error}</p>
+      )}
     </div>
   );
 }

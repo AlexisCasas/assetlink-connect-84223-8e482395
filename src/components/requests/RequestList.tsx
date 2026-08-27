@@ -51,6 +51,7 @@ import {
 } from './OrderTable';
 import {
   ServiceTypeBadge,
+  RequestTypeBadge,
   getServiceTypeText,
   getStatusText,
   getServiceTypeColor,
@@ -80,6 +81,10 @@ export const RequestList = () => {
   // Conteo de cotizaciones por solicitud
   const [quoteCounts, setQuoteCounts] = useState<Record<string, number>>({});
 
+  // OTs internas ya generadas, por request_id (solicitudes internas no usan cotizaciones)
+  const [internalWorkOrders, setInternalWorkOrders] = useState<Record<string, { id: string }>>({});
+  const [generatingRequestId, setGeneratingRequestId] = useState<string | null>(null);
+
   // Filtros
   const [filterStore, setFilterStore] = useState<string>('all');
   const [filterBranch, setFilterBranch] = useState<string>('all');
@@ -93,7 +98,7 @@ export const RequestList = () => {
   // Columnas
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const defaults: Record<ColumnKey, boolean> = {
-      requestNumber: true, title: true, serviceType: true, status: true, branch: true, asset: true,
+      requestNumber: true, title: true, serviceType: true, status: true, type: true, branch: true, asset: true,
       createdAt: true, store: true, createdBy: true, deadline: true, quotesProgress: true, actions: true,
     };
     const saved = localStorage.getItem('requestListVisibleColumns');
@@ -132,7 +137,7 @@ export const RequestList = () => {
 
   const resetColumns = () => {
     setVisibleColumns({
-      requestNumber: true, title: true, serviceType: true, status: true, branch: true, asset: true,
+      requestNumber: true, title: true, serviceType: true, status: true, type: true, branch: true, asset: true,
       createdAt: true, store: true, createdBy: true, deadline: true, quotesProgress: true, actions: true,
     });
     setColumnOrder(DEFAULT_COLUMN_ORDER);
@@ -167,6 +172,7 @@ export const RequestList = () => {
     if (!currentOrganization) {
       setRequests([]);
       setQuoteCounts({});
+      setInternalWorkOrders({});
       setLoading(false);
       return;
     }
@@ -190,6 +196,9 @@ export const RequestList = () => {
         description: req.description,
         asset: req.asset,
         assetId: req.asset_id ?? undefined,
+        // Legacy rows predate request_type and always behave as external.
+        requestType: (req.request_type === 'internal' ? 'internal' : 'external'),
+        internalResponsibleMemberId: req.internal_responsible_member_id ?? undefined,
         location: req.location,
         serviceType: req.service_type,
         observations: req.observations,
@@ -220,12 +229,12 @@ export const RequestList = () => {
 
       setRequests(transformedRequests);
 
-      if (transformedRequests.length > 0) {
-        const requestIds = transformedRequests.map((r) => r.id);
+      const externalRequestIds = transformedRequests.filter((r) => r.requestType !== 'internal').map((r) => r.id);
+      if (externalRequestIds.length > 0) {
         const { data: quotesData } = await supabase
           .from('quotes')
           .select('request_id')
-          .in('request_id', requestIds)
+          .in('request_id', externalRequestIds)
           .eq('status', 'submitted');
 
         const counts: Record<string, number> = {};
@@ -233,12 +242,53 @@ export const RequestList = () => {
           counts[q.request_id] = (counts[q.request_id] || 0) + 1;
         });
         setQuoteCounts(counts);
+      } else {
+        setQuoteCounts({});
+      }
+
+      const internalRequestIds = transformedRequests.filter((r) => r.requestType === 'internal').map((r) => r.id);
+      if (internalRequestIds.length > 0) {
+        // Internal work orders only (quote_id is null) — external work orders
+        // for the same organization are irrelevant to this "Generar OT" flag.
+        const { data: workOrdersData } = await supabase
+          .from('work_orders')
+          .select('id, request_id')
+          .in('request_id', internalRequestIds)
+          .is('quote_id', null);
+
+        const workOrderByRequest: Record<string, { id: string }> = {};
+        (workOrdersData || []).forEach((wo: any) => { workOrderByRequest[wo.request_id] = { id: wo.id }; });
+        setInternalWorkOrders(workOrderByRequest);
+      } else {
+        setInternalWorkOrders({});
       }
     } catch (error) {
       console.error('Error loading requests:', error);
       setRequests([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateWorkOrder = async (request: Request) => {
+    setGeneratingRequestId(request.id);
+    try {
+      const { data, error } = await supabase.rpc('create_internal_work_order_from_request', {
+        target_request_id: request.id,
+        target_assigned_member_id: request.internalResponsibleMemberId || null,
+      });
+      if (error) throw error;
+      if (data) setInternalWorkOrders((current) => ({ ...current, [request.id]: { id: data.id } }));
+      toast({ title: 'Orden de trabajo generada', description: `Se generó la OT para "${request.title || request.requestNumber}".` });
+    } catch (error) {
+      console.error('Error generating internal work order:', error);
+      toast({
+        title: 'No se pudo generar la orden de trabajo',
+        description: error instanceof Error ? error.message : 'Intenta nuevamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingRequestId(null);
     }
   };
 
@@ -331,6 +381,8 @@ export const RequestList = () => {
             visit_date: request.visitDate || null,
             asset: request.asset,
             asset_id: request.assetId || null,
+            request_type: request.requestType ?? 'external',
+            internal_responsible_member_id: request.internalResponsibleMemberId || null,
             status: isDraft ? 'draft' : 'sent',
             is_public: request.isPublic,
             min_quotes: request.minQuotes ?? 3,
@@ -358,6 +410,8 @@ export const RequestList = () => {
           visit_date: request.visitDate || null,
           asset: request.asset,
           asset_id: request.assetId || null,
+          request_type: request.requestType ?? 'external',
+          internal_responsible_member_id: request.internalResponsibleMemberId || null,
           status: isDraft ? 'draft' : 'sent',
           created_by: user?.email || '',
           created_by_user_id: user?.id || null,
@@ -557,6 +611,9 @@ export const RequestList = () => {
           quoteCounts={quoteCounts}
           assetsById={assetsById}
           assetPaths={assetPaths}
+          internalWorkOrders={internalWorkOrders}
+          generatingRequestId={generatingRequestId}
+          onGenerateWorkOrder={(r) => void handleGenerateWorkOrder(r)}
           expandedRequestId={expandedRequestId}
           expandedDetails={expandedDetails}
           columnOrder={columnOrder}
@@ -623,6 +680,10 @@ export const RequestList = () => {
                   <div>
                     <span className="text-muted-foreground">Tipo de Servicio:</span>
                     <p><ServiceTypeBadge type={selectedRequest.serviceType} /></p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Tipo de Gestión:</span>
+                    <p><RequestTypeBadge type={selectedRequest.requestType} /></p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Creador:</span>

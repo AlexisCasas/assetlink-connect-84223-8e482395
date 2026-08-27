@@ -627,3 +627,48 @@ Inicio de la rama `productization/mvp`.
 - Pendiente documentado (no construido): no hay pantalla "Mis Asignaciones"
   filtrada por técnico todavía; un `technician` ve el mismo "Órdenes de
   trabajo" que el resto de su organización proveedora.
+
+## Solicitudes internas y externas
+
+- Rama `feature/internal-requests-work-orders`. Detalle completo en
+  `docs/INTERNAL_REQUESTS_WORK_ORDERS.md`. Segundo camino de ejecución
+  (Solicitud → OT directa, sin proveedores) al lado del flujo externo ya
+  existente (Solicitud → proveedores → cotizaciones → selección → OT), sin
+  tocar ni deprecar el externo.
+- Campo nuevo: `requests.request_type text not null default 'external'
+  check in ('external','internal')` (migración
+  `20260827043747_internal_requests_work_orders.sql`). El `NOT NULL
+  DEFAULT` backfillea toda solicitud legacy a `'external'` en la propia
+  migración — el frontend no necesita tratar ningún caso `null`.
+- Campo opcional: `requests.internal_responsible_member_id uuid null
+  references organization_members(id)`, con trigger que exige mismo
+  `organization_id`, activo, y `role = 'technician'` (mismo patrón que el
+  trigger de `assigned_member_id` en `work_orders` de la fase anterior).
+- `work_orders.quote_id` pasa a nullable (antes `NOT NULL UNIQUE`): una OT
+  interna no tiene cotización de origen; `UNIQUE` permite múltiples `NULL`.
+- Para una OT interna, `provider_organization_id = client_organization_id
+  = requests.organization_id` (no hay proveedor externo) — deliberado, así
+  la policy `SELECT` existente y el trigger de técnico asignado de
+  `work_orders` siguen funcionando sin ningún cambio de RLS.
+- RPC `SECURITY DEFINER` `create_internal_work_order_from_request(
+  target_request_id, target_assigned_member_id default null)`: valida
+  `request_type = 'internal'`, organización cliente activa, llamador
+  owner/admin/manager de esa organización o platform_admin; es idempotente
+  (si ya existe una OT interna para la solicitud, la devuelve en vez de
+  duplicar). **No se agregó ninguna policy `INSERT`/`UPDATE` genérica** a
+  `work_orders` — sigue siendo la única forma de crear una OT interna.
+- `RequestForm.tsx`: campo "Tipo de gestión" (Externa por defecto/Interna).
+  En Interna se oculta cotizaciones mínimas y toda la sección de
+  proveedores/marketplace; aparece un selector opcional de responsable
+  interno reutilizando `TechnicianSelect.tsx` (nuevo prop `emptyMessage`).
+- `RequestList.tsx`/`OrderTable.tsx`: columna "Tipo de Gestión" (badge
+  Interna/Externa vía `RequestTypeBadge`, integrada al sistema de columnas
+  configurables existente); para internas, "Cotizaciones" muestra "No
+  aplica" y las acciones muestran "Generar OT"/"OT generada" en vez del
+  botón de cotizaciones.
+- `PublicRequestList.tsx`/`ProviderRequestList.tsx`: agregado
+  `.eq('request_type', 'external')` a sus queries — las solicitudes
+  internas nunca llegan a marketplace ni a proveedores.
+- `WorkOrdersList.tsx`/`WorkOrderDetailDialog.tsx`: badge "Solicitud
+  interna" cuando `quote_id` es null; ninguna rama de código nueva asume
+  `quote_id` no nulo.

@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Request, ServiceType, ClientBranch } from '@/types/request';
+import { Request, RequestType, ServiceType, ClientBranch } from '@/types/request';
 import { Badge } from '@/components/ui/badge';
 import { X, Upload, Search, CheckCircle2, Plus, Trash2, Pencil, CheckCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,6 +18,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RequestAssetPicker } from './RequestAssetPicker';
 import { RequestAssetSummary } from './RequestAssetSummary';
+import { TechnicianSelect } from '@/components/members/TechnicianSelect';
 import { ASSET_NODE_TYPE_LABELS } from '@/lib/assetLabels';
 import type { Asset } from '@/types/asset';
 
@@ -84,6 +85,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [city, setCity] = useState(editingRequest?.city || '');
   const [site, setSite] = useState(editingRequest?.branch || '');
   const [branches, setBranches] = useState<ClientBranch[]>([]);
+  const [requestType, setRequestType] = useState<RequestType>(editingRequest?.requestType || 'external');
+  const [internalResponsibleMemberId, setInternalResponsibleMemberId] = useState<string>(editingRequest?.internalResponsibleMemberId || '');
   const [assetId, setAssetId] = useState<string>(editingRequest?.assetId || '');
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [assetPath, setAssetPath] = useState<string>('');
@@ -310,7 +313,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       return;
     }
 
-    if (!isDraft && selectedProviders.length === 0) {
+    if (requestType === 'external' && !isDraft && selectedProviders.length === 0) {
       const confirmed = window.confirm(
         "No has seleccionado ningún proveedor. Tu solicitud será publicada como solicitud pública para que cualquier proveedor pueda enviar una cotización. ¿Deseas continuar?"
       );
@@ -346,6 +349,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       description,
       asset: assetDisplayText,
       assetId: assetId || undefined,
+      requestType,
+      internalResponsibleMemberId: requestType === 'internal' ? (internalResponsibleMemberId || undefined) : undefined,
       location: `${city} - ${site}`,
       serviceType,
       observations: '',
@@ -364,7 +369,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       quotes: editingRequest?.quotes || [],
       clientName: branches.find(b => b.id === branchId)?.name || '',
       clientBranch: site,
-      isPublic: selectedProviders.length === 0,
+      isPublic: requestType === 'external' && selectedProviders.length === 0,
       // Nuevos campos
       city,
       store: site,
@@ -449,6 +454,25 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               </div>
             </div>
 
+            {/* Fila 1.5: Tipo de gestión */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="requestType">Tipo de gestión *</Label>
+                <Select value={requestType} onValueChange={(value) => setRequestType(value as RequestType)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="external">Externa</SelectItem>
+                    <SelectItem value="internal">Interna</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {requestType === 'internal'
+                    ? 'Se ejecuta con tu propio equipo, sin proveedores externos ni marketplace.'
+                    : 'Se cotiza y ejecuta con proveedores externos.'}
+                </p>
+              </div>
+            </div>
+
             {/* Fila 2: Fecha entrega / Sucursal / Ciudad */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -494,20 +518,38 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   className="bg-muted"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="minQuotes">Cotizaciones mínimas requeridas *</Label>
-                <Input
-                  id="minQuotes"
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={minQuotes}
-                  onChange={(e) => setMinQuotes(Math.max(1, parseInt(e.target.value) || 3))}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">Los precios se mostrarán al alcanzar este número</p>
-              </div>
+              {requestType === 'external' && (
+                <div className="space-y-2">
+                  <Label htmlFor="minQuotes">Cotizaciones mínimas requeridas *</Label>
+                  <Input
+                    id="minQuotes"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={minQuotes}
+                    onChange={(e) => setMinQuotes(Math.max(1, parseInt(e.target.value) || 3))}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">Los precios se mostrarán al alcanzar este número</p>
+                </div>
+              )}
             </div>
+
+            {requestType === 'internal' && (
+              <div className="space-y-2">
+                <Label>Responsable interno / técnico (opcional)</Label>
+                {currentOrganization ? (
+                  <TechnicianSelect
+                    organizationId={currentOrganization.id}
+                    value={internalResponsibleMemberId || null}
+                    onChange={(memberId) => setInternalResponsibleMemberId(memberId || '')}
+                    emptyMessage="Puedes asignar responsable al generar la OT o posteriormente."
+                  />
+                ) : (
+                  <p className="text-xs text-muted-foreground">Puedes asignar responsable al generar la OT o posteriormente.</p>
+                )}
+              </div>
+            )}
 
             {/* Activo asociado */}
             <RequestAssetPicker
@@ -798,9 +840,11 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
             </DialogContent>
           </Dialog>
 
-          <Separator />
+          {requestType === 'external' && <Separator />}
 
-          {/* PROVEEDORES */}
+          {/* PROVEEDORES: solo aplica a solicitudes externas. Las internas no
+              usan marketplace, cotizaciones ni selección de proveedor. */}
+          {requestType === 'external' && (
           <div className="space-y-4">
             <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
               Selección directa de proveedores pendiente de migración tenant-aware. Si no seleccionas proveedores, la solicitud se publicará como pública.
@@ -936,6 +980,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               </>
             )}
           </div>
+          )}
 
           {/* BOTONES */}
           <div className="flex flex-col sm:flex-row gap-2 pt-4">
@@ -957,7 +1002,9 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               onClick={() => handleSubmit(false)}
               className="flex-1 sm:flex-none"
             >
-              {editingRequest?.status === 'sent' ? 'Guardar cambios' : 'Enviar a Proveedores'}
+              {editingRequest?.status === 'sent'
+                ? 'Guardar cambios'
+                : requestType === 'internal' ? 'Crear solicitud interna' : 'Enviar a Proveedores'}
             </Button>
           </div>
         </CardContent>

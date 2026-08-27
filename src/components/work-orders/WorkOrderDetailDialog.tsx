@@ -96,13 +96,18 @@ export function WorkOrderDetailDialog({ workOrder, open, onOpenChange, onAssigne
               <DialogTitle>{workOrder.title || 'Orden sin título'}</DialogTitle>
               <DialogDescription className="mt-1">Orden #{workOrder.id.slice(0, 8).toUpperCase()}</DialogDescription>
             </div>
-            <Badge variant="secondary">{statusLabels[workOrder.status] ?? workOrder.status}</Badge>
+            <div className="flex items-center gap-2">
+              {workOrder.quote_id === null && (
+                <Badge variant="outline" className="bg-violet-500/10 text-violet-600 border-violet-500/20">Solicitud interna</Badge>
+              )}
+              <Badge variant="secondary">{statusLabels[workOrder.status] ?? workOrder.status}</Badge>
+            </div>
           </div>
         </DialogHeader>
 
         <div className="grid gap-4 text-sm sm:grid-cols-2">
           <DetailItem label="Solicitud asociada" value={workOrder.request_id} />
-          <DetailItem label="Cotización aprobada" value={workOrder.quote_id} />
+          <DetailItem label="Cotización aprobada" value={workOrder.quote_id ?? 'No aplica (solicitud interna)'} />
           <DetailItem label="Organización cliente" value={workOrder.client_organization_id} />
           <DetailItem label="Organización proveedora" value={workOrder.provider_organization_id} />
           <DetailItem label="Importe total" value={formatAmount(workOrder.total_amount)} />

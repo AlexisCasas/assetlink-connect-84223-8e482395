@@ -22,16 +22,20 @@ import {
   DollarSign,
   Trash2,
   Package,
+  Wrench,
+  Loader2,
+  CheckCircle2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Request } from '@/types/request';
 import type { Asset } from '@/types/asset';
-import { ServiceTypeBadge, StatusBadge, QuotesProgressBadge } from './StatusBadge';
+import { ServiceTypeBadge, StatusBadge, QuotesProgressBadge, RequestTypeBadge } from './StatusBadge';
 
 export type ColumnKey =
   | 'requestNumber'
   | 'title'
+  | 'type'
   | 'serviceType'
   | 'status'
   | 'branch'
@@ -48,6 +52,7 @@ export type SortKey = Exclude<ColumnKey, 'actions' | 'title' | 'asset'>;
 export const COLUMN_LABELS: Record<ColumnKey, string> = {
   requestNumber: 'Nro. Solicitud',
   title: 'Título',
+  type: 'Tipo de Gestión',
   serviceType: 'Tipo de Servicio',
   status: 'Estado',
   branch: 'Sede',
@@ -61,7 +66,7 @@ export const COLUMN_LABELS: Record<ColumnKey, string> = {
 };
 
 export const DEFAULT_COLUMN_ORDER: ColumnKey[] = [
-  'requestNumber', 'title', 'serviceType', 'status', 'branch', 'asset',
+  'requestNumber', 'title', 'type', 'serviceType', 'status', 'branch', 'asset',
   'createdAt', 'store', 'createdBy', 'deadline', 'quotesProgress', 'actions',
 ];
 
@@ -70,6 +75,8 @@ interface OrderTableProps {
   quoteCounts: Record<string, number>;
   assetsById: Map<string, Asset>;
   assetPaths: Map<string, string>;
+  internalWorkOrders: Record<string, { id: string }>;
+  generatingRequestId: string | null;
   expandedRequestId: string | null;
   expandedDetails: any[];
   columnOrder: ColumnKey[];
@@ -85,6 +92,7 @@ interface OrderTableProps {
   onOpenChat: (r: Request) => void;
   onOpenQuotes: (r: Request) => void;
   onDelete: (id: string) => void;
+  onGenerateWorkOrder: (r: Request) => void;
   onDragStart: (col: ColumnKey) => void;
   onDragOver: (e: React.DragEvent, col: ColumnKey) => void;
   onDrop: (col: ColumnKey) => void;
@@ -96,6 +104,8 @@ export const OrderTable = ({
   quoteCounts,
   assetsById,
   assetPaths,
+  internalWorkOrders,
+  generatingRequestId,
   expandedRequestId,
   expandedDetails,
   columnOrder,
@@ -110,6 +120,7 @@ export const OrderTable = ({
   onOpenChat,
   onOpenQuotes,
   onDelete,
+  onGenerateWorkOrder,
   onDragStart,
   onDragOver,
   onDrop,
@@ -134,6 +145,8 @@ export const OrderTable = ({
             {request.title || <span className="text-muted-foreground italic">Sin título</span>}
           </TableCell>
         );
+      case 'type':
+        return <TableCell key={column}><RequestTypeBadge type={request.requestType} /></TableCell>;
       case 'serviceType':
         return <TableCell key={column}><ServiceTypeBadge type={request.serviceType} /></TableCell>;
       case 'status':
@@ -175,6 +188,9 @@ export const OrderTable = ({
           </TableCell>
         );
       case 'quotesProgress': {
+        if (request.requestType === 'internal') {
+          return <TableCell key={column} className="text-muted-foreground text-sm">No aplica</TableCell>;
+        }
         const received = quoteCounts[request.id] || 0;
         const minRequired = request.minQuotes ?? 3;
         return (
@@ -183,7 +199,10 @@ export const OrderTable = ({
           </TableCell>
         );
       }
-      case 'actions':
+      case 'actions': {
+        const isInternal = request.requestType === 'internal';
+        const internalWorkOrder = internalWorkOrders[request.id];
+        const isGenerating = generatingRequestId === request.id;
         return (
           <TableCell key={column} className="text-right">
             <div className="flex justify-end gap-1">
@@ -196,9 +215,27 @@ export const OrderTable = ({
               <Button variant="ghost" size="icon" onClick={() => onOpenChat(request)} title="Foro de Preguntas">
                 <MessageSquare className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => onOpenQuotes(request)} title="Ver cotizaciones">
-                <DollarSign className="h-4 w-4" />
-              </Button>
+              {isInternal ? (
+                internalWorkOrder ? (
+                  <Button variant="ghost" size="icon" disabled title="OT generada" className="text-emerald-600">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onGenerateWorkOrder(request)}
+                    disabled={isGenerating}
+                    title="Generar OT"
+                  >
+                    {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+                  </Button>
+                )
+              ) : (
+                <Button variant="ghost" size="icon" onClick={() => onOpenQuotes(request)} title="Ver cotizaciones">
+                  <DollarSign className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -211,6 +248,7 @@ export const OrderTable = ({
             </div>
           </TableCell>
         );
+      }
       default:
         return null;
     }
