@@ -21,12 +21,34 @@ import type { InspectionPlan } from '@/types/inspection';
 
 const FREQUENCY_LABELS: Record<string, string> = {
   one_time: 'Única vez',
-  daily: 'Diaria',
+  daily: 'Diaria', // legacy value, never offered as a choice in the form
   weekly: 'Semanal',
   monthly: 'Mensual',
   quarterly: 'Trimestral',
   semiannual: 'Semestral',
   annual: 'Anual',
+  custom: 'Personalizada',
+};
+
+const CUSTOM_UNIT_LABELS: Record<string, string> = {
+  days: 'días',
+  weeks: 'semanas',
+  months: 'meses',
+  years: 'años',
+};
+
+const frequencyDisplay = (plan: InspectionPlan) => plan.frequency === 'custom' && plan.customInterval != null && plan.customUnit
+  ? `Cada ${plan.customInterval} ${CUSTOM_UNIT_LABELS[plan.customUnit] ?? plan.customUnit}`
+  : FREQUENCY_LABELS[plan.frequency] ?? plan.frequency;
+
+const alertRulesDisplay = (plan: InspectionPlan): string => {
+  if (plan.alertRules.length === 0) return 'Sin alertas configuradas';
+  const beforeDue = plan.alertRules
+    .filter((rule) => rule.alertType === 'before_due')
+    .sort((a, b) => (b.daysBefore ?? 0) - (a.daysBefore ?? 0))
+    .map((rule) => `${rule.daysBefore}d`);
+  const hasOverdue = plan.alertRules.some((rule) => rule.alertType === 'overdue');
+  return [...beforeDue, ...(hasOverdue ? ['Vencido'] : [])].join(', ');
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -66,7 +88,7 @@ export function InspectionsView() {
   const organizationId = currentOrganization?.id;
   const { templates, saving: templateSaving, error: templateError, saveTemplate, saveItem, toggleItemActive, saveOption, toggleOptionActive } = useChecklistTemplates(organizationId);
   const { assets, branches } = useAssets();
-  const { plans, saving: planSaving, error: planError, savePlan, createRunFromPlan } = useInspectionPlans(organizationId);
+  const { plans, saving: planSaving, error: planError, savePlanWithAlertRules, createRunFromPlan } = useInspectionPlans(organizationId);
   const { runs, saving: runSaving, error: runError, loadRunDetail, submitRun, refresh: refreshRuns } = useInspectionRuns(organizationId);
 
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
@@ -290,7 +312,10 @@ export function InspectionsView() {
                         {plan.responsibleName && ` · Responsable: ${plan.responsibleName}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {FREQUENCY_LABELS[plan.frequency] ?? plan.frequency} · Próxima: {formatDate(plan.nextDueAt)}
+                        {frequencyDisplay(plan)} · Próxima: {formatDate(plan.nextDueAt)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Alertas: {alertRulesDisplay(plan)}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -388,7 +413,7 @@ export function InspectionsView() {
             assets={assets}
             plan={editingPlan}
             saving={planSaving}
-            onSave={(input, id) => savePlan(input, id)}
+            onSave={(input, id, rules) => savePlanWithAlertRules(input, id, rules)}
           />
         </>
       )}
