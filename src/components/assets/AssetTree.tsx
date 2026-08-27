@@ -24,8 +24,10 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UseAssetsResult } from '@/hooks/useAssets';
+import type { UseAssetTrafficLightResult } from '@/hooks/useAssetTrafficLight';
 import type { AssetNodeType, AssetStatus, AssetTreeNode } from '@/types/asset';
 import { ASSET_NODE_TYPE_ORDER, ASSET_NODE_TYPE_LABELS, ASSET_EDITABLE_STATUSES, ASSET_STATUS_LABELS, getAssetStatusBadgeClass } from '@/lib/assetLabels';
+import { TRAFFIC_LIGHT_DOT_CLASS, summarizeReasons } from '@/lib/trafficLightLabels';
 
 const NODE_TYPE_ICONS: Record<AssetNodeType, typeof Building2> = {
   structure: Building2,
@@ -46,9 +48,10 @@ const suggestNextNodeType = (parentType?: AssetNodeType): AssetNodeType => {
 
 interface AssetTreeProps {
   state: UseAssetsResult;
+  trafficLight: UseAssetTrafficLightResult;
 }
 
-export function AssetTree({ state }: AssetTreeProps) {
+export function AssetTree({ state, trafficLight }: AssetTreeProps) {
   const { assetTree, assets, categories, branches, loading, error, canManageAssets, showArchived, setShowArchived, selectedAssetId, selectAsset, createAsset } = state;
 
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -111,6 +114,11 @@ export function AssetTree({ state }: AssetTreeProps) {
     const isExpanded = expandedNodes.has(node.id);
     const isSelected = selectedAssetId === node.id;
     const Icon = NODE_TYPE_ICONS[node.nodeType] ?? Building2;
+    const tl = trafficLight.getAsset(node.id);
+    // rollup_color: for a parent this is the worst color across itself and
+    // every descendant; for a leaf rollup always equals direct — one field
+    // works uniformly for both cases (see docs/ASSET_TRAFFIC_LIGHT.md).
+    const dotTitle = tl ? summarizeReasons(tl.rollupColor, tl.rollupReasons) : undefined;
 
     return (
       <div key={node.id} className="select-none">
@@ -138,6 +146,14 @@ export function AssetTree({ state }: AssetTreeProps) {
           )}
 
           <Icon className="h-4 w-4 mr-2 text-muted-foreground shrink-0" />
+
+          {tl && (
+            <span
+              className={cn('mr-2 h-2.5 w-2.5 shrink-0 rounded-full', TRAFFIC_LIGHT_DOT_CLASS[tl.rollupColor])}
+              title={dotTitle}
+              aria-label={dotTitle}
+            />
+          )}
 
           <span className="flex-1 text-sm truncate">{node.name}</span>
 

@@ -1406,3 +1406,84 @@ Inicio de la rama `productization/mvp`.
   email/WhatsApp/push, calendario avanzado, reglas escalonadas por
   severidad, plantillas predefinidas ITSE, feriados/días hábiles,
   snooze/posponer alerta.
+
+## Semáforo operativo de activos/áreas/sedes
+
+- Rama `feature/asset-status-traffic-light`. Detalle completo en
+  `docs/ASSET_TRAFFIC_LIGHT.md`. No decorativo: cada color se deriva en
+  vivo de OT/inspecciones/estado real — sin color manual, sin tabla
+  espejo, dos RPCs de solo lectura.
+- Migración `20260830150000_asset_status_traffic_light.sql` (nueva, no
+  edita ninguna migración ya mergeada). `get_asset_traffic_light`:
+  cierre transitivo `WITH RECURSIVE` sobre `assets.parent_asset_id`
+  (ancestro→descendiente) para el roll-up; `get_branch_traffic_light`:
+  una sede (`client_branches`) no es una fila de `assets`, así que agrega
+  el `rollup_color` ya calculado de los activos etiquetados con ese
+  `branch_id` (reutiliza `get_asset_traffic_light` como subconsulta en
+  vez de duplicar lógica, mismo patrón que `get_efficiency_summary`
+  llamando a `get_efficiency_activity_metrics`).
+- **Bug real encontrado y corregido durante el propio desarrollo, antes
+  de cualquier commit**: `RETURNS TABLE` declara un parámetro OUT llamado
+  `asset_id`; una referencia SIN calificar a `asset_id` dentro de una de
+  las CTEs internas (`all_reasons`) resultó ambigua entre ese OUT
+  parameter y la columna de la CTE (42702) — exactamente la clase de bug
+  que `20260827170000_fix_work_order_activities_rpc_ambiguity.sql`
+  documenta. Corregido calificando cada referencia con el alias de su
+  CTE de origen (`ras.asset_id`, `rwo.asset_id`, etc.). Detectado por el
+  propio smoke test antes de aplicar en ningún entorno real.
+- Reglas verde/ámbar/rojo (ver el doc para la tabla completa de fuentes):
+  rojo = OT vencida / inspección vencida (incondicional, no depende de
+  reglas de alerta) / última ejecución de checklist `failed` (la más
+  reciente por plan, no "alguna vez falló" — una ejecución posterior que
+  pasa resuelve una falla anterior) / `assets.status = 'inactive'`.
+  Ámbar = OT próxima (ventana de 24h ya usada por
+  `generate_operational_due_notifications`) / inspección próxima (solo
+  si existe una regla `before_due` activa cuya ventana está abierta —
+  nunca una ventana inventada) / `assets.status = 'maintenance'`.
+  `assets.status` no tiene un valor `out_of_service` real — se usó
+  `inactive` como el más cercano, documentado explícitamente en vez de
+  inventar un valor.
+- **Criticidad nunca es rojo por sí sola** — se expone como columna de
+  contexto, nunca contribuye a `direct_color`/`rollup_color`. La regla
+  opcional "critical + trabajo pendiente → ámbar" del enunciado original
+  se evaluó y se dejó fuera deliberadamente (ya vendría cubierta por
+  `work_order_due_soon`/`inspection_due_soon` por sí solas).
+- `causing_asset_ids` = descendientes (nunca el nodo mismo) con color
+  no-verde; `rollup_reasons` = unión de razones directas de sí mismo y
+  de cada descendiente no-verde, cada una con su propio `asset_id`/
+  `asset_name`. Si el nodo no tiene hijos, `rollup = direct`
+  automáticamente (el cierre transitivo de una hoja es solo ella misma).
+  Verificado con `psql`: activo rojo → área roja (rollup) → sede roja,
+  con `causing_asset_ids` señalando el/los activo(s) responsables en
+  cada nivel; un activo con múltiples causas simultáneas (OT vencida +
+  checklist failed) muestra ambas razones correctamente.
+- Permisos: mismo patrón que `get_asset_integrated_history`/
+  `get_criticality_matrix`/`get_inspection_plans` — cualquier miembro
+  activo u `platform_admin`, incluye `technician` (ya ve activos e
+  inspecciones; el semáforo no compara técnicos ni expone analítica
+  agregada por persona). Verificado con `SET ROLE authenticated`: otra
+  organización no puede leer nada.
+- **No es historial**: no se inserta `asset_events` por cambios de color
+  — es estado calculado en el momento de la consulta, no un evento
+  discreto que "ocurrió". Explícito en la propia UI de
+  `AssetDetail.tsx`.
+- Frontend: `src/types/assetTrafficLight.ts`,
+  `src/hooks/useAssetTrafficLight.ts` (una sola llamada trae ambas RPCs;
+  expone `getAsset(id)` para lookup O(1) y `summary` con conteos
+  green/amber/red por `direct_color`, para evitar sobre-contar el mismo
+  problema en varios niveles del árbol), `src/lib/trafficLightLabels.ts`
+  (reutiliza los tokens `success`/`warning`/`destructive` ya usados en
+  `assetLabels.ts` — ningún color decorativo nuevo). Integrado en
+  `AssetTree.tsx` (punto de color con `rollup_color` por nodo, tooltip
+  vía `title`/`aria-label` con el resumen real de la razón),
+  `AssetDetail.tsx` (sección "Semáforo operativo": color directo, color
+  heredado si tiene hijos, razones directas, activos causantes
+  clicables, razones heredadas), y un resumen simple
+  (`TrafficLightSummaryCard.tsx`) en el Dashboard por defecto — visible
+  solo para organizaciones `client_company` (donde existen activos),
+  `null` en cualquier otro caso.
+- Pendiente documentado (no construido): ponderaciones configurables del
+  semáforo, reglas por organización, severidad por tipo de checklist,
+  suppress/snooze, SLA por contrato, dashboard ejecutivo dedicado,
+  histórico de cambios de semáforo, materialización/cron si el volumen
+  de activos lo justifica.
