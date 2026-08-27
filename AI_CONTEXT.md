@@ -1123,3 +1123,75 @@ Inicio de la rama `productization/mvp`.
 - Pendiente documentado (no construido): tipos de actividad normalizados,
   productividad comparable entre técnicos, tendencias por período,
   exportación, alertas predictivas.
+
+## Matriz de criticidad configurable
+
+- Rama `feature/configurable-criticality-matrix`. Detalle completo en
+  `docs/CONFIGURABLE_CRITICALITY_MATRIX.md`. Evoluciona `assets.criticality`
+  (existente desde `assets_tenant_aware_foundation`) sin eliminarlo: sigue
+  siendo la única columna de "criticidad efectiva" que lee el resto de la
+  app; con matriz configurada, `calculate_asset_criticality` la sobrescribe
+  con el resultado calculado, y sin matriz configurada el campo se sigue
+  comportando exactamente igual que antes (manual, editable desde
+  `AssetDetail.tsx` vía `useAssets.ts`, sin cambios).
+- Migración `20260829190000_configurable_criticality_matrix.sql`: 4 tablas
+  nuevas (`criticality_parameters`, `criticality_parameter_options`,
+  `asset_criticality_assessments`, `asset_criticality_assessment_answers`)
+  + 7 RPCs, todas `SECURITY DEFINER` con alias obligatorio por tabla
+  (cp/cpo/aca/acaa/a/om/au), mismo patrón que
+  `20260827170000_fix_work_order_activities_rpc_ambiguity.sql`.
+  `asset_criticality_assessments` reutiliza el trigger genérico
+  `check_asset_child_organization()` ya existente (de
+  `asset_documents`/`asset_events`) en vez de duplicar la validación
+  organization_id-debe-coincidir-con-el-activo.
+- **Ninguna de las 4 tablas nuevas tiene política de INSERT/UPDATE/DELETE**
+  — mismo patrón más estricto que `warehouses`/`materials`
+  (`20260828120000_minimal_inventory_materials.sql`): toda escritura pasa
+  por las RPCs `SECURITY DEFINER`; "borrar" un parámetro/opción es siempre
+  `is_active = false`, nunca un DELETE físico.
+- `calculate_asset_criticality` exige una respuesta por cada parámetro
+  **activo** de la organización (ni de más ni de menos, sin duplicados) o
+  rechaza toda la evaluación antes de escribir nada — valida en dos
+  pasadas (1: valida y acumula el score sin escribir; 2: inserta el
+  encabezado con su score ya calculado, luego las respuestas congeladas).
+  `weighted_score = option_score * weight / 100`; umbrales fijos del MVP:
+  `<25 low / <50 medium / <75 high / >=75 critical` — sin tabla de
+  umbrales configurables por ahora (evaluada y descartada deliberadamente
+  para no arriesgar el alcance).
+- Cada evaluación congela su propia foto (`asset_criticality_assessment_answers`
+  copia nombre/etiqueta/peso/puntuación, no los referencia en vivo), y
+  además inserta un `asset_events` con `event_type = 'criticality_assessed'`
+  — `get_asset_integrated_history` se actualizó (mismo patrón
+  `CREATE OR REPLACE`, sin `DROP FUNCTION` porque la firma no cambió) solo
+  para añadir la etiqueta en español de ese tipo de evento; ningún otro
+  branch de esa función cambió.
+- Permisos: lectura de la matriz y del historial (cualquier miembro activo
+  u `platform_admin`); escritura (crear/editar/desactivar parámetros y
+  opciones, ejecutar una evaluación) solo owner/admin/manager o
+  `platform_admin` — verificado con `SET ROLE authenticated` que un
+  técnico puede leer pero no escribir, y que una organización no ve ni
+  puede escribir la matriz/evaluaciones de otra. El ítem de navegación
+  "Criticidad" en `Sidebar.tsx` usa `canViewCriticality`, deliberadamente
+  acotado al mismo universo que `canViewAssets` (`client_company`
+  únicamente, no `isOperatingOrg`) porque los activos —y por lo tanto su
+  matriz— no existen para `provider_company`/`facility_manager`.
+- Sin bloqueo si la suma de pesos de los parámetros activos no es 100% —
+  `CriticalityMatrixView.tsx` solo muestra una advertencia visual, nunca
+  impide crear parámetros ni ejecutar una evaluación.
+- Frontend: `src/types/criticalityMatrix.ts`,
+  `src/hooks/useCriticalityMatrix.ts` (un solo hook cubre tanto la gestión
+  de la matriz por organización como la evaluación/historial por activo),
+  `src/components/criticality/CriticalityMatrixView.tsx` +
+  `CriticalityParameterDialog.tsx` + `CriticalityOptionDialog.tsx` (gestión
+  de parámetros/opciones), `CriticalityAssessmentDialog.tsx` ("Evaluar
+  criticidad" con preview de score local que replica la misma fórmula del
+  servidor) + `CriticalityAssessmentHistory.tsx`, ambos integrados en
+  `AssetDetail.tsx` (botón "Evaluar criticidad", campo "Criticidad
+  (efectiva)" con badge de score solo cuando la última evaluación sigue
+  vigente, historial en la pestaña "Historial" junto a `AssetHistory.tsx`).
+  Ruteado en `Dashboard.tsx` como vista `'criticality'`.
+- Pendiente documentado (no construido): umbrales configurables por
+  organización, plantillas de matriz por industria, criticidad automática
+  desde datos reales de fallas, recomendación automática con IA,
+  simulación de escenarios, override manual explícito de
+  effective_criticality distinto del calculado.

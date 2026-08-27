@@ -126,6 +126,115 @@ export type Database = {
           },
         ]
       }
+      asset_criticality_assessment_answers: {
+        Row: {
+          assessment_id: string
+          option_id: string | null
+          option_label: string | null
+          option_score: number
+          parameter_id: string
+          parameter_name: string
+          weight: number
+          weighted_score: number
+        }
+        Insert: {
+          assessment_id: string
+          option_id?: string | null
+          option_label?: string | null
+          option_score?: number
+          parameter_id: string
+          parameter_name: string
+          weight: number
+          weighted_score?: number
+        }
+        Update: {
+          assessment_id?: string
+          option_id?: string | null
+          option_label?: string | null
+          option_score?: number
+          parameter_id?: string
+          parameter_name?: string
+          weight?: number
+          weighted_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_criticality_assessment_answers_assessment_id_fkey"
+            columns: ["assessment_id"]
+            isOneToOne: false
+            referencedRelation: "asset_criticality_assessments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_criticality_assessment_answers_option_id_fkey"
+            columns: ["option_id"]
+            isOneToOne: false
+            referencedRelation: "criticality_parameter_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_criticality_assessment_answers_parameter_id_fkey"
+            columns: ["parameter_id"]
+            isOneToOne: false
+            referencedRelation: "criticality_parameters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_criticality_assessments: {
+        Row: {
+          asset_id: string
+          calculated_criticality: string
+          created_at: string
+          created_by_user_id: string | null
+          effective_criticality: string
+          id: string
+          manual_criticality: string | null
+          notes: string | null
+          organization_id: string
+          score: number
+        }
+        Insert: {
+          asset_id: string
+          calculated_criticality: string
+          created_at?: string
+          created_by_user_id?: string | null
+          effective_criticality: string
+          id?: string
+          manual_criticality?: string | null
+          notes?: string | null
+          organization_id: string
+          score?: number
+        }
+        Update: {
+          asset_id?: string
+          calculated_criticality?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          effective_criticality?: string
+          id?: string
+          manual_criticality?: string | null
+          notes?: string | null
+          organization_id?: string
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_criticality_assessments_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_criticality_assessments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       asset_documents: {
         Row: {
           asset_id: string
@@ -630,6 +739,91 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      criticality_parameter_options: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          parameter_id: string
+          score: number
+          sequence: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          parameter_id: string
+          score?: number
+          sequence?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          parameter_id?: string
+          score?: number
+          sequence?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "criticality_parameter_options_parameter_id_fkey"
+            columns: ["parameter_id"]
+            isOneToOne: false
+            referencedRelation: "criticality_parameters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      criticality_parameters: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          sequence: number
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          sequence?: number
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          sequence?: number
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "criticality_parameters_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       materials: {
         Row: {
@@ -2549,6 +2743,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      calculate_asset_criticality: {
+        Args: { p_answers: Json; p_asset_id: string; p_notes?: string }
+        Returns: {
+          asset_id: string
+          calculated_criticality: string
+          created_at: string
+          created_by_user_id: string | null
+          effective_criticality: string
+          id: string
+          manual_criticality: string | null
+          notes: string | null
+          organization_id: string
+          score: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_criticality_assessments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       can_provider_quote_request: {
         Args: {
           target_provider_organization_id: string
@@ -2701,6 +2916,23 @@ export type Database = {
           technician_name: string
         }[]
       }
+      get_asset_criticality_assessments: {
+        Args: { p_asset_id: string }
+        Returns: {
+          answers: Json
+          asset_id: string
+          calculated_criticality: string
+          created_at: string
+          created_by_name: string
+          created_by_user_id: string
+          effective_criticality: string
+          id: string
+          manual_criticality: string
+          notes: string
+          organization_id: string
+          score: number
+        }[]
+      }
       get_asset_integrated_history: {
         Args: { p_asset_id: string }
         Returns: {
@@ -2735,6 +2967,10 @@ export type Database = {
           name: string
           user_id: string
         }[]
+      }
+      get_criticality_matrix: {
+        Args: { p_include_inactive?: boolean; p_organization_id: string }
+        Returns: Json
       }
       get_efficiency_activity_metrics: {
         Args: {
@@ -2939,6 +3175,45 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: string
       }
+      set_criticality_option_active: {
+        Args: { p_is_active: boolean; p_option_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          parameter_id: string
+          score: number
+          sequence: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "criticality_parameter_options"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_criticality_parameter_active: {
+        Args: { p_is_active: boolean; p_parameter_id: string }
+        Returns: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          sequence: number
+          updated_at: string
+          weight: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "criticality_parameters"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       storage_request_id_from_name: {
         Args: { object_name: string }
         Returns: string
@@ -3049,6 +3324,60 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "work_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_criticality_option: {
+        Args: {
+          p_is_active?: boolean
+          p_label: string
+          p_option_id?: string
+          p_parameter_id: string
+          p_score?: number
+          p_sequence?: number
+        }
+        Returns: {
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          parameter_id: string
+          score: number
+          sequence: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "criticality_parameter_options"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_criticality_parameter: {
+        Args: {
+          p_description?: string
+          p_is_active?: boolean
+          p_name: string
+          p_organization_id: string
+          p_parameter_id?: string
+          p_sequence?: number
+          p_weight?: number
+        }
+        Returns: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          sequence: number
+          updated_at: string
+          weight: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "criticality_parameters"
           isOneToOne: true
           isSetofReturn: false
         }
