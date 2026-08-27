@@ -16,10 +16,11 @@ import { WorkOrdersList } from '@/components/work-orders/WorkOrdersList';
 import { InventoryView } from '@/components/inventory/InventoryView';
 import { TechnicianWorkView } from '@/components/technician/TechnicianWorkView';
 import { AdminConsole } from '@/components/admin/AdminConsole';
+import { EfficiencyDashboard } from '@/components/analytics/EfficiencyDashboard';
 
-type DashboardView = 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'admin';
+type DashboardView = 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'admin';
 
-const ALL_VIEWS: DashboardView[] = ['dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications', 'approved-providers', 'branches', 'work-orders', 'my-work-orders', 'inventory', 'contact', 'admin'];
+const ALL_VIEWS: DashboardView[] = ['dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications', 'approved-providers', 'branches', 'work-orders', 'my-work-orders', 'inventory', 'efficiency', 'contact', 'admin'];
 // A platform_admin organization only manages Administración; every other
 // operational view falls back to it, including direct hash navigation.
 const PLATFORM_ADMIN_ALLOWED_VIEWS: DashboardView[] = ['admin', 'notifications'];
@@ -90,6 +91,8 @@ const Dashboard = () => {
         return <TechnicianWorkView />;
       case 'inventory':
         return <InventoryView />;
+      case 'efficiency':
+        return <EfficiencyDashboard />;
       case 'admin': return <AdminConsole />;
       default:
         return <StatsCards />;

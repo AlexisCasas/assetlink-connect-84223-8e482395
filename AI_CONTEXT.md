@@ -1070,3 +1070,56 @@ Inicio de la rama `productization/mvp`.
 - Pendiente documentado (no construido): email/WhatsApp/push, scheduler
   real, preferencias de notificación, inspecciones próximas/vencidas
   (tipos reservados sin tabla).
+
+## Indicadores de eficiencia y desviaciones
+
+- Rama `feature/efficiency-deviations`. Detalle completo en
+  `docs/EFFICIENCY_DEVIATIONS.md`. MVP de planificado vs. real calculado
+  en vivo sobre datos ya existentes (`work_order_activities.estimated_hours`,
+  `work_order_activity_reports.actual_hours`) — **sin tablas espejo ni
+  sistema de tracking nuevo**.
+- Migración `20260829180000_efficiency_deviations.sql`, dos RPCs de
+  lectura, ambas `SECURITY DEFINER`, `STABLE`, con el mismo alias
+  obligatorio por tabla (`wo`/`woa`/`woar`/`woat`/`om`/`au`/`a`) que
+  `20260827170000_fix_work_order_activities_rpc_ambiguity.sql` dejó como
+  convención:
+  - `get_efficiency_activity_metrics(p_organization_id, p_start_date,
+    p_end_date)`: una fila por actividad (planificado, real, diferencia,
+    % desviación, técnico resuelto, período).
+  - `get_efficiency_summary(...)`: una fila resumen (OT terminadas/
+    pendientes/vencidas + totales de horas/desviación) — reutiliza
+    `get_efficiency_activity_metrics` como CTE en vez de recalcular la
+    misma agregación dos veces.
+- **Regla de división segura** aplicada igual en SQL y en cliente: si
+  `planned_hours` es `NULL` o `0`, `deviation_percent` es `NULL` (nunca
+  se divide entre cero). Mismo patrón ya usado en fases anteriores para
+  otros porcentajes.
+- **Deliberadamente sin `get_efficiency_grouped_metrics`**: las
+  agrupaciones por OT/técnico/activo se hacen del lado del cliente
+  (`useEfficiencyMetrics.ts` → `groupBy`) sobre las filas ya obtenidas de
+  `get_efficiency_activity_metrics`, para no triplicar la misma fórmula
+  de división segura.
+- **Sin ranking de técnicos**: ningún query ni componente compara un
+  técnico contra otro. La UI usa siempre "desviación vs. plan"/
+  "variación", nunca "mejor/peor técnico" — ver la sección dedicada en
+  `docs/EFFICIENCY_DEVIATIONS.md`.
+- Permisos: solo `owner`/`admin`/`manager` de la organización operativa
+  (`work_orders.provider_organization_id`) y `platform_admin` pueden
+  llamar ambas RPCs — verificado con `SET ROLE authenticated` que un
+  técnico y el owner de otra organización son rechazados. El ítem de
+  navegación "Eficiencia" en `Sidebar.tsx` usa el mismo criterio
+  (`canViewEfficiency`, idéntico en forma a `canViewInventory`): visible
+  solo para owner/admin/manager de una organización operativa, nunca
+  para técnico ni para la organización `platform_admin`.
+- Frontend: `src/types/efficiency.ts`, `src/hooks/useEfficiencyMetrics.ts`,
+  `src/lib/efficiencyFormat.ts` (formato neutral de desviación:
+  `+1 h / +50 %`, `-0.5 h / -25 %`), `src/components/analytics/
+  EfficiencyDashboard.tsx` (filtros de fecha, cards de resumen, tabla por
+  actividad, pestañas de agregación Por OT/Por técnico/Por activo),
+  ruteado en `Dashboard.tsx` como vista `'efficiency'`.
+  `WorkOrderActivityReportsSummary.tsx` ahora también muestra
+  `% desviación` por reporte y en el total, con cálculo local que replica
+  la misma regla de división segura (sin llamar a una RPC adicional).
+- Pendiente documentado (no construido): tipos de actividad normalizados,
+  productividad comparable entre técnicos, tendencias por período,
+  exportación, alertas predictivas.
