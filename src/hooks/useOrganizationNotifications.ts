@@ -32,6 +32,14 @@ export function useOrganizationNotifications(limit = 10) {
       console.error('Error generating due-date notifications:', dueNotificationsError);
     }
 
+    // Same best-effort, idempotent, no-cron pattern as the operational one
+    // above — see docs/GENERIC_CHECKLISTS_INSPECTIONS.md.
+    try {
+      await supabase.rpc('generate_inspection_due_notifications');
+    } catch (inspectionNotificationsError) {
+      console.error('Error generating inspection due-date notifications:', inspectionNotificationsError);
+    }
+
     const [notificationsResult, unreadResult] = await Promise.all([
       supabase
         .from('organization_notifications')

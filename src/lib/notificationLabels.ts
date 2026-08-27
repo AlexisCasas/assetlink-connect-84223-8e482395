@@ -1,8 +1,9 @@
 /** Labels for organization_notifications.type. Includes the pre-existing
  * quote_* types (still emitted by notify_quote_status_change, untouched by
- * this phase) alongside the new operational ones, plus the two inspection
- * placeholders from the task's suggested vocabulary — never actually
- * emitted anywhere until an inspections module exists. */
+ * this phase) alongside the operational ones. inspection_due_soon_future/
+ * inspection_overdue_future were reserved placeholders until the generic
+ * checklist/inspection engine (see docs/GENERIC_CHECKLISTS_INSPECTIONS.md)
+ * — now actually emitted by generate_inspection_due_notifications(). */
 export const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   internal_request_created: 'Nueva solicitud interna',
   work_order_created: 'Nueva orden de trabajo',
@@ -60,6 +61,8 @@ export const notificationEntityReference = (entityType: string | null, metadata:
       return typeof meta.work_order_number === 'string' ? `Actividad — OT: ${meta.work_order_number}` : 'Actividad';
     case 'quote':
       return 'Cotización';
+    case 'inspection_plan':
+      return typeof meta.title === 'string' ? `Inspección: ${meta.title}` : 'Plan de inspección';
     default:
       return null;
   }

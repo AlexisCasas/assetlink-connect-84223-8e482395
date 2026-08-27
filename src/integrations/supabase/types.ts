@@ -639,6 +639,141 @@ export type Database = {
           },
         ]
       }
+      checklist_template_items: {
+        Row: {
+          created_at: string
+          help_text: string | null
+          id: string
+          is_active: boolean
+          is_required: boolean
+          question: string
+          section: string | null
+          sequence: number
+          template_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          help_text?: string | null
+          id?: string
+          is_active?: boolean
+          is_required?: boolean
+          question: string
+          section?: string | null
+          sequence?: number
+          template_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          help_text?: string | null
+          id?: string
+          is_active?: boolean
+          is_required?: boolean
+          question?: string
+          section?: string | null
+          sequence?: number
+          template_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_template_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_template_response_options: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          is_failure: boolean
+          label: string
+          score: number | null
+          sequence: number
+          template_id: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_failure?: boolean
+          label: string
+          score?: number | null
+          sequence?: number
+          template_id: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_failure?: boolean
+          label?: string
+          score?: number | null
+          sequence?: number
+          template_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_template_response_options_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_templates: {
+        Row: {
+          category: string | null
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_approved_providers: {
         Row: {
           client_email: string
@@ -821,6 +956,334 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspection_plans: {
+        Row: {
+          area_asset_id: string | null
+          asset_id: string | null
+          branch_id: string | null
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          frequency: string
+          id: string
+          is_active: boolean
+          next_due_at: string | null
+          organization_id: string
+          responsible_member_id: string | null
+          start_date: string
+          template_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          area_asset_id?: string | null
+          asset_id?: string | null
+          branch_id?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          next_due_at?: string | null
+          organization_id: string
+          responsible_member_id?: string | null
+          start_date?: string
+          template_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          area_asset_id?: string | null
+          asset_id?: string | null
+          branch_id?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          next_due_at?: string | null
+          organization_id?: string
+          responsible_member_id?: string | null
+          start_date?: string
+          template_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_plans_area_asset_id_fkey"
+            columns: ["area_asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_plans_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_plans_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "client_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_plans_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_plans_responsible_member_id_fkey"
+            columns: ["responsible_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_plans_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspection_run_answers: {
+        Row: {
+          created_at: string
+          id: string
+          is_failure: boolean
+          item_question: string
+          observations: string | null
+          response_label: string | null
+          response_option_id: string | null
+          response_value: string | null
+          run_id: string
+          template_item_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_failure?: boolean
+          item_question: string
+          observations?: string | null
+          response_label?: string | null
+          response_option_id?: string | null
+          response_value?: string | null
+          run_id: string
+          template_item_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_failure?: boolean
+          item_question?: string
+          observations?: string | null
+          response_label?: string | null
+          response_option_id?: string | null
+          response_value?: string | null
+          run_id?: string
+          template_item_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_run_answers_response_option_id_fkey"
+            columns: ["response_option_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_template_response_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_run_answers_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_run_answers_template_item_id_fkey"
+            columns: ["template_item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_template_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspection_run_evidences: {
+        Row: {
+          answer_id: string | null
+          created_at: string
+          file_name: string
+          file_path: string | null
+          file_url: string | null
+          id: string
+          mime_type: string | null
+          notes: string | null
+          run_id: string
+          size_bytes: number | null
+        }
+        Insert: {
+          answer_id?: string | null
+          created_at?: string
+          file_name: string
+          file_path?: string | null
+          file_url?: string | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          run_id: string
+          size_bytes?: number | null
+        }
+        Update: {
+          answer_id?: string | null
+          created_at?: string
+          file_name?: string
+          file_path?: string | null
+          file_url?: string | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          run_id?: string
+          size_bytes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_run_evidences_answer_id_fkey"
+            columns: ["answer_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_run_answers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_run_evidences_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspection_runs: {
+        Row: {
+          area_asset_id: string | null
+          asset_id: string | null
+          branch_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          plan_id: string | null
+          responsible_member_id: string | null
+          result: string | null
+          scheduled_for: string | null
+          started_at: string | null
+          status: string
+          template_id: string
+          updated_at: string
+        }
+        Insert: {
+          area_asset_id?: string | null
+          asset_id?: string | null
+          branch_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          notes?: string | null
+          organization_id: string
+          plan_id?: string | null
+          responsible_member_id?: string | null
+          result?: string | null
+          scheduled_for?: string | null
+          started_at?: string | null
+          status?: string
+          template_id: string
+          updated_at?: string
+        }
+        Update: {
+          area_asset_id?: string | null
+          asset_id?: string | null
+          branch_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          plan_id?: string | null
+          responsible_member_id?: string | null
+          result?: string | null
+          scheduled_for?: string | null
+          started_at?: string | null
+          status?: string
+          template_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_runs_area_asset_id_fkey"
+            columns: ["area_asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_runs_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_runs_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "client_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_runs_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_runs_responsible_member_id_fkey"
+            columns: ["responsible_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_runs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -2780,6 +3243,34 @@ export type Database = {
         Returns: boolean
       }
       can_user_read_request: { Args: { _request_id: string }; Returns: boolean }
+      create_inspection_run_from_plan: {
+        Args: { p_plan_id: string }
+        Returns: {
+          area_asset_id: string | null
+          asset_id: string | null
+          branch_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          plan_id: string | null
+          responsible_member_id: string | null
+          result: string | null
+          scheduled_for: string | null
+          started_at: string | null
+          status: string
+          template_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inspection_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_internal_work_order_from_request: {
         Args: { target_assigned_member_id?: string; target_request_id: string }
         Returns: {
@@ -2887,6 +3378,7 @@ export type Database = {
         Args: { p_work_order_material_id: string }
         Returns: undefined
       }
+      generate_inspection_due_notifications: { Args: never; Returns: undefined }
       generate_operational_due_notifications: {
         Args: never
         Returns: undefined
@@ -2968,6 +3460,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_checklist_templates: {
+        Args: { p_include_inactive?: boolean; p_organization_id: string }
+        Returns: Json
+      }
       get_criticality_matrix: {
         Args: { p_include_inactive?: boolean; p_organization_id: string }
         Returns: Json
@@ -3015,6 +3511,50 @@ export type Database = {
           pending_work_orders: number
           planned_hours_total: number
           reported_activities_count: number
+        }[]
+      }
+      get_inspection_plans: {
+        Args: { p_include_inactive?: boolean; p_organization_id: string }
+        Returns: {
+          area_asset_id: string
+          area_asset_name: string
+          asset_id: string
+          asset_name: string
+          branch_id: string
+          branch_name: string
+          created_at: string
+          description: string
+          frequency: string
+          id: string
+          is_active: boolean
+          next_due_at: string
+          responsible_member_id: string
+          responsible_name: string
+          start_date: string
+          template_id: string
+          template_name: string
+          title: string
+        }[]
+      }
+      get_inspection_run_detail: { Args: { p_run_id: string }; Returns: Json }
+      get_inspection_runs: {
+        Args: { p_organization_id: string; p_status?: string }
+        Returns: {
+          area_asset_name: string
+          asset_name: string
+          branch_name: string
+          completed_at: string
+          id: string
+          organization_id: string
+          plan_id: string
+          responsible_member_id: string
+          responsible_name: string
+          result: string
+          scheduled_for: string
+          started_at: string
+          status: string
+          template_id: string
+          template_name: string
         }[]
       }
       get_inventory_catalog: {
@@ -3175,6 +3715,47 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: string
       }
+      set_checklist_response_option_active: {
+        Args: { p_is_active: boolean; p_option_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          is_active: boolean
+          is_failure: boolean
+          label: string
+          score: number | null
+          sequence: number
+          template_id: string
+          value: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "checklist_template_response_options"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_checklist_template_item_active: {
+        Args: { p_is_active: boolean; p_item_id: string }
+        Returns: {
+          created_at: string
+          help_text: string | null
+          id: string
+          is_active: boolean
+          is_required: boolean
+          question: string
+          section: string | null
+          sequence: number
+          template_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "checklist_template_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_criticality_option_active: {
         Args: { p_is_active: boolean; p_option_id: string }
         Returns: {
@@ -3245,6 +3826,41 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "work_order_activity_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      submit_inspection_run: {
+        Args: {
+          p_answers: Json
+          p_completed_at: string
+          p_evidences?: Json
+          p_notes?: string
+          p_run_id: string
+          p_started_at: string
+        }
+        Returns: {
+          area_asset_id: string | null
+          asset_id: string | null
+          branch_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          plan_id: string | null
+          responsible_member_id: string | null
+          result: string | null
+          scheduled_for: string | null
+          started_at: string | null
+          status: string
+          template_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inspection_runs"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3328,6 +3944,92 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      upsert_checklist_response_option: {
+        Args: {
+          p_is_active?: boolean
+          p_is_failure?: boolean
+          p_label: string
+          p_option_id?: string
+          p_score?: number
+          p_sequence?: number
+          p_template_id: string
+          p_value: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          is_active: boolean
+          is_failure: boolean
+          label: string
+          score: number | null
+          sequence: number
+          template_id: string
+          value: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "checklist_template_response_options"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_checklist_template: {
+        Args: {
+          p_category?: string
+          p_description?: string
+          p_is_active?: boolean
+          p_name: string
+          p_organization_id: string
+          p_template_id?: string
+        }
+        Returns: {
+          category: string | null
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "checklist_templates"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_checklist_template_item: {
+        Args: {
+          p_help_text?: string
+          p_is_active?: boolean
+          p_is_required?: boolean
+          p_item_id?: string
+          p_question: string
+          p_section?: string
+          p_sequence?: number
+          p_template_id: string
+        }
+        Returns: {
+          created_at: string
+          help_text: string | null
+          id: string
+          is_active: boolean
+          is_required: boolean
+          question: string
+          section: string | null
+          sequence: number
+          template_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "checklist_template_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       upsert_criticality_option: {
         Args: {
           p_is_active?: boolean
@@ -3378,6 +4080,47 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "criticality_parameters"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_inspection_plan: {
+        Args: {
+          p_area_asset_id?: string
+          p_asset_id?: string
+          p_branch_id?: string
+          p_description?: string
+          p_frequency?: string
+          p_is_active?: boolean
+          p_next_due_at?: string
+          p_organization_id: string
+          p_plan_id?: string
+          p_responsible_member_id?: string
+          p_start_date?: string
+          p_template_id: string
+          p_title: string
+        }
+        Returns: {
+          area_asset_id: string | null
+          asset_id: string | null
+          branch_id: string | null
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          frequency: string
+          id: string
+          is_active: boolean
+          next_due_at: string | null
+          organization_id: string
+          responsible_member_id: string | null
+          start_date: string
+          template_id: string
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inspection_plans"
           isOneToOne: true
           isSetofReturn: false
         }

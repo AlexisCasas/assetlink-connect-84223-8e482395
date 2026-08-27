@@ -1195,3 +1195,127 @@ Inicio de la rama `productization/mvp`.
   desde datos reales de fallas, recomendación automática con IA,
   simulación de escenarios, override manual explícito de
   effective_criticality distinto del calculado.
+
+## Motor genérico de checklists e inspecciones
+
+- Rama `feature/generic-checklists-inspections`. Detalle completo en
+  `docs/GENERIC_CHECKLISTS_INSPECTIONS.md`. **ITSE nunca es un módulo**:
+  es solo una fila en `checklist_templates` ("Plantilla ITSE"), igual que
+  "Inspección de techos", "Auditoría interna" o "Inspección de luces de
+  emergencia" — `category` es texto libre, nunca una lista cerrada. Nada
+  en el esquema/RPCs/frontend menciona ITSE de forma especial.
+- Migración `20260829200000_generic_checklists_inspections.sql`: 7 tablas
+  nuevas (`checklist_templates`, `checklist_template_items`,
+  `checklist_template_response_options`, `inspection_plans`,
+  `inspection_runs`, `inspection_run_answers`, `inspection_run_evidences`)
+  + 12 RPCs (13 con `get_inspection_runs`, ver abajo), mismo alias
+  obligatorio por tabla (ct/cti/ctro/ip/ir/ira/ire/a/cb/om/au) que
+  `20260827170000_fix_work_order_activities_rpc_ambiguity.sql` dejó como
+  convención.
+- **Flujo**: `checklist_templates` (+ items + response_options) →
+  `inspection_plans` (recurrente, sobre sede/área/activo, con
+  responsable/periodicidad/`next_due_at`) → `create_inspection_run_from_plan`
+  → `inspection_runs` (una ejecución) → `submit_inspection_run` congela
+  cada respuesta en `inspection_run_answers` (snapshot: `item_question`/
+  `response_label`/`response_value`/`is_failure` copiados, no
+  referenciados en vivo — una plantilla editada después nunca reescribe
+  una ejecución histórica).
+- **Resultado de una ejecución**: `failed` si alguna respuesta usa una
+  opción `is_failure = true`; `not_applicable` si todas las respuestas
+  usan `value = 'not_applicable'` (convención de texto, no un booleano
+  dedicado); si no, `passed`. Exige respuesta a todo ítem activo+
+  obligatorio antes de guardar (dos pasadas: valida todo primero, sin
+  escribir; solo si el payload completo es válido inserta el header y
+  luego las respuestas — mismo patrón de
+  `calculate_asset_criticality`).
+- **`next_due_at` se recalcula desde `completed_at`**, no desde el
+  `next_due_at` anterior, para que una inspección tardía no arrastre
+  atraso al siguiente ciclo. `frequency = 'one_time'` no tiene "siguiente
+  ciclo".
+- El trigger genérico `check_asset_child_organization()` no alcanza aquí
+  (inspection_plans/inspection_runs tienen múltiples FKs opcionales, no
+  solo un asset_id) — se creó `check_inspection_plan_organization()` y
+  `check_inspection_run_organization()` dedicados, cada uno validando que
+  template/sede/área/activo/responsable (y plan_id, para runs) pertenezcan
+  a la misma `organization_id`.
+- **`submit_inspection_run` inserta `asset_events` con
+  `event_type = 'inspection_completed'`** cuando el run tiene `asset_id`
+  — `get_asset_integrated_history` se actualizó (mismo `CREATE OR REPLACE`
+  sin `DROP FUNCTION`, firma sin cambios) solo para añadir la etiqueta en
+  español de ese tipo de evento a la rama genérica `asset_event`, junto a
+  `criticality_assessed` de la fase anterior.
+- **Notificaciones**: `generate_inspection_due_notifications()` reutiliza
+  `notify_role_members`/`notify_member` de `operational_notifications`
+  para los dos tipos ya reservados (`inspection_due_soon_future` dentro de
+  7 días, `inspection_overdue_future` vencida). **Idempotencia por
+  ciclo**: como un mismo plan recurre con un `next_due_at` distinto cada
+  vez (a diferencia de una OT, que llega a su `due_at` una sola vez),
+  reutilizar `plan.id` como `entity_id` habría silenciado toda
+  notificación después del primer ciclo (el índice de dedup de
+  `create_notification_once` no tiene dimensión de tiempo) — se usa
+  `entity_id = md5(plan_id || ciclo || next_due_at)::uuid`, determinístico
+  y distinto en cada ciclo, sin tocar el helper compartido. Llamada
+  best-effort desde `useOrganizationNotifications.ts`, junto a
+  `generate_operational_due_notifications`.
+- **Ninguna de las 7 tablas tiene política de INSERT/UPDATE/DELETE** —
+  mismo patrón más estricto que `warehouses`/`materials`/la matriz de
+  criticidad: toda escritura pasa por las RPCs `SECURITY DEFINER`;
+  "borrar" una plantilla/ítem/opción/plan es siempre `is_active = false`.
+- Permisos: lectura (plantillas/planes/ejecuciones) para cualquier miembro
+  activo u `platform_admin` — incluye `technician` (necesita ver sus
+  propias inspecciones asignadas); escritura de plantillas/ítems/
+  opciones/planes solo owner/admin/manager; ejecutar/guardar un run el
+  propio responsable asignado u owner/admin/manager. Verificado con
+  `SET ROLE authenticated` en los cuatro sentidos (técnico no puede
+  escribir plantillas pero sí leerlas; otra organización no puede leer ni
+  escribir nada; responsable puede ejecutar; no-responsable-no-planner no
+  puede).
+- **`get_inspection_runs` añadida más allá de la lista original de RPCs**:
+  no hay otra forma limpia de listar `inspection_runs` con nombres
+  resueltos (dos FKs distintas hacia `assets` hacen ambiguo un embed de
+  PostgREST, más un segundo join a `auth.users` para el responsable).
+  Mismo patrón que `get_inspection_plans`.
+- Frontend: `src/types/checklist.ts` + `src/types/inspection.ts`,
+  `src/hooks/useChecklistTemplates.ts` + `useInspectionPlans.ts` +
+  `useInspectionRuns.ts`, `src/components/inspections/InspectionsView.tsx`
+  (3 tabs: Plantillas / Programación / Ejecuciones-Historial) +
+  `ChecklistTemplateEditorDialog.tsx` + `ChecklistItemEditorDialog.tsx` +
+  `ChecklistOptionEditorDialog.tsx` + `InspectionPlanDialog.tsx` +
+  `InspectionRunDialog.tsx` (preview local de no-conformidad, misma lógica
+  que el servidor). "Inspecciones" en `Sidebar.tsx`/`Dashboard.tsx`:
+  visible para owner/admin/manager **y** technician de organizaciones
+  `client_company` (a diferencia de "Criticidad", que excluye a
+  technician) — la gestión de plantillas/planes queda oculta para
+  technician dentro de la vista (`canPlanWork`), no a nivel de navegación.
+- Pendiente documentado (no construido): plantillas predefinidas (ITSE u
+  otras) listas para importar, generación automática de OT por no
+  conformidad, checklist móvil avanzado, upload real de evidencias,
+  firmas digitales, vista de calendario, scheduler/cron real.
+- **Bugfix post-implementación (mismo alcance, antes del primer commit)**:
+  - `InspectionPlanDialog.tsx` perdía el draft con cualquier re-render
+    ajeno (p.ej. el refresh de token de Supabase Auth al recuperar el foco
+    de la ventana) porque `InspectionsView.tsx` le pasaba
+    `templates={templates.filter(...)}` inline — un array nuevo en cada
+    render — y el efecto de inicialización del diálogo dependía de esa
+    prop. Fix: `activeTemplates` memoizado con `useMemo` en
+    `InspectionsView.tsx`, y el efecto de inicialización del diálogo
+    reescrito para disparar solo en la transición cerrado→abierto o
+    cuando cambia el `id` del plan editado (con `useRef`, sin depender de
+    `templates`/`branches`/`assets`/`plan` como objeto) — más un draft
+    espejo en `sessionStorage` (clave por organización + id de plan o
+    "new") que se restaura al reabrir y se limpia solo al guardar con
+    éxito o al cancelar explícitamente (cerrar con Escape/clic afuera
+    conserva el draft, no lo borra).
+  - `create_inspection_run_from_plan`/`submit_inspection_run` ya
+    comparaban correctamente `responsible_member_id` contra la fila de
+    `organization_members` del llamante (nunca contra `auth.uid()`
+    directo) — el "P0001 Not authorized" que reportó el usuario era en
+    realidad consecuencia del bug anterior (el plan se guardaba sin
+    responsable porque el formulario perdía esa selección). Se agregó de
+    todas formas `om.organization_id = v_plan.organization_id` /
+    `= v_run.organization_id` explícito en ambas funciones, como
+    endurecimiento defensivo para que la autorización no dependa
+    implícitamente de la garantía de escritura de `upsert_inspection_plan`.
+  - `DialogDescription` agregado a los 5 diálogos de Inspecciones
+    (warning de accesibilidad de Radix por `DialogContent` sin
+    descripción).

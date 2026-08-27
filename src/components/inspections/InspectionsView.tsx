@@ -1,0 +1,418 @@
+import { useMemo, useState } from 'react';
+import { ClipboardCheck, ListChecks, Plus, Pencil, EyeOff, Eye, CalendarClock, PlayCircle, History } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useAssets } from '@/hooks/useAssets';
+import { useChecklistTemplates } from '@/hooks/useChecklistTemplates';
+import { useInspectionPlans } from '@/hooks/useInspectionPlans';
+import { useInspectionRuns } from '@/hooks/useInspectionRuns';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/hooks/use-toast';
+import { ChecklistTemplateEditorDialog } from './ChecklistTemplateEditorDialog';
+import { ChecklistItemEditorDialog } from './ChecklistItemEditorDialog';
+import { ChecklistOptionEditorDialog } from './ChecklistOptionEditorDialog';
+import { InspectionPlanDialog } from './InspectionPlanDialog';
+import { InspectionRunDialog } from './InspectionRunDialog';
+import type { ChecklistTemplate, ChecklistTemplateItem, ChecklistResponseOption } from '@/types/checklist';
+import type { InspectionPlan } from '@/types/inspection';
+
+const FREQUENCY_LABELS: Record<string, string> = {
+  one_time: 'Única vez',
+  daily: 'Diaria',
+  weekly: 'Semanal',
+  monthly: 'Mensual',
+  quarterly: 'Trimestral',
+  semiannual: 'Semestral',
+  annual: 'Anual',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  scheduled: 'Programada',
+  in_progress: 'En progreso',
+  completed: 'Completada',
+  cancelled: 'Cancelada',
+  overdue: 'Vencida',
+};
+
+const RESULT_LABELS: Record<string, string> = {
+  passed: 'Conforme',
+  failed: 'No conforme',
+  not_applicable: 'No aplica',
+};
+
+const resultBadgeVariant = (result: string | null) => {
+  if (result === 'failed') return 'destructive' as const;
+  if (result === 'passed') return 'secondary' as const;
+  return 'outline' as const;
+};
+
+const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
+
+/**
+ * Generic checklist/inspection engine. ITSE is never a module here — it is
+ * just one row a client_company organization can create under "Plantillas"
+ * ("Plantilla ITSE"), same as any other checklist (techos, gerencial,
+ * preventivo, auditoría interna, luces de emergencia…). See
+ * docs/GENERIC_CHECKLISTS_INSPECTIONS.md.
+ */
+export function InspectionsView() {
+  const { currentOrganization, currentMembership } = useAuth();
+  const { canPlanWork, isTechnician } = usePermissions();
+  const { toast } = useToast();
+
+  const organizationId = currentOrganization?.id;
+  const { templates, saving: templateSaving, error: templateError, saveTemplate, saveItem, toggleItemActive, saveOption, toggleOptionActive } = useChecklistTemplates(organizationId);
+  const { assets, branches } = useAssets();
+  const { plans, saving: planSaving, error: planError, savePlan, createRunFromPlan } = useInspectionPlans(organizationId);
+  const { runs, saving: runSaving, error: runError, loadRunDetail, submitRun, refresh: refreshRuns } = useInspectionRuns(organizationId);
+
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<ChecklistTemplate | null>(null);
+  const [itemDialogOpen, setItemDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<ChecklistTemplateItem | null>(null);
+  const [itemTemplate, setItemTemplate] = useState<ChecklistTemplate | null>(null);
+  const [optionDialogOpen, setOptionDialogOpen] = useState(false);
+  const [editingOption, setEditingOption] = useState<ChecklistResponseOption | null>(null);
+  const [optionTemplate, setOptionTemplate] = useState<ChecklistTemplate | null>(null);
+
+  const [planDialogOpen, setPlanDialogOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<InspectionPlan | null>(null);
+
+  const [runDialogOpen, setRunDialogOpen] = useState(false);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+
+  // Memoized so this only produces a new array reference when `templates`
+  // itself actually changes — an inline `.filter()` in the JSX below would
+  // create a fresh array on every render of InspectionsView (including
+  // ones with no real data change, e.g. an auth token refresh on window
+  // focus re-rendering the tree), which fed straight into
+  // InspectionPlanDialog's reset effect and wiped the in-progress draft.
+  const activeTemplates = useMemo(() => templates.filter((t) => t.isActive), [templates]);
+
+  if (!currentOrganization) {
+    return <EmptyState message="Sin organización asignada" />;
+  }
+
+  const openCreateTemplate = () => { setEditingTemplate(null); setTemplateDialogOpen(true); };
+  const openEditTemplate = (template: ChecklistTemplate) => { setEditingTemplate(template); setTemplateDialogOpen(true); };
+  const openCreateItem = (template: ChecklistTemplate) => { setItemTemplate(template); setEditingItem(null); setItemDialogOpen(true); };
+  const openEditItem = (template: ChecklistTemplate, item: ChecklistTemplateItem) => { setItemTemplate(template); setEditingItem(item); setItemDialogOpen(true); };
+  const openCreateOption = (template: ChecklistTemplate) => { setOptionTemplate(template); setEditingOption(null); setOptionDialogOpen(true); };
+  const openEditOption = (template: ChecklistTemplate, option: ChecklistResponseOption) => { setOptionTemplate(template); setEditingOption(option); setOptionDialogOpen(true); };
+
+  const openCreatePlan = () => { setEditingPlan(null); setPlanDialogOpen(true); };
+  const openEditPlan = (plan: InspectionPlan) => { setEditingPlan(plan); setPlanDialogOpen(true); };
+
+  const handleCreateRun = async (planId: string) => {
+    const runId = await createRunFromPlan(planId);
+    if (runId) {
+      toast({ title: 'Ejecución creada', description: 'Se creó una nueva ejecución para este plan.' });
+      await refreshRuns();
+    } else {
+      toast({ title: 'No se pudo crear la ejecución', description: planError ?? 'Intenta nuevamente.', variant: 'destructive' });
+    }
+  };
+
+  const openRun = (runId: string) => { setActiveRunId(runId); setRunDialogOpen(true); };
+
+  const nextItemSequence = (template: ChecklistTemplate | null) => (!template || template.items.length === 0 ? 1 : Math.max(...template.items.map((i) => i.sequence)) + 1);
+  const nextOptionSequence = (template: ChecklistTemplate | null) => (!template || template.responseOptions.length === 0 ? 1 : Math.max(...template.responseOptions.map((o) => o.sequence)) + 1);
+
+  const visibleRuns = isTechnician && currentMembership
+    ? runs.filter((run) => run.responsibleMemberId === currentMembership.id)
+    : runs;
+
+  return (
+    <div className="space-y-6 p-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Inspecciones</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Motor genérico de checklists e inspecciones — ITSE es solo una plantilla más, no un módulo aparte.
+        </p>
+      </div>
+
+      <Tabs defaultValue={isTechnician ? 'runs' : 'templates'}>
+        <TabsList>
+          <TabsTrigger value="templates">Plantillas</TabsTrigger>
+          <TabsTrigger value="plans">Programación</TabsTrigger>
+          <TabsTrigger value="runs">Ejecuciones / Historial</TabsTrigger>
+        </TabsList>
+
+        {/* ---------------------------------------------------------------- Plantillas */}
+        <TabsContent value="templates" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">Parámetros, ítems y opciones de respuesta por plantilla.</p>
+            {canPlanWork && (
+              <Button onClick={openCreateTemplate}>
+                <Plus className="mr-2 h-4 w-4" /> Crear plantilla
+              </Button>
+            )}
+          </div>
+
+          {templateError && <p className="text-sm text-destructive">{templateError}</p>}
+
+          {templates.length === 0 ? (
+            <Card>
+              <CardContent className="flex min-h-48 flex-col items-center justify-center gap-2 text-center">
+                <ClipboardCheck className="h-8 w-8 text-muted-foreground" />
+                <p className="font-medium">Aún no hay plantillas de checklist.</p>
+                <p className="text-sm text-muted-foreground">Crea una plantilla como "Inspección de luces de emergencia".</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {templates.map((template) => (
+                <Card key={template.id} className={!template.isActive ? 'opacity-60' : undefined}>
+                  <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <ListChecks className="h-4 w-4 text-muted-foreground" /> {template.name}
+                        {template.category && <Badge variant="outline">{template.category}</Badge>}
+                        {!template.isActive && <Badge variant="outline">Inactiva</Badge>}
+                      </CardTitle>
+                      {template.description && <p className="mt-1 text-sm text-muted-foreground">{template.description}</p>}
+                    </div>
+                    {canPlanWork && (
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => openEditTemplate(template)} title="Editar plantilla">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ítems</p>
+                        {canPlanWork && (
+                          <Button variant="outline" size="sm" onClick={() => openCreateItem(template)}>
+                            <Plus className="mr-1 h-3.5 w-3.5" /> Ítem
+                          </Button>
+                        )}
+                      </div>
+                      {template.items.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Sin ítems todavía.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {template.items.map((item) => (
+                            <div key={item.id} className={`flex items-center justify-between rounded-md border p-2 text-sm ${!item.isActive ? 'opacity-60' : ''}`}>
+                              <span>{item.question}{item.section && <span className="ml-2 text-xs text-muted-foreground">({item.section})</span>}</span>
+                              <div className="flex items-center gap-2">
+                                {item.isRequired && <Badge variant="secondary" className="text-xs">Obligatorio</Badge>}
+                                {!item.isActive && <Badge variant="outline" className="text-xs">Inactivo</Badge>}
+                                {canPlanWork && (
+                                  <>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditItem(template, item)}><Pencil className="h-3.5 w-3.5" /></Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void toggleItemActive(item.id, !item.isActive)}>
+                                      {item.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Opciones de respuesta</p>
+                        {canPlanWork && (
+                          <Button variant="outline" size="sm" onClick={() => openCreateOption(template)}>
+                            <Plus className="mr-1 h-3.5 w-3.5" /> Opción
+                          </Button>
+                        )}
+                      </div>
+                      {template.responseOptions.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Sin opciones todavía (ej. Cumple / No cumple / No aplica).</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {template.responseOptions.map((option) => (
+                            <div key={option.id} className={`flex items-center justify-between rounded-md border p-2 text-sm ${!option.isActive ? 'opacity-60' : ''}`}>
+                              <span>{option.label}</span>
+                              <div className="flex items-center gap-2">
+                                {option.isFailure && <Badge variant="destructive" className="text-xs">No conformidad</Badge>}
+                                {!option.isActive && <Badge variant="outline" className="text-xs">Inactiva</Badge>}
+                                {canPlanWork && (
+                                  <>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditOption(template, option)}><Pencil className="h-3.5 w-3.5" /></Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void toggleOptionActive(option.id, !option.isActive)}>
+                                      {option.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ---------------------------------------------------------------- Programación */}
+        <TabsContent value="plans" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">Planes recurrentes sobre sede/área/activo.</p>
+            {canPlanWork && (
+              <Button onClick={openCreatePlan} disabled={templates.length === 0}>
+                <Plus className="mr-2 h-4 w-4" /> Crear plan
+              </Button>
+            )}
+          </div>
+
+          {planError && <p className="text-sm text-destructive">{planError}</p>}
+
+          {plans.length === 0 ? (
+            <Card>
+              <CardContent className="flex min-h-40 flex-col items-center justify-center gap-2 text-center">
+                <CalendarClock className="h-8 w-8 text-muted-foreground" />
+                <p className="font-medium">Aún no hay planes de inspección.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {plans.map((plan) => (
+                <Card key={plan.id} className={!plan.isActive ? 'opacity-60' : undefined}>
+                  <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+                    <div className="min-w-0">
+                      <p className="font-medium">{plan.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {plan.templateName} · {[plan.branchName, plan.areaAssetName, plan.assetName].filter(Boolean).join(' / ') || 'Sin destino'}
+                        {plan.responsibleName && ` · Responsable: ${plan.responsibleName}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {FREQUENCY_LABELS[plan.frequency] ?? plan.frequency} · Próxima: {formatDate(plan.nextDueAt)}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {!plan.isActive && <Badge variant="outline">Inactivo</Badge>}
+                      {canPlanWork && (
+                        <Button variant="ghost" size="icon" onClick={() => openEditPlan(plan)} title="Editar plan"><Pencil className="h-4 w-4" /></Button>
+                      )}
+                      <Button variant="outline" size="sm" onClick={() => void handleCreateRun(plan.id)} disabled={runSaving}>
+                        <PlayCircle className="mr-1 h-3.5 w-3.5" /> Crear ejecución
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ---------------------------------------------------------------- Ejecuciones / Historial */}
+        <TabsContent value="runs" className="space-y-4">
+          {runError && <p className="text-sm text-destructive">{runError}</p>}
+
+          {visibleRuns.length === 0 ? (
+            <Card>
+              <CardContent className="flex min-h-40 flex-col items-center justify-center gap-2 text-center">
+                <History className="h-8 w-8 text-muted-foreground" />
+                <p className="font-medium">{isTechnician ? 'No tienes inspecciones asignadas.' : 'Aún no hay ejecuciones registradas.'}</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {visibleRuns.map((run) => (
+                <Card key={run.id}>
+                  <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+                    <div className="min-w-0">
+                      <p className="font-medium">{run.templateName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {[run.branchName, run.areaAssetName, run.assetName].filter(Boolean).join(' / ') || 'Sin destino'}
+                        {run.responsibleName && ` · Responsable: ${run.responsibleName}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Programada: {formatDate(run.scheduledFor)}{run.completedAt && ` · Completada: ${formatDate(run.completedAt)}`}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Badge variant="outline">{STATUS_LABELS[run.status] ?? run.status}</Badge>
+                      {run.result && <Badge variant={resultBadgeVariant(run.result)}>{RESULT_LABELS[run.result] ?? run.result}</Badge>}
+                      <Button variant="outline" size="sm" onClick={() => openRun(run.id)}>
+                        {run.status === 'completed' ? 'Ver detalle' : 'Ejecutar'}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {canPlanWork && (
+        <>
+          <ChecklistTemplateEditorDialog
+            open={templateDialogOpen}
+            onOpenChange={setTemplateDialogOpen}
+            template={editingTemplate}
+            saving={templateSaving}
+            onSave={(input, id) => saveTemplate(input, id)}
+          />
+          <ChecklistItemEditorDialog
+            open={itemDialogOpen}
+            onOpenChange={setItemDialogOpen}
+            templateId={itemTemplate?.id ?? null}
+            templateName={itemTemplate?.name ?? ''}
+            item={editingItem}
+            nextSequence={nextItemSequence(itemTemplate)}
+            saving={templateSaving}
+            onSave={(input, id) => saveItem(input, id)}
+          />
+          <ChecklistOptionEditorDialog
+            open={optionDialogOpen}
+            onOpenChange={setOptionDialogOpen}
+            templateId={optionTemplate?.id ?? null}
+            templateName={optionTemplate?.name ?? ''}
+            option={editingOption}
+            nextSequence={nextOptionSequence(optionTemplate)}
+            saving={templateSaving}
+            onSave={(input, id) => saveOption(input, id)}
+          />
+          <InspectionPlanDialog
+            open={planDialogOpen}
+            onOpenChange={setPlanDialogOpen}
+            organizationId={organizationId}
+            templates={activeTemplates}
+            branches={branches}
+            assets={assets}
+            plan={editingPlan}
+            saving={planSaving}
+            onSave={(input, id) => savePlan(input, id)}
+          />
+        </>
+      )}
+
+      <InspectionRunDialog
+        open={runDialogOpen}
+        onOpenChange={setRunDialogOpen}
+        runId={activeRunId}
+        loadRunDetail={loadRunDetail}
+        saving={runSaving}
+        onSave={submitRun}
+        onSaved={() => toast({ title: 'Inspección guardada', description: 'La ejecución se registró correctamente.' })}
+      />
+    </div>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="p-6">
+      <Card><CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 text-center">
+        <ClipboardCheck className="h-10 w-10 text-muted-foreground" />
+        <p className="font-medium">{message}</p>
+      </CardContent></Card>
+    </div>
+  );
+}
