@@ -30,7 +30,9 @@ inspection_run_answers / inspection_run_evidences — snapshot congelado
 
 ## Periodicidad y `next_due_at`
 
-`frequency`: `one_time | daily | weekly | monthly | quarterly | semiannual | annual`.
+> **Actualizado en `docs/INSPECTION_SCHEDULING_ALERTS.md`**: periodicidad "Personalizada" (`custom_interval`/`custom_unit`) y alertas configurables (`inspection_plan_alert_rules`) reemplazan la ventana fija de 7 días que tenía `generate_inspection_due_notifications()` en esta fase original. Lo descrito abajo sigue siendo válido para `weekly/monthly/quarterly/semiannual/annual/one_time`; ver el otro documento para `custom` y las alertas.
+
+`frequency`: `one_time | daily | weekly | monthly | quarterly | semiannual | annual` (`daily` es un valor heredado, nunca ofrecido en el formulario).
 
 Al guardar una ejecución (`submit_inspection_run`), si el run proviene de un plan activo, `next_due_at` de ese plan se recalcula como `completed_at + intervalo_de_frequency` (por ejemplo, `+1 month` para `monthly`). Se ancla en el momento de finalización, no en el `next_due_at` anterior, para no acumular atraso si una inspección se ejecuta tarde. Los planes `one_time` no tienen "siguiente ciclo" — su `next_due_at` no se toca.
 
@@ -60,14 +62,7 @@ Si el run tiene `asset_id`, `submit_inspection_run` inserta un `asset_events` co
 
 ## Notificaciones in-app
 
-`generate_inspection_due_notifications()` reutiliza los helpers de `operational_notifications` (`notify_role_members`, `notify_member`) para emitir los dos tipos ya reservados:
-
-- `inspection_due_soon_future`: `next_due_at` dentro de los próximos 7 días.
-- `inspection_overdue_future`: `next_due_at` ya pasado.
-
-Se llama best-effort desde `useOrganizationNotifications.ts`, junto a `generate_operational_due_notifications()`. Solo in-app — sin email/WhatsApp/push, sin cron/scheduler real.
-
-**Idempotencia por ciclo**: a diferencia de una OT (que llega a su `due_at` una sola vez), un mismo `inspection_plans.id` recorre muchos ciclos, cada uno con su propio `next_due_at`. Reutilizar `plan.id` tal cual como `entity_id` habría hecho que un plan recurrente solo reciba **una** notificación de cada tipo en toda su vida (el índice de deduplicación de `create_notification_once` no tiene dimensión de tiempo). Para evitarlo sin tocar ese helper compartido, `entity_id` aquí es `md5(plan_id || ciclo || next_due_at)::uuid` — determinístico, y distinto en cada ciclo porque cambia junto con `next_due_at`. Este id no referencia ninguna fila real (igual que el resto de `entity_id` en `organization_notifications`, sin FK).
+> **Superado por `docs/INSPECTION_SCHEDULING_ALERTS.md`**: la ventana fija de 7 días descrita abajo ya no existe — `generate_inspection_due_notifications()` ahora recorre las reglas configurables de `inspection_plan_alert_rules` por plan (90/60/30 días antes, vencido, etc., cualquiera que el usuario configure). Sigue siendo cierto que se reutilizan `notify_role_members`/`notify_member`, los mismos dos tipos de notificación, y que se llama best-effort desde `useOrganizationNotifications.ts`. La sección de idempotencia por ciclo también se amplió para incluir la regla, no solo el plan — ver el otro documento para el detalle actual.
 
 ## Permisos
 

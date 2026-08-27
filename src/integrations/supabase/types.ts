@@ -960,6 +960,57 @@ export type Database = {
           },
         ]
       }
+      inspection_plan_alert_rules: {
+        Row: {
+          alert_type: string
+          created_at: string
+          days_before: number | null
+          id: string
+          is_active: boolean
+          label: string | null
+          organization_id: string
+          plan_id: string
+          updated_at: string
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          days_before?: number | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          organization_id: string
+          plan_id: string
+          updated_at?: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          days_before?: number | null
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          organization_id?: string
+          plan_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_plan_alert_rules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_plan_alert_rules_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inspection_plans: {
         Row: {
           area_asset_id: string | null
@@ -967,6 +1018,8 @@ export type Database = {
           branch_id: string | null
           created_at: string
           created_by_user_id: string | null
+          custom_interval: number | null
+          custom_unit: string | null
           description: string | null
           frequency: string
           id: string
@@ -985,6 +1038,8 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          custom_interval?: number | null
+          custom_unit?: string | null
           description?: string | null
           frequency?: string
           id?: string
@@ -1003,6 +1058,8 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          custom_interval?: number | null
+          custom_unit?: string | null
           description?: string | null
           frequency?: string
           id?: string
@@ -3513,9 +3570,21 @@ export type Database = {
           reported_activities_count: number
         }[]
       }
+      get_inspection_plan_alert_rules: {
+        Args: { p_plan_id: string }
+        Returns: {
+          alert_type: string
+          days_before: number
+          id: string
+          is_active: boolean
+          label: string
+          plan_id: string
+        }[]
+      }
       get_inspection_plans: {
         Args: { p_include_inactive?: boolean; p_organization_id: string }
         Returns: {
+          alert_rules: Json
           area_asset_id: string
           area_asset_name: string
           asset_id: string
@@ -3523,6 +3592,8 @@ export type Database = {
           branch_id: string
           branch_name: string
           created_at: string
+          custom_interval: number
+          custom_unit: string
           description: string
           frequency: string
           id: string
@@ -3710,6 +3781,26 @@ export type Database = {
         Args: { reason?: string; target_quote_id: string }
         Returns: undefined
       }
+      replace_inspection_plan_alert_rules: {
+        Args: { p_plan_id: string; p_rules: Json }
+        Returns: {
+          alert_type: string
+          created_at: string
+          days_before: number | null
+          id: string
+          is_active: boolean
+          label: string | null
+          organization_id: string
+          plan_id: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "inspection_plan_alert_rules"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       resolve_asset_path: { Args: { p_asset_id: string }; Returns: string }
       resolve_caller_planner_member: {
         Args: { p_organization_id: string }
@@ -3791,6 +3882,26 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "criticality_parameters"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_inspection_plan_alert_rule_active: {
+        Args: { p_is_active: boolean; p_rule_id: string }
+        Returns: {
+          alert_type: string
+          created_at: string
+          days_before: number | null
+          id: string
+          is_active: boolean
+          label: string | null
+          organization_id: string
+          plan_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inspection_plan_alert_rules"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -4089,6 +4200,8 @@ export type Database = {
           p_area_asset_id?: string
           p_asset_id?: string
           p_branch_id?: string
+          p_custom_interval?: number
+          p_custom_unit?: string
           p_description?: string
           p_frequency?: string
           p_is_active?: boolean
@@ -4106,6 +4219,8 @@ export type Database = {
           branch_id: string | null
           created_at: string
           created_by_user_id: string | null
+          custom_interval: number | null
+          custom_unit: string | null
           description: string | null
           frequency: string
           id: string
@@ -4121,6 +4236,33 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "inspection_plans"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_inspection_plan_alert_rule: {
+        Args: {
+          p_alert_type: string
+          p_days_before?: number
+          p_is_active?: boolean
+          p_label?: string
+          p_plan_id: string
+          p_rule_id?: string
+        }
+        Returns: {
+          alert_type: string
+          created_at: string
+          days_before: number | null
+          id: string
+          is_active: boolean
+          label: string | null
+          organization_id: string
+          plan_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "inspection_plan_alert_rules"
           isOneToOne: true
           isSetofReturn: false
         }

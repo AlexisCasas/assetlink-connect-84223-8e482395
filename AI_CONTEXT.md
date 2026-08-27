@@ -1319,3 +1319,90 @@ Inicio de la rama `productization/mvp`.
   - `DialogDescription` agregado a los 5 diálogos de Inspecciones
     (warning de accesibilidad de Radix por `DialogContent` sin
     descripción).
+
+## Programación y alertas de inspección configurables
+
+- Rama `feature/inspection-scheduling-alerts`. Detalle completo en
+  `docs/INSPECTION_SCHEDULING_ALERTS.md` (secciones "Periodicidad y
+  next_due_at" y "Notificaciones in-app" de
+  `docs/GENERIC_CHECKLISTS_INSPECTIONS.md` marcadas como superadas, con
+  referencia cruzada). ITSE sigue sin ser un módulo — las alertas
+  funcionan igual para cualquier plantilla del motor genérico.
+- Migración `20260830100000_inspection_scheduling_alerts.sql` — nueva,
+  NO edita `20260829200000_generic_checklists_inspections.sql` (ya
+  mergeada a `productization/mvp`, confirmado vía `git log`). Alias
+  obligatorio (ip/ipar/ir/ct/om/au) igual que el resto del motor.
+- `inspection_plans` extendida con `custom_interval`/`custom_unit` y
+  `frequency` ampliado a incluir `'custom'` (`daily` se mantiene en el
+  `CHECK` solo por compatibilidad con filas preexistentes — el formulario
+  nunca lo ofrece). Tabla nueva `inspection_plan_alert_rules`
+  (`before_due` + `days_before`, o `overdue` sin `days_before`), con dos
+  índices únicos parciales (uno por tipo, ya que NULL nunca es igual a
+  NULL para unicidad — mismo patrón que `organization_notifications`
+  broadcast/targeted).
+- **Bug real encontrado y corregido en esta misma migración, no en el
+  código ya desplegado**: agregar `p_custom_interval`/`p_custom_unit`
+  como parámetros nuevos al final de `upsert_inspection_plan` con un
+  `CREATE OR REPLACE FUNCTION` simple NO reemplaza la función ya
+  desplegada — Postgres identifica una función por (nombre, lista de
+  tipos de argumento), así que un 13-arg y un 15-arg son dos funciones
+  *distintas*; sin `DROP FUNCTION` previo, ambas coexisten y PostgREST no
+  puede desambiguar una llamada que solo pasa los 13 nombres originales
+  ("function ... is not unique"). Corregido con
+  `DROP FUNCTION IF EXISTS ...(13-arg signature)` antes del
+  `CREATE OR REPLACE`. Distinto del caso ya documentado de
+  `get_criticality_matrix`'s `p_include_inactive` (esa RPC nunca tuvo una
+  versión previa desplegada con menos parámetros — se creó ya con ese
+  parámetro desde su primera migración). `get_inspection_plans` sí
+  necesitó `DROP FUNCTION` real (cambia el conjunto de columnas de salida
+  de un `RETURNS TABLE`, lo cual `CREATE OR REPLACE` nunca permite,
+  mismo error 42P13 de la clase ya documentada para renombrar parámetros).
+- `replace_inspection_plan_alert_rules(p_plan_id, p_rules)`: reemplazo
+  completo (borra e inserta, transaccional dentro de la función) — la
+  RPC que usa el formulario. Reglas nunca referenciadas por otra tabla
+  (a diferencia de los ítems de checklist, congelados en
+  `inspection_run_answers`), así que el borrado físico es seguro.
+- `generate_inspection_due_notifications()` reescrita: reemplaza la
+  ventana fija de 7 días por un join contra `inspection_plan_alert_rules`
+  activas por plan. `entity_id` pasa de
+  `md5(plan_id || ciclo || next_due_at)` a
+  `md5(plan_id || rule_id || next_due_at)` — agregar `rule_id` evita que
+  dos reglas del mismo plan/ciclo (ej. 90 y 60 días antes) colisionen en
+  un solo slot de deduplicación. Verificado con `psql`: 2 llamadas
+  seguidas nunca duplican; después de avanzar `next_due_at` (nuevo
+  ciclo), la misma regla vuelve a notificar sin bloqueo del ciclo
+  anterior; owner/admin/manager y responsable reciben, un miembro no
+  calificado no recibe nada.
+- **Comportamiento nuevo importante**: un plan sin reglas de alerta
+  configuradas ya no notifica (la ventana implícita de 7 días
+  desapareció) — documentado explícitamente, no es una regresión sino la
+  consecuencia esperada de que las alertas ahora sean 100% configurables.
+- `submit_inspection_run`: recalculo de `next_due_at` extendido con
+  `weekly/quarterly/semiannual/annual` (ya existían monthly/daily) y
+  `custom` (`make_interval` según `custom_unit`), siempre anclado en
+  `completed_at`, nunca en el `next_due_at` anterior.
+- Frontend: `src/types/inspection.ts` extendido
+  (`InspectionAlertRule`/`InspectionAlertRuleDraft`,
+  `InspectionCustomUnit`, `'custom'` en `InspectionFrequency`).
+  `useInspectionPlans.ts`: `savePlanWithAlertRules` reemplaza el antiguo
+  `savePlan` expuesto (guarda el plan, luego reemplaza sus reglas,
+  secuencial ya que las reglas necesitan el id del plan).
+  `InspectionPlanDialog.tsx`: selector de periodicidad con
+  "Personalizada" (cada [N] [días/semanas/meses/años]), sección
+  "Alertas" (chips rápidos 90/60/30 + input de días personalizado +
+  checkbox "Avisar cuando esté vencido"), default de 30-días-antes +
+  Vencido solo para planes nuevos. El fix de la fase anterior (guard por
+  `useRef` + draft en `sessionStorage`) se extendió para cubrir también
+  `customInterval`/`customUnit`/`alertRules` — mismas garantías, ningún
+  campo nuevo puede perderse por refetch ajeno.
+  `InspectionsView.tsx`: card de plan muestra periodicidad (con el
+  "Cada N unidad" cuando es personalizada) y alertas configuradas
+  ("90d, 60d, 30d, Vencido"). `notificationLabels.ts`:
+  `notificationEntityReference` para `inspection_plan` actualizado a
+  leer `plan_title` (reemplazó la clave `title` de la fase anterior) y a
+  mostrar el detalle de la regla ("Inspección: {plan} · 90 días antes" /
+  "Inspección vencida: {plan}").
+- Pendiente documentado (no construido): scheduler/cron real,
+  email/WhatsApp/push, calendario avanzado, reglas escalonadas por
+  severidad, plantillas predefinidas ITSE, feriados/días hábiles,
+  snooze/posponer alerta.

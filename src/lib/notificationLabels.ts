@@ -61,8 +61,19 @@ export const notificationEntityReference = (entityType: string | null, metadata:
       return typeof meta.work_order_number === 'string' ? `Actividad — OT: ${meta.work_order_number}` : 'Actividad';
     case 'quote':
       return 'Cotización';
-    case 'inspection_plan':
-      return typeof meta.title === 'string' ? `Inspección: ${meta.title}` : 'Plan de inspección';
+    case 'inspection_plan': {
+      // metadata shape from generate_inspection_due_notifications() — see
+      // docs/INSPECTION_SCHEDULING_ALERTS.md. plan_title replaced the
+      // earlier phase's `title` key when alert rules became configurable.
+      const planTitle = typeof meta.plan_title === 'string' ? meta.plan_title : null;
+      if (!planTitle) return 'Plan de inspección';
+      if (meta.alert_type === 'overdue') return `Inspección vencida: ${planTitle}`;
+      if (meta.alert_type === 'before_due') {
+        const daysBefore = typeof meta.days_before === 'number' ? `${meta.days_before} días antes` : 'próxima a vencer';
+        return `Inspección: ${planTitle} · ${daysBefore}`;
+      }
+      return `Inspección: ${planTitle}`;
+    }
     default:
       return null;
   }

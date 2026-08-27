@@ -10,13 +10,22 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { X, Plus } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOrganizationTechnicians } from '@/hooks/useOrganizationTechnicians';
 import { useOrganizationPlanners } from '@/hooks/useOrganizationPlanners';
 import type { ChecklistTemplate } from '@/types/checklist';
 import type { Asset } from '@/types/asset';
 import type { ClientBranch } from '@/types/request';
-import type { InspectionFrequency, InspectionPlan, InspectionPlanInput } from '@/types/inspection';
+import type {
+  InspectionAlertRuleDraft,
+  InspectionCustomUnit,
+  InspectionFrequency,
+  InspectionPlan,
+  InspectionPlanInput,
+} from '@/types/inspection';
 
 interface InspectionPlanDialogProps {
   open: boolean;
@@ -27,18 +36,35 @@ interface InspectionPlanDialogProps {
   assets: Asset[];
   plan: InspectionPlan | null;
   saving: boolean;
-  onSave: (input: InspectionPlanInput, planId: string | undefined) => Promise<boolean>;
+  onSave: (input: InspectionPlanInput, planId: string | undefined, alertRules: InspectionAlertRuleDraft[]) => Promise<boolean>;
 }
 
 const FREQUENCY_OPTIONS: { value: InspectionFrequency; label: string }[] = [
   { value: 'one_time', label: 'Única vez' },
-  { value: 'daily', label: 'Diaria' },
   { value: 'weekly', label: 'Semanal' },
   { value: 'monthly', label: 'Mensual' },
   { value: 'quarterly', label: 'Trimestral' },
   { value: 'semiannual', label: 'Semestral' },
   { value: 'annual', label: 'Anual' },
+  { value: 'custom', label: 'Personalizada' },
 ];
+
+const CUSTOM_UNIT_OPTIONS: { value: InspectionCustomUnit; label: string }[] = [
+  { value: 'days', label: 'días' },
+  { value: 'weeks', label: 'semanas' },
+  { value: 'months', label: 'meses' },
+  { value: 'years', label: 'años' },
+];
+
+/** Suggested starting point for a brand-new plan's "Alertas" section — the
+ * user can freely add/remove from here (e.g. ITSE typically adds 90/60/30 +
+ * vencido). Never applied when editing an existing plan. */
+const DEFAULT_NEW_PLAN_ALERT_RULES: InspectionAlertRuleDraft[] = [
+  { alertType: 'before_due', daysBefore: 30, label: '30 días antes' },
+  { alertType: 'overdue', daysBefore: null, label: 'Vencido' },
+];
+
+const QUICK_ADD_DAYS = [90, 60, 30];
 
 const toDateInputValue = (iso: string | null) => (iso ? iso.slice(0, 10) : '');
 
@@ -51,8 +77,11 @@ interface PlanDraft {
   assetId: string;
   responsibleMemberId: string;
   frequency: InspectionFrequency;
+  customInterval: string;
+  customUnit: InspectionCustomUnit;
   startDate: string;
   nextDueAt: string;
+  alertRules: InspectionAlertRuleDraft[];
 }
 
 const emptyDraft = (): PlanDraft => ({
@@ -64,22 +93,28 @@ const emptyDraft = (): PlanDraft => ({
   assetId: '',
   responsibleMemberId: '',
   frequency: 'one_time',
+  customInterval: '1',
+  customUnit: 'days',
   startDate: new Date().toISOString().slice(0, 10),
   nextDueAt: '',
+  alertRules: [],
 });
 
-const draftFromPlan = (plan: InspectionPlan | null): PlanDraft => ({
-  templateId: plan?.templateId ?? '',
-  title: plan?.title ?? '',
-  description: plan?.description ?? '',
-  branchId: plan?.branchId ?? '',
-  areaAssetId: plan?.areaAssetId ?? '',
-  assetId: plan?.assetId ?? '',
-  responsibleMemberId: plan?.responsibleMemberId ?? '',
-  frequency: plan?.frequency ?? 'one_time',
-  startDate: plan?.startDate ?? new Date().toISOString().slice(0, 10),
-  nextDueAt: toDateInputValue(plan?.nextDueAt ?? null),
-});
+const draftFromPlan = (plan: InspectionPlan | null): PlanDraft => plan ? {
+  templateId: plan.templateId,
+  title: plan.title,
+  description: plan.description ?? '',
+  branchId: plan.branchId ?? '',
+  areaAssetId: plan.areaAssetId ?? '',
+  assetId: plan.assetId ?? '',
+  responsibleMemberId: plan.responsibleMemberId ?? '',
+  frequency: plan.frequency,
+  customInterval: plan.customInterval != null ? String(plan.customInterval) : '1',
+  customUnit: plan.customUnit ?? 'days',
+  startDate: plan.startDate,
+  nextDueAt: toDateInputValue(plan.nextDueAt),
+  alertRules: plan.alertRules.map((rule) => ({ alertType: rule.alertType, daysBefore: rule.daysBefore, label: rule.label ?? '' })),
+} : { ...emptyDraft(), alertRules: DEFAULT_NEW_PLAN_ALERT_RULES };
 
 // No sensitive data here — just plan configuration already visible on
 // screen to this organization's own users. Per-tab (sessionStorage), not
@@ -118,20 +153,18 @@ const clearDraftStorage = (key: string | null) => {
 };
 
 /**
- * Bug fix (see feature/generic-checklists-inspections follow-up): this
- * form used to reset to defaults whenever the *tab regained focus* — not a
- * bug in this file's own effect logic alone, but that effect's dependency
- * on `templates` combined with the caller passing a freshly-`.filter()`ed
- * array on every render (fixed in InspectionsView.tsx too) meant any
- * unrelated re-render (e.g. Supabase Auth's token refresh on window focus)
- * re-ran the reset. Two independent hardenings now:
- *   1. Initialization only happens on an explicit closed→open transition or
- *      when the *id* of the edited plan changes — never merely because a
- *      prop array/object got a new reference. Tracked via refs, not deps.
- *   2. The in-progress draft is mirrored into sessionStorage (keyed by
- *      organization + plan id, or "new") while the dialog is open, and
- *      restored on the next open if the form was never saved/cancelled —
- *      so even an actual remount cannot silently lose typed data.
+ * Periodicidad (incluye "Personalizada": cada [N] [días/semanas/meses/años])
+ * y sección "Alertas" (N días antes / vencido), configurables por plan —
+ * funciona igual para cualquier plantilla (ITSE, luces de emergencia,
+ * techos, auditoría interna…), nunca hardcodeado. Ver
+ * docs/INSPECTION_SCHEDULING_ALERTS.md.
+ *
+ * Mantiene el fix de la fase anterior (ver
+ * docs/GENERIC_CHECKLISTS_INSPECTIONS.md): inicialización solo en la
+ * transición cerrado→abierto o cuando cambia el id del plan editado
+ * (nunca por refetch de templates/branches/assets), más un draft espejado
+ * en sessionStorage restaurado al reabrir y limpiado solo al guardar con
+ * éxito o cancelar explícitamente.
  */
 export function InspectionPlanDialog({ open, onOpenChange, organizationId, templates, branches, assets, plan, saving, onSave }: InspectionPlanDialogProps) {
   const { technicians } = useOrganizationTechnicians(organizationId);
@@ -145,8 +178,12 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
   const [assetId, setAssetId] = useState('');
   const [responsibleMemberId, setResponsibleMemberId] = useState('');
   const [frequency, setFrequency] = useState<InspectionFrequency>('one_time');
+  const [customInterval, setCustomInterval] = useState('1');
+  const [customUnit, setCustomUnit] = useState<InspectionCustomUnit>('days');
   const [startDate, setStartDate] = useState('');
   const [nextDueAt, setNextDueAt] = useState('');
+  const [alertRules, setAlertRules] = useState<InspectionAlertRuleDraft[]>([]);
+  const [customDaysInput, setCustomDaysInput] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
   const wasOpenRef = useRef(false);
@@ -158,7 +195,8 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
   // plan being edited actually changes while open — deliberately keyed off
   // `plan?.id` (a primitive), not `plan` itself or `templates`/`branches`/
   // `assets`/technician-planner lists, so a background refetch that
-  // produces new array/object references can never wipe the draft.
+  // produces new array/object references can never wipe the draft (root
+  // cause of a prior bug — see docs/GENERIC_CHECKLISTS_INSPECTIONS.md).
   useEffect(() => {
     if (!open) {
       wasOpenRef.current = false;
@@ -181,8 +219,12 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
       setAssetId(next.assetId);
       setResponsibleMemberId(next.responsibleMemberId);
       setFrequency(next.frequency);
+      setCustomInterval(next.customInterval);
+      setCustomUnit(next.customUnit);
       setStartDate(next.startDate);
       setNextDueAt(next.nextDueAt);
+      setAlertRules(next.alertRules);
+      setCustomDaysInput('');
       setFormError(null);
 
       initializedForRef.current = planKey;
@@ -196,13 +238,50 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
   // remount (or simply closing without saving) never loses the draft.
   useEffect(() => {
     if (!open || !draftKey) return;
-    writeDraft(draftKey, { templateId, title, description, branchId, areaAssetId, assetId, responsibleMemberId, frequency, startDate, nextDueAt });
-  }, [open, draftKey, templateId, title, description, branchId, areaAssetId, assetId, responsibleMemberId, frequency, startDate, nextDueAt]);
+    writeDraft(draftKey, { templateId, title, description, branchId, areaAssetId, assetId, responsibleMemberId, frequency, customInterval, customUnit, startDate, nextDueAt, alertRules });
+  }, [open, draftKey, templateId, title, description, branchId, areaAssetId, assetId, responsibleMemberId, frequency, customInterval, customUnit, startDate, nextDueAt, alertRules]);
 
   const responsibleOptions = [
     ...planners.map((p) => ({ id: p.memberId, label: `${p.name} (planner)` })),
     ...technicians.map((t) => ({ id: t.memberId, label: `${t.name} (técnico)` })),
   ];
+
+  const beforeDueRules = alertRules.filter((r) => r.alertType === 'before_due');
+  const hasOverdueRule = alertRules.some((r) => r.alertType === 'overdue');
+
+  const addBeforeDueRule = (days: number) => {
+    if (days < 0 || beforeDueRules.some((r) => r.daysBefore === days)) return;
+    setAlertRules((current) => [...current, { alertType: 'before_due', daysBefore: days, label: `${days} días antes` }]);
+  };
+
+  const addCustomBeforeDueRule = () => {
+    const days = Number(customDaysInput);
+    if (!Number.isInteger(days) || days < 0) {
+      setFormError('Los días antes deben ser un número entero mayor o igual a 0.');
+      return;
+    }
+    if (beforeDueRules.some((r) => r.daysBefore === days)) {
+      setFormError('Ya existe una alerta con esa cantidad de días.');
+      return;
+    }
+    setFormError(null);
+    addBeforeDueRule(days);
+    setCustomDaysInput('');
+  };
+
+  const removeBeforeDueRule = (days: number | null) => {
+    setAlertRules((current) => current.filter((r) => !(r.alertType === 'before_due' && r.daysBefore === days)));
+  };
+
+  const toggleOverdueRule = (checked: boolean) => {
+    setAlertRules((current) => {
+      if (checked) {
+        if (current.some((r) => r.alertType === 'overdue')) return current;
+        return [...current, { alertType: 'overdue', daysBefore: null, label: 'Vencido' }];
+      }
+      return current.filter((r) => r.alertType !== 'overdue');
+    });
+  };
 
   const handleCancel = () => {
     clearDraftStorage(draftKey);
@@ -222,6 +301,14 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
       setFormError('Selecciona al menos una sede, área o activo.');
       return;
     }
+    let customIntervalValue: number | null = null;
+    if (frequency === 'custom') {
+      customIntervalValue = Number(customInterval);
+      if (!Number.isInteger(customIntervalValue) || customIntervalValue <= 0) {
+        setFormError('El intervalo personalizado debe ser un número entero mayor a 0.');
+        return;
+      }
+    }
     setFormError(null);
 
     const input: InspectionPlanInput = {
@@ -233,10 +320,12 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
       assetId: assetId || null,
       responsibleMemberId: responsibleMemberId || null,
       frequency,
+      customInterval: customIntervalValue,
+      customUnit: frequency === 'custom' ? customUnit : null,
       startDate,
       nextDueAt: nextDueAt ? new Date(nextDueAt).toISOString() : null,
     };
-    const ok = await onSave(input, plan?.id);
+    const ok = await onSave(input, plan?.id, alertRules);
     if (ok) {
       clearDraftStorage(draftKey);
       onOpenChange(false);
@@ -249,7 +338,7 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
         <DialogHeader>
           <DialogTitle>{plan ? 'Editar plan de inspección' : 'Nuevo plan de inspección'}</DialogTitle>
           <DialogDescription>
-            Programa una plantilla de checklist sobre una sede, área y/o activo, con responsable y periodicidad.
+            Programa una plantilla de checklist sobre una sede, área y/o activo, con responsable, periodicidad y alertas.
           </DialogDescription>
         </DialogHeader>
 
@@ -348,6 +437,93 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
             <div className="space-y-1">
               <Label htmlFor="plan-next-due">Próxima inspección</Label>
               <Input id="plan-next-due" type="date" value={nextDueAt} onChange={(e) => setNextDueAt(e.target.value)} disabled={saving} />
+            </div>
+          </div>
+
+          {frequency === 'custom' && (
+            <div className="flex flex-wrap items-end gap-2 rounded-md border p-3">
+              <span className="text-sm">Cada</span>
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                className="w-20"
+                value={customInterval}
+                onChange={(e) => setCustomInterval(e.target.value)}
+                disabled={saving}
+              />
+              <Select value={customUnit} onValueChange={(v: InspectionCustomUnit) => setCustomUnit(v)} disabled={saving}>
+                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {CUSTOM_UNIT_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-muted-foreground">
+                Ej. "cada 45 días" o "cada 2 meses"
+              </span>
+            </div>
+          )}
+
+          <div className="space-y-2 rounded-md border p-3">
+            <Label className="text-sm font-medium">Alertas</Label>
+            <p className="text-xs text-muted-foreground">
+              Notificaciones in-app para owner/admin/manager y el responsable del plan. Funciona igual para cualquier plantilla (ITSE, luces de emergencia, techos…).
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {QUICK_ADD_DAYS.map((days) => {
+                const active = beforeDueRules.some((r) => r.daysBefore === days);
+                return (
+                  <Button
+                    key={days}
+                    type="button"
+                    variant={active ? 'default' : 'outline'}
+                    size="sm"
+                    disabled={saving || active}
+                    onClick={() => addBeforeDueRule(days)}
+                  >
+                    {days} días antes
+                  </Button>
+                );
+              })}
+              <div className="flex items-center gap-1">
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="Otro (días)"
+                  className="w-28"
+                  value={customDaysInput}
+                  onChange={(e) => setCustomDaysInput(e.target.value)}
+                  disabled={saving}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={addCustomBeforeDueRule} disabled={saving || !customDaysInput}>
+                  <Plus className="h-3.5 w-3.5" /> Agregar alerta
+                </Button>
+              </div>
+            </div>
+
+            {beforeDueRules.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {beforeDueRules
+                  .slice()
+                  .sort((a, b) => (b.daysBefore ?? 0) - (a.daysBefore ?? 0))
+                  .map((rule) => (
+                    <Badge key={rule.daysBefore} variant="secondary" className="flex items-center gap-1">
+                      {rule.label || `${rule.daysBefore} días antes`}
+                      <button type="button" onClick={() => removeBeforeDueRule(rule.daysBefore)} disabled={saving} aria-label={`Quitar alerta ${rule.daysBefore} días antes`}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox id="plan-alert-overdue" checked={hasOverdueRule} onCheckedChange={(checked) => toggleOverdueRule(checked === true)} disabled={saving} />
+              <Label htmlFor="plan-alert-overdue" className="cursor-pointer text-sm font-normal">Avisar cuando esté vencido</Label>
             </div>
           </div>
 
