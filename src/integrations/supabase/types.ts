@@ -1880,6 +1880,99 @@ export type Database = {
         }
         Relationships: []
       }
+      work_order_activities: {
+        Row: {
+          created_at: string
+          created_by_user_id: string | null
+          description: string
+          due_at: string | null
+          estimated_hours: number | null
+          id: string
+          organization_id: string
+          sequence: number
+          status: string
+          updated_at: string
+          work_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by_user_id?: string | null
+          description: string
+          due_at?: string | null
+          estimated_hours?: number | null
+          id?: string
+          organization_id: string
+          sequence?: number
+          status?: string
+          updated_at?: string
+          work_order_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string
+          due_at?: string | null
+          estimated_hours?: number | null
+          id?: string
+          organization_id?: string
+          sequence?: number
+          status?: string
+          updated_at?: string
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_order_activities_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_activities_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_order_activity_technicians: {
+        Row: {
+          activity_id: string
+          created_at: string
+          is_primary: boolean
+          member_id: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          is_primary?: boolean
+          member_id: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          is_primary?: boolean
+          member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_order_activity_technicians_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "work_order_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_activity_technicians_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       work_orders: {
         Row: {
           asset_id: string | null
@@ -2152,6 +2245,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      delete_work_order_activity: {
+        Args: { p_activity_id: string }
+        Returns: undefined
+      }
       get_assignable_planners: {
         Args: { p_organization_id: string }
         Returns: {
@@ -2190,6 +2287,21 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_work_order_activities: {
+        Args: { p_work_order_id: string }
+        Returns: {
+          created_at: string
+          description: string
+          due_at: string
+          estimated_hours: number
+          id: string
+          sequence: number
+          status: string
+          technicians: Json
+          updated_at: string
+          work_order_id: string
+        }[]
       }
       has_organization_role: {
         Args: {
@@ -2270,6 +2382,37 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "work_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_work_order_activity: {
+        Args: {
+          p_activity_id?: string
+          p_description: string
+          p_due_at?: string
+          p_estimated_hours?: number
+          p_sequence?: number
+          p_status?: string
+          p_technician_member_ids?: string[]
+          p_work_order_id: string
+        }
+        Returns: {
+          created_at: string
+          created_by_user_id: string | null
+          description: string
+          due_at: string | null
+          estimated_hours: number | null
+          id: string
+          organization_id: string
+          sequence: number
+          status: string
+          updated_at: string
+          work_order_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_order_activities"
           isOneToOne: true
           isSetofReturn: false
         }

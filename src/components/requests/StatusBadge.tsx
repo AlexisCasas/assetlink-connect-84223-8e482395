@@ -141,3 +141,27 @@ export const WorkOrderPriorityBadge = ({ priority }: WorkOrderPriorityBadgeProps
     {WORK_ORDER_PRIORITY_LABELS[priority] ?? priority}
   </Badge>
 );
+
+export const WORK_ORDER_ACTIVITY_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pendiente',
+  assigned: 'Asignada',
+  in_progress: 'En ejecución',
+  completed: 'Finalizada',
+};
+
+const WORK_ORDER_ACTIVITY_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-slate-500/10 text-slate-600 border-slate-500/20',
+  assigned: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  in_progress: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  completed: 'bg-green-500/10 text-green-600 border-green-500/20',
+};
+
+interface WorkOrderActivityStatusBadgeProps {
+  status: string;
+}
+
+export const WorkOrderActivityStatusBadge = ({ status }: WorkOrderActivityStatusBadgeProps) => (
+  <Badge variant="outline" className={WORK_ORDER_ACTIVITY_STATUS_COLORS[status] ?? ''}>
+    {WORK_ORDER_ACTIVITY_STATUS_LABELS[status] ?? status}
+  </Badge>
+);
