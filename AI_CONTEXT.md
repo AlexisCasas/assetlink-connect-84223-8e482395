@@ -555,3 +555,39 @@ Inicio de la rama `productization/mvp`.
   visible dentro del formulario si falla.
 - No se tocó RLS, Edge Functions, `service_role`, ni `requests`/
   `RequestForm.tsx`.
+
+## Activos ↔ Solicitudes: relación productiva
+
+- Rama `feature/assets-requests-integration`. Detalle completo en
+  `docs/ASSETS_REQUESTS_INTEGRATION.md`.
+- Migración `20260827012124_requests_asset_id.sql`: agrega
+  `requests.asset_id uuid null references public.assets(id) on delete set
+  null` + índice + trigger `check_request_asset_organization` (mismo patrón
+  que `check_asset_consistency`: el activo debe pertenecer al mismo
+  `organization_id` de la solicitud). **Sin cambios de RLS**: las policies
+  existentes de `requests` (`can_user_read_request`) y `assets`
+  (`is_organization_member`/`is_platform_admin`) ya eran correctas para esta
+  columna — verificado, no asumido.
+- Decisión de modelo: `requests.asset_id` (no `request_details.asset_id` ni
+  tabla puente `request_assets`) — sigue el mismo patrón ya usado por
+  `branch_id` (top-level, un activo principal por solicitud en esta fase
+  MVP), sin tocar el detalle multi-línea legacy (`equipment`/
+  `sub_equipment` en `request_details` siguen intactos).
+- `RequestForm.tsx` gana `RequestAssetPicker` (combobox Popover+Command,
+  busca por nombre/código/N° de serie, oculta archivados, no permite
+  seleccionarlos). Al elegir un activo real, sobreescribe el campo legacy
+  `requests.asset` (texto) con `"<Tipo de nodo>: <Nombre>"` — así
+  proveedores (que NO tienen RLS para leer `assets` directamente) siguen
+  viendo un resumen seguro sin exponer `serial_number`/`technical_data`/etc.
+  Sin activo seleccionado, el comportamiento es el de siempre.
+- `RequestList.tsx`/`OrderTable.tsx`: nueva columna "Activo asociado"
+  (persistida en el sistema de columnas existente, compatible con
+  localStorage previo) que, para el cliente dueño (con RLS completa sobre
+  `assets`), hace join en vivo vía `useAssets()` para mostrar nombre actual +
+  ruta jerárquica corta.
+- `ProviderRequestList.tsx`: sin nueva consulta ni cambio de RLS — solo un
+  ícono junto al texto ya visible (`requests.asset`) cuando `asset_id` no es
+  null, para distinguir un activo real de texto libre.
+- Trazabilidad hasta `work_orders`: ya alcanzable sin cambios, vía
+  `work_orders.request_id → requests.asset_id → assets`; no se agregó
+  columna en `work_orders` porque no hace falta.

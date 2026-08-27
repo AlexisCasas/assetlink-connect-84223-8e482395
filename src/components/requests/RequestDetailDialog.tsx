@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar, MapPin, Building2, Wrench, FileText, User, Image, File, List } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { RequestAssetSummary } from './RequestAssetSummary';
 
 interface RequestDetailDialogProps {
   request: any;
@@ -76,6 +77,9 @@ export const RequestDetailDialog = ({ request, assignment, onClose }: RequestDet
             </CardContent>
           </Card>
 
+          {/* Activo asociado */}
+          <RequestAssetSummary assetId={request.asset_id} assetText={request.asset} />
+
           {/* Información Técnica General */}
           <Card>
             <CardHeader>
@@ -85,18 +89,12 @@ export const RequestDetailDialog = ({ request, assignment, onClose }: RequestDet
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Equipo/Activo</p>
-                  <p className="font-medium">{request.asset}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Ubicación</p>
-                  <p className="font-medium flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    {request.location}
-                  </p>
-                </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Ubicación</p>
+                <p className="font-medium flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  {request.location}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Descripción</p>

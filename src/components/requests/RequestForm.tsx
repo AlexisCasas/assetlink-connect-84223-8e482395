@@ -16,6 +16,9 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { RequestAssetPicker } from './RequestAssetPicker';
+import { ASSET_NODE_TYPE_LABELS } from '@/lib/assetLabels';
+import type { Asset } from '@/types/asset';
 
 interface RequestFormProps {
   onClose: () => void;
@@ -85,6 +88,9 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [city, setCity] = useState(editingRequest?.city || '');
   const [site, setSite] = useState(editingRequest?.branch || '');
   const [branches, setBranches] = useState<ClientBranch[]>([]);
+  const [assetId, setAssetId] = useState<string>(editingRequest?.assetId || '');
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [assetTouched, setAssetTouched] = useState(false);
   const [requiresVisit, setRequiresVisit] = useState(editingRequest?.requiresVisit || false);
   const [visitDate, setVisitDate] = useState(formatDateForInput(editingRequest?.visitDate));
   const [minQuotes, setMinQuotes] = useState<number>(editingRequest?.minQuotes ?? 3);
@@ -329,7 +335,13 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       requestNumber,
       title: title.trim(),
       description,
-      asset: details[0]?.equipment || '',
+      // A freshly touched asset picker overrides the legacy text (selected or
+      // cleared); an untouched pre-existing selection keeps whatever text is
+      // already saved instead of falling back to the per-detail equipment.
+      asset: assetTouched
+        ? (selectedAsset ? `${ASSET_NODE_TYPE_LABELS[selectedAsset.nodeType]}: ${selectedAsset.name}` : (details[0]?.equipment || ''))
+        : (editingRequest?.asset || details[0]?.equipment || ''),
+      assetId: assetId || undefined,
       location: `${city} - ${site}`,
       serviceType,
       observations: '',
@@ -492,6 +504,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                 <p className="text-xs text-muted-foreground">Los precios se mostrarán al alcanzar este número</p>
               </div>
             </div>
+
+            {/* Activo asociado */}
+            <RequestAssetPicker
+              assetId={assetId}
+              onChange={(id, asset) => { setAssetId(id); setSelectedAsset(asset); setAssetTouched(true); }}
+            />
 
             {/* Descripción */}
             <div className="space-y-2">
