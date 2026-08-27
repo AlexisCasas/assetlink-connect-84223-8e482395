@@ -22,6 +22,16 @@ export function useWorkOrders() {
     setLoading(true);
     setError(null);
 
+    // Same best-effort, idempotent due-notification generation as
+    // useOrganizationNotifications.ts — no external scheduler in this
+    // phase, see docs/OPERATIONAL_NOTIFICATIONS.md. Never blocks the
+    // actual work orders load.
+    try {
+      await supabase.rpc('generate_operational_due_notifications');
+    } catch (dueNotificationsError) {
+      console.error('Error generating due-date notifications:', dueNotificationsError);
+    }
+
     const baseQuery = supabase
       .from('work_orders')
       .select('*')
