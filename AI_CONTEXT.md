@@ -1487,3 +1487,60 @@ Inicio de la rama `productization/mvp`.
   suppress/snooze, SLA por contrato, dashboard ejecutivo dedicado,
   histórico de cambios de semáforo, materialización/cron si el volumen
   de activos lo justifica.
+
+## Dashboard real de métricas operativas
+
+- Rama `feature/real-dashboard-metrics`. Detalle completo en
+  `docs/REAL_DASHBOARD_METRICS.md`. Reemplaza `StatsCards.tsx` (números
+  hardcodeados, nunca conectados a una consulta) con una sola RPC
+  consolidada.
+- Migración `20260830200000_real_dashboard_metrics.sql` (nueva RPC, sin
+  cambios de esquema): `get_dashboard_metrics(p_organization_id)` — una
+  fila con `total_assets`/`critical_assets` (excluye `archived`, mismo
+  criterio que el semáforo operativo), `open_requests` (`status IN
+  ('sent','quoted')` — excluye `draft` deliberadamente, ver el doc para
+  la justificación basada en cómo `DraftList.tsx`/`RequestList.tsx` ya
+  separan ese concepto), `open_work_orders`/`overdue_work_orders` (mismo
+  criterio que `generate_operational_due_notifications`),
+  `upcoming_inspections` (solo planes con una regla `before_due` activa
+  cuya ventana está abierta — `COUNT(DISTINCT ip.id)` porque un plan
+  puede tener varias reglas simultáneamente en ventana y debe contar una
+  sola vez) / `overdue_inspections` (incondicional a reglas, igual que
+  el semáforo), y `planned_hours`/`actual_hours` delegados a
+  `get_efficiency_summary(p_organization_id, NULL, NULL)` en vez de
+  recalcular esa agregación una segunda vez.
+- Cada conteo se computa primero en una variable `v_`-prefijada y solo
+  se referencia por ese nombre en el `RETURN QUERY` final — `RETURNS
+  TABLE` declara columnas OUT con el mismo nombre que las métricas
+  (`total_assets`, etc.), así que cualquier referencia sin calificar a
+  esos nombres dentro del cuerpo habría sido ambigua (42702), el mismo
+  bug ya encontrado y corregido en `get_asset_traffic_light` en la fase
+  anterior — evitado desde el diseño esta vez.
+- Permisos deliberadamente **más estrictos** que la mayoría de las RPCs
+  de lectura del proyecto: solo owner/admin/manager o `platform_admin`
+  (no "cualquier miembro activo" como `get_asset_traffic_light`/
+  `get_criticality_matrix`/etc.) — es un resumen de toda la organización
+  (conteos agregados, horas totales), no el dato de un activo/plan
+  puntual. Verificado con `SET ROLE authenticated`: técnico y viewer
+  rechazados; otra organización no puede leer nada.
+- Frontend: `src/types/dashboardMetrics.ts`,
+  `src/hooks/useDashboardMetrics.ts`,
+  `src/components/dashboard/DashboardMetricsCards.tsx` (9 cards, gate a
+  `canPlanWork` idéntico al de la RPC — un técnico ve "Sin acceso a
+  métricas operativas" en vez de datos globales, mientras que
+  `TrafficLightSummaryCard` sigue visible para él, gate distinto y
+  documentado explícitamente). `Dashboard.tsx`: la vista por defecto ya
+  no importa `StatsCards` en ningún caso (ni la principal ni el
+  fallback de "Activos" para organizaciones no-cliente, que ahora
+  muestra un mensaje neutral en vez de números falsos).
+  `platform_admin` nunca llega a esta vista (ya forzado a `admin` antes)
+  — sin caso especial adicional necesario.
+- `StatsCards.tsx` **no se eliminó** (sigue importado por
+  `src/pages/Index.tsx`, una página no registrada en `App.tsx` —
+  código muerto preexistente, fuera de alcance tocar) — se le agregó un
+  comentario de cabecera marcándolo explícitamente legacy/mock/deprecado
+  para evitar un uso accidental futuro.
+- Pendiente documentado (no construido): tendencia de OT, gráficos de
+  criticidad, cumplimiento de inspecciones, eficiencia por período
+  (hoy son totales de todo el tiempo sin filtro de fecha), filtros de
+  fecha, exportación, dashboard ejecutivo dedicado.

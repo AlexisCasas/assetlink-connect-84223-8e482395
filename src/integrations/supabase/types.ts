@@ -3558,6 +3558,21 @@ export type Database = {
         Args: { p_include_inactive?: boolean; p_organization_id: string }
         Returns: Json
       }
+      get_dashboard_metrics: {
+        Args: { p_organization_id: string }
+        Returns: {
+          actual_hours: number
+          critical_assets: number
+          open_requests: number
+          open_work_orders: number
+          overdue_inspections: number
+          overdue_work_orders: number
+          planned_hours: number
+          total_assets: number
+          upcoming_inspections: number
+          updated_at: string
+        }[]
+      }
       get_efficiency_activity_metrics: {
         Args: {
           p_end_date?: string

@@ -5,7 +5,7 @@ import { AssetsView } from '@/components/assets/AssetsView';
 import { RequestList } from '@/components/requests/RequestList';
 import { DraftList } from '@/components/requests/DraftList';
 import { ProviderRequestList } from '@/components/requests/ProviderRequestList';
-import { StatsCards } from '@/components/dashboard/StatsCards';
+import { DashboardMetricsCards } from '@/components/dashboard/DashboardMetricsCards';
 import { TrafficLightSummaryCard } from '@/components/dashboard/TrafficLightSummaryCard';
 import { OrganizationProfile } from '@/components/organization/OrganizationProfile';
 import { PublicRequestList } from '@/components/requests/PublicRequestList';
@@ -58,9 +58,15 @@ const Dashboard = () => {
     switch (currentView) {
       case 'assets':
         // Activos es un módulo de organizaciones cliente; platform_admin y
-        // proveedores no operan activos en esta fase.
+        // proveedores no operan activos en esta fase. Not normally
+        // reachable via the sidebar (its "Activos" item only renders for
+        // client_company orgs) — only via a stale/direct #assets hash.
         if (currentOrganization?.organizationType !== 'client_company') {
-          return <StatsCards />;
+          return (
+            <div className="flex h-full items-center justify-center p-6">
+              <p className="text-sm text-muted-foreground">Los activos se administran desde una organización cliente.</p>
+            </div>
+          );
         }
         return <AssetsView />;
       case 'requests':
@@ -102,10 +108,17 @@ const Dashboard = () => {
         return <InspectionsView />;
       case 'admin': return <AdminConsole />;
       default:
+        // Real dashboard — see docs/REAL_DASHBOARD_METRICS.md.
+        // DashboardMetricsCards gates itself to owner/admin/manager (same
+        // as the RPC it calls); TrafficLightSummaryCard is visible to any
+        // active member including technician (per the previous phase).
+        // platform_admin orgs never reach this case (forced to 'admin'
+        // above); technician sees TrafficLightSummaryCard but not the
+        // organization-wide metrics cards.
         return (
           <div className="space-y-6 p-6">
             <TrafficLightSummaryCard />
-            <StatsCards />
+            <DashboardMetricsCards />
           </div>
         );
     }

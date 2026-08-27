@@ -1,3 +1,9 @@
+// LEGACY / MOCK — hardcoded example numbers (never queried from the
+// database). The real Dashboard no longer uses this component; it was
+// replaced by DashboardMetricsCards.tsx (see
+// docs/REAL_DASHBOARD_METRICS.md). Kept only because src/pages/Index.tsx
+// (unrouted — not registered in App.tsx, unreachable from the app) still
+// imports it; do not add new usages of this component.
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Building2, 
