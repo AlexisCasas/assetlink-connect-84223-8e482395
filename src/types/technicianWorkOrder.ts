@@ -5,6 +5,10 @@ export interface TechnicianWorkOrderActivity {
   status: string;
   sequence: number;
   dueAt: string | null;
+  /** Sum of the caller's own work_order_activity_reports.actual_hours for
+   * this activity — 0 when none have been submitted yet. */
+  actualHoursTotal: number;
+  reportsCount: number;
 }
 
 export interface TechnicianWorkOrderMaterial {

@@ -13,7 +13,8 @@ import {
 } from '@/components/requests/StatusBadge';
 import { TechnicianWorkLogDialog } from './TechnicianWorkLogDialog';
 import { TechnicianWorkOrderDetailDialog } from './TechnicianWorkOrderDetailDialog';
-import type { TechnicianWorkOrder } from '@/types/technicianWorkOrder';
+import { ActivityReportDialog } from './ActivityReportDialog';
+import type { TechnicianWorkOrder, TechnicianWorkOrderActivity } from '@/types/technicianWorkOrder';
 
 const formatDate = (value: string | null) => value
   ? new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium' }).format(new Date(value))
@@ -25,6 +26,7 @@ export function TechnicianWorkView() {
 
   const [logDialogTarget, setLogDialogTarget] = useState<TechnicianWorkOrder | null>(null);
   const [detailTarget, setDetailTarget] = useState<TechnicianWorkOrder | null>(null);
+  const [reportingActivityId, setReportingActivityId] = useState<string | null>(null);
 
   const handleStart = async (workOrder: TechnicianWorkOrder) => {
     const ok = await updateProgress(workOrder.id, 'in_progress');
@@ -119,12 +121,32 @@ export function TechnicianWorkView() {
                     {workOrder.activities.length === 0 ? (
                       <p className="text-xs text-muted-foreground">Sin actividades asignadas.</p>
                     ) : (
-                      workOrder.activities.map((activity) => (
-                        <div key={activity.id} className="flex items-center justify-between gap-2 text-xs">
-                          <span className="truncate">{activity.description}{activity.estimatedHours != null ? ` (${activity.estimatedHours} h)` : ''}</span>
-                          <WorkOrderActivityStatusBadge status={activity.status} />
-                        </div>
-                      ))
+                      workOrder.activities.map((activity: TechnicianWorkOrderActivity) => {
+                        const difference = activity.reportsCount > 0 && activity.estimatedHours != null
+                          ? Math.round((activity.actualHoursTotal - activity.estimatedHours) * 100) / 100
+                          : null;
+                        return (
+                          <div key={activity.id} className="rounded-md border p-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate">{activity.description}</span>
+                              <WorkOrderActivityStatusBadge status={activity.status} />
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-muted-foreground">
+                              <span>
+                                Estimado: {activity.estimatedHours ?? '—'} h
+                                {activity.reportsCount > 0 && (
+                                  <> · Real: {activity.actualHoursTotal} h{difference !== null && (
+                                    <> · Dif: {difference > 0 ? `+${difference}` : difference} h</>
+                                  )}</>
+                                )}
+                              </span>
+                              <Button size="sm" variant="outline" className="h-6 px-2" onClick={() => setReportingActivityId(activity.id)}>
+                                Reportar
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
 
@@ -179,6 +201,13 @@ export function TechnicianWorkView() {
         open={detailTarget !== null}
         onOpenChange={(open) => !open && setDetailTarget(null)}
         workOrder={detailTarget}
+      />
+
+      <ActivityReportDialog
+        open={reportingActivityId !== null}
+        onOpenChange={(open) => !open && setReportingActivityId(null)}
+        activityId={reportingActivityId}
+        onSaved={() => void refresh()}
       />
     </div>
   );
