@@ -6,6 +6,7 @@ import { RequestList } from '@/components/requests/RequestList';
 import { DraftList } from '@/components/requests/DraftList';
 import { ProviderRequestList } from '@/components/requests/ProviderRequestList';
 import { StatsCards } from '@/components/dashboard/StatsCards';
+import { TrafficLightSummaryCard } from '@/components/dashboard/TrafficLightSummaryCard';
 import { OrganizationProfile } from '@/components/organization/OrganizationProfile';
 import { PublicRequestList } from '@/components/requests/PublicRequestList';
 import { NotificationList } from '@/components/notifications/NotificationList';
@@ -101,7 +102,12 @@ const Dashboard = () => {
         return <InspectionsView />;
       case 'admin': return <AdminConsole />;
       default:
-        return <StatsCards />;
+        return (
+          <div className="space-y-6 p-6">
+            <TrafficLightSummaryCard />
+            <StatsCards />
+          </div>
+        );
     }
   };
 

@@ -21,11 +21,14 @@ import {
   RotateCcw,
   Pencil,
   Gauge,
+  TrafficCone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UseAssetsResult } from '@/hooks/useAssets';
+import type { UseAssetTrafficLightResult } from '@/hooks/useAssetTrafficLight';
 import type { Asset, AssetCriticality, AssetNodeType, AssetStatus } from '@/types/asset';
 import { ASSET_NODE_TYPE_ORDER, ASSET_NODE_TYPE_LABELS, ASSET_EDITABLE_STATUSES, ASSET_CRITICALITY_ORDER, ASSET_CRITICALITY_LABELS, getAssetStatusBadgeClass } from '@/lib/assetLabels';
+import { TRAFFIC_LIGHT_BADGE_CLASS, TRAFFIC_LIGHT_DOT_CLASS, TRAFFIC_LIGHT_LABELS, TRAFFIC_LIGHT_SOURCE_LABELS } from '@/lib/trafficLightLabels';
 import { AssetHistory } from './AssetHistory';
 import { useCriticalityMatrix } from '@/hooks/useCriticalityMatrix';
 import { CriticalityAssessmentDialog } from '@/components/criticality/CriticalityAssessmentDialog';
@@ -34,6 +37,7 @@ import type { CriticalityAssessment } from '@/types/criticalityMatrix';
 
 interface AssetDetailProps {
   state: UseAssetsResult;
+  trafficLight: UseAssetTrafficLightResult;
 }
 
 const STATUS_LABELS: Record<AssetStatus, string> = {
@@ -79,8 +83,8 @@ const toEditForm = (asset: Asset): EditForm => ({
   locationText: asset.locationText ?? '',
 });
 
-export function AssetDetail({ state }: AssetDetailProps) {
-  const { selectedAsset: asset, canManageAssets, categories, branches, error, saving, archiveAsset, restoreAsset, updateAsset, refreshAssets } = state;
+export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
+  const { selectedAsset: asset, assets: allAssets, canManageAssets, categories, branches, error, saving, archiveAsset, restoreAsset, updateAsset, refreshAssets } = state;
   const { toast } = useToast();
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -128,6 +132,9 @@ export function AssetDetail({ state }: AssetDetailProps) {
       </Card>
     );
   }
+
+  const tl = trafficLight.getAsset(asset.id);
+  const hasChildren = allAssets.some((a) => a.parentAssetId === asset.id);
 
   const technicalData = asset.technicalData as Record<string, unknown>;
   const technicalText = (key: string) => {
@@ -399,6 +406,108 @@ export function AssetDetail({ state }: AssetDetailProps) {
             {asset.locationText || 'No especificado'}
           </p>
         </div>
+
+        {/* Semáforo operativo — calculado en vivo desde OT/inspecciones/estado
+            reales, nunca un color manual. Ver docs/ASSET_TRAFFIC_LIGHT.md. */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <TrafficCone className="h-4 w-4 text-muted-foreground" />
+            Semáforo operativo
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Estado calculado en este momento a partir de OT, inspecciones y estado del activo — no es un historial ni queda registrado como evento.
+          </p>
+
+          {!tl ? (
+            <p className="text-sm text-muted-foreground">Cargando semáforo…</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Directo</span>
+                  <Badge variant="outline" className={cn('gap-1.5', TRAFFIC_LIGHT_BADGE_CLASS[tl.directColor])}>
+                    <span className={cn('h-2 w-2 rounded-full', TRAFFIC_LIGHT_DOT_CLASS[tl.directColor])} />
+                    {TRAFFIC_LIGHT_LABELS[tl.directColor]}
+                  </Badge>
+                </div>
+                {hasChildren && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Heredado (rollup)</span>
+                    <Badge variant="outline" className={cn('gap-1.5', TRAFFIC_LIGHT_BADGE_CLASS[tl.rollupColor])}>
+                      <span className={cn('h-2 w-2 rounded-full', TRAFFIC_LIGHT_DOT_CLASS[tl.rollupColor])} />
+                      {TRAFFIC_LIGHT_LABELS[tl.rollupColor]}
+                    </Badge>
+                  </div>
+                )}
+                {tl.criticality && (
+                  <span className="text-xs text-muted-foreground">
+                    Criticidad: {ASSET_CRITICALITY_LABELS[tl.criticality as AssetCriticality] ?? tl.criticality} (contexto, no determina el color)
+                  </span>
+                )}
+              </div>
+
+              {tl.directColor === 'green' && (!hasChildren || tl.rollupColor === 'green') ? (
+                <p className="text-sm text-muted-foreground">Todo en regla — sin OT vencidas, inspecciones vencidas ni no conformidades.</p>
+              ) : (
+                <>
+                  {tl.directReasons.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Razones directas</p>
+                      {tl.directReasons.map((reason) => (
+                        <div key={reason.sourceType + reason.sourceId} className="rounded-md border p-2 text-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">{TRAFFIC_LIGHT_SOURCE_LABELS[reason.sourceType]}</span>
+                            <Badge variant="outline" className={TRAFFIC_LIGHT_BADGE_CLASS[reason.severity]}>{TRAFFIC_LIGHT_LABELS[reason.severity]}</Badge>
+                          </div>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{reason.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {hasChildren && tl.causingAssetIds.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Activos causantes</p>
+                      {tl.causingAssetIds.map((causingId) => {
+                        const causing = trafficLight.getAsset(causingId);
+                        return (
+                          <button
+                            key={causingId}
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-md border p-2 text-left text-sm hover:bg-muted/50"
+                            onClick={() => state.selectAsset(causingId)}
+                          >
+                            {causing && <span className={cn('h-2 w-2 shrink-0 rounded-full', TRAFFIC_LIGHT_DOT_CLASS[causing.rollupColor])} />}
+                            <span className="truncate">{causing?.assetName ?? causingId}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {hasChildren && tl.rollupReasons.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Razones heredadas (incluye descendientes)</p>
+                      {tl.rollupReasons.map((reason, index) => (
+                        <div key={`${reason.sourceType}-${reason.sourceId}-${index}`} className="rounded-md border p-2 text-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">
+                              {reason.assetName ? `${reason.assetName} — ` : ''}{TRAFFIC_LIGHT_SOURCE_LABELS[reason.sourceType]}
+                            </span>
+                            <Badge variant="outline" className={TRAFFIC_LIGHT_BADGE_CLASS[reason.severity]}>{TRAFFIC_LIGHT_LABELS[reason.severity]}</Badge>
+                          </div>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{reason.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <Separator />
 
         {/* Basic Information */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

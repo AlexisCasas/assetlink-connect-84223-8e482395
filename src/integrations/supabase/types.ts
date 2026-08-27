@@ -3499,6 +3499,28 @@ export type Database = {
           title: string
         }[]
       }
+      get_asset_traffic_light: {
+        Args: { p_organization_id: string }
+        Returns: {
+          asset_code: string
+          asset_id: string
+          asset_name: string
+          branch_id: string
+          causing_asset_ids: string[]
+          criticality: string
+          direct_color: string
+          direct_reasons: Json
+          direct_severity: number
+          node_type: string
+          organization_id: string
+          parent_asset_id: string
+          rollup_color: string
+          rollup_reasons: Json
+          rollup_severity: number
+          status: string
+          updated_at: string
+        }[]
+      }
       get_assignable_planners: {
         Args: { p_organization_id: string }
         Returns: {
@@ -3515,6 +3537,17 @@ export type Database = {
           member_id: string
           name: string
           user_id: string
+        }[]
+      }
+      get_branch_traffic_light: {
+        Args: { p_organization_id: string }
+        Returns: {
+          branch_id: string
+          branch_name: string
+          causing_asset_ids: string[]
+          rollup_color: string
+          rollup_reasons: Json
+          rollup_severity: number
         }[]
       }
       get_checklist_templates: {
