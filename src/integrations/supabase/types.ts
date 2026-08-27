@@ -1603,6 +1603,7 @@ export type Database = {
       requests: {
         Row: {
           asset: string
+          asset_id: string | null
           branch: string | null
           branch_id: string | null
           city: string | null
@@ -1638,6 +1639,7 @@ export type Database = {
         }
         Insert: {
           asset: string
+          asset_id?: string | null
           branch?: string | null
           branch_id?: string | null
           city?: string | null
@@ -1673,6 +1675,7 @@ export type Database = {
         }
         Update: {
           asset?: string
+          asset_id?: string | null
           branch?: string | null
           branch_id?: string | null
           city?: string | null
@@ -1707,6 +1710,13 @@ export type Database = {
           visit_date?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "requests_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "requests_organization_id_fkey"
             columns: ["organization_id"]

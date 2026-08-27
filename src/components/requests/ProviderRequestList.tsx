@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { AssignmentDialog } from './AssignmentDialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Settings2, ArrowUpDown, Download, GripVertical, Eye, FileText, UserCog, Pencil, FilePlus } from 'lucide-react';
+import { Search, Settings2, ArrowUpDown, Download, GripVertical, Eye, FileText, UserCog, Pencil, FilePlus, Package } from 'lucide-react';
 import { RequestDetailDialog } from './RequestDetailDialog';
 import { QuoteDetailDialog } from './QuoteDetailDialog';
 import { QuoteForm } from './QuoteForm';
@@ -43,6 +43,7 @@ interface RequestData {
   request_number: string;
   description: string;
   asset: string;
+  asset_id: string | null;
   location: string;
   service_type: string;
   deadline: string;
@@ -359,8 +360,11 @@ export const ProviderRequestList = () => {
         );
       case 'equipo':
         return (
-          <TableCell key={key} className="max-w-[150px] truncate">
-            {request.asset}
+          <TableCell key={key} className="max-w-[150px]">
+            <div className="flex items-center gap-1.5 truncate" title={request.asset_id ? 'Activo del módulo Activos' : undefined}>
+              {request.asset_id && <Package className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+              <span className="truncate">{request.asset || '-'}</span>
+            </div>
           </TableCell>
         );
       case 'operacion':

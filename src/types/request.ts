@@ -142,6 +142,7 @@ export interface Request {
   title?: string;
   description: string;
   asset: string;
+  assetId?: string;
   location: string;
   serviceType: ServiceType;
   observations?: string;

@@ -16,6 +16,10 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { RequestAssetPicker } from './RequestAssetPicker';
+import { RequestAssetSummary } from './RequestAssetSummary';
+import { ASSET_NODE_TYPE_LABELS } from '@/lib/assetLabels';
+import type { Asset } from '@/types/asset';
 
 interface RequestFormProps {
   onClose: () => void;
@@ -38,11 +42,6 @@ interface RequestDetail {
   delegateType: string;
   attachments: File[];
 }
-
-const EQUIPMENT_OPTIONS = ['CÁMARA CONGELADOS PESCADOS 01', 'ESCALERA DE AVIÓN 03', 'ESCALERA DE AVIÓN # 01'];
-const SUB_EQUIPMENT_OPTIONS = ['EXTRACTOR 02', 'EXTRACTOR 03'];
-const AREA_OPTIONS = ['Transtienda', 'Almacén', 'Sala de Ventas'];
-const SUB_AREA_OPTIONS = ['Congelados', 'Abarrotes', 'Electro'];
 
 const createEmptyDetail = (): RequestDetail => ({
   id: crypto.randomUUID(),
@@ -85,6 +84,10 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [city, setCity] = useState(editingRequest?.city || '');
   const [site, setSite] = useState(editingRequest?.branch || '');
   const [branches, setBranches] = useState<ClientBranch[]>([]);
+  const [assetId, setAssetId] = useState<string>(editingRequest?.assetId || '');
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [assetPath, setAssetPath] = useState<string>('');
+  const [assetTouched, setAssetTouched] = useState(false);
   const [requiresVisit, setRequiresVisit] = useState(editingRequest?.requiresVisit || false);
   const [visitDate, setVisitDate] = useState(formatDateForInput(editingRequest?.visitDate));
   const [minQuotes, setMinQuotes] = useState<number>(editingRequest?.minQuotes ?? 3);
@@ -322,14 +325,27 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       preventivo: 3,
       proyecto: 4,
     };
-    
+
+    // A freshly touched asset picker overrides the legacy text (selected or
+    // cleared); an untouched pre-existing selection keeps whatever text is
+    // already saved instead of falling back to the per-detail equipment.
+    const assetDisplayText = assetTouched
+      ? (selectedAsset ? `${ASSET_NODE_TYPE_LABELS[selectedAsset.nodeType]}: ${selectedAsset.name}` : (details[0]?.equipment || ''))
+      : (editingRequest?.asset || details[0]?.equipment || '');
+    // request_details still has legacy equipment/sub_equipment/area/sub_area
+    // columns; every line now mirrors the single request-level asset instead
+    // of asking the user to redundantly re-type it per row.
+    const detailEquipmentFallback = selectedAsset ? selectedAsset.name : assetDisplayText;
+    const detailAreaFallback = selectedAsset && assetPath ? assetPath : '';
+
     const request: Request = {
       id: editingRequest?.id || crypto.randomUUID(),
       organizationId: editingRequest?.organizationId || currentOrganization.id,
       requestNumber,
       title: title.trim(),
       description,
-      asset: details[0]?.equipment || '',
+      asset: assetDisplayText,
+      assetId: assetId || undefined,
       location: `${city} - ${site}`,
       serviceType,
       observations: '',
@@ -358,10 +374,10 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       visitDate: requiresVisit ? visitDate : undefined,
       minQuotes,
       details: details.map(d => ({
-        equipment: d.equipment,
-        subEquipment: d.subEquipment,
-        area: d.area,
-        subArea: d.subArea,
+        equipment: detailEquipmentFallback,
+        subEquipment: '',
+        area: detailAreaFallback,
+        subArea: '',
         activities: d.activities,
         relevantMaterials: d.relevantMaterials,
         quantity: d.quantity ? parseFloat(d.quantity) : undefined,
@@ -493,6 +509,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               </div>
             </div>
 
+            {/* Activo asociado */}
+            <RequestAssetPicker
+              assetId={assetId}
+              onChange={(id, asset, path) => { setAssetId(id); setSelectedAsset(asset); setAssetPath(path); setAssetTouched(true); }}
+            />
+
             {/* Descripción */}
             <div className="space-y-2">
               <Label htmlFor="description">Descripción *</Label>
@@ -558,11 +580,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                     <TableHeader>
                       <TableRow>
                         <TableHead className="min-w-[50px]">#</TableHead>
-                        <TableHead className="min-w-[180px]">Equipo</TableHead>
-                        <TableHead className="min-w-[130px]">Subequipo</TableHead>
-                        <TableHead className="min-w-[100px]">Área</TableHead>
-                        <TableHead className="min-w-[100px]">Subárea</TableHead>
-                        <TableHead className="min-w-[150px]">Actividades</TableHead>
+                        <TableHead className="min-w-[220px]">Actividad / Partida</TableHead>
                         <TableHead className="min-w-[130px]">Materiales</TableHead>
                         <TableHead className="min-w-[80px]">Cantidad</TableHead>
                         <TableHead className="min-w-[70px]">U.M</TableHead>
@@ -576,11 +594,14 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                       {details.map((detail, index) => (
                         <TableRow key={detail.id}>
                           <TableCell className="font-medium">{index + 1}</TableCell>
-                          <TableCell className="max-w-[180px] truncate" title={detail.equipment}>{detail.equipment || '-'}</TableCell>
-                          <TableCell className="max-w-[130px] truncate" title={detail.subEquipment}>{detail.subEquipment || '-'}</TableCell>
-                          <TableCell>{detail.area || '-'}</TableCell>
-                          <TableCell>{detail.subArea || '-'}</TableCell>
-                          <TableCell className="max-w-[150px] truncate" title={detail.activities}>{detail.activities || '-'}</TableCell>
+                          <TableCell className="max-w-[220px] truncate" title={detail.activities}>
+                            {detail.activities || '-'}
+                            {(detail.equipment || detail.area) && (
+                              <p className="mt-0.5 truncate text-xs text-muted-foreground" title={[detail.equipment, detail.area].filter(Boolean).join(' · ')}>
+                                {[detail.equipment, detail.area].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
+                          </TableCell>
                           <TableCell className="max-w-[130px] truncate" title={detail.relevantMaterials}>{detail.relevantMaterials || '-'}</TableCell>
                           <TableCell>{detail.quantity || '-'}</TableCell>
                           <TableCell>{detail.unitMeasure || '-'}</TableCell>
@@ -635,77 +656,13 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   Completa los datos del detalle de la solicitud.
                 </DialogDescription>
               </DialogHeader>
-              
+
+              {assetId && (
+                <RequestAssetSummary assetId={assetId} assetText={editingRequest?.asset} title="Detalle asociado a" />
+              )}
+
               {currentDetail && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Equipo</Label>
-                    <Select 
-                      value={currentDetail.equipment} 
-                      onValueChange={(value) => updateCurrentDetail('equipment', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona equipo" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {EQUIPMENT_OPTIONS.map((eq) => (
-                          <SelectItem key={eq} value={eq}>{eq}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Subequipo</Label>
-                    <Select 
-                      value={currentDetail.subEquipment} 
-                      onValueChange={(value) => updateCurrentDetail('subEquipment', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona subequipo" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {SUB_EQUIPMENT_OPTIONS.map((seq) => (
-                          <SelectItem key={seq} value={seq}>{seq}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Área</Label>
-                    <Select 
-                      value={currentDetail.area} 
-                      onValueChange={(value) => updateCurrentDetail('area', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona área" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {AREA_OPTIONS.map((a) => (
-                          <SelectItem key={a} value={a}>{a}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Subárea</Label>
-                    <Select 
-                      value={currentDetail.subArea} 
-                      onValueChange={(value) => updateCurrentDetail('subArea', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona subárea" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {SUB_AREA_OPTIONS.map((sa) => (
-                          <SelectItem key={sa} value={sa}>{sa}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
                   <div className="space-y-2">
                     <Label>Partidas o Actividades</Label>
                     <Input

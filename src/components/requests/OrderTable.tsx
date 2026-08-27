@@ -21,10 +21,12 @@ import {
   MessageSquare,
   DollarSign,
   Trash2,
+  Package,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Request } from '@/types/request';
+import type { Asset } from '@/types/asset';
 import { ServiceTypeBadge, StatusBadge, QuotesProgressBadge } from './StatusBadge';
 
 export type ColumnKey =
@@ -33,6 +35,7 @@ export type ColumnKey =
   | 'serviceType'
   | 'status'
   | 'branch'
+  | 'asset'
   | 'createdAt'
   | 'store'
   | 'createdBy'
@@ -40,7 +43,7 @@ export type ColumnKey =
   | 'quotesProgress'
   | 'actions';
 
-export type SortKey = Exclude<ColumnKey, 'actions' | 'title'>;
+export type SortKey = Exclude<ColumnKey, 'actions' | 'title' | 'asset'>;
 
 export const COLUMN_LABELS: Record<ColumnKey, string> = {
   requestNumber: 'Nro. Solicitud',
@@ -48,6 +51,7 @@ export const COLUMN_LABELS: Record<ColumnKey, string> = {
   serviceType: 'Tipo de Servicio',
   status: 'Estado',
   branch: 'Sede',
+  asset: 'Activo asociado',
   createdAt: 'Fecha de Registro',
   store: 'Sucursal',
   createdBy: 'Usuario',
@@ -57,13 +61,15 @@ export const COLUMN_LABELS: Record<ColumnKey, string> = {
 };
 
 export const DEFAULT_COLUMN_ORDER: ColumnKey[] = [
-  'requestNumber', 'title', 'serviceType', 'status', 'branch',
+  'requestNumber', 'title', 'serviceType', 'status', 'branch', 'asset',
   'createdAt', 'store', 'createdBy', 'deadline', 'quotesProgress', 'actions',
 ];
 
 interface OrderTableProps {
   requests: Request[];
   quoteCounts: Record<string, number>;
+  assetsById: Map<string, Asset>;
+  assetPaths: Map<string, string>;
   expandedRequestId: string | null;
   expandedDetails: any[];
   columnOrder: ColumnKey[];
@@ -88,6 +94,8 @@ interface OrderTableProps {
 export const OrderTable = ({
   requests,
   quoteCounts,
+  assetsById,
+  assetPaths,
   expandedRequestId,
   expandedDetails,
   columnOrder,
@@ -132,6 +140,24 @@ export const OrderTable = ({
         return <TableCell key={column}><StatusBadge status={request.status} /></TableCell>;
       case 'branch':
         return <TableCell key={column}>{request.branch || request.clientBranch || '-'}</TableCell>;
+      case 'asset': {
+        if (!request.assetId) {
+          return <TableCell key={column} className="text-muted-foreground">{request.asset || '-'}</TableCell>;
+        }
+        const liveAsset = assetsById.get(request.assetId);
+        const path = assetPaths.get(request.assetId);
+        return (
+          <TableCell key={column} className="max-w-[220px]">
+            <div className="flex items-center gap-1.5" title={path || undefined}>
+              <Package className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <p className="truncate text-sm">{liveAsset?.name || request.asset || '-'}</p>
+                {path && <p className="truncate text-xs text-muted-foreground">{path}</p>}
+              </div>
+            </div>
+          </TableCell>
+        );
+      }
       case 'createdAt':
         return (
           <TableCell key={column}>
@@ -247,10 +273,7 @@ export const OrderTable = ({
                         <Table className="text-sm">
                           <TableHeader>
                             <TableRow className="bg-muted/50">
-                              <TableHead className="min-w-[120px]">Equipo</TableHead>
-                              <TableHead className="min-w-[120px]">Subequipo</TableHead>
-                              <TableHead className="min-w-[100px]">Área</TableHead>
-                              <TableHead className="min-w-[200px]">Actividades</TableHead>
+                              <TableHead className="min-w-[220px]">Actividad / Partida</TableHead>
                               <TableHead className="min-w-[80px]">Cantidad</TableHead>
                               <TableHead className="min-w-[80px]">U.M</TableHead>
                             </TableRow>
@@ -259,17 +282,21 @@ export const OrderTable = ({
                             {expandedDetails.length > 0 ? (
                               expandedDetails.map((detail) => (
                                 <TableRow key={detail.id ?? `${request.id}-${detail.equipment ?? ''}-${detail.sub_equipment ?? ''}-${detail.area ?? ''}-${detail.activities ?? ''}`}>
-                                  <TableCell>{detail.equipment || '-'}</TableCell>
-                                  <TableCell>{detail.sub_equipment || '-'}</TableCell>
-                                  <TableCell>{detail.area || '-'}</TableCell>
-                                  <TableCell>{detail.activities || '-'}</TableCell>
+                                  <TableCell>
+                                    {detail.activities || '-'}
+                                    {(detail.equipment || detail.area) && (
+                                      <p className="mt-0.5 text-xs text-muted-foreground">
+                                        {[detail.equipment, detail.area].filter(Boolean).join(' · ')}
+                                      </p>
+                                    )}
+                                  </TableCell>
                                   <TableCell>{detail.quantity ?? '-'}</TableCell>
                                   <TableCell>{detail.unit_measure || '-'}</TableCell>
                                 </TableRow>
                               ))
                             ) : (
                               <TableRow>
-                                <TableCell colSpan={6} className="text-center text-muted-foreground py-4">
+                                <TableCell colSpan={3} className="text-center text-muted-foreground py-4">
                                   Sin detalles registrados
                                 </TableCell>
                               </TableRow>

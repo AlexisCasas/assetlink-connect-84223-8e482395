@@ -10,6 +10,9 @@ import { Plus, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/lib/seedData';
 import { supabase } from '@/integrations/supabase/client';
+import { useAssets } from '@/hooks/useAssets';
+import { buildAssetPathMap } from '@/lib/assetTree';
+import { RequestAssetSummary } from './RequestAssetSummary';
 import {
   Table,
   TableBody,
@@ -56,6 +59,9 @@ import {
 export const RequestList = () => {
   const { user, currentOrganization } = useAuth();
   const { toast } = useToast();
+  const { assets: linkedAssets, assetTree } = useAssets();
+  const assetsById = useMemo(() => new Map(linkedAssets.map((asset) => [asset.id, asset])), [linkedAssets]);
+  const assetPaths = useMemo(() => buildAssetPathMap(assetTree), [assetTree]);
   const [showForm, setShowForm] = useState(false);
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +93,7 @@ export const RequestList = () => {
   // Columnas
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const defaults: Record<ColumnKey, boolean> = {
-      requestNumber: true, title: true, serviceType: true, status: true, branch: true,
+      requestNumber: true, title: true, serviceType: true, status: true, branch: true, asset: true,
       createdAt: true, store: true, createdBy: true, deadline: true, quotesProgress: true, actions: true,
     };
     const saved = localStorage.getItem('requestListVisibleColumns');
@@ -126,7 +132,7 @@ export const RequestList = () => {
 
   const resetColumns = () => {
     setVisibleColumns({
-      requestNumber: true, title: true, serviceType: true, status: true, branch: true,
+      requestNumber: true, title: true, serviceType: true, status: true, branch: true, asset: true,
       createdAt: true, store: true, createdBy: true, deadline: true, quotesProgress: true, actions: true,
     });
     setColumnOrder(DEFAULT_COLUMN_ORDER);
@@ -183,6 +189,7 @@ export const RequestList = () => {
         title: req.title,
         description: req.description,
         asset: req.asset,
+        assetId: req.asset_id ?? undefined,
         location: req.location,
         serviceType: req.service_type,
         observations: req.observations,
@@ -323,6 +330,7 @@ export const RequestList = () => {
             requires_visit: request.requiresVisit,
             visit_date: request.visitDate || null,
             asset: request.asset,
+            asset_id: request.assetId || null,
             status: isDraft ? 'draft' : 'sent',
             is_public: request.isPublic,
             min_quotes: request.minQuotes ?? 3,
@@ -349,6 +357,7 @@ export const RequestList = () => {
           requires_visit: request.requiresVisit,
           visit_date: request.visitDate || null,
           asset: request.asset,
+          asset_id: request.assetId || null,
           status: isDraft ? 'draft' : 'sent',
           created_by: user?.email || '',
           created_by_user_id: user?.id || null,
@@ -546,6 +555,8 @@ export const RequestList = () => {
         <OrderTable
           requests={filteredRequests}
           quoteCounts={quoteCounts}
+          assetsById={assetsById}
+          assetPaths={assetPaths}
           expandedRequestId={expandedRequestId}
           expandedDetails={expandedDetails}
           columnOrder={columnOrder}
@@ -663,6 +674,11 @@ export const RequestList = () => {
                     </div>
                   )}
                 </div>
+              </div>
+
+              <RequestAssetSummary assetId={selectedRequest.assetId} assetText={selectedRequest.asset} />
+
+              <div className="space-y-4">
                 <div>
                   <span className="text-muted-foreground text-sm">Descripción:</span>
                   <p className="font-medium">{selectedRequest.description}</p>
@@ -684,11 +700,7 @@ export const RequestList = () => {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="min-w-[50px]">#</TableHead>
-                            <TableHead className="min-w-[200px]">Equipo</TableHead>
-                            <TableHead className="min-w-[150px]">Subequipo</TableHead>
-                            <TableHead className="min-w-[120px]">Área</TableHead>
-                            <TableHead className="min-w-[120px]">Subárea</TableHead>
-                            <TableHead className="min-w-[200px]">Actividades</TableHead>
+                            <TableHead className="min-w-[220px]">Actividad / Partida</TableHead>
                             <TableHead className="min-w-[180px]">Materiales</TableHead>
                             <TableHead className="min-w-[80px]">Cantidad</TableHead>
                             <TableHead className="min-w-[80px]">U.M</TableHead>
@@ -701,11 +713,14 @@ export const RequestList = () => {
                           {requestDetails.map((detail: any, index: number) => (
                             <TableRow key={detail.id}>
                               <TableCell className="font-medium">{index + 1}</TableCell>
-                              <TableCell>{detail.equipment || '-'}</TableCell>
-                              <TableCell>{detail.sub_equipment || '-'}</TableCell>
-                              <TableCell>{detail.area || '-'}</TableCell>
-                              <TableCell>{detail.sub_area || '-'}</TableCell>
-                              <TableCell>{detail.activities || '-'}</TableCell>
+                              <TableCell>
+                                {detail.activities || '-'}
+                                {(detail.equipment || detail.area) && (
+                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                    {[detail.equipment, detail.area].filter(Boolean).join(' · ')}
+                                  </p>
+                                )}
+                              </TableCell>
                               <TableCell>{detail.relevant_materials || '-'}</TableCell>
                               <TableCell>{detail.quantity || '-'}</TableCell>
                               <TableCell>{detail.unit_measure || '-'}</TableCell>
