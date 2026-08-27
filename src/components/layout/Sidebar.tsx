@@ -23,13 +23,14 @@ import {
   Building2,
   ClipboardList,
   Boxes,
-  Wrench
+  Wrench,
+  BarChart3
   ,Shield
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'admin') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'admin') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -70,6 +71,12 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   // platform_admin), and only to its planners (owner/admin/manager): they
   // are the ones who create warehouses/materials and assign them to OTs.
   const canViewInventory = isOperatingOrg && !!currentMembership?.isActive && ['owner', 'admin', 'manager'].includes(currentMembership.role);
+  // Eficiencia is operational analytics over the organization's own work
+  // orders: same owner/admin/manager-of-an-operating-org gate as inventory,
+  // and deliberately never shown to a technician (no cross-technician
+  // comparison surface) nor to a platform_admin org (no operating-org
+  // context to scope it to).
+  const canViewEfficiency = isOperatingOrg && !!currentMembership?.isActive && ['owner', 'admin', 'manager'].includes(currentMembership.role);
 
   return (
     <aside className={cn(
@@ -180,6 +187,23 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               !collapsed && "mr-2"
             )} />
             {!collapsed && 'Inventario'}
+          </Button>
+        )}
+
+        {canViewEfficiency && (
+          <Button
+            variant={currentView === 'efficiency' ? "default" : "ghost"}
+            className={cn(
+              "w-full justify-start",
+              collapsed && "justify-center px-2"
+            )}
+            onClick={() => onViewChange?.('efficiency')}
+          >
+            <BarChart3 className={cn(
+              "h-4 w-4",
+              !collapsed && "mr-2"
+            )} />
+            {!collapsed && 'Eficiencia'}
           </Button>
         )}
 

@@ -2736,6 +2736,51 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_efficiency_activity_metrics: {
+        Args: {
+          p_end_date?: string
+          p_organization_id: string
+          p_start_date?: string
+        }
+        Returns: {
+          activity_description: string
+          activity_id: string
+          activity_status: string
+          actual_hours: number
+          asset_id: string
+          asset_name: string
+          deviation_hours: number
+          deviation_percent: number
+          first_started_at: string
+          last_finished_at: string
+          period_date: string
+          planned_hours: number
+          reports_count: number
+          technician_member_id: string
+          technician_name: string
+          work_order_id: string
+          work_order_number: string
+          work_order_status: string
+        }[]
+      }
+      get_efficiency_summary: {
+        Args: {
+          p_end_date?: string
+          p_organization_id: string
+          p_start_date?: string
+        }
+        Returns: {
+          activities_count: number
+          actual_hours_total: number
+          completed_work_orders: number
+          deviation_hours_total: number
+          deviation_percent_total: number
+          overdue_work_orders: number
+          pending_work_orders: number
+          planned_hours_total: number
+          reported_activities_count: number
+        }[]
+      }
       get_inventory_catalog: {
         Args: { p_organization_id: string }
         Returns: Json

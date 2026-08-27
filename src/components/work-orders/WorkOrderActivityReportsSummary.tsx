@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { useActivityReports } from '@/hooks/useActivityReports';
+import { formatDeviationPercent, deviationColorClass } from '@/lib/efficiencyFormat';
 
 interface WorkOrderActivityReportsSummaryProps {
   workOrderId: string;
@@ -28,6 +29,11 @@ export function WorkOrderActivityReportsSummary({ workOrderId }: WorkOrderActivi
 
   const totalEstimated = reports.reduce((sum, report) => sum + (report.estimatedHours ?? 0), 0);
   const totalActual = reports.reduce((sum, report) => sum + report.actualHours, 0);
+  // Same safe-division rule as get_efficiency_activity_metrics — never
+  // divide by a null/zero estimate. See docs/EFFICIENCY_DEVIATIONS.md.
+  const deviationPercent = (estimated: number | null, actual: number): number | null =>
+    estimated === null || estimated === 0 ? null : Math.round(((actual - estimated) / estimated) * 10000) / 100;
+  const totalDeviationPercent = deviationPercent(totalEstimated || null, totalActual);
 
   return (
     <div className="rounded-lg border p-3 space-y-3">
@@ -44,6 +50,7 @@ export function WorkOrderActivityReportsSummary({ workOrderId }: WorkOrderActivi
           <div className="space-y-2">
             {reports.map((report) => {
               const diff = Math.round((report.hoursDifference) * 100) / 100;
+              const percent = deviationPercent(report.estimatedHours, report.actualHours);
               return (
                 <div key={report.id} className="rounded-md border p-2 text-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -55,6 +62,7 @@ export function WorkOrderActivityReportsSummary({ workOrderId }: WorkOrderActivi
                     <span>Estimado: {report.estimatedHours ?? '—'} h</span>
                     <span>Real: {report.actualHours} h</span>
                     <span>Diferencia: {diff > 0 ? `+${diff}` : diff} h</span>
+                    <span className={deviationColorClass(percent)}>Desviación: {formatDeviationPercent(percent)}</span>
                     <span>{formatDate(report.startedAt)} – {formatDate(report.finishedAt)}</span>
                   </div>
                   {report.observations && <p className="mt-1 text-xs">{report.observations}</p>}
@@ -68,7 +76,8 @@ export function WorkOrderActivityReportsSummary({ workOrderId }: WorkOrderActivi
             })}
           </div>
           <p className="text-sm font-medium">
-            Total estimado: {Math.round(totalEstimated * 100) / 100} h · Total real: {Math.round(totalActual * 100) / 100} h
+            Total estimado: {Math.round(totalEstimated * 100) / 100} h · Total real: {Math.round(totalActual * 100) / 100} h ·{' '}
+            <span className={deviationColorClass(totalDeviationPercent)}>Desviación: {formatDeviationPercent(totalDeviationPercent)}</span>
           </p>
         </div>
       )}
