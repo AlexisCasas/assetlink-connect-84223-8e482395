@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { AssetTree, AssetNode } from '@/components/assets/AssetTree';
-import { AssetDetail } from '@/components/assets/AssetDetail';
+import { AssetsView } from '@/components/assets/AssetsView';
 import { RequestList } from '@/components/requests/RequestList';
 import { DraftList } from '@/components/requests/DraftList';
 import { ProviderRequestList } from '@/components/requests/ProviderRequestList';
@@ -27,7 +26,6 @@ const Dashboard = () => {
   const { user, currentOrganization } = useAuth();
   const isPlatformAdminOrg = currentOrganization?.organizationType === 'platform_admin';
   const [currentView, setCurrentView] = useState<DashboardView>(isPlatformAdminOrg ? 'admin' : 'dashboard');
-  const [selectedAsset, setSelectedAsset] = useState<AssetNode | null>(null);
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '');
@@ -52,16 +50,12 @@ const Dashboard = () => {
   const renderContent = () => {
     switch (currentView) {
       case 'assets':
-        // Solo mostrar activos para clientes
-        if (user?.role !== 'cliente') {
+        // Activos es un módulo de organizaciones cliente; platform_admin y
+        // proveedores no operan activos en esta fase.
+        if (currentOrganization?.organizationType !== 'client_company') {
           return <StatsCards />;
         }
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-            <AssetTree onAssetSelect={setSelectedAsset} />
-            <AssetDetail asset={selectedAsset} />
-          </div>
-        );
+        return <AssetsView />;
       case 'requests':
         if (user?.role === 'cliente') {
           return <RequestList />;

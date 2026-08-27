@@ -64,6 +64,7 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
     'facility_manager',
   ].includes(currentOrganization.organizationType);
   const canManage = memberships.some(m => m.isActive && ['owner','admin'].includes(m.role) && organizations.some(o => o.id === m.organizationId && o.organizationType === 'platform_admin'));
+  const canViewAssets = currentOrganization?.organizationType === 'client_company';
 
   return (
     <aside className={cn(
@@ -143,7 +144,7 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
           </Button>
         )}
         
-        {userRole === 'cliente' && (
+        {canViewAssets && (
           <Button
             variant={currentView === 'assets' ? "default" : "ghost"}
             className={cn(

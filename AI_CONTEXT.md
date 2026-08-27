@@ -471,3 +471,36 @@ Inicio de la rama `productization/mvp`.
   cotizaciones, asignaciones, detalle y chat sigue pendiente; no se deben abrir
   policies de `requests` como solucion temporal.
 - `VITE_ENABLE_DEMO_SEED=false` desactiva el seeding demo automático.
+
+## Activos: fundación tenant-aware (Fase 1)
+
+- Rama `feature/assets-tenant-aware-foundation`: se creó la base productiva del
+  módulo Activos. Detalle completo en `docs/ASSETS_TENANT_AWARE_FOUNDATION.md`.
+- Migración `supabase/migrations/20260826234732_assets_tenant_aware_foundation.sql`
+  crea `asset_categories`, `assets`, `asset_documents`, `asset_events`.
+- `assets` es una única tabla jerárquica vía `parent_asset_id` (niveles
+  ilimitados: sociedad/sector/flota/equipo/componente/subcomponente son nodos
+  del mismo árbol, no tablas ni organizaciones separadas). `organization_id` es
+  el tenant real; `branch_id` referencia `client_branches` cuando aplica.
+- RLS en las 4 tablas: `is_platform_admin()` o `is_organization_member()` para
+  lectura; `has_organization_role(org, ['owner','admin','manager'])` o
+  platform admin para alta/edición. Sin policy de `DELETE` — el archivado es
+  lógico (`assets.status = 'archived'`). Grants otorgados solo a `authenticated`
+  (select/insert/update), nada a `anon`.
+- Trigger `check_asset_consistency` en `assets` exige que `parent_asset_id`,
+  `asset_category_id` y `branch_id` pertenezcan al mismo `organization_id`;
+  `check_asset_child_organization` aplica el mismo control en
+  `asset_documents`/`asset_events` contra su `asset_id`.
+- La UI de Activos (`AssetTree`, `AssetDetail`, nuevo `AssetsView`) dejó de usar
+  `mockAssets`/datos hardcodeados: consume `src/hooks/useAssets.ts`, filtrado
+  por `currentOrganization`. El acceso al módulo ya no depende del rol legacy
+  `'cliente'`, sino de `currentOrganization.organizationType === 'client_company'`
+  (`Sidebar.tsx`, `Dashboard.tsx`); crear/editar/archivar requiere rol
+  owner/admin/manager en esa organización.
+- Integración con `requests`/`request_details` (que hoy usan `asset`/`equipment`
+  como texto libre) queda pendiente para una fase posterior; no se tocó
+  `RequestForm.tsx` en esta fase.
+- `src/pages/Index.tsx` (código muerto, no está en las rutas de `App.tsx`) no se
+  actualizó a la nueva firma de props de `AssetTree`/`AssetDetail` porque esta
+  fase no debía borrar código legacy; queda pendiente de limpieza en una fase
+  posterior junto con `src/components/tickets/TicketList.tsx`.
