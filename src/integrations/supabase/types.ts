@@ -631,6 +631,60 @@ export type Database = {
         }
         Relationships: []
       }
+      materials: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          stock: number
+          unit: string
+          updated_at: string
+          warehouse_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          stock?: number
+          unit: string
+          updated_at?: string
+          warehouse_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          stock?: number
+          unit?: string
+          updated_at?: string
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "materials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materials_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
@@ -1880,6 +1934,51 @@ export type Database = {
         }
         Relationships: []
       }
+      warehouses: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "client_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       work_order_activities: {
         Row: {
           created_at: string
@@ -1969,6 +2068,67 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_order_materials: {
+        Row: {
+          created_at: string
+          id: string
+          material_id: string
+          notes: string | null
+          organization_id: string
+          planned_quantity: number
+          stock_snapshot: number
+          updated_at: string
+          used_quantity: number
+          work_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          material_id: string
+          notes?: string | null
+          organization_id: string
+          planned_quantity?: number
+          stock_snapshot?: number
+          updated_at?: string
+          used_quantity?: number
+          work_order_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          material_id?: string
+          notes?: string | null
+          organization_id?: string
+          planned_quantity?: number
+          stock_snapshot?: number
+          updated_at?: string
+          used_quantity?: number
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_order_materials_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_materials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_materials_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -2249,6 +2409,10 @@ export type Database = {
         Args: { p_activity_id: string }
         Returns: undefined
       }
+      delete_work_order_material: {
+        Args: { p_work_order_material_id: string }
+        Returns: undefined
+      }
       get_assignable_planners: {
         Args: { p_organization_id: string }
         Returns: {
@@ -2266,6 +2430,10 @@ export type Database = {
           name: string
           user_id: string
         }[]
+      }
+      get_inventory_catalog: {
+        Args: { p_organization_id: string }
+        Returns: Json
       }
       get_user_organizations: {
         Args: never
@@ -2301,6 +2469,26 @@ export type Database = {
           technicians: Json
           updated_at: string
           work_order_id: string
+        }[]
+      }
+      get_work_order_materials: {
+        Args: { p_work_order_id: string }
+        Returns: {
+          created_at: string
+          current_stock: number
+          id: string
+          material_code: string
+          material_id: string
+          material_name: string
+          material_unit: string
+          notes: string
+          planned_quantity: number
+          stock_snapshot: number
+          updated_at: string
+          used_quantity: number
+          warehouse_id: string
+          warehouse_name: string
+          warning_status: string
         }[]
       }
       has_organization_role: {
@@ -2386,6 +2574,60 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      upsert_material: {
+        Args: {
+          p_code: string
+          p_is_active?: boolean
+          p_material_id?: string
+          p_name: string
+          p_organization_id: string
+          p_stock?: number
+          p_unit: string
+          p_warehouse_id: string
+        }
+        Returns: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          stock: number
+          unit: string
+          updated_at: string
+          warehouse_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "materials"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_warehouse: {
+        Args: {
+          p_branch_id?: string
+          p_is_active?: boolean
+          p_name: string
+          p_organization_id: string
+          p_warehouse_id?: string
+        }
+        Returns: {
+          branch_id: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "warehouses"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       upsert_work_order_activity: {
         Args: {
           p_activity_id?: string
@@ -2413,6 +2655,34 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "work_order_activities"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_work_order_material: {
+        Args: {
+          p_material_id: string
+          p_notes?: string
+          p_planned_quantity?: number
+          p_used_quantity?: number
+          p_work_order_id: string
+          p_work_order_material_id?: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          material_id: string
+          notes: string | null
+          organization_id: string
+          planned_quantity: number
+          stock_snapshot: number
+          updated_at: string
+          used_quantity: number
+          work_order_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_order_materials"
           isOneToOne: true
           isSetofReturn: false
         }

@@ -786,3 +786,63 @@ Inicio de la rama `productization/mvp`.
   sincronización automática de estado entre actividades y la OT de
   cabecera, autogestión de estado por el propio técnico, y reordenar por
   drag-and-drop.
+- Corrección posterior (`20260827170000_fix_work_order_activities_rpc_ambiguity.sql`):
+  `get_work_order_activities` fallaba con Postgres 42702
+  (`ambiguous_column`) — su `RETURNS TABLE(id uuid, ...)` crea variables
+  OUT implícitas, y su primera consulta referenciaba `id` sin alias,
+  ambiguo contra `work_orders.id`. Las tres RPCs de actividades se
+  reescribieron con alias cortos de tabla (`wo`, `woa`, `woat`, `om`,
+  `au`) y parámetros renombrados con prefijo `p_` (antes `target_*`) —
+  Postgres no permite renombrar parámetros vía `CREATE OR REPLACE
+  FUNCTION` (SQLSTATE 42P13), así que la migración correctiva hace `DROP
+  FUNCTION` antes de recrear cada una. `src/hooks/useWorkOrderActivities.ts`
+  actualizado a los nuevos nombres de parámetro. Esta convención de
+  alias/prefijo `p_`/`v_` es ahora el estándar para toda RPC nueva del
+  proyecto.
+
+## Inventario mínimo + materiales de OT
+
+- Rama `feature/minimal-inventory-materials`. Detalle completo en
+  `docs/MINIMAL_INVENTORY_MATERIALS.md`. Agrega
+  `warehouses → materials → work_order_materials` — explícitamente NO
+  SAP MM (sin kardex, valorización, órdenes de compra, transferencias,
+  reservas complejas, lotes, costeo, ni descuento automático de stock).
+  Los materiales cuelgan de `work_orders` sin importar el origen de la OT,
+  mismo principio que `work_order_activities`.
+- Migración `20260828120000_minimal_inventory_materials.sql`, escrita
+  desde el inicio con la convención de alias corto (`wo`, `wh`, `m`,
+  `wom`, `cb`) y parámetros `p_`/variables `v_` que dejó la corrección de
+  ambigüedad anterior — verificada end-to-end contra Postgres local
+  (smoke test manual vía `psql`) antes de tocar el frontend.
+- `materials`: `UNIQUE(organization_id, lower(code))` — código único por
+  organización, no por almacén (decisión documentada: dos almacenes no
+  pueden compartir el mismo SKU con significados distintos en esta fase).
+  Sin `DELETE` en `warehouses`/`materials` — desactivar es
+  `is_active = false` vía `upsert_warehouse`/`upsert_material`.
+- `work_order_materials.organization_id` = siempre
+  `work_orders.provider_organization_id` (mismo ancla que
+  `work_order_activities`); `stock_snapshot` se congela al crear la línea
+  o al cambiar de material, `current_stock` se resuelve en vivo en cada
+  lectura.
+- `get_work_order_materials` calcula `warning_status`
+  (`ok`/`no_stock`/`insufficient_stock`) server-side con la regla exacta
+  pedida: `stock = 0 y planificado > 0` → sin stock; `stock < planificado`
+  → insuficiente; si no, disponible. **Nunca bloquea el guardado** —
+  `upsert_work_order_material` siempre acepta la cantidad planificada.
+- Visibilidad de `work_order_materials` igual de restrictiva que
+  `work_order_activities`: solo la organización operadora o
+  `platform_admin`; el cliente de una OT externa no ve el detalle de
+  materiales. Ninguna de las tres tablas tiene policy
+  `INSERT`/`UPDATE`/`DELETE` — escritura solo vía RPC.
+- Frontend: `useInventoryCatalog.ts` + `InventoryView.tsx` (módulo nuevo,
+  nuevo ítem "Inventario" en `Sidebar.tsx`/`Dashboard.tsx`, visible solo
+  para owner/admin/manager de una organización operadora);
+  `useWorkOrderMaterials.ts` + `WorkOrderMaterialsSection.tsx` (integrada
+  en `WorkOrderDetailDialog.tsx` junto a Actividades, bajo la misma
+  condición de visibilidad — renombrada `canViewActivities` →
+  `canViewOperatingDetails` porque ahora gatea ambas secciones);
+  `WorkOrderMaterialWarningBadge` en `StatusBadge.tsx`.
+- Pendiente documentado (no construido): reactivar almacén/material
+  desactivado (la UI no lo expone todavía), descuento real de stock al
+  ejecutar la OT, múltiples almacenes para el mismo material, y
+  reservas/bloqueo duro por stock insuficiente.

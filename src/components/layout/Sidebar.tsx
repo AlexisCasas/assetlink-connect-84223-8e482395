@@ -21,13 +21,14 @@ import {
   MessageSquare,
   Users,
   Building2,
-  ClipboardList
+  ClipboardList,
+  Boxes
   ,Shield
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'admin') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'inventory' | 'admin') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -55,6 +56,11 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   ].includes(currentOrganization.organizationType);
   const canManage = memberships.some(m => m.isActive && ['owner','admin'].includes(m.role) && organizations.some(o => o.id === m.organizationId && o.organizationType === 'platform_admin'));
   const canViewAssets = currentOrganization?.organizationType === 'client_company';
+  // Inventory belongs to the organization that operates work (same set as
+  // canViewWorkOrders — client/provider/facility_manager, never
+  // platform_admin), and only to its planners (owner/admin/manager): they
+  // are the ones who create warehouses/materials and assign them to OTs.
+  const canViewInventory = canViewWorkOrders && !!currentMembership?.isActive && ['owner', 'admin', 'manager'].includes(currentMembership.role);
 
   return (
     <aside className={cn(
@@ -133,7 +139,24 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
             {!collapsed && 'Órdenes de trabajo'}
           </Button>
         )}
-        
+
+        {canViewInventory && (
+          <Button
+            variant={currentView === 'inventory' ? "default" : "ghost"}
+            className={cn(
+              "w-full justify-start",
+              collapsed && "justify-center px-2"
+            )}
+            onClick={() => onViewChange?.('inventory')}
+          >
+            <Boxes className={cn(
+              "h-4 w-4",
+              !collapsed && "mr-2"
+            )} />
+            {!collapsed && 'Inventario'}
+          </Button>
+        )}
+
         {canViewAssets && (
           <Button
             variant={currentView === 'assets' ? "default" : "ghost"}
