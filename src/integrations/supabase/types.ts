@@ -2666,6 +2666,23 @@ export type Database = {
           technician_name: string
         }[]
       }
+      get_asset_integrated_history: {
+        Args: { p_asset_id: string }
+        Returns: {
+          actor_email: string
+          actor_name: string
+          description: string
+          event_date: string
+          event_label: string
+          event_type: string
+          id: string
+          metadata: Json
+          source_id: string
+          source_table: string
+          status: string
+          title: string
+        }[]
+      }
       get_assignable_planners: {
         Args: { p_organization_id: string }
         Returns: {

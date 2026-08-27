@@ -951,3 +951,58 @@ Inicio de la rama `productization/mvp`.
 - Pendiente documentado (no construido): upload real de archivos
   (evidencias), cronómetro real, cierre automático de OT, consolidado
   avanzado de productividad.
+
+## Historial integral del activo
+
+- Rama `feature/asset-integrated-history`. Detalle completo en
+  `docs/ASSET_INTEGRATED_HISTORY.md`. "¿Qué le ha pasado a este activo?"
+  — una sola línea de tiempo consolidada **en el momento de la lectura**
+  desde las tablas fuente reales (`assets`, `asset_events`, `requests`,
+  `work_orders`, `work_order_activities`,
+  `work_order_activity_reports`/`_materials`/`_evidences`). **Sin tabla
+  espejo, sin módulo paralelo**: cada item apunta (`source_table`/
+  `source_id`) directo a su fila origen.
+- Migración `20260829110000_asset_integrated_history.sql`: una sola RPC
+  nueva, `get_asset_integrated_history(p_asset_id)`. **Sin cambios de
+  esquema a `asset_events`** — ya tenía `event_type`/`description`/
+  `payload` (usado como `metadata`), y `useAssets.ts` ya lo alimenta en
+  cada creación/edición/archivado/restauración desde una fase anterior.
+- **Anti-duplicación explícita**: el item "creación del activo" normalmente
+  sale de `asset_events` (`event_type='created'`); el respaldo derivado de
+  `assets.created_at` solo se emite si esa fila de `asset_events` no
+  existe (`NOT EXISTS`) — nunca ambos a la vez. `assets.updated_at` **no**
+  se usa como fuente de un item separado, a propósito: `asset_events` ya
+  cubre `updated`/`archived`/`restored`, así que hacerlo habría duplicado
+  exactamente lo que la tarea pedía evitar.
+- **Bug evitado antes de que ocurriera**: en un `UNION ALL` dentro de
+  `RETURN QUERY`, el `ORDER BY` final resuelve contra los nombres de
+  columna de la *primera* rama a nivel SQL (antes de que PL/pgSQL asigne
+  el resultado a `RETURNS TABLE`) — sin alias explícito por columna en
+  cada rama, `ORDER BY event_date DESC` habría fallado en tiempo de
+  ejecución. Las 8 ramas del `UNION ALL` llevan `AS <columna>` en cada una.
+- **Visibilidad deliberadamente más permisiva hacia el dueño del activo**
+  que la de fases anteriores: el cliente dueño ve el detalle operativo
+  completo (OT, actividad, técnico, material, evidencia) **incluso de una
+  OT ejecutada por un proveedor externo** — a diferencia de
+  `work_order_activities`/`work_order_materials`/`work_order_work_logs`,
+  donde el cliente de una OT externa no veía ese detalle. Decisión
+  explícita y acotada solo a esta RPC, documentada, sin tocar ninguna
+  policy ni RPC existente. Un proveedor solo ve la cadena de *sus propias*
+  OT sobre el activo (nunca solicitudes/eventos del activo ni OT de otro
+  proveedor); una organización sin relación es rechazada.
+- **Verificado end-to-end vía `psql`**: escenario completo (solicitud → OT
+  interna → actividad → reporte con material y evidencia) → 7 items en
+  orden cronológico correcto, visibles para dueño y técnico, rechazados
+  para una organización sin relación, y una sola fila "Activo creado" (sin
+  duplicado).
+- Frontend: `useAssetHistory.ts` (puramente de lectura) +
+  `AssetHistory.tsx` (una sola línea de tiempo cronológica con badge de
+  grupo por item — nunca separada en secciones por tipo, eso rompería el
+  orden cronológico) integrado en `AssetDetail.tsx` como pestaña
+  "Historial" junto a "Resumen" (mismo patrón de `Tabs` que ya usaba el
+  modo edición). El botón "Historial" que existía deshabilitado en la
+  barra de acciones se eliminó — quedaba redundante con la pestaña real.
+- Pendiente documentado (no construido): inspecciones (tipo
+  `inspection_created` reservado, sin tabla), checklist técnico,
+  mantenimientos preventivos, métricas predictivas, upload real de
+  evidencias (mismo pendiente que la fase anterior).

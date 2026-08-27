@@ -13,7 +13,6 @@ import {
   Settings2,
   QrCode,
   MapPin,
-  Calendar,
   FileText,
   User,
   Camera,
@@ -26,6 +25,7 @@ import { cn } from '@/lib/utils';
 import type { UseAssetsResult } from '@/hooks/useAssets';
 import type { Asset, AssetCriticality, AssetNodeType, AssetStatus } from '@/types/asset';
 import { ASSET_NODE_TYPE_ORDER, ASSET_NODE_TYPE_LABELS, ASSET_EDITABLE_STATUSES, ASSET_CRITICALITY_ORDER, ASSET_CRITICALITY_LABELS, getAssetStatusBadgeClass } from '@/lib/assetLabels';
+import { AssetHistory } from './AssetHistory';
 
 interface AssetDetailProps {
   state: UseAssetsResult;
@@ -335,6 +335,13 @@ export function AssetDetail({ state }: AssetDetailProps) {
       </CardHeader>
 
       <CardContent className="space-y-6">
+        <Tabs defaultValue="summary" className="space-y-4">
+          <TabsList className="inline-flex w-max gap-1 rounded-lg border border-onefacility-border bg-onefacility-surface p-1">
+            <TabsTrigger value="summary" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Resumen</TabsTrigger>
+            <TabsTrigger value="history" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Historial</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="summary" className="space-y-6">
         {/* Asset Image and QR Code */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative">
@@ -427,16 +434,18 @@ export function AssetDetail({ state }: AssetDetailProps) {
             </div>
           )}
         </div>
+          </TabsContent>
+
+          <TabsContent value="history">
+            <AssetHistory assetId={asset.id} />
+          </TabsContent>
+        </Tabs>
 
         {/* Action Buttons */}
         <div className="flex flex-wrap gap-2 pt-4">
           <Button variant="outline" size="sm" disabled>
             <FileText className="h-4 w-4 mr-2" />
             Generar Reporte
-          </Button>
-          <Button variant="outline" size="sm" disabled>
-            <Calendar className="h-4 w-4 mr-2" />
-            Historial
           </Button>
           <Button variant="outline" size="sm" disabled>
             <User className="h-4 w-4 mr-2" />
