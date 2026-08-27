@@ -56,7 +56,7 @@ export function WorkOrdersList() {
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle>Órdenes de trabajo</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">Órdenes generadas desde cotizaciones aprobadas.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Órdenes generadas desde cotizaciones aprobadas o solicitudes internas.</p>
           </div>
           <Button variant="outline" size="icon" onClick={() => void refetch()}><RefreshCw className="h-4 w-4" /><span className="sr-only">Actualizar listado</span></Button>
         </CardHeader>
@@ -71,7 +71,13 @@ export function WorkOrdersList() {
               </TableRow></TableHeader>
               <TableBody>{workOrders.map((workOrder) => (
                 <TableRow key={workOrder.id}>
-                  <TableCell><p className="font-medium">{workOrder.title || 'Orden sin título'}</p><p className="text-xs text-muted-foreground">#{shortId(workOrder.id)}</p></TableCell>
+                  <TableCell>
+                    <p className="font-medium">{workOrder.title || 'Orden sin título'}</p>
+                    <p className="text-xs text-muted-foreground">#{shortId(workOrder.id)}</p>
+                    {workOrder.quote_id === null && (
+                      <Badge variant="outline" className="mt-1 bg-violet-500/10 text-violet-600 border-violet-500/20">Solicitud interna</Badge>
+                    )}
+                  </TableCell>
                   <TableCell><Badge variant="secondary">{statusLabels[workOrder.status] ?? workOrder.status}</Badge></TableCell>
                   <TableCell className="font-mono text-xs">#{shortId(workOrder.request_id)}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">

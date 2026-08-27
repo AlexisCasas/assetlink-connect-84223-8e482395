@@ -54,6 +54,7 @@ export const PublicRequestList = () => {
         .select('*')
         .eq('status', 'sent')
         .eq('is_public', true)
+        .eq('request_type', 'external')
         .order('priority', { ascending: true });
 
       if (error) {
