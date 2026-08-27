@@ -27,6 +27,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toDatetimeLocalValue, fromDatetimeLocalValue } from '@/lib/dateTime';
 import { WorkOrderActivitiesSection } from './WorkOrderActivitiesSection';
+import { WorkOrderMaterialsSection } from './WorkOrderMaterialsSection';
 import type { WorkOrder } from '@/hooks/useWorkOrders';
 
 interface WorkOrderDetailDialogProps {
@@ -66,11 +67,13 @@ export function WorkOrderDetailDialog({ workOrder, open, onOpenChange, onUpdated
     && currentOrganization?.id === workOrder.provider_organization_id
     && canPlanWork;
 
-  // Activities are an operating-organization-internal execution detail (see
-  // get_work_order_activities' authorization and docs/WORK_ORDER_ACTIVITIES.md)
-  // — a client viewing an external OT it doesn't operate never sees the
-  // section at all, rather than seeing it render an authorization error.
-  const canViewActivities = !!workOrder && currentOrganization?.id === workOrder.provider_organization_id;
+  // Activities and materials are operating-organization-internal execution
+  // detail (see get_work_order_activities/get_work_order_materials'
+  // authorization and docs/WORK_ORDER_ACTIVITIES.md,
+  // docs/MINIMAL_INVENTORY_MATERIALS.md) — a client viewing an external OT
+  // it doesn't operate never sees either section at all, rather than
+  // seeing them render an authorization error.
+  const canViewOperatingDetails = !!workOrder && currentOrganization?.id === workOrder.provider_organization_id;
 
   useEffect(() => {
     setPendingPlannerId(workOrder?.planner_member_id ?? null);
@@ -262,8 +265,16 @@ export function WorkOrderDetailDialog({ workOrder, open, onOpenChange, onUpdated
           )}
         </div>
 
-        {canViewActivities && (
+        {canViewOperatingDetails && (
           <WorkOrderActivitiesSection
+            workOrderId={workOrder.id}
+            organizationId={workOrder.provider_organization_id}
+            canManage={isProviderPlanner}
+          />
+        )}
+
+        {canViewOperatingDetails && (
+          <WorkOrderMaterialsSection
             workOrderId={workOrder.id}
             organizationId={workOrder.provider_organization_id}
             canManage={isProviderPlanner}

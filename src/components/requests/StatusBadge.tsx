@@ -165,3 +165,28 @@ export const WorkOrderActivityStatusBadge = ({ status }: WorkOrderActivityStatus
     {WORK_ORDER_ACTIVITY_STATUS_LABELS[status] ?? status}
   </Badge>
 );
+
+/** ok/no_stock/insufficient_stock — purely informational, never a hard
+ * block. See get_work_order_materials in
+ * 20260828120000_minimal_inventory_materials.sql for where this is computed. */
+export const WORK_ORDER_MATERIAL_WARNING_LABELS: Record<string, string> = {
+  ok: 'Disponible',
+  no_stock: 'Sin stock',
+  insufficient_stock: 'Stock insuficiente',
+};
+
+const WORK_ORDER_MATERIAL_WARNING_COLORS: Record<string, string> = {
+  ok: 'bg-green-500/10 text-green-600 border-green-500/20',
+  no_stock: 'bg-red-500/10 text-red-600 border-red-500/20',
+  insufficient_stock: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
+};
+
+interface WorkOrderMaterialWarningBadgeProps {
+  status: string;
+}
+
+export const WorkOrderMaterialWarningBadge = ({ status }: WorkOrderMaterialWarningBadgeProps) => (
+  <Badge variant="outline" className={WORK_ORDER_MATERIAL_WARNING_COLORS[status] ?? ''}>
+    {WORK_ORDER_MATERIAL_WARNING_LABELS[status] ?? status}
+  </Badge>
+);

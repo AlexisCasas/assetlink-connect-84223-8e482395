@@ -13,11 +13,12 @@ import { ContactList } from '@/components/contact/ContactList';
 import { ApprovedProvidersList } from '@/components/providers/ApprovedProvidersList';
 import { BranchesList } from '@/components/branches/BranchesList';
 import { WorkOrdersList } from '@/components/work-orders/WorkOrdersList';
+import { InventoryView } from '@/components/inventory/InventoryView';
 import { AdminConsole } from '@/components/admin/AdminConsole';
 
-type DashboardView = 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'admin';
+type DashboardView = 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'inventory' | 'admin';
 
-const ALL_VIEWS: DashboardView[] = ['dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications', 'approved-providers', 'branches', 'work-orders', 'contact', 'admin'];
+const ALL_VIEWS: DashboardView[] = ['dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications', 'approved-providers', 'branches', 'work-orders', 'inventory', 'contact', 'admin'];
 // A platform_admin organization only manages Administración; every other
 // operational view falls back to it, including direct hash navigation.
 const PLATFORM_ADMIN_ALLOWED_VIEWS: DashboardView[] = ['admin', 'notifications'];
@@ -80,6 +81,8 @@ const Dashboard = () => {
         return <BranchesList />;
       case 'work-orders':
         return <WorkOrdersList />;
+      case 'inventory':
+        return <InventoryView />;
       case 'admin': return <AdminConsole />;
       default:
         return <StatsCards />;
