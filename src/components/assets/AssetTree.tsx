@@ -25,19 +25,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { UseAssetsResult } from '@/hooks/useAssets';
 import type { AssetNodeType, AssetStatus, AssetTreeNode } from '@/types/asset';
-
-const NODE_TYPE_ORDER: AssetNodeType[] = ['structure', 'site', 'area', 'system', 'fleet', 'equipment', 'component', 'subcomponent'];
-
-const NODE_TYPE_LABELS: Record<AssetNodeType, string> = {
-  structure: 'Estructura / Unidad',
-  site: 'Sede',
-  area: 'Área / Sector',
-  system: 'Sistema / Línea',
-  fleet: 'Flota',
-  equipment: 'Equipo',
-  component: 'Componente',
-  subcomponent: 'Subcomponente',
-};
+import { ASSET_NODE_TYPE_ORDER, ASSET_NODE_TYPE_LABELS, ASSET_EDITABLE_STATUSES, ASSET_STATUS_LABELS, getAssetStatusBadgeClass } from '@/lib/assetLabels';
 
 const NODE_TYPE_ICONS: Record<AssetNodeType, typeof Building2> = {
   structure: Building2,
@@ -50,30 +38,10 @@ const NODE_TYPE_ICONS: Record<AssetNodeType, typeof Building2> = {
   subcomponent: CircleDot,
 };
 
-const STATUS_LABELS: Record<AssetStatus, string> = {
-  active: 'Activo',
-  maintenance: 'Mantenimiento',
-  inactive: 'Inactivo',
-  archived: 'Archivado',
-};
-
-const getStatusColor = (status: AssetStatus) => {
-  switch (status) {
-    case 'active':
-      return 'bg-success/10 text-success border-success/20';
-    case 'maintenance':
-      return 'bg-warning/10 text-warning border-warning/20';
-    case 'archived':
-      return 'bg-muted text-muted-foreground border-border';
-    default:
-      return 'bg-muted text-muted-foreground border-border';
-  }
-};
-
 const suggestNextNodeType = (parentType?: AssetNodeType): AssetNodeType => {
   if (!parentType) return 'structure';
-  const index = NODE_TYPE_ORDER.indexOf(parentType);
-  return NODE_TYPE_ORDER[Math.min(index + 1, NODE_TYPE_ORDER.length - 1)];
+  const index = ASSET_NODE_TYPE_ORDER.indexOf(parentType);
+  return ASSET_NODE_TYPE_ORDER[Math.min(index + 1, ASSET_NODE_TYPE_ORDER.length - 1)];
 };
 
 interface AssetTreeProps {
@@ -173,8 +141,8 @@ export function AssetTree({ state }: AssetTreeProps) {
 
           <span className="flex-1 text-sm truncate">{node.name}</span>
 
-          <Badge variant="outline" className={cn('ml-2 shrink-0 text-xs', getStatusColor(node.status))}>
-            {STATUS_LABELS[node.status]}
+          <Badge variant="outline" className={cn('ml-2 shrink-0 text-xs', getAssetStatusBadgeClass(node.status))}>
+            {ASSET_STATUS_LABELS[node.status]}
           </Badge>
 
           {canManageAssets && (
@@ -271,8 +239,8 @@ export function AssetTree({ state }: AssetTreeProps) {
                 <Select value={form.nodeType} onValueChange={(value: AssetNodeType) => setForm((current) => ({ ...current, nodeType: value }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {NODE_TYPE_ORDER.map((type) => (
-                      <SelectItem key={type} value={type}>{NODE_TYPE_LABELS[type]}</SelectItem>
+                    {ASSET_NODE_TYPE_ORDER.map((type) => (
+                      <SelectItem key={type} value={type}>{ASSET_NODE_TYPE_LABELS[type]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -282,9 +250,9 @@ export function AssetTree({ state }: AssetTreeProps) {
                 <Select value={form.status} onValueChange={(value: AssetStatus) => setForm((current) => ({ ...current, status: value }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Activo</SelectItem>
-                    <SelectItem value="maintenance">Mantenimiento</SelectItem>
-                    <SelectItem value="inactive">Inactivo</SelectItem>
+                    {ASSET_EDITABLE_STATUSES.map((status) => (
+                      <SelectItem key={status} value={status}>{ASSET_STATUS_LABELS[status]}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

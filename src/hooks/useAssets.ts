@@ -113,12 +113,20 @@ const filterArchived = (nodes: AssetTreeNode[], showArchived: boolean): AssetTre
     .map((node) => ({ ...node, children: filterArchived(node.children, showArchived) }));
 };
 
+const isValidDateString = (value: string) => !Number.isNaN(Date.parse(value));
+
 const validateAssetInput = (input: UpdateAssetInput, knownAssets: Asset[], selfId?: string): string | null => {
   if (input.name !== undefined && !input.name.trim()) return 'El nombre es obligatorio.';
   if (input.nodeType !== undefined && !ASSET_NODE_TYPES.includes(input.nodeType)) return 'El tipo de nodo no es válido.';
   if (input.status !== undefined && !ASSET_STATUSES.includes(input.status)) return 'El estado no es válido.';
   if (input.criticality !== undefined && input.criticality !== null && !ASSET_CRITICALITIES.includes(input.criticality)) {
     return 'La criticidad no es válida.';
+  }
+  if (input.purchaseDate !== undefined && input.purchaseDate !== null && input.purchaseDate !== '' && !isValidDateString(input.purchaseDate)) {
+    return 'La fecha de compra no es válida.';
+  }
+  if (input.warrantyUntil !== undefined && input.warrantyUntil !== null && input.warrantyUntil !== '' && !isValidDateString(input.warrantyUntil)) {
+    return 'La fecha de garantía no es válida.';
   }
   if (input.parentAssetId) {
     if (input.parentAssetId === selfId) return 'Un activo no puede ser su propio padre.';
@@ -269,6 +277,13 @@ export function useAssets() {
         status: input.status ?? 'active',
         criticality: input.criticality ?? null,
         description: input.description ?? null,
+        manufacturer: input.manufacturer ?? null,
+        model: input.model ?? null,
+        serial_number: input.serialNumber ?? null,
+        barcode: input.barcode ?? null,
+        purchase_date: input.purchaseDate ?? null,
+        warranty_until: input.warrantyUntil ?? null,
+        location_text: input.locationText ?? null,
         created_by_user_id: user?.id ?? null,
       }).select('*').single();
 
@@ -305,6 +320,13 @@ export function useAssets() {
       if (changes.assetCategoryId !== undefined) payload.asset_category_id = changes.assetCategoryId;
       if (changes.code !== undefined) payload.code = changes.code;
       if (changes.description !== undefined) payload.description = changes.description;
+      if (changes.manufacturer !== undefined) payload.manufacturer = changes.manufacturer;
+      if (changes.model !== undefined) payload.model = changes.model;
+      if (changes.serialNumber !== undefined) payload.serial_number = changes.serialNumber;
+      if (changes.barcode !== undefined) payload.barcode = changes.barcode;
+      if (changes.purchaseDate !== undefined) payload.purchase_date = changes.purchaseDate;
+      if (changes.warrantyUntil !== undefined) payload.warranty_until = changes.warrantyUntil;
+      if (changes.locationText !== undefined) payload.location_text = changes.locationText;
 
       const { data, error: updateError } = await supabase.from('assets').update(payload).eq('id', assetId).select('*').single();
       if (updateError || !data) throw new Error(failureMessage);
