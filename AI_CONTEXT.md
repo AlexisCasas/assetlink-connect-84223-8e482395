@@ -504,3 +504,27 @@ Inicio de la rama `productization/mvp`.
   actualizó a la nueva firma de props de `AssetTree`/`AssetDetail` porque esta
   fase no debía borrar código legacy; queda pendiente de limpieza en una fase
   posterior junto con `src/components/tickets/TicketList.tsx`.
+
+## Activos: hook productivo (Fase 2)
+
+- Rama `feature/assets-productive-hook`: no agrega tablas ni migraciones;
+  solo endurece la capa de datos/frontend sobre la fundación de Fase 1.
+  Detalle completo en `docs/ASSETS_PRODUCTIVE_HOOK.md`.
+- `useAssets()` centraliza todo lo que antes estaba repartido entre
+  `AssetsView`/`AssetTree`: carga de `assets`/`asset_categories`/
+  `client_branches`, selección, `showArchived`, permisos, construcción del
+  árbol, mutaciones y eventos. Migrado a TanStack Query
+  (`useQuery`/`useMutation`, ya disponible vía `QueryClientProvider` en
+  `App.tsx` pero sin uso previo en el proyecto) en vez de
+  `useState`/`useEffect` manual.
+- Permisos derivados de `currentOrganization`/`currentMembership`:
+  `canViewAssets` (organización `client_company` con membresía activa) y
+  `canManageAssets` (además, rol owner/admin/manager) — coincide con la RLS
+  de `assets`/`asset_categories`/`asset_documents`/`asset_events`. No se tocó
+  `AuthContext.tsx`, `Dashboard.tsx` ni `Sidebar.tsx` en esta fase.
+- El árbol tolera `parent_asset_id` huérfano o cíclico (datos corruptos) sin
+  colgar la UI: usa un recorrido acotado con set de visitados y muestra como
+  raíz cualquier nodo que no sea alcanzable en vez de ocultarlo en silencio.
+- Se agregó `restoreAsset()` (`status = 'active'`, evento `restored`) y
+  eventos `updated`/`archived`/`created` en `asset_events`. No se tocaron RLS,
+  Edge Functions, migraciones ni `service_role`.

@@ -23,11 +23,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { CreateAssetInput } from '@/hooks/useAssets';
-import type { Asset, AssetCategory, AssetNodeType, AssetStatus, AssetTreeNode } from '@/types/asset';
-import type { ClientBranch } from '@/types/request';
-
-export type { Asset as AssetNode };
+import type { UseAssetsResult } from '@/hooks/useAssets';
+import type { AssetNodeType, AssetStatus, AssetTreeNode } from '@/types/asset';
 
 const NODE_TYPE_ORDER: AssetNodeType[] = ['structure', 'site', 'area', 'system', 'fleet', 'equipment', 'component', 'subcomponent'];
 
@@ -79,29 +76,14 @@ const suggestNextNodeType = (parentType?: AssetNodeType): AssetNodeType => {
   return NODE_TYPE_ORDER[Math.min(index + 1, NODE_TYPE_ORDER.length - 1)];
 };
 
-const filterVisible = (nodes: AssetTreeNode[], showArchived: boolean): AssetTreeNode[] => {
-  if (showArchived) return nodes;
-  return nodes
-    .filter((node) => node.status !== 'archived')
-    .map((node) => ({ ...node, children: filterVisible(node.children, showArchived) }));
-};
-
 interface AssetTreeProps {
-  tree: AssetTreeNode[];
-  assets: Asset[];
-  categories: AssetCategory[];
-  branches: ClientBranch[];
-  loading: boolean;
-  error: string | null;
-  canEdit: boolean;
-  selectedAssetId: string | null;
-  onSelectAsset: (asset: Asset) => void;
-  onCreateAsset: (input: CreateAssetInput) => Promise<Asset | null>;
+  state: UseAssetsResult;
 }
 
-export function AssetTree({ tree, assets, categories, branches, loading, error, canEdit, selectedAssetId, onSelectAsset, onCreateAsset }: AssetTreeProps) {
+export function AssetTree({ state }: AssetTreeProps) {
+  const { assetTree, assets, categories, branches, loading, error, canManageAssets, showArchived, setShowArchived, selectedAssetId, selectAsset, createAsset } = state;
+
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  const [showArchived, setShowArchived] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogParentId, setDialogParentId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -113,7 +95,6 @@ export function AssetTree({ tree, assets, categories, branches, loading, error, 
     assetCategoryId: '',
   });
 
-  const visibleTree = filterVisible(tree, showArchived);
   const findAssetById = (id: string) => assets.find((asset) => asset.id === id) ?? null;
   const selectedParent = dialogParentId ? findAssetById(dialogParentId) : null;
 
@@ -142,15 +123,14 @@ export function AssetTree({ tree, assets, categories, branches, loading, error, 
   const submitDialog = async () => {
     if (!form.name.trim()) return;
     setSubmitting(true);
-    const input: CreateAssetInput = {
+    const created = await createAsset({
       name: form.name.trim(),
       nodeType: form.nodeType,
       status: form.status,
       parentAssetId: dialogParentId,
       branchId: form.branchId || null,
       assetCategoryId: form.assetCategoryId || null,
-    };
-    const created = await onCreateAsset(input);
+    });
     setSubmitting(false);
     if (created) {
       if (dialogParentId) setExpandedNodes((current) => new Set(current).add(dialogParentId));
@@ -173,7 +153,7 @@ export function AssetTree({ tree, assets, categories, branches, loading, error, 
             level === 0 && 'font-semibold',
           )}
           style={{ paddingLeft: `${level * 20 + 8}px` }}
-          onClick={() => onSelectAsset(node)}
+          onClick={() => selectAsset(node.id)}
         >
           {hasChildren && (
             <Button
@@ -197,7 +177,7 @@ export function AssetTree({ tree, assets, categories, branches, loading, error, 
             {STATUS_LABELS[node.status]}
           </Badge>
 
-          {canEdit && (
+          {canManageAssets && (
             <Button
               variant="ghost"
               size="sm"
@@ -231,11 +211,11 @@ export function AssetTree({ tree, assets, categories, branches, loading, error, 
             Estructura de Activos
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setShowArchived((current) => !current)}>
+            <Button variant="ghost" size="sm" onClick={() => setShowArchived(!showArchived)}>
               {showArchived ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
               {showArchived ? 'Ocultar archivados' : 'Ver archivados'}
             </Button>
-            {canEdit && (
+            {canManageAssets && (
               <Button variant="default" size="sm" onClick={() => openDialog(selectedAssetId)}>
                 <Plus className="h-4 w-4 mr-1" />
                 {selectedAssetId ? 'Agregar subactivo' : 'Agregar activo raíz'}
@@ -257,7 +237,7 @@ export function AssetTree({ tree, assets, categories, branches, loading, error, 
             <Building2 className="mx-auto mb-3 h-8 w-8 opacity-50" />
             <p className="font-medium">Aún no tienes activos registrados. Crea tu primera estructura.</p>
           </div>
-        ) : visibleTree.length === 0 ? (
+        ) : assetTree.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
             <ChevronDown className="mx-auto mb-3 h-8 w-8 opacity-50" />
             <p>Todos tus activos están archivados.</p>
@@ -265,7 +245,7 @@ export function AssetTree({ tree, assets, categories, branches, loading, error, 
           </div>
         ) : (
           <div className="space-y-1">
-            {visibleTree.map((node) => renderNode(node))}
+            {assetTree.map((node) => renderNode(node))}
           </div>
         )}
 

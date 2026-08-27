@@ -79,3 +79,20 @@ export interface AssetEvent {
 export interface AssetTreeNode extends Asset {
   children: AssetTreeNode[];
 }
+
+/** Alias for call sites that only care about a single selected/flat asset. */
+export type AssetNode = Asset;
+
+export interface CreateAssetInput {
+  name: string;
+  nodeType: AssetNodeType;
+  status?: AssetStatus;
+  criticality?: AssetCriticality | null;
+  parentAssetId?: string | null;
+  branchId?: string | null;
+  assetCategoryId?: string | null;
+  code?: string | null;
+  description?: string | null;
+}
+
+export type UpdateAssetInput = Partial<CreateAssetInput>;

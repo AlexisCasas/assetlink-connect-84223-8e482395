@@ -13,14 +13,14 @@ import {
   Camera,
   CheckCircle,
   Archive,
+  RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Asset, AssetStatus } from '@/types/asset';
+import type { UseAssetsResult } from '@/hooks/useAssets';
+import type { AssetStatus } from '@/types/asset';
 
 interface AssetDetailProps {
-  asset: Asset | null;
-  canEdit: boolean;
-  onArchive: (assetId: string) => Promise<boolean>;
+  state: UseAssetsResult;
 }
 
 const STATUS_LABELS: Record<AssetStatus, string> = {
@@ -43,8 +43,10 @@ const getStatusColor = (status: AssetStatus) => {
   }
 };
 
-export function AssetDetail({ asset, canEdit, onArchive }: AssetDetailProps) {
+export function AssetDetail({ state }: AssetDetailProps) {
+  const { selectedAsset: asset, canManageAssets, archiveAsset, restoreAsset } = state;
   const [archiving, setArchiving] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   if (!asset) {
     return (
@@ -67,8 +69,14 @@ export function AssetDetail({ asset, canEdit, onArchive }: AssetDetailProps) {
 
   const handleArchive = async () => {
     setArchiving(true);
-    await onArchive(asset.id);
+    await archiveAsset(asset.id);
     setArchiving(false);
+  };
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    await restoreAsset(asset.id);
+    setRestoring(false);
   };
 
   return (
@@ -197,10 +205,16 @@ export function AssetDetail({ asset, canEdit, onArchive }: AssetDetailProps) {
             <User className="h-4 w-4 mr-2" />
             Asignar Técnico
           </Button>
-          {canEdit && asset.status !== 'archived' && (
+          {canManageAssets && asset.status !== 'archived' && (
             <Button variant="outline" size="sm" onClick={() => void handleArchive()} disabled={archiving}>
               <Archive className="h-4 w-4 mr-2" />
               {archiving ? 'Archivando…' : 'Archivar'}
+            </Button>
+          )}
+          {canManageAssets && asset.status === 'archived' && (
+            <Button variant="outline" size="sm" onClick={() => void handleRestore()} disabled={restoring}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              {restoring ? 'Restaurando…' : 'Restaurar'}
             </Button>
           )}
         </div>
