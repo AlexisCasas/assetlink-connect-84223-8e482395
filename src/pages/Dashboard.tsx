@@ -88,6 +88,16 @@ const Dashboard = () => {
       case 'contact':
         return <ContactList />;
       case 'approved-providers':
+        // Proveedores Homologados solo tiene sentido en contexto de una
+        // organización client_company (es quien homologa proveedores) — no
+        // solo user.role='cliente', también accesible por hash directo.
+        if (currentOrganization?.organizationType !== 'client_company') {
+          return (
+            <div className="flex h-full items-center justify-center p-6">
+              <p className="text-sm text-muted-foreground">Esta vista solo está disponible para organizaciones cliente.</p>
+            </div>
+          );
+        }
         return <ApprovedProvidersList />;
       case 'branches':
         return <BranchesList />;

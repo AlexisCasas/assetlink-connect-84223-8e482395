@@ -26,4 +26,8 @@ export type OrganizationProfileForm = {
   presentation_file_url: string;
   certification_status: string;
   certification_notes: string;
+  /** Only meaningful for provider-facing organizations (provider_company /
+   * facility_manager / subcontractor_company) — belongs to the provider
+   * itself, never to a client that homologates it. */
+  specialties: string[];
 };

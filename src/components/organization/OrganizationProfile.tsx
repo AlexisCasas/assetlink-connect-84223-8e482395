@@ -9,6 +9,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import type { OrganizationProfileClient, OrganizationProfileForm } from '@/types/organizationProfile';
+import type { OrganizationType } from '@/types/organization';
+import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
+
+// trim, drop empty entries, and de-dupe case-insensitively (keeping the
+// first casing seen) — same normalization on load-time data and on save.
+const parseSpecialties = (raw: string): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  raw.split(',').forEach((item) => {
+    const trimmed = item.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(trimmed);
+  });
+  return result;
+};
 
 type OrganizationProfileProps = {
   organizationId?: string;
@@ -39,12 +57,18 @@ const defaultProfile = (organization?: { name: string; legal_name: string | null
   presentation_file_url: '',
   certification_status: 'not_requested',
   certification_notes: '',
+  specialties: [],
 });
 
 export function OrganizationProfile({ organizationId, readOnly = false }: OrganizationProfileProps) {
   const { user, currentOrganization, memberships, organizations } = useAuth();
   const targetOrganizationId = organizationId ?? currentOrganization?.id;
   const [form, setForm] = useState<OrganizationProfileForm>(defaultProfile());
+  const [organizationType, setOrganizationType] = useState<OrganizationType | null>(null);
+  // Raw comma-separated text the user types; parsed into form.specialties
+  // (trim / drop empty / de-dupe) on blur and again right before save, so
+  // an unfinished trailing "," never gets lost mid-edit.
+  const [specialtiesInput, setSpecialtiesInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -62,6 +86,8 @@ export function OrganizationProfile({ organizationId, readOnly = false }: Organi
     ['owner', 'admin'].includes(membership.role),
   );
   const canEdit = !readOnly && !!user && (isPlatformAdmin || isOrganizationAdmin);
+  const isProviderFacing = !!organizationType && isProviderFacingOrganizationType(organizationType);
+  const specialtiesPreview = useMemo(() => parseSpecialties(specialtiesInput), [specialtiesInput]);
 
   useEffect(() => {
     const load = async () => {
@@ -74,7 +100,7 @@ export function OrganizationProfile({ organizationId, readOnly = false }: Organi
       setMessage('');
       try {
         const [{ data: organization, error: organizationError }, { data: profile, error: profileError }] = await Promise.all([
-          supabase.from('organizations').select('id, name, legal_name, tax_id').eq('id', targetOrganizationId).maybeSingle(),
+          supabase.from('organizations').select('id, name, legal_name, tax_id, organization_type').eq('id', targetOrganizationId).maybeSingle(),
           supabase.from('organization_profiles').select('*').eq('organization_id', targetOrganizationId).maybeSingle(),
         ]);
         if (organizationError) throw organizationError;
@@ -84,6 +110,9 @@ export function OrganizationProfile({ organizationId, readOnly = false }: Organi
           return;
         }
 
+        setOrganizationType(organization.organization_type);
+        const specialties = profile?.specialties ?? [];
+        setSpecialtiesInput(specialties.join(', '));
         setForm(profile ? {
           commercial_name: profile.commercial_name ?? organization.name,
           legal_name: profile.legal_name ?? organization.legal_name ?? '',
@@ -104,6 +133,7 @@ export function OrganizationProfile({ organizationId, readOnly = false }: Organi
           presentation_file_url: profile.presentation_file_url ?? '',
           certification_status: profile.certification_status,
           certification_notes: profile.certification_notes ?? '',
+          specialties,
         } : defaultProfile(organization));
       } catch (error) {
         setMessage(error instanceof Error ? error.message : 'No se pudo cargar el perfil.');
@@ -148,6 +178,7 @@ export function OrganizationProfile({ organizationId, readOnly = false }: Organi
         service_regions: form.service_regions || null,
         primary_clients: form.primary_clients,
         presentation_file_url: form.presentation_file_url || null,
+        specialties: isProviderFacing ? parseSpecialties(specialtiesInput) : form.specialties,
         certification_status: form.certification_status,
         certification_notes: form.certification_notes || null,
         updated_by_user_id: user.id,
@@ -207,7 +238,27 @@ export function OrganizationProfile({ organizationId, readOnly = false }: Organi
       </TabsContent>
 
       <TabsContent value="commercial">
-        <Card><CardHeader><CardTitle>Información comercial</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">{input('Año de constitución', 'founded_year', 'number')}{input('Número de empleados', 'employee_range')}{input('Zona / Región de cobertura', 'service_regions')}<div className="space-y-2 md:col-span-2"><Label>Descripción empresarial</Label><Textarea value={form.description} disabled={disabled} onChange={(event) => setField('description', event.target.value)} /></div></CardContent></Card>
+        <Card><CardHeader><CardTitle>Información comercial</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2">{input('Año de constitución', 'founded_year', 'number')}{input('Número de empleados', 'employee_range')}{input('Zona / Región de cobertura', 'service_regions')}
+          {isProviderFacing && (
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="specialties">Especialidades</Label>
+              <Input
+                id="specialties"
+                value={specialtiesInput}
+                disabled={disabled}
+                placeholder="Ej: HVAC, Electricidad, Plomería"
+                onChange={(event) => setSpecialtiesInput(event.target.value)}
+                onBlur={() => setSpecialtiesInput(parseSpecialties(specialtiesInput).join(', '))}
+              />
+              <p className="text-xs text-muted-foreground">Separadas por coma. Visibles para los clientes que te homologuen.</p>
+              {specialtiesPreview.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {specialtiesPreview.map((specialty) => <Badge key={specialty} variant="outline">{specialty}</Badge>)}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="space-y-2 md:col-span-2"><Label>Descripción empresarial</Label><Textarea value={form.description} disabled={disabled} onChange={(event) => setField('description', event.target.value)} /></div></CardContent></Card>
       </TabsContent>
 
       <TabsContent value="clients">
