@@ -1,3 +1,4 @@
+Connecting to db 5432
 export type Json =
   | string
   | number
@@ -1652,6 +1653,7 @@ export type Database = {
           presentation_file_url: string | null
           primary_clients: Json
           service_regions: string | null
+          specialties: string[]
           tax_id: string | null
           timezone: string
           updated_at: string
@@ -1677,6 +1679,7 @@ export type Database = {
           presentation_file_url?: string | null
           primary_clients?: Json
           service_regions?: string | null
+          specialties?: string[]
           tax_id?: string | null
           timezone?: string
           updated_at?: string
@@ -1702,6 +1705,7 @@ export type Database = {
           presentation_file_url?: string | null
           primary_clients?: Json
           service_regions?: string | null
+          specialties?: string[]
           tax_id?: string | null
           timezone?: string
           updated_at?: string
@@ -3701,6 +3705,18 @@ export type Database = {
           work_order_type: string
         }[]
       }
+      get_provider_relationship_directory: {
+        Args: { p_client_organization_id: string }
+        Returns: {
+          organization_id: string
+          organization_name: string
+          organization_type: Database["public"]["Enums"]["organization_type"]
+          relationship_id: string
+          relationship_status: Database["public"]["Enums"]["organization_relationship_status"]
+          relationship_type: Database["public"]["Enums"]["organization_relationship_type"]
+          specialties: string[]
+        }[]
+      }
       get_user_organizations: {
         Args: never
         Returns: {
@@ -3950,6 +3966,29 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "inspection_plan_alert_rules"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_provider_relationship_status: {
+        Args: {
+          p_client_organization_id: string
+          p_status: Database["public"]["Enums"]["organization_relationship_status"]
+          p_target_organization_id: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          id: string
+          relationship_type: Database["public"]["Enums"]["organization_relationship_type"]
+          source_organization_id: string
+          status: Database["public"]["Enums"]["organization_relationship_status"]
+          target_organization_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_relationships"
           isOneToOne: true
           isSetofReturn: false
         }

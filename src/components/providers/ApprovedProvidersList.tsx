@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useMemo, useState } from 'react';
+import { useProviderRelationships } from '@/hooks/useProviderRelationships';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -14,13 +12,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -29,206 +20,78 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Users, Phone, Mail, Briefcase, Tag } from 'lucide-react';
+import { Users, Search, Briefcase } from 'lucide-react';
+import type { OrganizationRelationshipStatus, OrganizationType } from '@/types/organization';
+import type { ProviderDirectoryEntry } from '@/types/providerRelationship';
 
-interface ApprovedProvider {
-  id: string;
-  client_email: string;
-  name: string;
-  email: string;
-  phone: string | null;
-  specialty: string | null;
-  created_at: string;
-}
+type StatusFilter = 'all' | 'none' | OrganizationRelationshipStatus;
+type TypeFilter = 'all' | OrganizationType;
 
-interface ClientSpecialty {
-  id: string;
-  client_email: string;
-  name: string;
-  created_at: string;
-}
+const ORGANIZATION_TYPE_LABELS: Record<OrganizationType, string> = {
+  provider_company: 'Proveedor',
+  facility_manager: 'Facility Manager',
+  subcontractor_company: 'Subcontratista',
+  client_company: 'Cliente',
+  platform_admin: 'Administración',
+};
+
+const STATUS_META: Record<'none' | OrganizationRelationshipStatus, { label: string; badgeClass: string }> = {
+  none: { label: 'Disponible', badgeClass: 'text-muted-foreground' },
+  pending: { label: 'Pendiente', badgeClass: 'text-warning border-warning/40' },
+  active: { label: 'Homologado', badgeClass: 'text-success border-success/40' },
+  suspended: { label: 'Inactivo', badgeClass: 'text-destructive border-destructive/40' },
+  ended: { label: 'Finalizado', badgeClass: 'text-muted-foreground' },
+};
+
+const statusKey = (status: OrganizationRelationshipStatus | null): 'none' | OrganizationRelationshipStatus =>
+  status ?? 'none';
+
+// Next status per current status, and the label of the action that gets
+// there — mirrors the state machine described for this screen. Every
+// transition goes exclusively through set_provider_relationship_status.
+const NEXT_ACTION: Record<'none' | OrganizationRelationshipStatus, { label: string; next: OrganizationRelationshipStatus }> = {
+  none: { label: 'Agregar como pendiente', next: 'pending' },
+  pending: { label: 'Homologar', next: 'active' },
+  active: { label: 'Suspender', next: 'suspended' },
+  suspended: { label: 'Reactivar', next: 'active' },
+  ended: { label: 'Reabrir como pendiente', next: 'pending' },
+};
 
 export const ApprovedProvidersList = () => {
-  const { user } = useAuth();
-  const [providers, setProviders] = useState<ApprovedProvider[]>([]);
-  const [specialties, setSpecialties] = useState<ClientSpecialty[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showDialog, setShowDialog] = useState(false);
-  const [showSpecialtyDialog, setShowSpecialtyDialog] = useState(false);
-  const [editingProvider, setEditingProvider] = useState<ApprovedProvider | null>(null);
-  const [newSpecialtyName, setNewSpecialtyName] = useState('');
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    specialty: '',
-  });
+  const { directory, loading, error, setStatus } = useProviderRelationships();
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [specialtyFilter, setSpecialtyFilter] = useState<string>('all');
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
+  const availableSpecialties = useMemo(() => {
+    const set = new Set<string>();
+    directory.forEach((entry) => entry.specialties.forEach((specialty) => set.add(specialty)));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [directory]);
 
-  const loadData = async () => {
-    if (!user?.email) return;
-    
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return directory.filter((entry) => {
+      if (term && !entry.organizationName.toLowerCase().includes(term)) return false;
+      if (statusFilter !== 'all' && statusKey(entry.relationshipStatus) !== statusFilter) return false;
+      if (typeFilter !== 'all' && entry.organizationType !== typeFilter) return false;
+      if (specialtyFilter !== 'all' && !entry.specialties.includes(specialtyFilter)) return false;
+      return true;
+    });
+  }, [directory, search, statusFilter, typeFilter, specialtyFilter]);
+
+  const handleAction = async (entry: ProviderDirectoryEntry) => {
+    const action = NEXT_ACTION[statusKey(entry.relationshipStatus)];
+    setPendingActionId(entry.organizationId);
     try {
-      const [providersResult, specialtiesResult] = await Promise.all([
-        supabase
-          .from('client_approved_providers')
-          .select('*')
-          .eq('client_email', user.email)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('client_specialties')
-          .select('*')
-          .eq('client_email', user.email)
-          .order('name', { ascending: true }),
-      ]);
-
-      if (providersResult.error) throw providersResult.error;
-      if (specialtiesResult.error) throw specialtiesResult.error;
-      
-      setProviders(providersResult.data || []);
-      setSpecialties(specialtiesResult.data || []);
-    } catch (error) {
-      console.error('Error loading data:', error);
-      toast.error('Error al cargar datos');
+      await setStatus(entry.organizationId, action.next);
+      toast.success(`${entry.organizationName}: ${action.label.toLowerCase()} correctamente`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo actualizar la relación con el proveedor');
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOpenDialog = (provider?: ApprovedProvider) => {
-    if (provider) {
-      setEditingProvider(provider);
-      setFormData({
-        name: provider.name,
-        email: provider.email,
-        phone: provider.phone || '',
-        specialty: provider.specialty || '',
-      });
-    } else {
-      setEditingProvider(null);
-      setFormData({ name: '', email: '', phone: '', specialty: '' });
-    }
-    setShowDialog(true);
-  };
-
-  const handleCloseDialog = () => {
-    setShowDialog(false);
-    setEditingProvider(null);
-    setFormData({ name: '', email: '', phone: '', specialty: '' });
-  };
-
-  const handleSubmit = async () => {
-    if (!formData.name.trim() || !formData.email.trim()) {
-      toast.error('Nombre y correo son obligatorios');
-      return;
-    }
-
-    try {
-      if (editingProvider) {
-        const { error } = await supabase
-          .from('client_approved_providers')
-          .update({
-            name: formData.name.trim(),
-            email: formData.email.trim(),
-            phone: formData.phone.trim() || null,
-            specialty: formData.specialty || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', editingProvider.id);
-
-        if (error) throw error;
-        toast.success('Proveedor actualizado');
-      } else {
-        const { error } = await supabase
-          .from('client_approved_providers')
-          .insert({
-            client_email: user?.email,
-            name: formData.name.trim(),
-            email: formData.email.trim(),
-            phone: formData.phone.trim() || null,
-            specialty: formData.specialty || null,
-          });
-
-        if (error) throw error;
-        toast.success('Proveedor agregado');
-      }
-
-      handleCloseDialog();
-      loadData();
-    } catch (error) {
-      console.error('Error saving provider:', error);
-      toast.error('Error al guardar proveedor');
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('¿Está seguro de eliminar este proveedor?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('client_approved_providers')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      toast.success('Proveedor eliminado');
-      loadData();
-    } catch (error) {
-      console.error('Error deleting provider:', error);
-      toast.error('Error al eliminar proveedor');
-    }
-  };
-
-  const handleAddSpecialty = async () => {
-    if (!newSpecialtyName.trim()) {
-      toast.error('Ingrese un nombre para la especialidad');
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('client_specialties')
-        .insert({
-          client_email: user?.email,
-          name: newSpecialtyName.trim(),
-        });
-
-      if (error) {
-        if (error.code === '23505') {
-          toast.error('Esta especialidad ya existe');
-        } else {
-          throw error;
-        }
-        return;
-      }
-
-      toast.success('Especialidad agregada');
-      setNewSpecialtyName('');
-      loadData();
-    } catch (error) {
-      console.error('Error adding specialty:', error);
-      toast.error('Error al agregar especialidad');
-    }
-  };
-
-  const handleDeleteSpecialty = async (id: string, name: string) => {
-    if (!confirm(`¿Está seguro de eliminar la especialidad "${name}"?`)) return;
-
-    try {
-      const { error } = await supabase
-        .from('client_specialties')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      toast.success('Especialidad eliminada');
-      loadData();
-    } catch (error) {
-      console.error('Error deleting specialty:', error);
-      toast.error('Error al eliminar especialidad');
+      setPendingActionId(null);
     }
   };
 
@@ -245,265 +108,135 @@ export const ApprovedProvidersList = () => {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <Users className="h-8 w-8 text-primary" />
-            Proveedores Homologados
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Gestiona tu lista de proveedores aprobados
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowSpecialtyDialog(true)}>
-            <Tag className="h-4 w-4 mr-2" />
-            Gestionar Especialidades
-          </Button>
-          <Button onClick={() => handleOpenDialog()}>
-            <Plus className="h-4 w-4 mr-2" />
-            Agregar Proveedor
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold flex items-center gap-3">
+          <Users className="h-8 w-8 text-primary" />
+          Proveedores Homologados
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Organizaciones proveedoras disponibles y tu relación de homologación con cada una.
+        </p>
       </div>
 
-      {/* Specialty badges */}
-      {specialties.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <span className="text-sm text-muted-foreground">Especialidades:</span>
-          {specialties.map((specialty) => (
-            <Badge key={specialty.id} variant="secondary">
-              {specialty.name}
-            </Badge>
-          ))}
+      {error && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          {error}
         </div>
       )}
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Lista de Proveedores ({providers.length})</CardTitle>
+          <CardTitle className="text-lg">Filtros</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-4">
+          <div className="relative md:col-span-2">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Buscar organización..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+            <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
+            <SelectContent className="bg-popover">
+              <SelectItem value="all">Todos los estados</SelectItem>
+              <SelectItem value="none">Disponible</SelectItem>
+              <SelectItem value="pending">Pendiente</SelectItem>
+              <SelectItem value="active">Homologado</SelectItem>
+              <SelectItem value="suspended">Inactivo</SelectItem>
+              <SelectItem value="ended">Finalizado</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value as TypeFilter)}>
+            <SelectTrigger><SelectValue placeholder="Tipo de organización" /></SelectTrigger>
+            <SelectContent className="bg-popover">
+              <SelectItem value="all">Todos los tipos</SelectItem>
+              <SelectItem value="provider_company">Proveedor</SelectItem>
+              <SelectItem value="facility_manager">Facility Manager</SelectItem>
+              <SelectItem value="subcontractor_company">Subcontratista</SelectItem>
+            </SelectContent>
+          </Select>
+          {availableSpecialties.length > 0 && (
+            <Select value={specialtyFilter} onValueChange={setSpecialtyFilter}>
+              <SelectTrigger><SelectValue placeholder="Especialidad" /></SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">Todas las especialidades</SelectItem>
+                {availableSpecialties.map((specialty) => (
+                  <SelectItem key={specialty} value={specialty}>{specialty}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Organizaciones ({filtered.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {providers.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No tienes proveedores homologados registrados</p>
-              <Button variant="outline" className="mt-4" onClick={() => handleOpenDialog()}>
-                <Plus className="h-4 w-4 mr-2" />
-                Agregar tu primer proveedor
-              </Button>
+              <p>No hay organizaciones que coincidan con los filtros.</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Correo</TableHead>
-                  <TableHead>Celular</TableHead>
-                  <TableHead>Especialidad</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead>Organización</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Especialidades</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Acción</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {providers.map((provider) => (
-                  <TableRow key={provider.id}>
-                    <TableCell className="font-medium">{provider.name}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        {provider.email}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {provider.phone ? (
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          {provider.phone}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {provider.specialty ? (
-                        <Badge variant="outline">
-                          <Briefcase className="h-3 w-3 mr-1" />
-                          {provider.specialty}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                {filtered.map((entry) => {
+                  const key = statusKey(entry.relationshipStatus);
+                  const meta = STATUS_META[key];
+                  const action = NEXT_ACTION[key];
+                  return (
+                    <TableRow key={entry.organizationId}>
+                      <TableCell className="font-medium">{entry.organizationName}</TableCell>
+                      <TableCell>{ORGANIZATION_TYPE_LABELS[entry.organizationType]}</TableCell>
+                      <TableCell>
+                        {entry.specialties.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {entry.specialties.map((specialty) => (
+                              <Badge key={specialty} variant="outline">
+                                <Briefcase className="h-3 w-3 mr-1" />
+                                {specialty}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={meta.badgeClass}>{meta.label}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleOpenDialog(provider)}
+                          disabled={pendingActionId === entry.organizationId}
+                          onClick={() => void handleAction(entry)}
                         >
-                          <Pencil className="h-4 w-4" />
+                          {pendingActionId === entry.organizationId ? 'Guardando…' : action.label}
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete(provider.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
         </CardContent>
       </Card>
-
-      {/* Dialog para agregar/editar proveedor */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingProvider ? 'Editar Proveedor' : 'Agregar Proveedor'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nombre *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Nombre del proveedor"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Correo electrónico *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="correo@ejemplo.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Celular</Label>
-              <Input
-                id="phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+51 999 999 999"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="specialty">Especialidad</Label>
-              {specialties.length > 0 ? (
-              <Select
-                  value={formData.specialty || "none"}
-                  onValueChange={(value) => setFormData({ ...formData, specialty: value === "none" ? "" : value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona una especialidad" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    <SelectItem value="none">Sin especialidad</SelectItem>
-                    {specialties.map((specialty) => (
-                      <SelectItem key={specialty.id} value={specialty.name}>
-                        {specialty.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="text-sm text-muted-foreground p-3 border rounded-md">
-                  No hay especialidades definidas. 
-                  <Button
-                    variant="link"
-                    className="px-1 h-auto"
-                    onClick={() => {
-                      setShowDialog(false);
-                      setShowSpecialtyDialog(true);
-                    }}
-                  >
-                    Agregar especialidades
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCloseDialog}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSubmit}>
-              {editingProvider ? 'Guardar Cambios' : 'Agregar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog para gestionar especialidades */}
-      <Dialog open={showSpecialtyDialog} onOpenChange={setShowSpecialtyDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Tag className="h-5 w-5" />
-              Gestionar Especialidades
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Nueva especialidad..."
-                value={newSpecialtyName}
-                onChange={(e) => setNewSpecialtyName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddSpecialty();
-                  }
-                }}
-              />
-              <Button onClick={handleAddSpecialty}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {specialties.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">
-                No hay especialidades definidas
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {specialties.map((specialty) => (
-                  <div
-                    key={specialty.id}
-                    className="flex items-center justify-between p-2 border rounded-md"
-                  >
-                    <span>{specialty.name}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteSpecialty(specialty.id, specialty.name)}
-                      className="text-destructive hover:text-destructive h-8 w-8 p-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSpecialtyDialog(false)}>
-              Cerrar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
