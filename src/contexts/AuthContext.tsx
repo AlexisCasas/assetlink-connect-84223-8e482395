@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable';
 import type { Organization, OrganizationMember, OrganizationMemberRole } from '@/types/organization';
@@ -195,33 +195,91 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Single-flight cache for the organization_members + organizations load:
+  // keyed by userId, so that a SIGNED_IN event arriving through the auth
+  // listener and an explicit login() call for the same sign-in share one
+  // in-flight query instead of firing it twice (and, on bootstrap, the
+  // same protection covers any other overlapping caller). Cleared as soon
+  // as the query settles — never a permanent cache of a resolved promise.
+  const organizationLoadRef = useRef(new Map<string, ReturnType<typeof loadOrganizations>>());
+
+  const loadOrganizationsSingleFlight = (userId: string) => {
+    const inFlight = organizationLoadRef.current.get(userId);
+    if (inFlight) {
+      if (import.meta.env.DEV) console.debug('[auth] reuse in-flight organizations load', userId);
+      return inFlight;
+    }
+    if (import.meta.env.DEV) console.debug('[auth] start organizations load', userId);
+    const promise = loadOrganizations(userId).finally(() => {
+      organizationLoadRef.current.delete(userId);
+    });
+    organizationLoadRef.current.set(userId, promise);
+    return promise;
+  };
+
+  // Bumped on every sign-out so a hydration already in flight for a user
+  // who has since signed out can detect it was superseded and must not
+  // repopulate the context (hydrate User A -> logout -> User A's load
+  // resolves late -> discarded, never re-applied).
+  const sessionGenerationRef = useRef(0);
+
+  // The single central hydration path: bootstrap (INITIAL_SESSION),
+  // subsequent sign-ins (SIGNED_IN) and login() all call this instead of
+  // each running their own loadOrganizations + setAuthState. Returns
+  // whether the resulting state was actually applied (false only when a
+  // sign-out raced ahead of this call while it was pending).
+  const hydrateSession = async (session: Parameters<typeof loadProfile>[0]): Promise<boolean> => {
+    const myGeneration = sessionGenerationRef.current;
+    if (import.meta.env.DEV) console.debug('[auth] hydrate start', session.user.id);
+    const organizationData = await loadOrganizationsSingleFlight(session.user.id);
+    if (sessionGenerationRef.current !== myGeneration) {
+      if (import.meta.env.DEV) console.debug('[auth] hydrate discarded (stale, signed out meanwhile)', session.user.id);
+      return false;
+    }
+    setAuthState(loadProfile(session), organizationData);
+    if (import.meta.env.DEV) console.debug('[auth] hydrate applied', session.user.id);
+    return true;
+  };
+
+  const clearAuthState = () => {
+    sessionGenerationRef.current += 1;
+    setUser(null);
+    setProfile(null);
+    setOrganizations([]);
+    setMemberships([]);
+    setCurrentOrganizationState(null);
+    setLoading(false);
+    if (typeof window !== 'undefined') window.localStorage.removeItem(CURRENT_ORGANIZATION_STORAGE_KEY);
+  };
+
   useEffect(() => {
-    // Listener FIRST
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        setUser(null);
-        setProfile(null);
-        setOrganizations([]);
-        setMemberships([]);
-        setCurrentOrganizationState(null);
+    // Listener FIRST — required both for onAuthStateChange to reliably
+    // deliver INITIAL_SESSION and so no event fired during client
+    // initialization is missed.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (import.meta.env.DEV) console.debug('[auth] event', event, session ? 'session' : 'no-session');
+
+      if (event === 'SIGNED_OUT' || !session) {
+        clearAuthState();
         return;
       }
-      // Defer Supabase calls to avoid deadlock inside the callback
-      setTimeout(() => {
-        loadOrganizations(session.user.id)
-          .then((organizationData) => setAuthState(loadProfile(session), organizationData));
-      }, 0);
-    });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        loadOrganizations(session.user.id).then((organizationData) => {
-          setAuthState(loadProfile(session), organizationData);
-          setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
+      // A refreshed access token does not change organization_members,
+      // organizations, or currentOrganization — re-running hydration for
+      // it would only add contention around the session lock for no
+      // observable benefit. The Supabase client already persists the
+      // refreshed token on its own; nothing here depends on the raw
+      // session/tokens, so there is nothing to update.
+      if (event === 'TOKEN_REFRESHED') return;
+
+      // INITIAL_SESSION (bootstrap) and SIGNED_IN (including the one
+      // login() itself triggers) both flow through the same central,
+      // single-flight hydration. Deferred out of the callback per
+      // supabase-js guidance: never call back into the Supabase client
+      // synchronously from inside onAuthStateChange.
+      setTimeout(() => {
+        void hydrateSession(session).finally(() => setLoading(false));
+      }, 0);
     });
 
     return () => sub.subscription.unsubscribe();
@@ -250,9 +308,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Do not wait only for onAuthStateChange: Login navigates immediately after
     // this promise resolves, so the protected route must already know the user.
-    const organizationData = await loadOrganizations(result.data.session.user.id);
-    setAuthState(loadProfile(result.data.session), organizationData);
-    return true;
+    // Goes through the same central hydrateSession() as the SIGNED_IN event the
+    // auth listener will also receive for this same sign-in — the single-flight
+    // load means whichever caller resolves second just reuses the other's
+    // in-flight query instead of issuing a second one. Returns false (instead
+    // of true) in the rare case a sign-out raced in and the hydration was
+    // discarded, so the caller never navigates with a stale/empty context.
+    return hydrateSession(result.data.session);
   };
 
   const loginWithGoogle = async () => {
@@ -263,12 +325,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-    setOrganizations([]);
-    setMemberships([]);
-    setCurrentOrganizationState(null);
-    if (typeof window !== 'undefined') window.localStorage.removeItem(CURRENT_ORGANIZATION_STORAGE_KEY);
+    // The SIGNED_OUT event from the listener will also call this, but
+    // clearing here too means the UI updates immediately without waiting
+    // for that event to round-trip — clearAuthState() is idempotent.
+    clearAuthState();
   };
 
   const setCurrentOrganization = (organizationId: string | null) => {
