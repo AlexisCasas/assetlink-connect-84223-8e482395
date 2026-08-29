@@ -359,12 +359,19 @@ export const RequestList = () => {
     try {
       const { data: existing } = await supabase
         .from('requests')
-        .select('id')
+        .select('id, status')
         .eq('id', request.id)
         .eq('organization_id', currentOrganization.id)
         .maybeSingle();
 
       if (existing) {
+        // Editing an existing request must never reset its status: only a
+        // still-draft request actually toggles between 'draft' and 'sent'
+        // here — sent/quoted/completed/anulado keep their current status
+        // regardless of which button was clicked (trg_requests_lock_
+        // request_type also rejects a 'draft' regression server-side, this
+        // just avoids relying on that error path for the normal case).
+        const nextStatus = existing.status === 'draft' ? (isDraft ? 'draft' : 'sent') : existing.status;
         const { error: requestError } = await supabase
           .from('requests')
           .update({
@@ -383,7 +390,7 @@ export const RequestList = () => {
             asset_id: request.assetId || null,
             request_type: request.requestType ?? 'external',
             internal_responsible_member_id: request.internalResponsibleMemberId || null,
-            status: isDraft ? 'draft' : 'sent',
+            status: nextStatus,
             is_public: request.isPublic,
             min_quotes: request.minQuotes ?? 3,
           })

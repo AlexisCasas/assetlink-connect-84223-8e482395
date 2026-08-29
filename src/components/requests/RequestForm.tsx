@@ -86,6 +86,10 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [site, setSite] = useState(editingRequest?.branch || '');
   const [branches, setBranches] = useState<ClientBranch[]>([]);
   const [requestType, setRequestType] = useState<RequestType>(editingRequest?.requestType || 'external');
+  // Once a request has left 'draft' (sent/quoted/etc.), request_type is
+  // frozen server-side by trg_requests_lock_request_type — mirrored here
+  // so the user sees why before submitting, not just a failed save.
+  const isRequestTypeLocked = !!editingRequest && editingRequest.status !== 'draft';
   const [internalResponsibleMemberId, setInternalResponsibleMemberId] = useState<string>(editingRequest?.internalResponsibleMemberId || '');
   const [assetId, setAssetId] = useState<string>(editingRequest?.assetId || '');
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
@@ -357,7 +361,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       deadline,
       startTime: undefined,
       selectedProviders,
-      status: isDraft ? 'draft' : 'sent',
+      // Editing a request that already left draft must never reset its
+      // status — only a still-draft request (new or existing) actually
+      // toggles between 'draft' and 'sent' from this form.
+      status: editingRequest && editingRequest.status !== 'draft'
+        ? editingRequest.status
+        : (isDraft ? 'draft' : 'sent'),
       createdAt: editingRequest?.createdAt || new Date().toISOString(),
       createdBy: user?.email || '',
       createdByUserId: editingRequest?.createdByUserId || user?.id,
@@ -458,7 +467,11 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="requestType">Tipo de gestión *</Label>
-                <Select value={requestType} onValueChange={(value) => setRequestType(value as RequestType)}>
+                <Select
+                  value={requestType}
+                  onValueChange={(value) => setRequestType(value as RequestType)}
+                  disabled={isRequestTypeLocked}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-popover">
                     <SelectItem value="external">Externa</SelectItem>
@@ -466,9 +479,11 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  {requestType === 'internal'
-                    ? 'Se ejecuta con tu propio equipo, sin proveedores externos ni marketplace.'
-                    : 'Se cotiza y ejecuta con proveedores externos.'}
+                  {isRequestTypeLocked
+                    ? 'El tipo de gestión no puede modificarse después de enviar la solicitud.'
+                    : requestType === 'internal'
+                      ? 'Se ejecuta con tu propio equipo, sin proveedores externos ni marketplace.'
+                      : 'Se cotiza y ejecuta con proveedores externos.'}
                 </p>
               </div>
             </div>
@@ -988,21 +1003,23 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               Cancelar
             </Button>
             <div className="flex-1" />
-            {/* Solo mostrar botón de borrador si no es una solicitud ya enviada */}
-            {editingRequest?.status !== 'sent' && (
-              <Button 
-                variant="secondary" 
+            {/* Solo mostrar botón de borrador para una solicitud nueva o que
+                todavía sigue en draft — una vez enviada (sent/quoted/
+                completed/anulado) ya no puede volver a draft. */}
+            {(!editingRequest || editingRequest.status === 'draft') && (
+              <Button
+                variant="secondary"
                 onClick={() => handleSubmit(true)}
                 className="flex-1 sm:flex-none"
               >
                 Guardar como borrador
               </Button>
             )}
-            <Button 
+            <Button
               onClick={() => handleSubmit(false)}
               className="flex-1 sm:flex-none"
             >
-              {editingRequest?.status === 'sent'
+              {editingRequest && editingRequest.status !== 'draft'
                 ? 'Guardar cambios'
                 : requestType === 'internal' ? 'Crear solicitud interna' : 'Enviar a Proveedores'}
             </Button>
