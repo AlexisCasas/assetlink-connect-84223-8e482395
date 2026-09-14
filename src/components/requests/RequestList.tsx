@@ -224,7 +224,14 @@ export const RequestList = () => {
         branchId: req.branch_id,
         requiresVisit: req.requires_visit,
         visitDate: req.visit_date,
+        visitScheduleMode: req.visit_schedule_mode ?? undefined,
+        visitContactMemberId: req.visit_contact_member_id ?? undefined,
         minQuotes: req.min_quotes ?? 3,
+        coordinationContactMemberId: req.coordination_contact_member_id ?? undefined,
+        coordinationContactName: req.coordination_contact_name ?? undefined,
+        coordinationContactEmail: req.coordination_contact_email ?? undefined,
+        serviceAddress: req.service_address ?? undefined,
+        convocationMode: req.is_public ? 'public' : 'private',
       }));
 
       setRequests(transformedRequests);
@@ -342,7 +349,18 @@ export const RequestList = () => {
       delegateType: d.delegate_type || '',
     }));
 
-    setEditingRequest({ ...request, details });
+    let selectedProviderOrganizationIds: string[] = [];
+    if (request.requestType !== 'internal') {
+      const { data: accessData } = await supabase
+        .from('request_provider_access')
+        .select('provider_organization_id')
+        .eq('request_id', request.id)
+        .eq('access_type', 'invited')
+        .eq('status', 'active');
+      selectedProviderOrganizationIds = (accessData || []).map((a: any) => a.provider_organization_id);
+    }
+
+    setEditingRequest({ ...request, details, selectedProviderOrganizationIds });
     setShowForm(true);
   };
 
@@ -364,14 +382,27 @@ export const RequestList = () => {
         .eq('organization_id', currentOrganization.id)
         .maybeSingle();
 
+      const isExternal = (request.requestType ?? 'external') === 'external';
+      // Atomicity guard (external only): a request must never reach 'sent'
+      // with is_public already flipped before its audience (is_public +
+      // request_provider_access) is confirmed synced by set_request_audience.
+      // So for any transition into 'sent', the row is first written/kept as
+      // 'draft' — invisible to every provider regardless of is_public,
+      // exactly like today — and only promoted to 'sent' in a dedicated
+      // final step, after set_request_audience has already succeeded. If
+      // that RPC throws (network blip, a relationship revoked between page
+      // load and submit, etc.), the promotion step never runs and the
+      // request simply stays a normal, still-editable draft — it can never
+      // be observed as request_type=external + status=sent + is_public=false
+      // + 0 rows in request_provider_access. `is_public` itself is never
+      // written by this insert/update anymore — set_request_audience is now
+      // its only writer, for the same reason.
+      const wantsToSend = !isDraft;
+      const initialStatus = existing
+        ? (existing.status === 'draft' ? 'draft' : existing.status)
+        : 'draft';
+
       if (existing) {
-        // Editing an existing request must never reset its status: only a
-        // still-draft request actually toggles between 'draft' and 'sent'
-        // here — sent/quoted/completed/anulado keep their current status
-        // regardless of which button was clicked (trg_requests_lock_
-        // request_type also rejects a 'draft' regression server-side, this
-        // just avoids relying on that error path for the normal case).
-        const nextStatus = existing.status === 'draft' ? (isDraft ? 'draft' : 'sent') : existing.status;
         const { error: requestError } = await supabase
           .from('requests')
           .update({
@@ -386,13 +417,18 @@ export const RequestList = () => {
             location: request.location,
             requires_visit: request.requiresVisit,
             visit_date: request.visitDate || null,
+            visit_schedule_mode: request.requiresVisit ? (request.visitScheduleMode ?? null) : null,
+            visit_contact_member_id: request.requiresVisit ? (request.visitContactMemberId || null) : null,
             asset: request.asset,
             asset_id: request.assetId || null,
             request_type: request.requestType ?? 'external',
             internal_responsible_member_id: request.internalResponsibleMemberId || null,
-            status: nextStatus,
-            is_public: request.isPublic,
+            status: initialStatus,
             min_quotes: request.minQuotes ?? 3,
+            coordination_contact_member_id: request.coordinationContactMemberId || null,
+            coordination_contact_name: request.coordinationContactName || null,
+            coordination_contact_email: request.coordinationContactEmail || null,
+            service_address: request.serviceAddress || null,
           })
           .eq('id', request.id)
           .eq('organization_id', currentOrganization.id);
@@ -415,20 +451,25 @@ export const RequestList = () => {
           location: request.location,
           requires_visit: request.requiresVisit,
           visit_date: request.visitDate || null,
+          visit_schedule_mode: request.requiresVisit ? (request.visitScheduleMode ?? null) : null,
+          visit_contact_member_id: request.requiresVisit ? (request.visitContactMemberId || null) : null,
           asset: request.asset,
           asset_id: request.assetId || null,
           request_type: request.requestType ?? 'external',
           internal_responsible_member_id: request.internalResponsibleMemberId || null,
-          status: isDraft ? 'draft' : 'sent',
+          status: initialStatus,
           created_by: user?.email || '',
           created_by_user_id: user?.id || null,
           created_by_name: user?.name || null,
           created_by_email: user?.email || null,
-          is_public: request.isPublic,
           client_name: request.clientName,
           client_branch: request.clientBranch,
           priority: request.priority,
           min_quotes: request.minQuotes ?? 3,
+          coordination_contact_member_id: request.coordinationContactMemberId || null,
+          coordination_contact_name: request.coordinationContactName || null,
+          coordination_contact_email: request.coordinationContactEmail || null,
+          service_address: request.serviceAddress || null,
         });
         if (insertError) throw insertError;
       }
@@ -452,6 +493,35 @@ export const RequestList = () => {
         if (detailsError) throw detailsError;
       }
 
+      // Audience (público/privado + invitaciones) se sincroniza en una sola
+      // transacción server-side, después de que la fila de requests ya
+      // existe — nunca se puede terminar con is_public actualizado pero sin
+      // sus invitaciones (o viceversa). No aplica a solicitudes internas.
+      if (isExternal) {
+        const { error: audienceError } = await supabase.rpc('set_request_audience', {
+          p_request_id: request.id,
+          p_is_public: request.isPublic ?? true,
+          p_provider_organization_ids: request.convocationMode === 'private'
+            ? (request.selectedProviderOrganizationIds || [])
+            : [],
+        });
+        if (audienceError) throw audienceError;
+      }
+
+      // Promoción final a 'sent': solo ocurre aquí, después de que
+      // request_details ya se guardó y (para external) set_request_audience
+      // ya confirmó éxito. Si cualquiera de esos pasos falló, esta línea
+      // nunca se ejecuta y la solicitud queda como 'draft' — nunca a medio
+      // camino entre borrador y enviada.
+      if (wantsToSend && initialStatus === 'draft') {
+        const { error: promoteError } = await supabase
+          .from('requests')
+          .update({ status: 'sent' })
+          .eq('id', request.id)
+          .eq('organization_id', currentOrganization.id);
+        if (promoteError) throw promoteError;
+      }
+
       toast({
         title: isDraft ? 'Borrador guardado' : 'Solicitud actualizada',
         description: isDraft
@@ -466,7 +536,7 @@ export const RequestList = () => {
       console.error('Error saving request:', error);
       toast({
         title: 'Error',
-        description: 'No se pudo guardar la solicitud',
+        description: error instanceof Error && error.message ? error.message : 'No se pudo guardar la solicitud',
         variant: 'destructive',
       });
     }

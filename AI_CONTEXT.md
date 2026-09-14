@@ -1544,3 +1544,77 @@ Inicio de la rama `productization/mvp`.
   criticidad, cumplimiento de inspecciones, eficiencia por período
   (hoy son totales de todo el tiempo sin filtro de fecha), filtros de
   fecha, exportación, dashboard ejecutivo dedicado.
+
+## Formulario de Solicitud v2 + Invitaciones Privadas
+
+- Rama `feature/request-form-v2-private-invitations`. Detalle completo en
+  `docs/REQUEST_FORM_V2_PRIVATE_INVITATIONS.md`. **Sin catálogo paralelo de
+  proveedores ni tabla nueva de invitaciones**: reutiliza
+  `request_provider_access` (Fase 16) como única ACL de audiencia privada y
+  `organization_relationships`/`get_provider_relationship_directory` (Fase
+  18) como único directorio de homologación — ambos ya tenían exactamente
+  la forma que esta fase necesitaba.
+- **La RLS de lectura de `requests`/`quotes` para proveedores no cambió**:
+  `can_user_read_request`/`can_provider_quote_request` (Fase 16/17) ya
+  evaluaban `is_public IS TRUE OR request_provider_access activo` — una
+  solicitud privada con proveedor invitado ya era invisible por RLS para
+  cualquier tercero desde antes de esta fase.
+- Migración `20260914120000_request_form_v2_private_invitations.sql`:
+  `requests` gana `coordination_contact_member_id` + snapshot
+  `coordination_contact_name`/`coordination_contact_email` (sin
+  `coordination_contact_phone` — no hay ninguna fuente real de teléfono en
+  `organization_members`/`auth.users` que snapshotear),
+  `service_address` (snapshot de `client_branches.address`),
+  `visit_schedule_mode` (`scheduled`/`to_schedule`) + `visit_contact_member_id`,
+  con un CHECK que hace imposible requires_visit=false con fecha/modo
+  seteados, o `scheduled` sin fecha, o `to_schedule` con fecha.
+- RPC nueva `get_coordination_contacts` (espejo de
+  `get_assignable_technicians` sin filtro de rol) y RPC transaccional nueva
+  `set_request_audience`: único camino para pasar una solicitud externa de
+  pública a privada (o viceversa) y sincronizar `request_provider_access`,
+  notificaciones (`notify_role_members`, tipo `request_private_invitation`,
+  idempotente vía la dedup ya existente de
+  `20260829150000_operational_notifications.sql`) y `audit_logs` en una
+  sola transacción — nunca puede quedar `is_public` actualizado sin su ACL
+  sincronizada o viceversa. Valida cada proveedor objetivo desde cero
+  (organización activa + `organization_relationships.status = 'active'`
+  con el cliente llamante) y rechaza remover un proveedor que ya cotizó,
+  con el mensaje exacto pedido.
+- `RequestForm.tsx`: reemplaza el mock
+  `setClientUsers(['Juan Pérez', 'María García', 'Carlos López', 'Ana
+  Rodríguez'])` y el bloque muerto (`{false && (...)}`) de selección
+  directa de proveedores legacy. Nueva sección "Coordinación"
+  (`CoordinationContactSelect.tsx`, combobox buscable) y nueva sección
+  "Convocatoria" (solo `request_type = external`): elección explícita
+  Marketplace público / Invitación privada — reemplaza la regla implícita
+  "0 proveedores = pública". `RequestProviderSelector.tsx` es la única
+  fuente de selección de proveedores: `useProviderRelationships()` (Fase
+  18), nunca `provider_profiles` legacy ni mocks; solo organizaciones con
+  relación `active` son seleccionables, el resto se muestra deshabilitado
+  con su estado real. El snapshot de activo (`requests.asset`) ahora
+  guarda la ruta jerárquica completa (`assetPath`, ya calculada por
+  `RequestAssetPicker` desde `feature/assets-requests-integration`) en vez
+  de solo `"<Tipo>: <Nombre>"` — sin columna nueva.
+- `ProviderRequestList.tsx`: columna/badge nueva "Invitación privada" vs
+  "Marketplace", derivada del mismo `request_provider_access` que ya se
+  consultaba para filtrar visibilidad (ninguna query nueva).
+- **Hallazgo de atomicidad corregido**: `RequestList.tsx` escribía
+  `status`/`is_public` en `requests` antes de llamar `set_request_audience`
+  — si esa RPC fallaba, una solicitud podía quedar `sent` + `is_public=false`
+  + 0 filas de `request_provider_access`. Corregido sin tocar la RPC: toda
+  transición a `sent` pasa primero por `status='draft'` y solo se promueve a
+  `sent` después de que `set_request_audience` confirme éxito; `is_public`
+  dejó de escribirse fuera de esa RPC.
+- **RLS verificada con pruebas reales** contra el proyecto Supabase enlazado
+  (`supabase db query --linked`, transacción con `ROLLBACK` final, cero
+  filas persistidas): Proveedor Z no invitado → 0 filas por UUID,
+  `can_provider_quote_request` falso, `INSERT` en `quotes` rechazado por
+  RLS; Cliente B → 0 filas y `set_request_audience` rechazado; X/Y
+  invitados → 1 fila visible y pueden cotizar; re-guardar no duplica ACL ni
+  notificaciones; agregar Z después solo lo notifica a él; remover un
+  proveedor con cotización existente se rechaza sin tocar su acceso.
+  Detalle completo en `docs/REQUEST_FORM_V2_PRIVATE_INVITATIONS.md`.
+- Pendiente documentado (no construido): anulación formal de la
+  participación de un proveedor ya invitado (bloquea la baja, no ofrece
+  alternativa), email/WhatsApp/push, visita técnica completa, transición
+  post-envío interna↔externa.

@@ -55,13 +55,16 @@ interface RequestData {
   client_branch: string | null;
   observations: string | null;
   is_public?: boolean | null;
+  /** true when this organization was privately invited (request_provider_access,
+   * access_type='invited') rather than reading it off the public marketplace. */
+  isPrivateInvitation?: boolean;
 }
 
 interface Assignment {
   team_member_name: string;
 }
 
-type ColumnKey = 'ticket' | 'estado' | 'equipo' | 'operacion' | 'ubicacion' | 'prioridad' | 'coordinador' | 'ingresado' | 'programado' | 'comentarios' | 'cotizacion' | 'acciones';
+type ColumnKey = 'ticket' | 'estado' | 'convocatoria' | 'equipo' | 'operacion' | 'ubicacion' | 'prioridad' | 'coordinador' | 'ingresado' | 'programado' | 'comentarios' | 'cotizacion' | 'acciones';
 
 interface ColumnConfig {
   key: ColumnKey;
@@ -73,16 +76,17 @@ interface ColumnConfig {
 const DEFAULT_COLUMNS: ColumnConfig[] = [
   { key: 'ticket', label: '# Ticket', visible: true, order: 0 },
   { key: 'estado', label: 'Estado', visible: true, order: 1 },
-  { key: 'equipo', label: 'Equipo', visible: true, order: 2 },
-  { key: 'operacion', label: 'Operación', visible: true, order: 3 },
-  { key: 'ubicacion', label: 'Ubicación', visible: true, order: 4 },
-  { key: 'prioridad', label: 'Prior.', visible: true, order: 5 },
-  { key: 'coordinador', label: 'Coordinador', visible: true, order: 6 },
-  { key: 'ingresado', label: 'Ingresado', visible: true, order: 7 },
-  { key: 'programado', label: 'Programado Para', visible: true, order: 8 },
-  { key: 'comentarios', label: 'Comentarios', visible: true, order: 9 },
-  { key: 'cotizacion', label: 'Estado cotización', visible: true, order: 10 },
-  { key: 'acciones', label: 'Acciones', visible: true, order: 11 },
+  { key: 'convocatoria', label: 'Convocatoria', visible: true, order: 2 },
+  { key: 'equipo', label: 'Equipo', visible: true, order: 3 },
+  { key: 'operacion', label: 'Operación', visible: true, order: 4 },
+  { key: 'ubicacion', label: 'Ubicación', visible: true, order: 5 },
+  { key: 'prioridad', label: 'Prior.', visible: true, order: 6 },
+  { key: 'coordinador', label: 'Coordinador', visible: true, order: 7 },
+  { key: 'ingresado', label: 'Ingresado', visible: true, order: 8 },
+  { key: 'programado', label: 'Programado Para', visible: true, order: 9 },
+  { key: 'comentarios', label: 'Comentarios', visible: true, order: 10 },
+  { key: 'cotizacion', label: 'Estado cotización', visible: true, order: 11 },
+  { key: 'acciones', label: 'Acciones', visible: true, order: 12 },
 ];
 
 export const ProviderRequestList = () => {
@@ -161,7 +165,9 @@ export const ProviderRequestList = () => {
 
       if (error) throw error;
 
-      const visibleRequests = (requestsData || []).filter((request) => request.is_public || accessRequestIds.has(request.id));
+      const visibleRequests: RequestData[] = (requestsData || [])
+        .filter((request) => request.is_public || accessRequestIds.has(request.id))
+        .map((request) => ({ ...request, isPrivateInvitation: !request.is_public && accessRequestIds.has(request.id) }));
       setRequests(visibleRequests);
       setQuotes({});
 
@@ -357,6 +363,16 @@ export const ProviderRequestList = () => {
             <Badge className={getServiceTypeColor(request.service_type)}>
               {getServiceTypeText(request.service_type)}
             </Badge>
+          </TableCell>
+        );
+      case 'convocatoria':
+        return (
+          <TableCell key={key}>
+            {request.isPrivateInvitation ? (
+              <Badge variant="outline" className="text-primary border-primary/40">Invitación privada</Badge>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground">Marketplace</Badge>
+            )}
           </TableCell>
         );
       case 'equipo':
