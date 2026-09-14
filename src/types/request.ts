@@ -120,6 +120,19 @@ export interface QuoteCalculationSummary {
 
 export type ServiceType = 'emergencia' | 'correctivo' | 'preventivo' | 'proyecto';
 
+/** 'scheduled' requires visitDate; 'to_schedule' means the provider must
+ * coordinate the visit date later with visitContactMemberId. Only meaningful
+ * while requiresVisit is true — enforced server-side by
+ * requests_visit_schedule_mode_check. */
+export type VisitScheduleMode = 'scheduled' | 'to_schedule';
+
+/** External-only. 'public' keeps the marketplace behavior (any homologated
+ * provider with marketplace access can see/quote it); 'private' restricts
+ * visibility to the organizations selected in selectedProviderOrganizationIds
+ * via request_provider_access. Replaces the old implicit
+ * "0 providers = public" rule. */
+export type ConvocationMode = 'public' | 'private';
+
 /** 'external' (default) goes through providers/quotes/marketplace; 'internal'
  * is executed directly by the client's own organization. Legacy rows without
  * request_type are always treated as 'external'. */
@@ -179,7 +192,19 @@ export interface Request {
   branchId?: string;
   requiresVisit?: boolean;
   visitDate?: string;
+  visitScheduleMode?: VisitScheduleMode;
+  visitContactMemberId?: string;
   minQuotes?: number; // Cantidad mínima de cotizaciones requeridas (default: 3)
+  // Contacto de coordinación (organization_members.id real + snapshot histórico)
+  coordinationContactMemberId?: string;
+  coordinationContactName?: string;
+  coordinationContactEmail?: string;
+  // Dirección del servicio (snapshot de client_branches.address)
+  serviceAddress?: string;
+  // Convocatoria (solo external). selectedProviders permanece legacy/sin uso;
+  // la selección real vive acá y se persiste vía la RPC set_request_audience.
+  convocationMode?: ConvocationMode;
+  selectedProviderOrganizationIds?: string[];
   // Detalle (1 a muchos)
   details?: RequestDetailData[];
 }

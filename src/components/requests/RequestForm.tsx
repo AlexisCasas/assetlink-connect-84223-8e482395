@@ -7,10 +7,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import { Request, RequestType, ServiceType, ClientBranch } from '@/types/request';
-import { Badge } from '@/components/ui/badge';
-import { X, Upload, Search, CheckCircle2, Plus, Trash2, Pencil, CheckCheck } from 'lucide-react';
+import { Request, RequestType, ServiceType, ClientBranch, VisitScheduleMode, ConvocationMode } from '@/types/request';
+import { X, Plus, Trash2, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -18,7 +18,10 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RequestAssetPicker } from './RequestAssetPicker';
 import { RequestAssetSummary } from './RequestAssetSummary';
+import { RequestProviderSelector } from './RequestProviderSelector';
 import { TechnicianSelect } from '@/components/members/TechnicianSelect';
+import { CoordinationContactSelect } from '@/components/members/CoordinationContactSelect';
+import { useCoordinationContacts } from '@/hooks/useCoordinationContacts';
 import { ASSET_NODE_TYPE_LABELS } from '@/lib/assetLabels';
 import type { Asset } from '@/types/asset';
 
@@ -61,9 +64,10 @@ const createEmptyDetail = (): RequestDetail => ({
 });
 
 export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProps) => {
-  const { user, currentOrganization } = useAuth();
+  const { user, currentOrganization, currentMembership } = useAuth();
   const { toast } = useToast();
   const currentOrganizationId = currentOrganization?.id;
+  const { contacts: coordinationContacts } = useCoordinationContacts(currentOrganizationId);
   
   // Formatear fecha para input date
   const formatDateForInput = (dateString: string | undefined) => {
@@ -97,7 +101,35 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [assetTouched, setAssetTouched] = useState(false);
   const [requiresVisit, setRequiresVisit] = useState(editingRequest?.requiresVisit || false);
   const [visitDate, setVisitDate] = useState(formatDateForInput(editingRequest?.visitDate));
+  const [visitScheduleMode, setVisitScheduleMode] = useState<VisitScheduleMode>(
+    editingRequest?.visitScheduleMode || 'scheduled'
+  );
+  const [visitContactMemberId, setVisitContactMemberId] = useState<string>(editingRequest?.visitContactMemberId || '');
   const [minQuotes, setMinQuotes] = useState<number>(editingRequest?.minQuotes ?? 3);
+
+  // Contacto de coordinación: por defecto, el miembro correspondiente al
+  // usuario creador cuando existe (solicitud nueva); una solicitud existente
+  // conserva lo que ya tenía guardado.
+  const [coordinationContactMemberId, setCoordinationContactMemberId] = useState<string>(
+    editingRequest?.coordinationContactMemberId || currentMembership?.id || ''
+  );
+  const [coordinationContactName, setCoordinationContactName] = useState<string>(editingRequest?.coordinationContactName || '');
+  const [coordinationContactEmail, setCoordinationContactEmail] = useState<string>(editingRequest?.coordinationContactEmail || '');
+  const [coordinationContactTouched, setCoordinationContactTouched] = useState(false);
+
+  // Dirección del servicio: snapshot de client_branches.address al
+  // seleccionar sucursal. Una solicitud histórica conserva su propio snapshot
+  // aunque la sucursal cambie de dirección después.
+  const [serviceAddress, setServiceAddress] = useState<string>(editingRequest?.serviceAddress || '');
+
+  // Convocatoria (solo external). Reemplaza la regla implícita "0
+  // proveedores = pública": ahora es una elección explícita.
+  const [convocationMode, setConvocationMode] = useState<ConvocationMode>(
+    editingRequest ? (editingRequest.isPublic === false ? 'private' : 'public') : 'public'
+  );
+  const [selectedProviderOrganizationIds, setSelectedProviderOrganizationIds] = useState<string[]>(
+    editingRequest?.selectedProviderOrganizationIds || []
+  );
   
   // Detalle (1 a muchos) - inicializar con datos existentes o vacío
   const initialDetails = editingRequest?.details?.length 
@@ -123,28 +155,27 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [currentDetail, setCurrentDetail] = useState<RequestDetail | null>(null);
   
-  // Direct provider selection remains legacy. Public requests are the
-  // tenant-aware default until the selector has been migrated.
-  const selectedProviders: string[] = [];
-  const setSelectedProviders = (_providerIds: string[]) => undefined;
-  const [providers, setProviders] = useState<any[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterCertified, setFilterCertified] = useState<'all' | 'certified' | 'non-certified'>('all');
-  const [filterSpecialty, setFilterSpecialty] = useState<string>('all');
-  const [availableSpecialties, setAvailableSpecialties] = useState<string[]>([]);
-  
-  // Usuarios del cliente para encargado
-  const [clientUsers, setClientUsers] = useState<string[]>([]);
-
   useEffect(() => {
     if (currentOrganizationId) {
       fetchBranches(currentOrganizationId);
     } else {
       setBranches([]);
     }
-    // Simular usuarios del cliente (en producción vendría de la base de datos)
-    setClientUsers(['Juan Pérez', 'María García', 'Carlos López', 'Ana Rodríguez']);
   }, [currentOrganizationId]);
+
+  // Default the coordination contact's name/email snapshot to the caller's
+  // own membership once the real directory loads, only for a brand-new
+  // request that hasn't been touched yet — an existing request keeps
+  // whatever snapshot it already had.
+  useEffect(() => {
+    if (editingRequest || coordinationContactTouched) return;
+    if (!coordinationContactMemberId) return;
+    const own = coordinationContacts.find((c) => c.memberId === coordinationContactMemberId);
+    if (own) {
+      setCoordinationContactName(own.name);
+      setCoordinationContactEmail(own.email);
+    }
+  }, [coordinationContacts, coordinationContactMemberId, coordinationContactTouched, editingRequest]);
 
   const fetchBranches = async (organizationId: string) => {
     const { data } = await supabase
@@ -165,6 +196,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
     if (b) {
       setCity(b.city || '');
       setSite(b.site || '');
+      setServiceAddress(b.address || '');
       if (!b.city || !b.site) {
         toast({
           title: 'Sucursal incompleta',
@@ -175,46 +207,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
     } else {
       setCity('');
       setSite('');
-    }
-  };
-
-  const fetchProviders = async () => {
-    const data: any[] = [];
-    setProviders(data || []);
-    
-    const specialties = new Set<string>();
-    (data || []).forEach((provider: any) => {
-      if (provider.specialties && Array.isArray(provider.specialties)) {
-        provider.specialties.forEach((specialty: string) => specialties.add(specialty));
-      }
-    });
-    setAvailableSpecialties(Array.from(specialties).sort());
-  };
-
-  const filteredProviders = providers.filter(provider => {
-    const matchesSearch = provider.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         provider.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCertified = filterCertified === 'all' ||
-                            (filterCertified === 'certified' && provider.certified) ||
-                            (filterCertified === 'non-certified' && !provider.certified);
-    const matchesSpecialty = filterSpecialty === 'all' ||
-                            (provider.specialties && provider.specialties.includes(filterSpecialty));
-    return matchesSearch && matchesCertified && matchesSpecialty;
-  });
-
-  const handleProviderToggle = (providerId: string) => {
-    if (selectedProviders.includes(providerId)) {
-      setSelectedProviders(selectedProviders.filter(id => id !== providerId));
-    } else {
-      if (selectedProviders.length >= 5) {
-        toast({
-          title: "Límite alcanzado",
-          description: "Solo puedes seleccionar hasta 5 proveedores",
-          variant: "destructive",
-        });
-        return;
-      }
-      setSelectedProviders([...selectedProviders, providerId]);
+      setServiceAddress('');
     }
   };
 
@@ -308,20 +301,22 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       return;
     }
 
-    if (requiresVisit && !visitDate) {
+    if (requiresVisit && visitScheduleMode === 'scheduled' && !visitDate) {
       toast({
         title: "Error",
-        description: "Por favor indica la fecha de visita técnica",
+        description: "Por favor indica la fecha de visita técnica, o cambia la programación a \"Por coordinar\".",
         variant: "destructive",
       });
       return;
     }
 
-    if (requestType === 'external' && !isDraft && selectedProviders.length === 0) {
-      const confirmed = window.confirm(
-        "No has seleccionado ningún proveedor. Tu solicitud será publicada como solicitud pública para que cualquier proveedor pueda enviar una cotización. ¿Deseas continuar?"
-      );
-      if (!confirmed) return;
+    if (requestType === 'external' && !isDraft && convocationMode === 'private' && selectedProviderOrganizationIds.length === 0) {
+      toast({
+        title: 'Selecciona al menos un proveedor',
+        description: 'Selecciona al menos un proveedor para enviar una invitación privada.',
+        variant: 'destructive',
+      });
+      return;
     }
 
     const requestNumber = editingRequest?.requestNumber || `SOL-${Date.now().toString().slice(-6)}`;
@@ -336,8 +331,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
     // A freshly touched asset picker overrides the legacy text (selected or
     // cleared); an untouched pre-existing selection keeps whatever text is
     // already saved instead of falling back to the per-detail equipment.
+    // The full hierarchical path (not just "<Tipo>: <Nombre>") is what gets
+    // snapshotted here — it's the only asset context a provider (who has no
+    // RLS to read `assets` directly) ever sees, in RequestList, in
+    // ProviderRequestList and in this request's own detail dialog.
     const assetDisplayText = assetTouched
-      ? (selectedAsset ? `${ASSET_NODE_TYPE_LABELS[selectedAsset.nodeType]}: ${selectedAsset.name}` : (details[0]?.equipment || ''))
+      ? (selectedAsset ? (assetPath || `${ASSET_NODE_TYPE_LABELS[selectedAsset.nodeType]}: ${selectedAsset.name}`) : (details[0]?.equipment || ''))
       : (editingRequest?.asset || details[0]?.equipment || '');
     // request_details still has legacy equipment/sub_equipment/area/sub_area
     // columns; every line now mirrors the single request-level asset instead
@@ -360,7 +359,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       observations: '',
       deadline,
       startTime: undefined,
-      selectedProviders,
+      selectedProviders: [],
       // Editing a request that already left draft must never reset its
       // status — only a still-draft request (new or existing) actually
       // toggles between 'draft' and 'sent' from this form.
@@ -378,15 +377,23 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
       quotes: editingRequest?.quotes || [],
       clientName: branches.find(b => b.id === branchId)?.name || '',
       clientBranch: site,
-      isPublic: requestType === 'external' && selectedProviders.length === 0,
+      isPublic: requestType === 'external' ? convocationMode === 'public' : false,
       // Nuevos campos
       city,
       store: site,
       branch: site,
       branchId,
       requiresVisit,
-      visitDate: requiresVisit ? visitDate : undefined,
+      visitDate: requiresVisit && visitScheduleMode === 'scheduled' ? visitDate : undefined,
+      visitScheduleMode: requiresVisit ? visitScheduleMode : undefined,
+      visitContactMemberId: requiresVisit ? (visitContactMemberId || coordinationContactMemberId || undefined) : undefined,
       minQuotes,
+      coordinationContactMemberId: coordinationContactMemberId || undefined,
+      coordinationContactName: coordinationContactName || undefined,
+      coordinationContactEmail: coordinationContactEmail || undefined,
+      serviceAddress: serviceAddress || undefined,
+      convocationMode: requestType === 'external' ? convocationMode : undefined,
+      selectedProviderOrganizationIds: requestType === 'external' && convocationMode === 'private' ? selectedProviderOrganizationIds : [],
       details: details.map(d => ({
         equipment: detailEquipmentFallback,
         subEquipment: '',
@@ -526,6 +533,16 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                 <Input id="site" value={site} readOnly className="bg-muted" placeholder="Auto desde sucursal" />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="serviceAddress">Dirección del servicio</Label>
+                <Input
+                  id="serviceAddress"
+                  value={serviceAddress}
+                  readOnly
+                  className="bg-muted"
+                  placeholder="Auto desde sucursal"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>Creador</Label>
                 <Input
                   value={user?.name ? `${user.name} (${user.email})` : (user?.email || '')}
@@ -584,32 +601,129 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
                 required
               />
             </div>
+          </div>
 
-            {/* Visita técnica */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Separator />
+
+          {/* COORDINACIÓN */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-primary">Coordinación</h3>
+
+            <CoordinationContactSelect
+              organizationId={currentOrganizationId}
+              value={coordinationContactMemberId || null}
+              onChange={(memberId, contact) => {
+                setCoordinationContactMemberId(memberId || '');
+                setCoordinationContactName(contact?.name || '');
+                setCoordinationContactEmail(contact?.email || '');
+                setCoordinationContactTouched(true);
+              }}
+            />
+
+            <div className="space-y-3">
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="requiresVisit"
                   checked={requiresVisit}
-                  onCheckedChange={(checked) => setRequiresVisit(checked as boolean)}
+                  onCheckedChange={(checked) => {
+                    const next = checked as boolean;
+                    setRequiresVisit(next);
+                    if (!next) { setVisitDate(''); }
+                  }}
                 />
                 <Label htmlFor="requiresVisit" className="cursor-pointer">¿Requiere visita técnica?</Label>
               </div>
 
               {requiresVisit && (
-                <div className="space-y-2">
-                  <Label htmlFor="visitDate">Fecha Visita Técnica *</Label>
-                  <Input
-                    id="visitDate"
-                    type="date"
-                    value={visitDate}
-                    onChange={(e) => setVisitDate(e.target.value)}
-                    required
+                <div className="space-y-4 rounded-lg border p-4">
+                  <div className="space-y-2">
+                    <Label>Programación</Label>
+                    <RadioGroup
+                      value={visitScheduleMode}
+                      onValueChange={(value) => setVisitScheduleMode(value as VisitScheduleMode)}
+                      className="flex flex-col gap-2 sm:flex-row sm:gap-6"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="scheduled" id="visit-scheduled" />
+                        <Label htmlFor="visit-scheduled" className="cursor-pointer font-normal">Fecha definida</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="to_schedule" id="visit-to-schedule" />
+                        <Label htmlFor="visit-to-schedule" className="cursor-pointer font-normal">Por coordinar</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {visitScheduleMode === 'scheduled' ? (
+                    <div className="space-y-2 max-w-xs">
+                      <Label htmlFor="visitDate">Fecha Visita Técnica *</Label>
+                      <Input
+                        id="visitDate"
+                        type="date"
+                        value={visitDate}
+                        onChange={(e) => setVisitDate(e.target.value)}
+                        required
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      El proveedor deberá coordinar la visita con el contacto indicado.
+                    </p>
+                  )}
+
+                  <CoordinationContactSelect
+                    organizationId={currentOrganizationId}
+                    value={visitContactMemberId || coordinationContactMemberId || null}
+                    onChange={(memberId) => setVisitContactMemberId(memberId || '')}
+                    label="Contacto de visita"
                   />
                 </div>
               )}
             </div>
           </div>
+
+          {requestType === 'external' && <Separator />}
+
+          {/* CONVOCATORIA: solo aplica a solicitudes externas. Reemplaza la
+              regla implícita "0 proveedores = pública" por una elección
+              explícita; las internas no usan marketplace ni proveedores. */}
+          {requestType === 'external' && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-primary">Convocatoria</h3>
+
+            <RadioGroup
+              value={convocationMode}
+              onValueChange={(value) => setConvocationMode(value as ConvocationMode)}
+              className="space-y-3"
+            >
+              <div className="flex items-start space-x-2 rounded-lg border p-3">
+                <RadioGroupItem value="public" id="convocation-public" className="mt-1" />
+                <Label htmlFor="convocation-public" className="cursor-pointer font-normal">
+                  <span className="block font-medium text-foreground">Marketplace público</span>
+                  <span className="block text-sm text-muted-foreground">
+                    La solicitud podrá ser consultada por los proveedores habilitados en el marketplace.
+                  </span>
+                </Label>
+              </div>
+              <div className="flex items-start space-x-2 rounded-lg border p-3">
+                <RadioGroupItem value="private" id="convocation-private" className="mt-1" />
+                <Label htmlFor="convocation-private" className="cursor-pointer font-normal">
+                  <span className="block font-medium text-foreground">Invitación privada</span>
+                  <span className="block text-sm text-muted-foreground">
+                    Solo los proveedores seleccionados podrán acceder y cotizar.
+                  </span>
+                </Label>
+              </div>
+            </RadioGroup>
+
+            {convocationMode === 'private' && (
+              <RequestProviderSelector
+                selectedOrganizationIds={selectedProviderOrganizationIds}
+                onChange={setSelectedProviderOrganizationIds}
+              />
+            )}
+          </div>
+          )}
 
           <Separator />
 
@@ -769,16 +883,16 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
 
                   <div className="space-y-2">
                     <Label>Encargado</Label>
-                    <Select 
-                      value={currentDetail.responsibleUser} 
+                    <Select
+                      value={currentDetail.responsibleUser}
                       onValueChange={(value) => updateCurrentDetail('responsibleUser', value)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona encargado" />
                       </SelectTrigger>
                       <SelectContent className="bg-popover">
-                        {clientUsers.map((u) => (
-                          <SelectItem key={u} value={u}>{u}</SelectItem>
+                        {coordinationContacts.map((contact) => (
+                          <SelectItem key={contact.memberId} value={contact.name}>{contact.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -854,148 +968,6 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               </div>
             </DialogContent>
           </Dialog>
-
-          {requestType === 'external' && <Separator />}
-
-          {/* PROVEEDORES: solo aplica a solicitudes externas. Las internas no
-              usan marketplace, cotizaciones ni selección de proveedor. */}
-          {requestType === 'external' && (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
-              Selección directa de proveedores pendiente de migración tenant-aware. Si no seleccionas proveedores, la solicitud se publicará como pública.
-            </div>
-
-            {false && (
-              <>
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Seleccionar proveedores (máximo 5, opcional)</Label>
-                <p className="text-xs text-muted-foreground">
-                  Si no seleccionas proveedores, tu solicitud será pública y cualquier proveedor podrá cotizar
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const allProviderIds = filteredProviders.map(p => p.id);
-                  setSelectedProviders(allProviderIds);
-                  if (allProviderIds.length > 5) {
-                    toast({
-                      title: "Proveedores seleccionados",
-                      description: `Se han seleccionado los ${allProviderIds.length} proveedores disponibles`,
-                    });
-                  }
-                }}
-                disabled={filteredProviders.length === 0}
-              >
-                <CheckCheck className="h-4 w-4 mr-2" />
-                Seleccionar todos
-              </Button>
-            </div>
-            
-            <div className="flex flex-col md:flex-row gap-2">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nombre o email..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Select value={filterSpecialty} onValueChange={setFilterSpecialty}>
-                <SelectTrigger className="w-full md:w-[200px]">
-                  <SelectValue placeholder="Especialidad" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  <SelectItem value="all">Todas las especialidades</SelectItem>
-                  {availableSpecialties.map((specialty) => (
-                    <SelectItem key={specialty} value={specialty}>
-                      {specialty}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={filterCertified} onValueChange={(value: any) => setFilterCertified(value)}>
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue placeholder="Certificación" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="certified">Certificados</SelectItem>
-                  <SelectItem value="non-certified">No certificados</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedProviders.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {selectedProviders.map(providerId => {
-                  const provider = providers.find(p => p.id === providerId);
-                  return provider ? (
-                    <Badge key={providerId} variant="secondary" className="pl-2 pr-1 py-1">
-                      {provider.name}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-4 w-4 ml-1 hover:bg-transparent"
-                        onClick={() => handleProviderToggle(providerId)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  ) : null;
-                })}
-              </div>
-            )}
-
-            <div className="border rounded-lg max-h-48 overflow-y-auto">
-              {filteredProviders.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground text-sm">
-                  No se encontraron proveedores
-                </div>
-              ) : (
-                filteredProviders.map(provider => (
-                  <div
-                    key={provider.id}
-                    className={`flex items-center justify-between p-3 border-b last:border-b-0 cursor-pointer hover:bg-muted/50 transition-colors ${
-                      selectedProviders.includes(provider.id) ? 'bg-primary/10' : ''
-                    }`}
-                    onClick={() => handleProviderToggle(provider.id)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-5 h-5 rounded border flex items-center justify-center ${
-                        selectedProviders.includes(provider.id) 
-                          ? 'bg-primary border-primary' 
-                          : 'border-muted-foreground'
-                      }`}>
-                        {selectedProviders.includes(provider.id) && (
-                          <CheckCircle2 className="w-4 h-4 text-primary-foreground" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">{provider.name}</p>
-                        <p className="text-xs text-muted-foreground">{provider.email}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {provider.certified && (
-                        <Badge variant="outline" className="text-xs">Certificado</Badge>
-                      )}
-                      <Badge variant="secondary" className="text-xs">
-                        ★ {provider.rating?.toFixed(1) || '0.0'}
-                      </Badge>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-              </>
-            )}
-          </div>
-          )}
 
           {/* BOTONES */}
           <div className="flex flex-col sm:flex-row gap-2 pt-4">

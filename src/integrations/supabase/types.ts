@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -2396,6 +2401,9 @@ export type Database = {
           city: string | null
           client_branch: string | null
           client_name: string | null
+          coordination_contact_email: string | null
+          coordination_contact_member_id: string | null
+          coordination_contact_name: string | null
           created_at: string
           created_by: string
           created_by_email: string | null
@@ -2418,13 +2426,16 @@ export type Database = {
           request_number: string
           request_type: string
           requires_visit: boolean | null
+          service_address: string | null
           service_type: Database["public"]["Enums"]["service_type"]
           start_time: string | null
           status: Database["public"]["Enums"]["request_status"]
           store: string | null
           title: string | null
           updated_at: string
+          visit_contact_member_id: string | null
           visit_date: string | null
+          visit_schedule_mode: string | null
         }
         Insert: {
           asset: string
@@ -2434,6 +2445,9 @@ export type Database = {
           city?: string | null
           client_branch?: string | null
           client_name?: string | null
+          coordination_contact_email?: string | null
+          coordination_contact_member_id?: string | null
+          coordination_contact_name?: string | null
           created_at?: string
           created_by: string
           created_by_email?: string | null
@@ -2456,13 +2470,16 @@ export type Database = {
           request_number: string
           request_type?: string
           requires_visit?: boolean | null
+          service_address?: string | null
           service_type: Database["public"]["Enums"]["service_type"]
           start_time?: string | null
           status?: Database["public"]["Enums"]["request_status"]
           store?: string | null
           title?: string | null
           updated_at?: string
+          visit_contact_member_id?: string | null
           visit_date?: string | null
+          visit_schedule_mode?: string | null
         }
         Update: {
           asset?: string
@@ -2472,6 +2489,9 @@ export type Database = {
           city?: string | null
           client_branch?: string | null
           client_name?: string | null
+          coordination_contact_email?: string | null
+          coordination_contact_member_id?: string | null
+          coordination_contact_name?: string | null
           created_at?: string
           created_by?: string
           created_by_email?: string | null
@@ -2494,13 +2514,16 @@ export type Database = {
           request_number?: string
           request_type?: string
           requires_visit?: boolean | null
+          service_address?: string | null
           service_type?: Database["public"]["Enums"]["service_type"]
           start_time?: string | null
           status?: Database["public"]["Enums"]["request_status"]
           store?: string | null
           title?: string | null
           updated_at?: string
+          visit_contact_member_id?: string | null
           visit_date?: string | null
+          visit_schedule_mode?: string | null
         }
         Relationships: [
           {
@@ -2508,6 +2531,13 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requests_coordination_contact_member_id_fkey"
+            columns: ["coordination_contact_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
             referencedColumns: ["id"]
           },
           {
@@ -2522,6 +2552,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requests_visit_contact_member_id_fkey"
+            columns: ["visit_contact_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
             referencedColumns: ["id"]
           },
         ]
@@ -3557,6 +3594,15 @@ export type Database = {
         Args: { p_include_inactive?: boolean; p_organization_id: string }
         Returns: Json
       }
+      get_coordination_contacts: {
+        Args: { p_organization_id: string }
+        Returns: {
+          email: string
+          member_id: string
+          name: string
+          user_id: string
+        }[]
+      }
       get_criticality_matrix: {
         Args: { p_include_inactive?: boolean; p_organization_id: string }
         Returns: Json
@@ -3991,6 +4037,17 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_request_audience: {
+        Args: {
+          p_is_public: boolean
+          p_provider_organization_ids?: string[]
+          p_request_id: string
+        }
+        Returns: {
+          is_public: boolean
+          provider_organization_ids: string[]
+        }[]
       }
       storage_request_id_from_name: {
         Args: { object_name: string }
@@ -4526,12 +4583,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4555,11 +4612,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4580,11 +4637,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4605,11 +4662,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4622,11 +4679,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
