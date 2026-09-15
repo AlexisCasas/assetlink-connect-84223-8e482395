@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -57,7 +57,18 @@ import {
   getServiceTypeColor,
 } from './StatusBadge';
 
-export const RequestList = () => {
+interface RequestListProps {
+  /** Deep-link target from a notification (#requests?request=...&quote=...)
+   * — Dashboard parses the hash and passes these down; this component never
+   * reads window.location.hash itself. Only requests with status='sent' are
+   * ever loaded here (existing query, unchanged) — a request that later
+   * moved to 'quoted'/'completed'/'anulado' degrades to the same "no se
+   * pudo abrir" message as a deleted/inaccessible one. */
+  focusRequestId?: string;
+  focusQuoteId?: string;
+}
+
+export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps = {}) => {
   const { user, currentOrganization } = useAuth();
   const { toast } = useToast();
   const { assets: linkedAssets, assetTree } = useAssets();
@@ -328,6 +339,32 @@ export const RequestList = () => {
     await loadRequestDetails(request.id);
     setShowViewDialog(true);
   };
+
+  // Guards against reprocessing the same focusRequestId on every render —
+  // only acts again if the deep link target itself changes.
+  const processedFocusIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusRequestId || loading) return;
+    if (processedFocusIdRef.current === focusRequestId) return;
+    processedFocusIdRef.current = focusRequestId;
+
+    const found = requests.find((request) => request.id === focusRequestId);
+    if (!found) {
+      toast({
+        title: 'No se pudo abrir la solicitud',
+        description: 'Puede haber sido eliminada o ya no tienes acceso.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (focusQuoteId) {
+      setSelectedRequest(found);
+      setShowQuotesDialog(true);
+    } else {
+      void handleViewRequest(found);
+    }
+  }, [focusRequestId, focusQuoteId, loading, requests]);
 
   const handleEditRequest = async (request: Request) => {
     const { data: detailsData } = await supabase
@@ -729,6 +766,7 @@ export const RequestList = () => {
           open={showQuotesDialog}
           onClose={() => { setShowQuotesDialog(false); setSelectedRequest(null); }}
           request={selectedRequest}
+          focusQuoteId={selectedRequest.id === focusRequestId ? focusQuoteId : undefined}
         />
       )}
 

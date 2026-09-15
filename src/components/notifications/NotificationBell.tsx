@@ -12,6 +12,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useOrganizationNotifications } from '@/hooks/useOrganizationNotifications';
 import { NOTIFICATION_PRIORITY_COLORS, NOTIFICATION_PRIORITY_LABELS, notificationEntityReference } from '@/lib/notificationLabels';
+import { handleNotificationNavigation } from '@/lib/entityNavigation';
 
 interface NotificationBellProps {
   collapsed?: boolean;
@@ -68,7 +69,11 @@ export function NotificationBell({ collapsed = false }: NotificationBellProps) {
               key={notification.id}
               className="flex cursor-pointer flex-col items-start gap-1 whitespace-normal py-2"
               onSelect={() => {
-                if (!notification.is_read) void markAsRead(notification.id);
+                // The dropdown closes immediately (default Radix behavior);
+                // handleNotificationNavigation keeps running afterwards —
+                // it only ever touches window.location.hash and Supabase,
+                // neither of which depends on this menu still being mounted.
+                void handleNotificationNavigation(notification, markAsRead);
               }}
             >
               <div className="flex w-full items-center gap-2">

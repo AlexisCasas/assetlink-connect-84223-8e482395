@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 import {
   RequestTypeBadge,
   WorkOrderStatusBadge,
@@ -22,6 +23,10 @@ interface TechnicianWorkOrderDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workOrder: TechnicianWorkOrder | null;
+  /** Activity to highlight/scroll to, from a deep link
+   * (#work-orders?workOrder=...&activity=...). MVP: highlight + locate
+   * only — never auto-opens the report form. */
+  focusActivityId?: string;
 }
 
 const formatDate = (value: string | null) => value
@@ -38,10 +43,20 @@ const formatDate = (value: string | null) => value
  * displays what get_my_technician_work_orders already returned, plus the
  * work log history.
  */
-export function TechnicianWorkOrderDetailDialog({ open, onOpenChange, workOrder }: TechnicianWorkOrderDetailDialogProps) {
+export function TechnicianWorkOrderDetailDialog({ open, onOpenChange, workOrder, focusActivityId }: TechnicianWorkOrderDetailDialogProps) {
   const [logs, setLogs] = useState<TechnicianWorkLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [reportingActivityId, setReportingActivityId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !focusActivityId) return;
+    // Deferred one tick so the dialog's own open animation/layout has
+    // already happened before we scroll within it.
+    const timer = setTimeout(() => {
+      document.getElementById(`technician-activity-${focusActivityId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [open, focusActivityId, workOrder]);
 
   useEffect(() => {
     if (!open || !workOrder) return;
@@ -112,7 +127,14 @@ export function TechnicianWorkOrderDetailDialog({ open, onOpenChange, workOrder 
           ) : (
             <div className="space-y-2">
               {workOrder.activities.map((activity) => (
-                <div key={activity.id} className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
+                <div
+                  key={activity.id}
+                  id={`technician-activity-${activity.id}`}
+                  className={cn(
+                    'flex items-center justify-between gap-2 rounded-md border p-2 text-sm',
+                    activity.id === focusActivityId && 'ring-2 ring-primary bg-primary/5',
+                  )}
+                >
                   <div className="min-w-0">
                     <p className="truncate">{activity.sequence}. {activity.description}{activity.estimatedHours != null ? ` — ${activity.estimatedHours} h` : ''}</p>
                     {activity.reportsCount > 0 && (

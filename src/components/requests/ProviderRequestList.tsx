@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -89,7 +89,17 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
   { key: 'acciones', label: 'Acciones', visible: true, order: 12 },
 ];
 
-export const ProviderRequestList = () => {
+interface ProviderRequestListProps {
+  /** Deep-link target from a notification (#requests?request=...&quote=...)
+   * — works the same for public and privately-invited opportunities: RLS
+   * on `requests` already decides whether the row comes back at all (see
+   * docs/NOTIFICATION_DEEP_LINKS.md). Dashboard parses the hash and passes
+   * these down; this component never reads window.location.hash itself. */
+  focusRequestId?: string;
+  focusQuoteId?: string;
+}
+
+export const ProviderRequestList = ({ focusRequestId, focusQuoteId }: ProviderRequestListProps = {}) => {
   const { currentOrganization } = useAuth();
   const { toast } = useToast();
   const [requests, setRequests] = useState<RequestData[]>([]);
@@ -135,6 +145,36 @@ export const ProviderRequestList = () => {
   useEffect(() => {
     filterAndSortRequests();
   }, [requests, searchQuery, sortBy, sortOrder, statusFilter, priorityFilter]);
+
+  // Guards against reprocessing the same focusRequestId on every render —
+  // only acts again if the deep link target itself changes. Searches the
+  // unfiltered `requests` (already RLS/is_public/invitation-scoped by
+  // initializeAndLoadRequests) rather than `filteredRequests`, so an active
+  // search/status/priority filter can never hide the deep-linked request.
+  const processedFocusIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusRequestId || loading) return;
+    if (processedFocusIdRef.current === focusRequestId) return;
+    processedFocusIdRef.current = focusRequestId;
+
+    const found = requests.find((request) => request.id === focusRequestId);
+    if (!found) {
+      toast({
+        title: 'No se pudo abrir la solicitud',
+        description: 'La solicitud no existe o ya no tienes acceso.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (focusQuoteId && quotes[found.id]) {
+      setSelectedRequestForQuote(found);
+      setShowQuoteDialog(true);
+    } else {
+      setSelectedRequestForDetail(found);
+      setShowDetailDialog(true);
+    }
+  }, [focusRequestId, focusQuoteId, loading, requests, quotes, toast]);
 
   const initializeAndLoadRequests = async () => {
     if (!currentOrganization || !canViewProviderRequests) {

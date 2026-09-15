@@ -11,7 +11,9 @@ import {
   isOperationalNotificationType,
   notificationEntityReference,
 } from '@/lib/notificationLabels';
+import { handleNotificationNavigation } from '@/lib/entityNavigation';
 import { toast } from 'sonner';
+import { ExternalLink } from 'lucide-react';
 
 type FilterMode = 'all' | 'operational';
 
@@ -37,6 +39,17 @@ export const NotificationList = () => {
       toast.success('Notificacion marcada como leida');
     } else {
       toast.error('No se pudo marcar la notificacion');
+    }
+  };
+
+  // Shared with NotificationBell — the only navigation resolver either of
+  // them calls. A card click and the "Ver detalle" button both use this
+  // exact function; "Marcar como leída" stays a separate, non-navigating
+  // action (stopPropagation'd so it never triggers the card's own click).
+  const handleOpen = async (notification: typeof notifications[number]) => {
+    const navigated = await handleNotificationNavigation(notification, markAsRead);
+    if (!navigated) {
+      toast.error('No se pudo abrir el registro relacionado con esta notificación.');
     }
   };
 
@@ -110,7 +123,19 @@ export const NotificationList = () => {
           {visibleNotifications.map((notification) => {
             const reference = notificationEntityReference(notification.entity_type, notification.metadata);
             return (
-              <Card key={notification.id} className={!notification.is_read ? 'border-primary/50 bg-muted/30' : ''}>
+              <Card
+                key={notification.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => void handleOpen(notification)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    void handleOpen(notification);
+                  }
+                }}
+                className={`cursor-pointer transition-colors hover:bg-muted/50 ${!notification.is_read ? 'border-primary/50 bg-muted/30' : ''}`}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -131,11 +156,25 @@ export const NotificationList = () => {
                         })}
                       </p>
                     </div>
-                    {!notification.is_read && (
-                      <Button variant="ghost" size="sm" onClick={() => void handleMarkAsRead(notification.id)}>
-                        Marcar como leida
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(event) => { event.stopPropagation(); void handleOpen(notification); }}
+                      >
+                        <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                        Ver detalle
                       </Button>
-                    )}
+                      {!notification.is_read && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(event) => { event.stopPropagation(); void handleMarkAsRead(notification.id); }}
+                        >
+                          Marcar como leida
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent><p className="text-sm">{notification.message}</p></CardContent>
