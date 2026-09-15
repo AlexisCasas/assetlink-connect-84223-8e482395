@@ -16,12 +16,16 @@ interface RequestAssetPickerProps {
   /** `path` is the "›"-joined hierarchical breadcrumb of the picked asset,
    * or '' when clearing the selection. */
   onChange: (assetId: string, asset: Asset | null, path: string) => void;
+  /** El activo es opcional en una solicitud pero obligatorio en un aviso de
+   * avería (un aviso siempre es sobre algo). Sin esto, el backlog mostraría
+   * "(opcional)" sobre un campo que sí exige. */
+  label?: string;
 }
 
 /** Combobox to link a request to a real tenant-aware asset of the active
  * organization. Calls useAssets() itself — React Query dedupes the fetch
  * with any other mounted instance (e.g. the Activos module) by query key. */
-export function RequestAssetPicker({ assetId, onChange }: RequestAssetPickerProps) {
+export function RequestAssetPicker({ assetId, onChange, label = 'Activo asociado (opcional)' }: RequestAssetPickerProps) {
   const { assets, assetTree, loading, error } = useAssets();
   const [open, setOpen] = useState(false);
 
@@ -31,7 +35,7 @@ export function RequestAssetPicker({ assetId, onChange }: RequestAssetPickerProp
   if (!loading && assets.length === 0) {
     return (
       <div className="space-y-2">
-        <Label>Activo asociado (opcional)</Label>
+        <Label>{label}</Label>
         <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
           Aún no tienes activos registrados. Puedes crear una solicitud sin activo o registrar
           activos desde el módulo Activos.
@@ -42,7 +46,7 @@ export function RequestAssetPicker({ assetId, onChange }: RequestAssetPickerProp
 
   return (
     <div className="space-y-2">
-      <Label>Activo asociado (opcional)</Label>
+      <Label>{label}</Label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button

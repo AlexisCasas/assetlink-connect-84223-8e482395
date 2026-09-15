@@ -28,11 +28,12 @@ import {
   Gauge,
   ClipboardCheck
   ,Shield
+  ,AlertTriangle
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'admin') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'backlog' | 'admin') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -91,6 +92,12 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   // even though they cannot edit templates/plans (gated inside
   // InspectionsView itself via canPlanWork, not at the nav level).
   const canViewInspections = canViewAssets && !!currentMembership?.isActive && ['owner', 'admin', 'manager', 'technician'].includes(currentMembership.role);
+  // El backlog de avisos es del cliente dueño de los activos, igual que
+  // Activos/Criticidad/Inspecciones. Se muestra a todo el que puede
+  // REPORTAR (incluidos technician y requester); quien solo puede leer ve
+  // los avisos pero sin acciones, y las de gestión las vuelve a validar el
+  // backend. Ocultar el ítem nunca es la autorización.
+  const canViewBacklog = canViewAssets && !!currentMembership?.isActive && ['owner', 'admin', 'manager', 'technician', 'requester'].includes(currentMembership.role);
 
   return (
     <aside className={cn(
@@ -269,6 +276,23 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               !collapsed && "mr-2"
             )} />
             {!collapsed && 'Inspecciones'}
+          </Button>
+        )}
+
+        {canViewBacklog && (
+          <Button
+            variant={currentView === 'backlog' ? "default" : "ghost"}
+            className={cn(
+              "w-full justify-start",
+              collapsed && "justify-center px-2"
+            )}
+            onClick={() => onViewChange?.('backlog')}
+          >
+            <AlertTriangle className={cn(
+              "h-4 w-4",
+              !collapsed && "mr-2"
+            )} />
+            {!collapsed && 'Backlog'}
           </Button>
         )}
 

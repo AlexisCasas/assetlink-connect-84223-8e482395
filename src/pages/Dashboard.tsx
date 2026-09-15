@@ -20,6 +20,7 @@ import { AdminConsole } from '@/components/admin/AdminConsole';
 import { EfficiencyDashboard } from '@/components/analytics/EfficiencyDashboard';
 import { CriticalityMatrixView } from '@/components/criticality/CriticalityMatrixView';
 import { InspectionsView } from '@/components/inspections/InspectionsView';
+import { BacklogView } from '@/components/backlog/BacklogView';
 import { useToast } from '@/hooks/use-toast';
 import { parseEntityHash, type DashboardView, type ParsedEntityHash } from '@/lib/entityNavigation';
 
@@ -167,6 +168,11 @@ const Dashboard = () => {
         return <CriticalityMatrixView />;
       case 'inspections':
         return <InspectionsView focusPlanId={focus.inspectionPlanId} focusRunId={focus.inspectionRunId} />;
+      case 'backlog':
+        // BacklogView se defiende sola de un #backlog directo desde una
+        // organización que no es cliente; el gating del sidebar nunca es la
+        // autorización.
+        return <BacklogView focusNoticeId={focus.noticeId} />;
       case 'admin': return <AdminConsole />;
       default:
         // Real dashboard — see docs/REAL_DASHBOARD_METRICS.md.

@@ -20,13 +20,14 @@ export type DashboardView =
   | 'efficiency'
   | 'criticality'
   | 'inspections'
+  | 'backlog'
   | 'contact'
   | 'admin';
 
 export const ALL_DASHBOARD_VIEWS: DashboardView[] = [
   'dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications',
   'approved-providers', 'branches', 'work-orders', 'my-work-orders', 'inventory', 'efficiency',
-  'criticality', 'inspections', 'contact', 'admin',
+  'criticality', 'inspections', 'backlog', 'contact', 'admin',
 ];
 
 export interface EntityNavigationTarget {
@@ -38,6 +39,7 @@ export interface EntityNavigationTarget {
   activityId?: string;
   inspectionPlanId?: string;
   inspectionRunId?: string;
+  noticeId?: string;
 }
 
 /** What parseEntityHash extracts from window.location.hash: a logical view
@@ -54,6 +56,7 @@ const QUERY_KEYS = {
   activityId: 'activity',
   inspectionPlanId: 'plan',
   inspectionRunId: 'run',
+  noticeId: 'notice',
 } as const;
 
 /**
@@ -180,6 +183,16 @@ export async function resolveNotificationTarget(
       const planId = asNonEmptyString(metadata.plan_id);
       if (!planId) return null;
       return { view: 'inspections', inspectionPlanId: planId };
+    }
+
+    case 'maintenance_notice': {
+      // entity_id es el id real del aviso (lo escribe
+      // create_maintenance_notice). El deep link solo indica QUÉ abrir: si
+      // quien hace clic no es miembro del tenant dueño del aviso, la RLS de
+      // maintenance_notices devuelve 0 filas y el backlog muestra "no se
+      // pudo abrir" — el hash nunca es autorización.
+      if (!notification.entity_id) return null;
+      return { view: 'backlog', noticeId: notification.entity_id };
     }
 
     case 'inspection_run': {

@@ -1494,6 +1494,167 @@ export type Database = {
           },
         ]
       }
+      maintenance_notice_counters: {
+        Row: {
+          last_number: number
+          organization_id: string
+          year: number
+        }
+        Insert: {
+          last_number?: number
+          organization_id: string
+          year: number
+        }
+        Update: {
+          last_number?: number
+          organization_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_notice_counters_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_notices: {
+        Row: {
+          asset_code_snapshot: string | null
+          asset_id: string
+          asset_name_snapshot: string | null
+          asset_path_snapshot: string | null
+          branch_id_snapshot: string | null
+          branch_name_snapshot: string | null
+          converted_at: string | null
+          converted_by_user_id: string | null
+          converted_request_id: string | null
+          created_at: string
+          description: string
+          dismissal_reason: string | null
+          dismissed_at: string | null
+          dismissed_by_user_id: string | null
+          id: string
+          notice_number: string
+          organization_id: string
+          priority: string
+          reported_at: string
+          reported_by_user_id: string | null
+          responsible_member_id: string | null
+          source_id: string | null
+          source_metadata: Json
+          source_type: string
+          status: string
+          title: string
+          triage_notes: string | null
+          triaged_at: string | null
+          triaged_by_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          asset_code_snapshot?: string | null
+          asset_id: string
+          asset_name_snapshot?: string | null
+          asset_path_snapshot?: string | null
+          branch_id_snapshot?: string | null
+          branch_name_snapshot?: string | null
+          converted_at?: string | null
+          converted_by_user_id?: string | null
+          converted_request_id?: string | null
+          created_at?: string
+          description: string
+          dismissal_reason?: string | null
+          dismissed_at?: string | null
+          dismissed_by_user_id?: string | null
+          id?: string
+          notice_number: string
+          organization_id: string
+          priority?: string
+          reported_at?: string
+          reported_by_user_id?: string | null
+          responsible_member_id?: string | null
+          source_id?: string | null
+          source_metadata?: Json
+          source_type?: string
+          status?: string
+          title: string
+          triage_notes?: string | null
+          triaged_at?: string | null
+          triaged_by_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          asset_code_snapshot?: string | null
+          asset_id?: string
+          asset_name_snapshot?: string | null
+          asset_path_snapshot?: string | null
+          branch_id_snapshot?: string | null
+          branch_name_snapshot?: string | null
+          converted_at?: string | null
+          converted_by_user_id?: string | null
+          converted_request_id?: string | null
+          created_at?: string
+          description?: string
+          dismissal_reason?: string | null
+          dismissed_at?: string | null
+          dismissed_by_user_id?: string | null
+          id?: string
+          notice_number?: string
+          organization_id?: string
+          priority?: string
+          reported_at?: string
+          reported_by_user_id?: string | null
+          responsible_member_id?: string | null
+          source_id?: string | null
+          source_metadata?: Json
+          source_type?: string
+          status?: string
+          title?: string
+          triage_notes?: string | null
+          triaged_at?: string | null
+          triaged_by_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_notices_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_notices_branch_id_snapshot_fkey"
+            columns: ["branch_id_snapshot"]
+            isOneToOne: false
+            referencedRelation: "client_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_notices_converted_request_id_fkey"
+            columns: ["converted_request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_notices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_notices_responsible_member_id_fkey"
+            columns: ["responsible_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       materials: {
         Row: {
           code: string
@@ -3480,11 +3641,19 @@ export type Database = {
         Args: { p_template_id: string }
         Returns: boolean
       }
+      can_manage_maintenance_notice: {
+        Args: { p_organization_id: string }
+        Returns: boolean
+      }
       can_provider_quote_request: {
         Args: {
           target_provider_organization_id: string
           target_request_id: string
         }
+        Returns: boolean
+      }
+      can_report_maintenance_notice: {
+        Args: { p_organization_id: string }
         Returns: boolean
       }
       can_user_manage_request_access: {
@@ -3499,6 +3668,47 @@ export type Database = {
       clear_active_criticality_matrix: {
         Args: { p_organization_id: string }
         Returns: Json
+      }
+      convert_maintenance_notice: {
+        Args: { p_notice_id: string; p_request_id: string }
+        Returns: {
+          asset_code_snapshot: string | null
+          asset_id: string
+          asset_name_snapshot: string | null
+          asset_path_snapshot: string | null
+          branch_id_snapshot: string | null
+          branch_name_snapshot: string | null
+          converted_at: string | null
+          converted_by_user_id: string | null
+          converted_request_id: string | null
+          created_at: string
+          description: string
+          dismissal_reason: string | null
+          dismissed_at: string | null
+          dismissed_by_user_id: string | null
+          id: string
+          notice_number: string
+          organization_id: string
+          priority: string
+          reported_at: string
+          reported_by_user_id: string | null
+          responsible_member_id: string | null
+          source_id: string | null
+          source_metadata: Json
+          source_type: string
+          status: string
+          title: string
+          triage_notes: string | null
+          triaged_at: string | null
+          triaged_by_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "maintenance_notices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       create_inspection_run_from_plan: {
         Args: { p_plan_id: string }
@@ -3559,6 +3769,56 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "work_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_maintenance_notice: {
+        Args: {
+          p_asset_id: string
+          p_description: string
+          p_organization_id: string
+          p_priority?: string
+          p_source_id?: string
+          p_source_item_id?: string
+          p_source_type?: string
+          p_title: string
+        }
+        Returns: {
+          asset_code_snapshot: string | null
+          asset_id: string
+          asset_name_snapshot: string | null
+          asset_path_snapshot: string | null
+          branch_id_snapshot: string | null
+          branch_name_snapshot: string | null
+          converted_at: string | null
+          converted_by_user_id: string | null
+          converted_request_id: string | null
+          created_at: string
+          description: string
+          dismissal_reason: string | null
+          dismissed_at: string | null
+          dismissed_by_user_id: string | null
+          id: string
+          notice_number: string
+          organization_id: string
+          priority: string
+          reported_at: string
+          reported_by_user_id: string | null
+          responsible_member_id: string | null
+          source_id: string | null
+          source_metadata: Json
+          source_type: string
+          status: string
+          title: string
+          triage_notes: string | null
+          triaged_at: string | null
+          triaged_by_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "maintenance_notices"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3661,6 +3921,47 @@ export type Database = {
       delete_work_order_material: {
         Args: { p_work_order_material_id: string }
         Returns: undefined
+      }
+      dismiss_maintenance_notice: {
+        Args: { p_notice_id: string; p_reason: string }
+        Returns: {
+          asset_code_snapshot: string | null
+          asset_id: string
+          asset_name_snapshot: string | null
+          asset_path_snapshot: string | null
+          branch_id_snapshot: string | null
+          branch_name_snapshot: string | null
+          converted_at: string | null
+          converted_by_user_id: string | null
+          converted_request_id: string | null
+          created_at: string
+          description: string
+          dismissal_reason: string | null
+          dismissed_at: string | null
+          dismissed_by_user_id: string | null
+          id: string
+          notice_number: string
+          organization_id: string
+          priority: string
+          reported_at: string
+          reported_by_user_id: string | null
+          responsible_member_id: string | null
+          source_id: string | null
+          source_metadata: Json
+          source_type: string
+          status: string
+          title: string
+          triage_notes: string | null
+          triaged_at: string | null
+          triaged_by_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "maintenance_notices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       generate_inspection_due_notifications: { Args: never; Returns: undefined }
       generate_operational_due_notifications: {
@@ -3936,6 +4237,44 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: Json
       }
+      get_maintenance_notices: {
+        Args: { p_organization_id: string }
+        Returns: {
+          asset_code_snapshot: string
+          asset_current_criticality: string
+          asset_id: string
+          asset_name_snapshot: string
+          asset_path_snapshot: string
+          branch_id_snapshot: string
+          branch_name_snapshot: string
+          converted_at: string
+          converted_by_name: string
+          converted_request_id: string
+          converted_request_number: string
+          created_at: string
+          description: string
+          dismissal_reason: string
+          dismissed_at: string
+          dismissed_by_name: string
+          id: string
+          notice_number: string
+          organization_id: string
+          priority: string
+          reported_at: string
+          reported_by_name: string
+          reported_by_user_id: string
+          responsible_member_id: string
+          responsible_name: string
+          source_id: string
+          source_metadata: Json
+          source_type: string
+          status: string
+          title: string
+          triage_notes: string
+          triaged_at: string
+          triaged_by_name: string
+        }[]
+      }
       get_my_technician_work_orders: {
         Args: never
         Returns: {
@@ -4064,6 +4403,10 @@ export type Database = {
         Args: { request_priority: number }
         Returns: string
       }
+      next_maintenance_notice_number: {
+        Args: { p_organization_id: string }
+        Returns: string
+      }
       notify_member: {
         Args: {
           p_actor_user_id: string
@@ -4135,6 +4478,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      resolve_asset_branch: { Args: { p_asset_id: string }; Returns: string }
       resolve_asset_path: { Args: { p_asset_id: string }; Returns: string }
       resolve_caller_planner_member: {
         Args: { p_organization_id: string }
@@ -4377,6 +4721,52 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "work_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      triage_maintenance_notice: {
+        Args: {
+          p_notice_id: string
+          p_priority?: string
+          p_responsible_member_id?: string
+          p_triage_notes?: string
+        }
+        Returns: {
+          asset_code_snapshot: string | null
+          asset_id: string
+          asset_name_snapshot: string | null
+          asset_path_snapshot: string | null
+          branch_id_snapshot: string | null
+          branch_name_snapshot: string | null
+          converted_at: string | null
+          converted_by_user_id: string | null
+          converted_request_id: string | null
+          created_at: string
+          description: string
+          dismissal_reason: string | null
+          dismissed_at: string | null
+          dismissed_by_user_id: string | null
+          id: string
+          notice_number: string
+          organization_id: string
+          priority: string
+          reported_at: string
+          reported_by_user_id: string | null
+          responsible_member_id: string | null
+          source_id: string | null
+          source_metadata: Json
+          source_type: string
+          status: string
+          title: string
+          triage_notes: string | null
+          triaged_at: string | null
+          triaged_by_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "maintenance_notices"
           isOneToOne: true
           isSetofReturn: false
         }

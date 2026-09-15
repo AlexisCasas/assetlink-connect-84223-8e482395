@@ -1,0 +1,137 @@
+import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { useOrganizationPlanners } from '@/hooks/useOrganizationPlanners';
+import type { MaintenanceNotice, MaintenanceNoticePriority, TriageMaintenanceNoticeInput } from '@/types/maintenanceNotice';
+import { MAINTENANCE_NOTICE_PRIORITY_LABELS } from '@/types/maintenanceNotice';
+
+interface MaintenanceNoticeTriageDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  notice: MaintenanceNotice | null;
+  organizationId: string | null | undefined;
+  onTriage: (input: TriageMaintenanceNoticeInput) => Promise<void>;
+}
+
+const PRIORITIES: MaintenanceNoticePriority[] = ['low', 'medium', 'high', 'urgent'];
+const NO_RESPONSIBLE = '__none__';
+
+/** Revisar un aviso: confirmar o corregir la prioridad reportada, dejar
+ * notas y asignar un responsable de seguimiento. Revisar NO planifica nada
+ * — el aviso sigue siendo un aviso hasta que alguien decida convertirlo. */
+export function MaintenanceNoticeTriageDialog({
+  open,
+  onOpenChange,
+  notice,
+  organizationId,
+  onTriage,
+}: MaintenanceNoticeTriageDialogProps) {
+  const { toast } = useToast();
+  const { planners, loading: loadingPlanners } = useOrganizationPlanners(open ? organizationId : null);
+  const [priority, setPriority] = useState<MaintenanceNoticePriority>('medium');
+  const [triageNotes, setTriageNotes] = useState('');
+  const [responsibleMemberId, setResponsibleMemberId] = useState<string>(NO_RESPONSIBLE);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!notice) return;
+    setPriority(notice.priority);
+    setTriageNotes(notice.triageNotes ?? '');
+    setResponsibleMemberId(notice.responsibleMemberId ?? NO_RESPONSIBLE);
+  }, [notice]);
+
+  if (!notice) return null;
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    try {
+      await onTriage({
+        noticeId: notice.id,
+        priority,
+        triageNotes: triageNotes.trim() || undefined,
+        responsibleMemberId: responsibleMemberId === NO_RESPONSIBLE ? null : responsibleMemberId,
+      });
+      toast({ title: 'Aviso revisado', description: `${notice.noticeNumber} quedó marcado como revisado.` });
+      onOpenChange(false);
+    } catch (error) {
+      toast({
+        title: 'No se pudo revisar el aviso',
+        description: error instanceof Error ? error.message : 'Intenta nuevamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Revisar {notice.noticeNumber}</DialogTitle>
+          <DialogDescription>{notice.title}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Prioridad</Label>
+            <Select value={priority} onValueChange={(value) => setPriority(value as MaintenanceNoticePriority)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PRIORITIES.map((value) => (
+                  <SelectItem key={value} value={value}>{MAINTENANCE_NOTICE_PRIORITY_LABELS[value]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Responsable de seguimiento</Label>
+            <Select value={responsibleMemberId} onValueChange={setResponsibleMemberId} disabled={loadingPlanners}>
+              <SelectTrigger><SelectValue placeholder="Sin responsable" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_RESPONSIBLE}>Sin responsable</SelectItem>
+                {planners.map((planner) => (
+                  <SelectItem key={planner.memberId} value={planner.memberId}>
+                    {planner.name} — {planner.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="triage-notes">Notas de revisión</Label>
+            <Textarea
+              id="triage-notes"
+              value={triageNotes}
+              onChange={(event) => setTriageNotes(event.target.value)}
+              placeholder="Qué se verificó, qué falta por confirmar"
+              rows={4}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={saving}>
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Guardar revisión
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
