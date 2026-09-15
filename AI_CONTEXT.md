@@ -1684,3 +1684,77 @@ Inicio de la rama `productization/mvp`.
   arranque de `npm run dev` (HTTP 200, sin errores de módulos). Los 10 casos
   manuales de clic/F5/Back-Forward con sesión real quedan pendientes de
   verificación por el equipo antes de mergear.
+
+## Criticidad V2: plantillas, Excel y evaluación masiva
+
+- Rama `feature/criticality-v2-templates-excel`. Detalle completo en
+  `docs/CRITICALITY_V2_TEMPLATES_EXCEL.md`. Migración
+  `20260915120000_criticality_v2_templates_excel.sql` — **no modifica**
+  `20260829190000_configurable_criticality_matrix.sql`: lo que cambia de esa
+  fase se hace con `CREATE OR REPLACE` de **misma firma**
+  (`get_criticality_matrix`, `calculate_asset_criticality`), así que ningún
+  call site existente cambió de contrato.
+- **Motor común de cálculo** (lo más importante): nuevo helper
+  `validate_and_score_asset_criticality(asset, answers, expected_org)` — única
+  implementación de "validar + puntuar" del sistema. La fórmula
+  (`Σ round(score * weight / 100, 2)`) y los umbrales (25/50/75) viven solo
+  ahí. Lo reusan `calculate_asset_criticality` (individual, API intacta),
+  `preview_bulk_asset_criticality` (dry run) y
+  `bulk_calculate_asset_criticality`. **Nunca se replicó la fórmula en
+  JavaScript**: el score del preview sale del mismo SQL que el definitivo.
+  Helper interno sin `GRANT` a `authenticated` (patrón `resolve_asset_path`).
+- `criticality_parameters`/`_options` ganaron `code` (identificador técnico
+  estable para el round-trip de Excel), con backfill determinístico y triggers
+  que lo autogeneran — los RPC manuales **no cambiaron de firma**, no se
+  crearon overloads. Unicidad **parcial sobre `is_active`**: obligatorio,
+  porque el módulo nunca borra (solo desactiva) y un índice total impediría
+  reimportar la misma matriz con los mismos códigos.
+- Plantillas: `criticality_matrix_templates` + `_parameters` + `_options`,
+  `scope='system'` (global) u `'organization'` (privada). Solo policies de
+  `SELECT`; escritura exclusivamente por RPC (`get_criticality_templates`,
+  `get_criticality_template`, `apply_criticality_template`,
+  `create_template_from_current_matrix`). **Cero plantillas `system` cargadas
+  a propósito** — la infraestructura existe, el contenido HVAC/etc. espera
+  validación de negocio.
+- `replace_criticality_matrix(org, jsonb)`: valida todo el payload primero,
+  luego desactiva (`is_active=false`, **nunca DELETE**) y recién inserta.
+  `apply_criticality_template` arma el payload y delega ahí, así el reemplazo
+  tiene una sola implementación. Peso total ≠ 100 **no bloquea**.
+- Excel: dependencia **`exceljs@4.4.0`** (npm, sin CDN; `xlsx` descartada por
+  advisories *high* sin fix en npm dentro del parser mismo). Import dinámico →
+  chunk propio de ~939 KB, fuera del bundle principal.
+  `src/lib/criticalityExcel.ts` (contrato y parsing) +
+  `src/lib/criticalityImportValidation.ts` (validación estructural) fuera de
+  React. En la plantilla de evaluación masiva, `ID interno` es el UUID real de
+  `assets` y es la única identidad técnica; los activos incluidos son los no
+  archivados, misma regla que ya usa el árbol (`filterArchived`).
+- Verificado de verdad en este entorno: migración + **17 checks SQL** contra el
+  proyecto remoto enlazado en transacción con `ROLLBACK` (regresión
+  individual, historial intacto tras reemplazo, multitenant de plantillas con
+  UUID real, preview/bulk, abort sin escrituras parciales, validaciones de
+  payload) y el **contrato Excel end-to-end en Node** con los módulos reales
+  (export → import → validación, peso 25→30, columna faltante, score texto,
+  peso negativo, código inconsistente, opción inexistente). Pendiente: clics
+  reales en navegador (sin herramienta de automatización aquí).
+
+### Nueva matriz en blanco
+
+- Migración `20260915130000_criticality_clear_active_matrix.sql` —
+  **separada** de la anterior a propósito: `20260915120000` ya estaba aplicada
+  al proyecto enlazado cuando se pidió este botón, así que editarla habría
+  desincronizado el archivo local del historial remoto de migraciones.
+- `clear_active_criticality_matrix(p_organization_id)`: 2 `UPDATE`
+  transaccionales (opciones activas → parámetros activos), misma lógica de
+  desactivación que ya vivía dentro de `replace_criticality_matrix`, sin la
+  inserción posterior. Nunca `DELETE`, nunca toca plantillas ni evaluaciones
+  históricas ni `assets.criticality`. Idempotente sin parámetros activos.
+- Botón en `CriticalityMatrixView.tsx` visible solo para
+  owner/admin/manager/platform_admin (mismo chequeo que la RPC, solo cortesía
+  visual), con `AlertDialog` de confirmación antes de ejecutar.
+- Verificado con 10 checks SQL contra el proyecto remoto en transacción con
+  `ROLLBACK`: matriz activa creada → plantilla guardada → Cliente B (otra
+  organización) rechazado → limpiar (2 parámetros/4 opciones desactivados,
+  nunca borrados) → matriz activa vacía → plantilla intacta → evaluación
+  histórica y `assets.criticality` sin cambios → idempotencia (limpiar de
+  nuevo da 0/0 sin error) → aplicar la plantilla guardada vuelve a poblar la
+  matriz.

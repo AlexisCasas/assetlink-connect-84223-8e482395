@@ -1,28 +1,51 @@
 import { useState } from 'react';
-import { Gauge, Plus, Pencil, EyeOff, Eye, AlertTriangle, ListChecks } from 'lucide-react';
+import { Gauge, Plus, Pencil, EyeOff, Eye, AlertTriangle, ListChecks, LayoutTemplate, FileSpreadsheet, Upload, Download, Save, FilePlus2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCriticalityMatrix } from '@/hooks/useCriticalityMatrix';
+import { useCriticalityTemplates } from '@/hooks/useCriticalityTemplates';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { CriticalityParameterDialog } from './CriticalityParameterDialog';
 import { CriticalityOptionDialog } from './CriticalityOptionDialog';
+import { CriticalityTemplatesDialog } from './CriticalityTemplatesDialog';
+import { CriticalitySaveTemplateDialog } from './CriticalitySaveTemplateDialog';
+import { CriticalityMatrixImportDialog } from './CriticalityMatrixImportDialog';
+import { CriticalityBulkAssessmentDialog } from './CriticalityBulkAssessmentDialog';
+import { buildMatrixWorkbook, downloadBlob, matrixFileName } from '@/lib/criticalityExcel';
 import type { CriticalityOption, CriticalityOptionInput, CriticalityParameter, CriticalityParameterInput } from '@/types/criticalityMatrix';
 
 export function CriticalityMatrixView() {
-  const { currentOrganization } = useAuth();
+  const { currentOrganization, currentMembership } = useAuth();
   const {
     matrix,
+    activeParameters,
     totalActiveWeight,
     loading,
     saving,
     error,
+    refresh,
     saveParameter,
     saveOption,
     toggleParameterActive,
     toggleOptionActive,
+    replaceMatrix,
+    clearActiveMatrix,
+    previewBulk,
+    applyBulk,
   } = useCriticalityMatrix(currentOrganization?.id);
+  const { saving: templateSaving, saveCurrentMatrixAsTemplate } = useCriticalityTemplates(currentOrganization?.id);
   const { toast } = useToast();
 
   const [parameterDialogOpen, setParameterDialogOpen] = useState(false);
@@ -30,10 +53,48 @@ export function CriticalityMatrixView() {
   const [optionDialogOpen, setOptionDialogOpen] = useState(false);
   const [editingOption, setEditingOption] = useState<CriticalityOption | null>(null);
   const [optionParameter, setOptionParameter] = useState<CriticalityParameter | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   if (!currentOrganization) {
     return <EmptyState message="Sin organización asignada" />;
   }
+
+  const hasActiveMatrix = activeParameters.length > 0;
+  // Same authorization set clear_active_criticality_matrix enforces
+  // server-side (owner/admin/manager or platform_admin) — this only gates
+  // the button's visibility, the RPC is still the real authority.
+  const canManageMatrix = currentOrganization.organizationType === 'platform_admin'
+    || (!!currentMembership?.isActive && ['owner', 'admin', 'manager'].includes(currentMembership.role));
+
+  const handleClearActiveMatrix = async () => {
+    const ok = await clearActiveMatrix();
+    setClearConfirmOpen(false);
+    toast(ok
+      ? { title: 'Matriz en blanco', description: 'La configuración activa fue desactivada. Plantillas y evaluaciones históricas se conservan.' }
+      : { title: 'No se pudo limpiar la matriz', description: error ?? 'Intenta nuevamente.', variant: 'destructive' });
+  };
+
+  const handleExportMatrix = async () => {
+    setExporting(true);
+    try {
+      const blob = await buildMatrixWorkbook(matrix, currentOrganization.name);
+      downloadBlob(blob, matrixFileName(currentOrganization.name));
+      toast({ title: 'Matriz exportada' });
+    } catch (exportError) {
+      toast({
+        title: 'No se pudo exportar la matriz',
+        description: exportError instanceof Error ? exportError.message : 'Intenta nuevamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const openCreateParameter = () => { setEditingParameter(null); setParameterDialogOpen(true); };
   const openEditParameter = (parameter: CriticalityParameter) => { setEditingParameter(parameter); setParameterDialogOpen(true); };
@@ -83,9 +144,31 @@ export function CriticalityMatrixView() {
             Matriz de criticidad configurable: parámetros ponderados y opciones puntuadas para calcular la criticidad de un activo.
           </p>
         </div>
-        <Button onClick={openCreateParameter} disabled={loading}>
-          <Plus className="mr-2 h-4 w-4" /> Crear parámetro
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => setTemplatesOpen(true)} disabled={loading}>
+            <LayoutTemplate className="mr-2 h-4 w-4" /> Plantillas
+          </Button>
+          <Button variant="outline" onClick={() => setBulkOpen(true)} disabled={loading || !hasActiveMatrix}>
+            <FileSpreadsheet className="mr-2 h-4 w-4" /> Evaluar por Excel
+          </Button>
+          <Button variant="outline" onClick={() => setImportOpen(true)} disabled={loading}>
+            <Upload className="mr-2 h-4 w-4" /> Importar matriz
+          </Button>
+          <Button variant="outline" onClick={() => void handleExportMatrix()} disabled={loading || exporting || matrix.length === 0}>
+            <Download className="mr-2 h-4 w-4" /> {exporting ? 'Exportando…' : 'Exportar matriz'}
+          </Button>
+          {canManageMatrix && (
+            <Button variant="outline" onClick={() => setClearConfirmOpen(true)} disabled={loading || saving || !hasActiveMatrix}>
+              <FilePlus2 className="mr-2 h-4 w-4" /> Nueva matriz en blanco
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => setSaveTemplateOpen(true)} disabled={loading || !hasActiveMatrix}>
+            <Save className="mr-2 h-4 w-4" /> Guardar como plantilla
+          </Button>
+          <Button onClick={openCreateParameter} disabled={loading}>
+            <Plus className="mr-2 h-4 w-4" /> Crear parámetro
+          </Button>
+        </div>
       </div>
 
       {matrix.length > 0 && (
@@ -127,8 +210,11 @@ export function CriticalityMatrixView() {
             <Card key={parameter.id} className={!parameter.isActive ? 'opacity-60' : undefined}>
               <CardHeader className="flex flex-row items-start justify-between space-y-0">
                 <div>
-                  <CardTitle className="flex items-center gap-2 text-base">
+                  <CardTitle className="flex flex-wrap items-center gap-2 text-base">
                     <ListChecks className="h-4 w-4 text-muted-foreground" /> {parameter.name}
+                    <Badge variant="outline" className="font-mono text-[10px]" title="Código técnico usado por el Excel">
+                      {parameter.code}
+                    </Badge>
                     <Badge variant="secondary">{parameter.weight}%</Badge>
                     {!parameter.isActive && <Badge variant="outline">Inactivo</Badge>}
                   </CardTitle>
@@ -192,6 +278,74 @@ export function CriticalityMatrixView() {
         saving={saving}
         onSave={handleSaveOption}
       />
+
+      <CriticalityTemplatesDialog
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
+        organizationId={currentOrganization.id}
+        hasActiveMatrix={hasActiveMatrix}
+        onApplied={() => {
+          void refresh();
+          toast({ title: 'Plantilla aplicada', description: 'La matriz activa fue reemplazada. Las evaluaciones históricas se conservan.' });
+        }}
+      />
+
+      <CriticalitySaveTemplateDialog
+        open={saveTemplateOpen}
+        onOpenChange={setSaveTemplateOpen}
+        saving={templateSaving}
+        onSave={async (name, description, category) => {
+          const ok = await saveCurrentMatrixAsTemplate(name, description, category);
+          toast(ok
+            ? { title: 'Plantilla guardada', description: `"${name}" quedó disponible para tu organización.` }
+            : { title: 'No se pudo guardar la plantilla', description: 'Intenta nuevamente.', variant: 'destructive' });
+          return ok;
+        }}
+      />
+
+      <CriticalityMatrixImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        hasActiveMatrix={hasActiveMatrix}
+        saving={saving}
+        onApply={async (parameters) => {
+          const ok = await replaceMatrix(parameters);
+          toast(ok
+            ? { title: 'Matriz importada', description: 'La configuración anterior quedó desactivada, no eliminada.' }
+            : { title: 'No se pudo importar la matriz', description: error ?? 'Intenta nuevamente.', variant: 'destructive' });
+          return ok;
+        }}
+      />
+
+      <CriticalityBulkAssessmentDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        organizationName={currentOrganization.name}
+        activeParameters={activeParameters}
+        saving={saving}
+        onPreview={previewBulk}
+        onApply={applyBulk}
+        onApplied={() => void refresh()}
+      />
+
+      <AlertDialog open={clearConfirmOpen} onOpenChange={(open) => !saving && setClearConfirmOpen(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Nueva matriz en blanco</AlertDialogTitle>
+            <AlertDialogDescription>
+              La configuración activa actual quedará desactivada. Las plantillas guardadas y las evaluaciones
+              históricas no serán eliminadas. Hasta que configures nuevos parámetros no se podrán realizar
+              nuevas evaluaciones de criticidad.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleClearActiveMatrix()} disabled={saving}>
+              {saving ? 'Aplicando…' : 'Sí, crear matriz en blanco'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

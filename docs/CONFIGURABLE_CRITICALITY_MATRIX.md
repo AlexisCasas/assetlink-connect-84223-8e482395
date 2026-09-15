@@ -82,10 +82,31 @@ La función valida en dos pasadas: la primera solo valida y acumula el score (si
 
 Igual que los indicadores de eficiencia (ver `docs/EFFICIENCY_DEVIATIONS.md`), esto es información operativa para apoyar una decisión, no una verdad absoluta: la matriz depende enteramente de cómo la organización configure sus parámetros y puntuaciones. Un score alto refleja la configuración elegida, no una medición objetiva externa.
 
+## Continuación: Criticidad V2
+
+Plantillas, contrato Excel (exportar/importar matriz, evaluación masiva) y el
+refactor del motor de cálculo a un helper SQL común
+(`validate_and_score_asset_criticality`) están documentados en
+`docs/CRITICALITY_V2_TEMPLATES_EXCEL.md` (migración
+`20260915120000_criticality_v2_templates_excel.sql`). Cambios relevantes para
+lo descrito en este documento:
+
+- `criticality_parameters`/`criticality_parameter_options` ganaron `code`
+  (identificador técnico estable, único entre las filas **activas**);
+  `get_criticality_matrix` lo devuelve. Los RPC manuales conservan su firma —
+  un trigger genera el código cuando no se envía.
+- `calculate_asset_criticality` mantiene exactamente su API pública, pero la
+  validación y la fórmula ya no viven dentro: las delega al helper común, que
+  también usan el preview y la evaluación masiva. La fórmula y los umbrales
+  existen en un único lugar.
+- Reemplazar la matriz (por plantilla o por Excel) sigue la misma regla de
+  siempre: desactivar (`is_active = false`), nunca borrar; las evaluaciones
+  históricas y sus snapshots quedan intactos.
+
 ## Próximos pasos (fuera de alcance de este MVP)
 
 - Umbrales configurables por organización (tabla `criticality_thresholds` con `low_min`/`medium_min`/`high_min`/`critical_min`) — evaluada para este MVP y descartada deliberadamente para no arriesgar el alcance; los umbrales quedan fijos (25/50/75).
-- Plantillas de matriz por industria (para no partir de cero en cada organización nueva).
+- Plantillas de matriz por industria — la infraestructura ya existe en V2 (`scope='system'`), pendiente solo la validación de negocio del contenido.
 - Criticidad automática alimentada por datos reales de fallas (frecuencia real de reportes técnicos, tiempo de parada real desde `work_order_activity_reports`, en vez de una opción elegida manualmente).
 - Recomendación automática de parámetros/pesos con IA.
 - Simulación de escenarios ("¿qué pasaría si el peso de X subiera a 40%?") antes de guardar cambios en la matriz.
