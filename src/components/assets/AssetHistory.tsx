@@ -11,11 +11,17 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useEffect } from 'react';
 import { useAssetHistory } from '@/hooks/useAssetHistory';
 import type { AssetHistoryEventType, AssetHistoryGroup, AssetHistoryItem } from '@/types/assetHistory';
 
 interface AssetHistoryProps {
   assetId: string;
+  /** Se incrementa desde fuera cuando algo acaba de escribir un evento de
+   * este activo (p. ej. crear un aviso de avería), para no obligar al
+   * usuario a pulsar "Actualizar" para ver lo que él mismo acaba de hacer.
+   * Mismo patrón que CriticalityAssessmentHistory. */
+  refreshToken?: number;
 }
 
 const EVENT_TYPE_TO_GROUP: Record<AssetHistoryEventType, AssetHistoryGroup> = {
@@ -74,8 +80,12 @@ const workOrderReference = (item: AssetHistoryItem): string | null => {
  * glance. Reads get_asset_integrated_history — nothing here writes
  * anything; the whole timeline is assembled live from source tables.
  */
-export function AssetHistory({ assetId }: AssetHistoryProps) {
+export function AssetHistory({ assetId, refreshToken = 0 }: AssetHistoryProps) {
   const { items, loading, error, refresh } = useAssetHistory(assetId);
+
+  useEffect(() => {
+    if (refreshToken > 0) void refresh();
+  }, [refreshToken, refresh]);
 
   return (
     <div className="space-y-3">

@@ -12,8 +12,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
-import type { InspectionRunDetail } from '@/types/inspection';
+import { AlertTriangle } from 'lucide-react';
+import type { InspectionRunAnswer, InspectionRunDetail } from '@/types/inspection';
 import type { SubmitInspectionRunAnswerInput, SubmitInspectionRunEvidenceInput } from '@/hooks/useInspectionRuns';
+import { useMaintenanceNotices } from '@/hooks/useMaintenanceNotices';
+import { MaintenanceNoticeDialog } from '@/components/backlog/MaintenanceNoticeDialog';
 
 interface InspectionRunDialogProps {
   open: boolean;
@@ -50,6 +53,11 @@ const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('es
  */
 export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, saving, onSave, onSaved }: InspectionRunDialogProps) {
   const [detail, setDetail] = useState<InspectionRunDetail | null>(null);
+  // Ítem sobre el que se está creando un aviso de avería. Nunca se crea un
+  // aviso automáticamente al detectar una no conformidad: detectar y decidir
+  // son dos actos distintos, y este es el segundo.
+  const [noticeItem, setNoticeItem] = useState<InspectionRunAnswer | null>(null);
+  const { createNotice } = useMaintenanceNotices(noticeItem ? detail?.organizationId : null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<string>('');
@@ -200,6 +208,32 @@ export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, 
                     onChange={(e) => setAnswer(item.id, { observations: e.target.value })}
                     disabled={saving}
                   />
+                  {(() => {
+                    // Solo sobre una respuesta YA guardada y marcada como no
+                    // conformidad: create_maintenance_notice revalida contra
+                    // inspection_run_answers, así que ofrecerlo antes de
+                    // guardar solo produciría un error. El botón se muestra
+                    // SIEMPRE para una no conformidad — nunca se bloquea por
+                    // falta de asset_id — porque el activo se resuelve o se
+                    // pide dentro del propio diálogo (ver effectiveAsset más
+                    // abajo). Nunca se inventa un activo: si no hay ninguno
+                    // real disponible (ni asset_id ni area_asset_id), el
+                    // usuario lo elige él mismo del selector de la
+                    // organización, con selección obligatoria.
+                    const savedAnswer = detail.answers.find((answer) => answer.templateItemId === item.id);
+                    if (detail.status !== 'completed' || !savedAnswer?.isFailure) return null;
+                    return (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setNoticeItem(savedAnswer)}
+                      >
+                        <AlertTriangle className="mr-2 h-4 w-4" />
+                        Crear aviso de avería
+                      </Button>
+                    );
+                  })()}
+
                   <div className="grid gap-2 sm:grid-cols-2">
                     <Input
                       placeholder="Nombre de evidencia (opcional)"
@@ -245,6 +279,42 @@ export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, 
           </div>
         )}
       </DialogContent>
+
+      {noticeItem && detail && (() => {
+        // Prioridad para resolver el activo del aviso, sin inventar nada:
+        //   1. asset_id de la ejecución — el caso normal, se preselecciona
+        //      y se bloquea (no tiene sentido reportar sobre un activo
+        //      distinto al que se inspeccionó).
+        //   2. area_asset_id — auditado: es una fila real de `assets`
+        //      (mismo FK y mismo guardia de organización que asset_id;
+        //      create_maintenance_notice no restringe node_type), así que
+        //      reutilizarlo es válido y evita pedirle al usuario que elija
+        //      a mano un activo que la inspección ya identifica.
+        //   3. Ninguno de los dos — la inspección solo tiene contexto de
+        //      sede — el usuario elige del selector real de la
+        //      organización; el activo es obligatorio antes de crear.
+        const fixedAsset = detail.assetId
+          ? { id: detail.assetId, label: detail.assetName ?? 'Activo de la inspección' }
+          : detail.areaAssetId
+            ? { id: detail.areaAssetId, label: detail.areaAssetName ?? 'Área de la inspección' }
+            : undefined;
+
+        return (
+          <MaintenanceNoticeDialog
+            open
+            onOpenChange={(next) => { if (!next) setNoticeItem(null); }}
+            onCreate={createNotice}
+            fixedAsset={fixedAsset}
+            source={{ type: 'inspection_run', runId: detail.id, itemId: noticeItem.templateItemId }}
+            defaultTitle={noticeItem.itemQuestion}
+            defaultDescription={[
+              `Detectado en la inspección "${detail.templateName}".`,
+              noticeItem.responseLabel ? `Respuesta: ${noticeItem.responseLabel}.` : null,
+              noticeItem.observations ? `Observación: ${noticeItem.observations}` : null,
+            ].filter(Boolean).join('\n')}
+          />
+        );
+      })()}
     </Dialog>
   );
 }

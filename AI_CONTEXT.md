@@ -1758,3 +1758,57 @@ Inicio de la rama `productization/mvp`.
   histórica y `assets.criticality` sin cambios → idempotencia (limpiar de
   nuevo da 0/0 sin error) → aplicar la plantilla guardada vuelve a poblar la
   matriz.
+
+## Fase 21 — Backlog de mantenimiento / Avisos de avería
+
+Ver `docs/MAINTENANCE_BACKLOG_NOTICES.md`.
+
+- **Un aviso no es una solicitud y no es una OT.** Dominio propio
+  `maintenance_notices` (migración `20260916120000_maintenance_backlog_notices.sql`);
+  nunca `requests(status='backlog')`. Estados: `open → triaged → converted`,
+  o `dismissed` con motivo obligatorio. **Sin DELETE funcional.**
+- Correlativo `AV-<año>-<6 dígitos>` **único por organización y año**. No se
+  reutilizó `work_order_number_seq` porque esa secuencia es global y no puede
+  expresar una serie por tenant. Se usa `maintenance_notice_counters` con
+  `INSERT ... ON CONFLICT DO UPDATE ... RETURNING` (lock de fila ⇒ seguro ante
+  concurrencia, a diferencia de `COUNT(*)+1` / `MAX()+1`). La tabla contador no
+  tiene GRANT ni policies.
+- Snapshots (nombre, código, ruta y **sede**) generados **en el servidor**
+  desde la base; el frontend sólo manda ids y texto. `resolve_asset_path`
+  reutilizada; `resolve_asset_branch` nueva resuelve la sede heredada del
+  ancestro más cercano. La **criticidad no se congela**: se lee vigente, porque
+  en el backlog sirve para priorizar hoy.
+- RLS: **sólo policy de SELECT** + `GRANT SELECT`. Toda escritura pasa por RPC
+  `SECURITY DEFINER` (`create` / `triage` / `dismiss` / `convert` /
+  `get_maintenance_notices`), cada una con `GRANT EXECUTE ... TO authenticated`.
+  Permisos en un solo lugar: `can_report_maintenance_notice` (owner/admin/
+  manager/technician/requester, viewer no) y `can_manage_maintenance_notice`
+  (owner/admin/manager); ambos exigen `client_company`.
+- `convert_maintenance_notice` es **idempotente para el mismo par
+  aviso/solicitud** (reintento tras fallo de red) y error con otra solicitud,
+  para que nadie termine creando una segunda solicitud duplicada. Índice único
+  parcial sobre `converted_request_id` ⇒ 1 aviso ↔ 1 solicitud.
+- **`RequestList.handleSaveRequest` se extrajo a `src/lib/requestPersistence.ts`**
+  (`persistRequest`) y ahora la usan tanto Solicitudes como la conversión del
+  backlog. Es la única implementación del flujo, incluida la atomicidad
+  `draft → set_request_audience → 'sent'`. El backlog **no** reimplementa nada
+  de eso: monta el mismo `OrderForm` y sólo después vincula.
+- Integración: "Crear aviso" en la ficha del activo, y en inspecciones sólo
+  sobre respuestas **ya guardadas** y marcadas `is_failure` — **nunca
+  automático**, y **nunca inventando un activo** (si la ejecución no tiene
+  activo específico, no hay botón). El backend revalida contra
+  `inspection_run_answers`.
+- Historial del activo: **una** fila por acción en `asset_events` y sólo tres
+  etiquetas nuevas en la rama genérica de `get_asset_integrated_history`. No se
+  agregó una UNION sobre `maintenance_notices` porque duplicaría cada aviso.
+- Deep link `#backlog?notice=<uuid>&org=<uuid>` vía `entityNavigation.ts`
+  (`entity_type='maintenance_notice'`). El deep link **no es autorización** y el
+  ítem del sidebar tampoco: `BacklogView` se defiende de un `#backlog` directo
+  y el backend rechaza igual.
+- Verificado de verdad: **33/33 checks SQL** contra el proyecto remoto enlazado
+  en transacción con `ROLLBACK` (correlativo por tenant, snapshots inmutables,
+  aislamiento multitenant incluido acceso por UUID directo, permisos por rol,
+  origen inspección, conversión idempotente, descarte con motivo, historial sin
+  duplicados, notificaciones por rol) + `npm run build` y `tsc --noEmit` sin
+  errores nuevos. **No ejecutado**: QA en navegador real (sin automatización de
+  navegador ni Docker en este entorno).

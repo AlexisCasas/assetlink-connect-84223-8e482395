@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Settings2,
   QrCode,
@@ -22,6 +23,7 @@ import {
   Pencil,
   Gauge,
   TrafficCone,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UseAssetsResult } from '@/hooks/useAssets';
@@ -34,6 +36,8 @@ import { useCriticalityMatrix } from '@/hooks/useCriticalityMatrix';
 import { CriticalityAssessmentDialog } from '@/components/criticality/CriticalityAssessmentDialog';
 import { CriticalityAssessmentHistory } from '@/components/criticality/CriticalityAssessmentHistory';
 import type { CriticalityAssessment } from '@/types/criticalityMatrix';
+import { useMaintenanceNotices } from '@/hooks/useMaintenanceNotices';
+import { MaintenanceNoticeDialog } from '@/components/backlog/MaintenanceNoticeDialog';
 
 interface AssetDetailProps {
   state: UseAssetsResult;
@@ -86,6 +90,16 @@ const toEditForm = (asset: Asset): EditForm => ({
 export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   const { selectedAsset: asset, assets: allAssets, canManageAssets, categories, branches, error, saving, archiveAsset, restoreAsset, updateAsset, refreshAssets } = state;
   const { toast } = useToast();
+  const { currentMembership } = useAuth();
+  const [noticeDialogOpen, setNoticeDialogOpen] = useState(false);
+  // Reportar una avería es más amplio que administrar activos: un técnico o
+  // un solicitante reportan, aunque no puedan editar la ficha. El backend
+  // vuelve a validarlo en create_maintenance_notice.
+  const canReportNotice = !!currentMembership?.isActive
+    && ['owner', 'admin', 'manager', 'technician', 'requester'].includes(currentMembership.role);
+  // El hook solo consulta cuando el diálogo está abierto: la ficha del
+  // activo no necesita cargar todo el backlog para mostrar un botón.
+  const { createNotice } = useMaintenanceNotices(noticeDialogOpen ? asset?.organizationId : null);
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -590,7 +604,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
           <TabsContent value="history" className="space-y-6">
             <CriticalityAssessmentHistory assetId={asset.id} refreshToken={historyRefreshToken} loadAssessments={loadAssessments} />
             <Separator />
-            <AssetHistory assetId={asset.id} />
+            <AssetHistory assetId={asset.id} refreshToken={historyRefreshToken} />
           </TabsContent>
         </Tabs>
 
@@ -604,6 +618,12 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
             <User className="h-4 w-4 mr-2" />
             Asignar Técnico
           </Button>
+          {canReportNotice && asset.status !== 'archived' && (
+            <Button variant="outline" size="sm" onClick={() => setNoticeDialogOpen(true)}>
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              Crear aviso
+            </Button>
+          )}
           {canManageAssets && asset.status !== 'archived' && (
             <Button variant="outline" size="sm" onClick={startEdit}>
               <Pencil className="h-4 w-4 mr-2" />
@@ -624,6 +644,13 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
           )}
         </div>
       </CardContent>
+
+      <MaintenanceNoticeDialog
+        open={noticeDialogOpen}
+        onOpenChange={setNoticeDialogOpen}
+        onCreate={createNotice}
+        fixedAsset={{ id: asset.id, label: asset.code ? `${asset.name} (${asset.code})` : asset.name }}
+      />
 
       <CriticalityAssessmentDialog
         open={assessmentDialogOpen}

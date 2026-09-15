@@ -15,6 +15,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   work_completed: 'Trabajo completado',
   inspection_due_soon_future: 'Inspección próxima a vencer',
   inspection_overdue_future: 'Inspección vencida',
+  maintenance_notice_created: 'Nuevo aviso de avería',
   quote_submitted: 'Cotización recibida',
   quote_approved: 'Cotización aprobada',
   quote_rejected: 'Cotización no seleccionada',
@@ -30,6 +31,7 @@ const OPERATIONAL_NOTIFICATION_TYPES = new Set([
   'work_completed',
   'inspection_due_soon_future',
   'inspection_overdue_future',
+  'maintenance_notice_created',
 ]);
 
 export const isOperationalNotificationType = (type: string) => OPERATIONAL_NOTIFICATION_TYPES.has(type);
@@ -62,6 +64,14 @@ export const notificationEntityReference = (entityType: string | null, metadata:
       return typeof meta.work_order_number === 'string' ? `Actividad — OT: ${meta.work_order_number}` : 'Actividad';
     case 'quote':
       return 'Cotización';
+    case 'maintenance_notice': {
+      const noticeNumber = typeof meta.notice_number === 'string' ? meta.notice_number : null;
+      const assetLabel = typeof meta.asset_code === 'string' && meta.asset_code
+        ? meta.asset_code
+        : (typeof meta.asset_name === 'string' ? meta.asset_name : null);
+      if (!noticeNumber) return 'Aviso de avería';
+      return assetLabel ? `Aviso: ${noticeNumber} — ${assetLabel}` : `Aviso: ${noticeNumber}`;
+    }
     case 'inspection_plan': {
       // metadata shape from generate_inspection_due_notifications() — see
       // docs/INSPECTION_SCHEDULING_ALERTS.md. plan_title replaced the
