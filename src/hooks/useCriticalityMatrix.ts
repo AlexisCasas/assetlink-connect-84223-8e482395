@@ -2,9 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { AssetCriticality } from '@/types/asset';
 import type {
+  BulkCriticalityPreviewRow,
+  BulkCriticalityResult,
+  BulkCriticalityRow,
   CriticalityAnswer,
   CriticalityAssessment,
   CriticalityAssessmentAnswer,
+  CriticalityMatrixPayloadParameter,
   CriticalityOptionInput,
   CriticalityParameter,
   CriticalityParameterInput,
@@ -12,6 +16,7 @@ import type {
 
 interface RawOption {
   id: string;
+  code: string;
   label: string;
   score: number;
   sequence: number;
@@ -20,6 +25,7 @@ interface RawOption {
 
 interface RawParameter {
   id: string;
+  code: string;
   name: string;
   description: string | null;
   weight: number;
@@ -30,6 +36,7 @@ interface RawParameter {
 
 const toOption = (row: RawOption) => ({
   id: row.id,
+  code: row.code,
   label: row.label,
   score: row.score,
   sequence: row.sequence,
@@ -38,6 +45,7 @@ const toOption = (row: RawOption) => ({
 
 const toParameter = (row: RawParameter): CriticalityParameter => ({
   id: row.id,
+  code: row.code,
   name: row.name,
   description: row.description,
   weight: row.weight,
@@ -259,6 +267,123 @@ export function useCriticalityMatrix(organizationId: string | null | undefined) 
     }
   }, []);
 
+  /** Replaces the whole active matrix in one transaction (Excel import or
+   * template apply). The backend revalidates the entire payload, deactivates
+   * — never deletes — the previous configuration, and only then inserts. */
+  const replaceMatrix = useCallback(async (parameters: CriticalityMatrixPayloadParameter[]): Promise<boolean> => {
+    if (!organizationId) return false;
+    setSaving(true);
+    setError(null);
+    try {
+      const { error: rpcError } = await supabase.rpc('replace_criticality_matrix', {
+        p_organization_id: organizationId,
+        p_matrix: {
+          parameters: parameters.map((parameter) => ({
+            code: parameter.code,
+            name: parameter.name,
+            description: parameter.description ?? null,
+            weight: parameter.weight,
+            sequence: parameter.sequence,
+            is_active: parameter.isActive,
+            options: parameter.options.map((option) => ({
+              code: option.code,
+              label: option.label,
+              score: option.score,
+              sequence: option.sequence,
+              is_active: option.isActive,
+            })),
+          })),
+        },
+      });
+      if (rpcError) throw rpcError;
+      await refresh();
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo reemplazar la matriz de criticidad.');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [organizationId, refresh]);
+
+  /** "Nueva matriz en blanco": deactivates every currently active parameter
+   * (and their active options) for the organization in one transaction —
+   * never deletes, never touches templates or historical assessments/
+   * assets.criticality. Idempotent when there is nothing active already. */
+  const clearActiveMatrix = useCallback(async (): Promise<boolean> => {
+    if (!organizationId) return false;
+    setSaving(true);
+    setError(null);
+    try {
+      const { error: rpcError } = await supabase.rpc('clear_active_criticality_matrix', {
+        p_organization_id: organizationId,
+      });
+      if (rpcError) throw rpcError;
+      await refresh();
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo limpiar la matriz de criticidad.');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [organizationId, refresh]);
+
+  /** Server-side dry run of a bulk evaluation: the score/criticality it
+   * returns comes from the same SQL engine the real evaluation uses
+   * (validate_and_score_asset_criticality) — never recomputed in JS. */
+  const previewBulk = useCallback(async (rows: BulkCriticalityRow[]): Promise<BulkCriticalityPreviewRow[]> => {
+    if (!organizationId) return [];
+    const { data, error: rpcError } = await supabase.rpc('preview_bulk_asset_criticality', {
+      p_organization_id: organizationId,
+      p_rows: rows.map((row) => ({
+        row_number: row.rowNumber,
+        asset_id: row.assetId,
+        answers: row.answers.map((answer) => ({ parameter_id: answer.parameterId, option_id: answer.optionId })),
+      })),
+    });
+    if (rpcError) throw rpcError;
+    return (data ?? []).map((row) => ({
+      rowNumber: row.row_number ?? 0,
+      assetId: row.asset_id,
+      assetCode: row.asset_code,
+      assetName: row.asset_name,
+      valid: row.valid ?? false,
+      score: row.score === null || row.score === undefined ? null : Number(row.score),
+      calculatedCriticality: (row.calculated_criticality ?? null) as BulkCriticalityPreviewRow['calculatedCriticality'],
+      errors: ((row.errors ?? []) as unknown as string[]),
+      warnings: ((row.warnings ?? []) as unknown as string[]),
+    }));
+  }, [organizationId]);
+
+  /** Applies a subset the user already accepted in the preview. The backend
+   * revalidates every row first and aborts the whole subset if any is no
+   * longer valid — never partial writes. Each row always creates a NEW
+   * assessment; previous ones are never overwritten. */
+  const applyBulk = useCallback(async (rows: BulkCriticalityRow[]): Promise<BulkCriticalityResult | null> => {
+    if (!organizationId) return null;
+    setSaving(true);
+    setError(null);
+    try {
+      const { data, error: rpcError } = await supabase.rpc('bulk_calculate_asset_criticality', {
+        p_organization_id: organizationId,
+        p_rows: rows.map((row) => ({
+          row_number: row.rowNumber,
+          asset_id: row.assetId,
+          notes: row.notes ?? null,
+          answers: row.answers.map((answer) => ({ parameter_id: answer.parameterId, option_id: answer.optionId })),
+        })),
+      });
+      if (rpcError) throw rpcError;
+      return data as unknown as BulkCriticalityResult;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudieron aplicar las evaluaciones.');
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }, [organizationId]);
+
   const loadAssessments = useCallback(async (assetId: string): Promise<CriticalityAssessment[]> => {
     const { data, error: rpcError } = await supabase.rpc('get_asset_criticality_assessments', {
       p_asset_id: assetId,
@@ -280,6 +405,10 @@ export function useCriticalityMatrix(organizationId: string | null | undefined) 
     toggleParameterActive,
     toggleOptionActive,
     calculateCriticality,
+    replaceMatrix,
+    clearActiveMatrix,
+    previewBulk,
+    applyBulk,
     loadAssessments,
   };
 }
