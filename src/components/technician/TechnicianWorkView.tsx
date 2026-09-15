@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ClipboardList, Eye, MapPin, NotebookPen, Package, Play, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useTechnicianWorkOrders } from '@/hooks/useTechnicianWorkOrders';
 import { useToast } from '@/hooks/use-toast';
@@ -20,13 +20,39 @@ const formatDate = (value: string | null) => value
   ? new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium' }).format(new Date(value))
   : '—';
 
-export function TechnicianWorkView() {
+interface TechnicianWorkViewProps {
+  /** Deep-link target from a notification, resolved and passed down by
+   * Dashboard (#work-orders?workOrder=...&activity=..., same canonical hash
+   * a planner uses — Dashboard alone decides this component renders it). */
+  focusWorkOrderId?: string;
+  focusActivityId?: string;
+}
+
+export function TechnicianWorkView({ focusWorkOrderId, focusActivityId }: TechnicianWorkViewProps = {}) {
   const { workOrders, loading, saving, error, refresh, updateProgress } = useTechnicianWorkOrders();
   const { toast } = useToast();
 
   const [logDialogTarget, setLogDialogTarget] = useState<TechnicianWorkOrder | null>(null);
   const [detailTarget, setDetailTarget] = useState<TechnicianWorkOrder | null>(null);
   const [reportingActivityId, setReportingActivityId] = useState<string | null>(null);
+
+  const processedFocusIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusWorkOrderId || loading) return;
+    if (processedFocusIdRef.current === focusWorkOrderId) return;
+    processedFocusIdRef.current = focusWorkOrderId;
+
+    const found = workOrders.find((workOrder) => workOrder.id === focusWorkOrderId);
+    if (found) {
+      setDetailTarget(found);
+    } else {
+      toast({
+        title: 'No se pudo abrir la orden de trabajo',
+        description: 'Puede haber sido eliminada, reasignada, o ya no tienes acceso.',
+        variant: 'destructive',
+      });
+    }
+  }, [focusWorkOrderId, loading, workOrders, toast]);
 
   const handleStart = async (workOrder: TechnicianWorkOrder) => {
     const ok = await updateProgress(workOrder.id, 'in_progress');
@@ -201,6 +227,7 @@ export function TechnicianWorkView() {
         open={detailTarget !== null}
         onOpenChange={(open) => !open && setDetailTarget(null)}
         workOrder={detailTarget}
+        focusActivityId={detailTarget?.id === focusWorkOrderId ? focusActivityId : undefined}
       />
 
       <ActivityReportDialog

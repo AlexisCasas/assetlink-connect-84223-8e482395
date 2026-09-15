@@ -20,37 +20,84 @@ import { AdminConsole } from '@/components/admin/AdminConsole';
 import { EfficiencyDashboard } from '@/components/analytics/EfficiencyDashboard';
 import { CriticalityMatrixView } from '@/components/criticality/CriticalityMatrixView';
 import { InspectionsView } from '@/components/inspections/InspectionsView';
+import { useToast } from '@/hooks/use-toast';
+import { parseEntityHash, type DashboardView, type ParsedEntityHash } from '@/lib/entityNavigation';
 
-type DashboardView = 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'admin';
-
-const ALL_VIEWS: DashboardView[] = ['dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications', 'approved-providers', 'branches', 'work-orders', 'my-work-orders', 'inventory', 'efficiency', 'criticality', 'inspections', 'contact', 'admin'];
 // A platform_admin organization only manages Administración; every other
 // operational view falls back to it, including direct hash navigation.
 const PLATFORM_ADMIN_ALLOWED_VIEWS: DashboardView[] = ['admin', 'notifications'];
 
+const EMPTY_FOCUS: ParsedEntityHash = { view: null };
+
 const Dashboard = () => {
-  const { user, currentOrganization, currentMembership } = useAuth();
+  const { user, organizations, currentOrganization, currentMembership, setCurrentOrganization } = useAuth();
+  const { toast } = useToast();
   const isPlatformAdminOrg = currentOrganization?.organizationType === 'platform_admin';
   const isTechnicianRole = !!currentMembership?.isActive && currentMembership.role === 'technician';
   const [currentView, setCurrentView] = useState<DashboardView>(isPlatformAdminOrg ? 'admin' : 'dashboard');
+  // Entity ids parsed from the current hash's query string (?request=...,
+  // ?workOrder=..., etc.) — Dashboard parses once here and hands the ids
+  // down as props; the target components never read window.location.hash
+  // themselves (see docs/NOTIFICATION_DEEP_LINKS.md).
+  const [focus, setFocus] = useState<ParsedEntityHash>(EMPTY_FOCUS);
 
+  // Reads and reacts to window.location.hash — on mount (so a deep link
+  // survives F5 or a pasted URL, not just a client-side click) and on every
+  // 'hashchange' (browser Back/Forward, or any code setting the hash,
+  // including navigateToEntity()). isPlatformAdminOrg/organizations/
+  // currentOrganization?.id are dependencies so this also re-evaluates right
+  // after an org switch below settles.
   useEffect(() => {
-    const hash = window.location.hash.replace('#', '');
-    const hashView = ALL_VIEWS.includes(hash as DashboardView) ? (hash as DashboardView) : null;
+    const syncFromHash = () => {
+      const parsed = parseEntityHash(window.location.hash);
+      const hashView = parsed.view;
+      if (!hashView) return;
 
-    if (isPlatformAdminOrg) {
-      const nextView = hashView && PLATFORM_ADMIN_ALLOWED_VIEWS.includes(hashView) ? hashView : 'admin';
+      const nextView = isPlatformAdminOrg && !PLATFORM_ADMIN_ALLOWED_VIEWS.includes(hashView) ? 'admin' : hashView;
+
+      // ?org=<uuid>: only relevant when it actually names a different
+      // organization than the one currently active. Never a bypass — it
+      // only ever switches to an organization already present in this
+      // user's own `organizations` (loaded from their real
+      // organization_members rows), exactly like OrganizationSwitcher does.
+      if (parsed.organizationId && parsed.organizationId !== currentOrganization?.id) {
+        const target = organizations.find((organization) => organization.id === parsed.organizationId);
+        if (target) {
+          setCurrentOrganization(target.id);
+          // Re-render with the new currentOrganization will re-run this
+          // effect (currentOrganization?.id is a dependency below) and pick
+          // up the matching branch on the next pass — don't open anything
+          // yet against the still-stale organization.
+          return;
+        }
+        toast({
+          title: 'Sin acceso a la organización del enlace',
+          description: 'No tienes acceso a la organización relacionada con este enlace.',
+          variant: 'destructive',
+        });
+        setCurrentView(nextView);
+        setFocus(EMPTY_FOCUS);
+        if (nextView !== hashView) window.location.hash = nextView;
+        return;
+      }
+
       setCurrentView(nextView);
-      if (hash !== nextView) window.location.hash = nextView;
-      return;
-    }
+      setFocus(nextView === hashView ? parsed : EMPTY_FOCUS);
+      // Only rewrite the hash when platform-admin forced a different view
+      // than what was requested — a normal view with query params (the
+      // common case) must never be stripped back down to a bare view name.
+      if (nextView !== hashView) window.location.hash = nextView;
+    };
 
-    if (hashView) setCurrentView(hashView);
-  }, [isPlatformAdminOrg]);
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
+    return () => window.removeEventListener('hashchange', syncFromHash);
+  }, [isPlatformAdminOrg, organizations, currentOrganization?.id, setCurrentOrganization, toast]);
 
   const handleViewChange = (view: DashboardView) => {
     const nextView = isPlatformAdminOrg && !PLATFORM_ADMIN_ALLOWED_VIEWS.includes(view) ? 'admin' : view;
     setCurrentView(nextView);
+    setFocus(EMPTY_FOCUS);
     window.location.hash = nextView;
   };
 
@@ -71,12 +118,12 @@ const Dashboard = () => {
         return <AssetsView />;
       case 'requests':
         if (user?.role === 'cliente') {
-          return <RequestList />;
+          return <RequestList focusRequestId={focus.requestId} focusQuoteId={focus.quoteId} />;
         }
         if (user?.role === 'team_member') {
           return <LegacyAssignmentsPlaceholder />;
         }
-        return <ProviderRequestList />;
+        return <ProviderRequestList focusRequestId={focus.requestId} focusQuoteId={focus.quoteId} />;
       case 'drafts':
         return <DraftList />;
       case 'public-requests':
@@ -103,11 +150,15 @@ const Dashboard = () => {
         return <BranchesList />;
       case 'work-orders':
         // A technician only ever sees their own assigned work — even via
-        // direct hash navigation, never the organization's full list.
-        if (isTechnicianRole) return <TechnicianWorkView />;
-        return <WorkOrdersList />;
+        // direct hash navigation, never the organization's full list. The
+        // same canonical #work-orders?workOrder=... link works for both:
+        // Dashboard only decides which component renders it.
+        if (isTechnicianRole) {
+          return <TechnicianWorkView focusWorkOrderId={focus.workOrderId} focusActivityId={focus.activityId} />;
+        }
+        return <WorkOrdersList focusWorkOrderId={focus.workOrderId} focusActivityId={focus.activityId} />;
       case 'my-work-orders':
-        return <TechnicianWorkView />;
+        return <TechnicianWorkView focusWorkOrderId={focus.workOrderId} focusActivityId={focus.activityId} />;
       case 'inventory':
         return <InventoryView />;
       case 'efficiency':
@@ -115,7 +166,7 @@ const Dashboard = () => {
       case 'criticality':
         return <CriticalityMatrixView />;
       case 'inspections':
-        return <InspectionsView />;
+        return <InspectionsView focusPlanId={focus.inspectionPlanId} focusRunId={focus.inspectionRunId} />;
       case 'admin': return <AdminConsole />;
       default:
         // Real dashboard — see docs/REAL_DASHBOARD_METRICS.md.

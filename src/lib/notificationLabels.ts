@@ -6,6 +6,7 @@
  * — now actually emitted by generate_inspection_due_notifications(). */
 export const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   internal_request_created: 'Nueva solicitud interna',
+  request_private_invitation: 'Nueva invitación a cotizar',
   work_order_created: 'Nueva orden de trabajo',
   technician_assigned: 'Técnico asignado',
   activity_assigned: 'Actividad asignada',

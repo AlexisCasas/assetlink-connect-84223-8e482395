@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { FileText, Clock, CheckCircle, User, MessageSquare, MessageCircle, ThumbsUp, Lock, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { cn } from '@/lib/utils';
 import type { Request } from '@/types/request';
 import { QuoteChatDialog } from './QuoteChatDialog';
 
@@ -15,6 +16,10 @@ interface QuoteListDialogProps {
   open: boolean;
   onClose: () => void;
   request: Request;
+  /** Quote to highlight/scroll to, from a deep link
+   * (#requests?request=...&quote=...) — e.g. a quote_submitted/approved/
+   * rejected notification. */
+  focusQuoteId?: string;
 }
 
 interface Quote {
@@ -36,7 +41,7 @@ interface Quote {
   work_order_id?: string | null;
 }
 
-export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps) => {
+export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteListDialogProps) => {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalProviders, setTotalProviders] = useState(0);
@@ -65,6 +70,11 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
       loadQuotes();
     }
   }, [open, request.id]);
+
+  useEffect(() => {
+    if (!open || !focusQuoteId || loading) return;
+    document.getElementById(`quote-${focusQuoteId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [open, focusQuoteId, loading]);
 
   const loadQuotes = async () => {
     try {
@@ -355,7 +365,11 @@ export const QuoteListDialog = ({ open, onClose, request }: QuoteListDialogProps
           ) : (
             <div className="grid gap-4">
               {quotes.map((quote) => (
-                <Card key={quote.id}>
+                <Card
+                  key={quote.id}
+                  id={`quote-${quote.id}`}
+                  className={cn(quote.id === focusQuoteId && 'ring-2 ring-primary')}
+                >
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">

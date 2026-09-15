@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardCheck, ListChecks, Plus, Pencil, EyeOff, Eye, CalendarClock, PlayCircle, History } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -80,7 +80,17 @@ const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('es
  * preventivo, auditoría interna, luces de emergencia…). See
  * docs/GENERIC_CHECKLISTS_INSPECTIONS.md.
  */
-export function InspectionsView() {
+interface InspectionsViewProps {
+  /** Deep-link target from a notification — e.g. inspection_due_soon_future/
+   * inspection_overdue_future resolve to metadata.plan_id, never
+   * notification.entity_id (that one is a synthetic dedup key, see
+   * docs/NOTIFICATION_DEEP_LINKS.md). Dashboard parses the hash and passes
+   * these down; this component never reads window.location.hash itself. */
+  focusPlanId?: string;
+  focusRunId?: string;
+}
+
+export function InspectionsView({ focusPlanId, focusRunId }: InspectionsViewProps = {}) {
   const { currentOrganization, currentMembership } = useAuth();
   const { canPlanWork, isTechnician } = usePermissions();
   const { toast } = useToast();
@@ -88,8 +98,10 @@ export function InspectionsView() {
   const organizationId = currentOrganization?.id;
   const { templates, saving: templateSaving, error: templateError, saveTemplate, saveItem, toggleItemActive, saveOption, toggleOptionActive } = useChecklistTemplates(organizationId);
   const { assets, branches } = useAssets();
-  const { plans, saving: planSaving, error: planError, savePlanWithAlertRules, createRunFromPlan } = useInspectionPlans(organizationId);
+  const { plans, loading: plansLoading, saving: planSaving, error: planError, savePlanWithAlertRules, createRunFromPlan } = useInspectionPlans(organizationId);
   const { runs, saving: runSaving, error: runError, loadRunDetail, submitRun, refresh: refreshRuns } = useInspectionRuns(organizationId);
+
+  const [activeTab, setActiveTab] = useState<string>(isTechnician ? 'runs' : 'templates');
 
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ChecklistTemplate | null>(null);
@@ -113,6 +125,46 @@ export function InspectionsView() {
   // focus re-rendering the tree), which fed straight into
   // InspectionPlanDialog's reset effect and wiped the in-progress draft.
   const activeTemplates = useMemo(() => templates.filter((t) => t.isActive), [templates]);
+
+  // Guards against reprocessing the same focus target on every render — only
+  // acts again if the deep link target itself changes. Placed before the
+  // `!currentOrganization` early return below (Rules of Hooks: every hook in
+  // this component must run on every render, including the one where that
+  // return fires) and uses the state setters directly rather than
+  // openEditPlan/openRun, which are only defined further down.
+  const processedFocusKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (focusRunId) {
+      const key = `run:${focusRunId}`;
+      if (processedFocusKeyRef.current === key) return;
+      processedFocusKeyRef.current = key;
+      setActiveTab('runs');
+      // InspectionRunDialog loads the run directly via loadRunDetail(runId)
+      // (its own RLS-scoped query) — no need to wait for the `runs` list.
+      setActiveRunId(focusRunId);
+      setRunDialogOpen(true);
+      return;
+    }
+
+    if (focusPlanId) {
+      if (plansLoading) return;
+      const key = `plan:${focusPlanId}`;
+      if (processedFocusKeyRef.current === key) return;
+      processedFocusKeyRef.current = key;
+      setActiveTab('plans');
+      const plan = plans.find((p) => p.id === focusPlanId);
+      if (plan) {
+        setEditingPlan(plan);
+        setPlanDialogOpen(true);
+      } else {
+        toast({
+          title: 'No se pudo abrir el plan de inspección',
+          description: 'Puede haber sido eliminado o ya no tienes acceso.',
+          variant: 'destructive',
+        });
+      }
+    }
+  }, [focusPlanId, focusRunId, plansLoading, plans, toast]);
 
   if (!currentOrganization) {
     return <EmptyState message="Sin organización asignada" />;
@@ -156,7 +208,7 @@ export function InspectionsView() {
         </p>
       </div>
 
-      <Tabs defaultValue={isTechnician ? 'runs' : 'templates'}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="templates">Plantillas</TabsTrigger>
           <TabsTrigger value="plans">Programación</TabsTrigger>

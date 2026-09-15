@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, Eye, Package, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { useWorkOrders, type WorkOrder } from '@/hooks/useWorkOrders';
 import { useOrganizationTechnicians } from '@/hooks/useOrganizationTechnicians';
 import { useOrganizationPlanners } from '@/hooks/useOrganizationPlanners';
@@ -12,15 +13,45 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { RequestTypeBadge, WorkOrderStatusBadge, WorkOrderPriorityBadge } from '@/components/requests/StatusBadge';
 import { WorkOrderDetailDialog } from './WorkOrderDetailDialog';
 
+interface WorkOrdersListProps {
+  /** Deep-link target from a notification (#work-orders?workOrder=...) —
+   * Dashboard parses the hash and passes these down; this component never
+   * reads window.location.hash itself. */
+  focusWorkOrderId?: string;
+  focusActivityId?: string;
+}
+
 const shortId = (id: string) => id.slice(0, 8).toUpperCase();
 const formatDate = (value: string) => new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium' }).format(new Date(value));
 const formatDateOrDash = (value: string | null) => value ? formatDate(value) : '—';
 const formatAmount = (value: number | null) => value === null ? '—' : new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(value);
 
-export function WorkOrdersList() {
+export function WorkOrdersList({ focusWorkOrderId, focusActivityId }: WorkOrdersListProps) {
   const { currentOrganization } = useAuth();
+  const { toast } = useToast();
   const { workOrders, loading, error, refetch } = useWorkOrders();
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
+
+  // Guards against reprocessing the same focusWorkOrderId on every render
+  // (e.g. once the dialog opens and this component re-renders) — only acts
+  // again if the deep link target itself actually changes.
+  const processedFocusIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusWorkOrderId || loading) return;
+    if (processedFocusIdRef.current === focusWorkOrderId) return;
+    processedFocusIdRef.current = focusWorkOrderId;
+
+    const found = workOrders.find((workOrder) => workOrder.id === focusWorkOrderId);
+    if (found) {
+      setSelectedWorkOrder(found);
+    } else {
+      toast({
+        title: 'No se pudo abrir la orden de trabajo',
+        description: 'Puede haber sido eliminada o ya no tienes acceso.',
+        variant: 'destructive',
+      });
+    }
+  }, [focusWorkOrderId, loading, workOrders, toast]);
 
   const isClientView = currentOrganization?.organizationType === 'client_company';
   const isPlatformView = currentOrganization?.organizationType === 'platform_admin';
@@ -134,6 +165,7 @@ export function WorkOrdersList() {
         open={selectedWorkOrder !== null}
         onOpenChange={(open) => !open && setSelectedWorkOrder(null)}
         onUpdated={(updated) => { setSelectedWorkOrder(updated); void refetch(); }}
+        focusActivityId={selectedWorkOrder?.id === focusWorkOrderId ? focusActivityId : undefined}
       />
     </>
   );

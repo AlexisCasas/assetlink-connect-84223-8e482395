@@ -1618,3 +1618,69 @@ Inicio de la rama `productization/mvp`.
   participación de un proveedor ya invitado (bloquea la baja, no ofrece
   alternativa), email/WhatsApp/push, visita técnica completa, transición
   post-envío interna↔externa.
+
+## Deep links de notificaciones + navegación contextual
+
+- Rama `feature/notification-deep-links`. Detalle completo en
+  `docs/NOTIFICATION_DEEP_LINKS.md`. **Sin migración SQL, sin tabla nueva,
+  sin React Router**: `organization_notifications` ya traía
+  `entity_type`/`entity_id`/`related_request_id`/`related_quote_id`/
+  `metadata`, y el hash router liviano que ya tenía `Dashboard.tsx` bastó
+  una vez corregido.
+- **Bug de raíz encontrado y corregido**: `Dashboard.tsx` comparaba el hash
+  completo (`window.location.hash.replace('#','')`) contra la lista de
+  vistas — `"work-orders?workOrder=<uuid>"` nunca hacía match exacto contra
+  `"work-orders"`, así que un deep link con query string se ignoraba
+  siempre. Tampoco escuchaba `hashchange`, así que Back/Forward no
+  funcionaban. `src/lib/entityNavigation.ts` (`parseEntityHash`/
+  `buildEntityHash`) separa la vista lógica de sus query params; `Dashboard`
+  ahora sincroniza en el montaje y en cada `hashchange`.
+- Formato canónico: `#<view>?<key>=<uuid>&...` — siempre UUID, nunca
+  nombre/correlativo/título. `resolveNotificationTarget(notification)` es
+  la única matriz `entity_type → destino`; se ramifica por `entity_type`,
+  no por `notification.type` — la mayoría de los tipos operativos no
+  necesitan ninguna rama propia porque ya traen un `entity_id` directamente
+  navegable.
+- **`entity_type = 'activity'`**: `entity_id` es el id de la actividad, no
+  el de la OT — se resuelve con una consulta normal (`select work_order_id
+  from work_order_activities where id = entity_id`), sujeta a la misma RLS
+  de siempre (solo organización operadora/`platform_admin`).
+- **`entity_type = 'inspection_plan'`**: `entity_id` es una clave sintética
+  de deduplicación (`md5(plan_id|rule_id|next_due_at)`,
+  `generate_inspection_due_notifications()`), **nunca** el plan real — el
+  plan real vive únicamente en `metadata.plan_id`.
+- **`entity_type = 'quote'`**: usa `related_request_id`/`related_quote_id`
+  (poblados por la ruta antigua `create_organization_notification`, la que
+  usan `quote_submitted`/`quote_approved`/`quote_rejected`), metadata solo
+  como fallback, nunca inventado.
+- `handleNotificationNavigation(notification, markAsRead?)` es el único
+  handler que llaman `NotificationBell.tsx` y `NotificationList.tsx` —
+  ninguno duplica un `if (notification.type === ...)` propio. Marcar como
+  leída y navegar son independientes: uno fallando nunca bloquea al otro.
+  `NotificationList.tsx` hizo la tarjeta completa clickeable + botón "Ver
+  detalle"; "Marcar como leída" sigue siendo una acción separada con
+  `stopPropagation`.
+- `?org=<uuid>` implementado (no diferido): si el hash trae una
+  organización distinta a la activa, `Dashboard` la busca en
+  `organizations` (ya cargadas por `AuthContext` desde las membresías
+  reales) y llama `setCurrentOrganization` si el usuario pertenece; si no,
+  muestra *"No tienes acceso a la organización relacionada con este
+  enlace."* y nunca abre la entidad — sin bypass.
+- `WorkOrdersList.tsx`/`TechnicianWorkView.tsx` aceptan
+  `focusWorkOrderId`/`focusActivityId`; `RequestList.tsx`/
+  `ProviderRequestList.tsx` aceptan `focusRequestId`/`focusQuoteId`;
+  `InspectionsView.tsx` (sus `Tabs` pasan de no controlados a controlados)
+  acepta `focusPlanId`/`focusRunId`. Ninguno lee `window.location.hash`
+  directamente — `Dashboard.tsx` parsea una sola vez y pasa los ids como
+  props. Cada uno usa un `useRef` para no reabrir el diálogo en cada
+  render, y degrada con un toast controlado (nunca una pantalla rota) si el
+  UUID no existe o RLS lo deniega.
+- Resaltado de actividad (`WorkOrderActivitiesSection.tsx`,
+  `TechnicianWorkOrderDetailDialog.tsx`) y de cotización
+  (`QuoteListDialog.tsx`): MVP deliberado — solo `ring-2` + `scrollIntoView`,
+  nunca abre automáticamente el formulario de reporte.
+- **Sin pruebas de navegador automatizadas en este entorno** (no hay
+  Playwright ni equivalente): verificación estática (build, `tsc`) más
+  arranque de `npm run dev` (HTTP 200, sin errores de módulos). Los 10 casos
+  manuales de clic/F5/Back-Forward con sesión real quedan pendientes de
+  verificación por el equipo antes de mergear.

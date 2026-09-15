@@ -23,6 +23,7 @@ import { TechnicianSelect } from '@/components/members/TechnicianSelect';
 import { CoordinationContactSelect } from '@/components/members/CoordinationContactSelect';
 import { useCoordinationContacts } from '@/hooks/useCoordinationContacts';
 import { ASSET_NODE_TYPE_LABELS } from '@/lib/assetLabels';
+import { generateUuid } from '@/lib/uuid';
 import type { Asset } from '@/types/asset';
 
 interface RequestFormProps {
@@ -48,7 +49,7 @@ interface RequestDetail {
 }
 
 const createEmptyDetail = (): RequestDetail => ({
-  id: crypto.randomUUID(),
+  id: generateUuid(),
   equipment: '',
   subEquipment: '',
   area: '',
@@ -134,7 +135,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
   // Detalle (1 a muchos) - inicializar con datos existentes o vacío
   const initialDetails = editingRequest?.details?.length 
     ? editingRequest.details.map(d => ({
-        id: crypto.randomUUID(),
+        id: generateUuid(),
         equipment: d.equipment || '',
         subEquipment: d.subEquipment || '',
         area: d.area || '',
@@ -345,7 +346,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
     const detailAreaFallback = selectedAsset && assetPath ? assetPath : '';
 
     const request: Request = {
-      id: editingRequest?.id || crypto.randomUUID(),
+      id: editingRequest?.id || generateUuid(),
       organizationId: editingRequest?.organizationId || currentOrganization.id,
       requestNumber,
       title: title.trim(),

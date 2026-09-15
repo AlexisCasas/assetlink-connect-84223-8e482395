@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ListChecks, Plus, Pencil, Trash2, ArrowUp, ArrowDown, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,18 +24,27 @@ interface WorkOrderActivitiesSectionProps {
    * organization technicians are scoped to elsewhere in this dialog. */
   organizationId: string;
   canManage: boolean;
+  /** Activity to highlight and scroll into view, from a deep link
+   * (#work-orders?workOrder=...&activity=...). MVP: highlight + locate
+   * only — never auto-opens the report form. */
+  focusActivityId?: string;
 }
 
 const formatDate = (value: string | null) => value
   ? new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
   : '—';
 
-export function WorkOrderActivitiesSection({ workOrderId, organizationId, canManage }: WorkOrderActivitiesSectionProps) {
+export function WorkOrderActivitiesSection({ workOrderId, organizationId, canManage, focusActivityId }: WorkOrderActivitiesSectionProps) {
   const { activities, loading, saving, error, saveActivity, deleteActivity, moveActivity } = useWorkOrderActivities(workOrderId);
   const { toast } = useToast();
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<WorkOrderActivity | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!focusActivityId || loading) return;
+    document.getElementById(`activity-${focusActivityId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focusActivityId, loading, activities.length]);
 
   const sorted = [...activities].sort((a, b) => a.sequence - b.sequence);
   const nextSequence = (sorted[sorted.length - 1]?.sequence ?? 0) + 1;
@@ -86,7 +96,11 @@ export function WorkOrderActivitiesSection({ workOrderId, organizationId, canMan
       ) : (
         <div className="space-y-2">
           {sorted.map((activity, index) => (
-            <div key={activity.id} className="rounded-md border p-2.5">
+            <div
+              key={activity.id}
+              id={`activity-${activity.id}`}
+              className={cn('rounded-md border p-2.5', activity.id === focusActivityId && 'ring-2 ring-primary bg-primary/5')}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-start gap-2 min-w-0">
                   <span className="mt-0.5 shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">

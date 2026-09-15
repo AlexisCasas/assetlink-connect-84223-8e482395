@@ -36,6 +36,9 @@ interface WorkOrderDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdated?: (workOrder: WorkOrder) => void;
+  /** Activity to highlight/scroll to inside the Actividades section, from a
+   * #work-orders?workOrder=...&activity=... deep link. */
+  focusActivityId?: string;
 }
 
 const formatDate = (value: string | null) => value
@@ -46,7 +49,7 @@ const formatAmount = (value: number | null) => value === null
   ? '—'
   : new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(value);
 
-export function WorkOrderDetailDialog({ workOrder, open, onOpenChange, onUpdated }: WorkOrderDetailDialogProps) {
+export function WorkOrderDetailDialog({ workOrder, open, onOpenChange, onUpdated, focusActivityId }: WorkOrderDetailDialogProps) {
   const { currentOrganization } = useAuth();
   const { canPlanWork } = usePermissions();
   const { toast } = useToast();
@@ -271,6 +274,7 @@ export function WorkOrderDetailDialog({ workOrder, open, onOpenChange, onUpdated
             workOrderId={workOrder.id}
             organizationId={workOrder.provider_organization_id}
             canManage={isProviderPlanner}
+            focusActivityId={focusActivityId}
           />
         )}
 
