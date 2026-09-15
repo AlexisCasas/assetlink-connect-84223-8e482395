@@ -4,6 +4,7 @@ import type {
   QuoteSalesConditions,
   QuoteCalculationSummary,
 } from '@/types/request';
+import { generateUuid } from '@/lib/uuid';
 
 export const IGV_RATE = 0.18;
 
@@ -15,7 +16,7 @@ export const DEFAULT_SECTION_NAMES = [
 ];
 
 export const createEmptyItem = (): QuoteSectionItem => ({
-  id: crypto.randomUUID(),
+  id: generateUuid(),
   description: '',
   quantity: 0,
   unitMeasure: '',
@@ -23,7 +24,7 @@ export const createEmptyItem = (): QuoteSectionItem => ({
 });
 
 export const createSection = (name: string, order: number): QuoteSection => ({
-  id: crypto.randomUUID(),
+  id: generateUuid(),
   name,
   type: 'line_items',
   order,
