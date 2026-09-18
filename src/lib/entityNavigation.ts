@@ -20,6 +20,7 @@ export type DashboardView =
   | 'efficiency'
   | 'criticality'
   | 'inspections'
+  | 'preventive-maintenance'
   | 'backlog'
   | 'contact'
   | 'admin';
@@ -27,7 +28,7 @@ export type DashboardView =
 export const ALL_DASHBOARD_VIEWS: DashboardView[] = [
   'dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications',
   'approved-providers', 'branches', 'work-orders', 'my-work-orders', 'inventory', 'efficiency',
-  'criticality', 'inspections', 'backlog', 'contact', 'admin',
+  'criticality', 'inspections', 'preventive-maintenance', 'backlog', 'contact', 'admin',
 ];
 
 export interface EntityNavigationTarget {
@@ -40,6 +41,9 @@ export interface EntityNavigationTarget {
   inspectionPlanId?: string;
   inspectionRunId?: string;
   noticeId?: string;
+  preventivePlanId?: string;
+  preventiveOccurrenceId?: string;
+  preventiveAssetId?: string;
 }
 
 /** What parseEntityHash extracts from window.location.hash: a logical view
@@ -57,6 +61,9 @@ const QUERY_KEYS = {
   inspectionPlanId: 'plan',
   inspectionRunId: 'run',
   noticeId: 'notice',
+  preventivePlanId: 'plan',
+  preventiveOccurrenceId: 'occurrence',
+  preventiveAssetId: 'asset',
 } as const;
 
 /**
@@ -193,6 +200,15 @@ export async function resolveNotificationTarget(
       // pudo abrir" — el hash nunca es autorización.
       if (!notification.entity_id) return null;
       return { view: 'backlog', noticeId: notification.entity_id };
+    }
+
+    case 'preventive_maintenance_occurrence': {
+      if (!notification.entity_id) return null;
+      return {
+        view: 'preventive-maintenance',
+        preventiveOccurrenceId: notification.entity_id,
+        preventivePlanId: asNonEmptyString(metadata.plan_id),
+      };
     }
 
     case 'inspection_run': {

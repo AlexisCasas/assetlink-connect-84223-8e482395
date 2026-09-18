@@ -30,6 +30,8 @@ interface RequestFormProps {
   onClose: () => void;
   onSave: (request: Request, isDraft: boolean) => Promise<void>;
   editingRequest?: Request;
+  lockAsset?: boolean;
+  lockServiceType?: boolean;
 }
 
 interface RequestDetail {
@@ -64,7 +66,7 @@ const createEmptyDetail = (): RequestDetail => ({
   attachments: [],
 });
 
-export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProps) => {
+export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false, lockServiceType = false }: RequestFormProps) => {
   const { user, currentOrganization, currentMembership } = useAuth();
   const { toast } = useToast();
   const currentOrganizationId = currentOrganization?.id;
@@ -459,7 +461,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
               </div>
               <div className="space-y-2">
                 <Label htmlFor="serviceType">Tipo de servicio *</Label>
-                <Select value={serviceType} onValueChange={(value) => setServiceType(value as ServiceType)}>
+                <Select value={serviceType} onValueChange={(value) => setServiceType(value as ServiceType)} disabled={lockServiceType}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-popover">
                     <SelectItem value="emergencia">Emergencia</SelectItem>
@@ -585,10 +587,14 @@ export const RequestForm = ({ onClose, onSave, editingRequest }: RequestFormProp
             )}
 
             {/* Activo asociado */}
-            <RequestAssetPicker
-              assetId={assetId}
-              onChange={(id, asset, path) => { setAssetId(id); setSelectedAsset(asset); setAssetPath(path); setAssetTouched(true); }}
-            />
+            {lockAsset ? (
+              <RequestAssetSummary assetId={assetId} assetText={editingRequest?.asset} title="Activo del plan preventivo" />
+            ) : (
+              <RequestAssetPicker
+                assetId={assetId}
+                onChange={(id, asset, path) => { setAssetId(id); setSelectedAsset(asset); setAssetPath(path); setAssetTouched(true); }}
+              />
+            )}
 
             {/* Descripción */}
             <div className="space-y-2">

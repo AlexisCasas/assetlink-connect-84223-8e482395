@@ -1812,3 +1812,35 @@ Ver `docs/MAINTENANCE_BACKLOG_NOTICES.md`.
   duplicados, notificaciones por rol) + `npm run build` y `tsc --noEmit` sin
   errores nuevos. **No ejecutado**: QA en navegador real (sin automatización de
   navegador ni Docker en este entorno).
+
+## Fase 22 — Planes y cartillas de mantenimiento preventivo
+
+Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
+
+- Dominio separado `maintenance_cards → preventive_maintenance_plans →
+  preventive_maintenance_occurrences`; no reutiliza inspecciones. Las siete
+  tablas nuevas son tenant-aware, solo exponen SELECT con RLS y escriben por
+  RPCs `SECURITY DEFINER`.
+- Cada ocurrencia congela activo/ruta/sede, responsable, ficha, tareas,
+  materiales, medidor, configuración y vencimiento en `scope_snapshot` con
+  `schema_version`. Ese alcance y sus valores de vencimiento son inmutables.
+- Los medidores son genéricos (`name`/`unit`) y sus lecturas acumulativas son
+  inmutables. Corregir anula y reemplaza; un reset físico retira/reemplaza el
+  medidor y conserva todo el historial.
+- La ocurrencia, no el plan, es la fuente del próximo vencimiento. Completado
+  reinicia desde hora/lectura de cierre; omitido conserva la cadencia desde el
+  vencimiento anterior. Locks siempre en orden plan → ocurrencia, reforzados
+  por índices únicos parciales.
+- Planificar reutiliza `OrderForm` + `persistRequest` y reserva
+  `request_creation_id` como `requests.id`; activo y servicio preventivo quedan
+  bloqueados, mientras el tipo internal/external sigue editable antes de enviar.
+- Triggers de OT fijan timestamps y completan/vinculan la ocurrencia en la misma
+  transacción. En planes por medidor, cerrar sin lectura efectiva a la hora de
+  cierre aborta también la transición de la OT.
+- Vista `#preventive-maintenance` con Cartillas, Planes, Próximos/Pendientes y
+  Medidores; resumen en Dashboard y bloque compacto en AssetDetail. Deep links
+  aceptan `plan`, `occurrence`, `asset` y `org` mediante `entityNavigation`.
+- Verificado localmente desde esquema vacío: `supabase db reset --local`, **154
+  checks pgTAP** (incluye dos conexiones concurrentes reales) y build. El `tsc`
+  completo no reporta errores en este módulo, pero conserva 6 errores
+  preexistentes en `AdminConsole`, `BranchesList`, `QuoteListDialog` e `Index`.

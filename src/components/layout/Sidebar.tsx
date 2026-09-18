@@ -27,13 +27,14 @@ import {
   BarChart3,
   Gauge,
   ClipboardCheck
+  ,CalendarClock
   ,Shield
   ,AlertTriangle
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'backlog' | 'admin') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -92,6 +93,7 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   // even though they cannot edit templates/plans (gated inside
   // InspectionsView itself via canPlanWork, not at the nav level).
   const canViewInspections = canViewAssets && !!currentMembership?.isActive && ['owner', 'admin', 'manager', 'technician'].includes(currentMembership.role);
+  const canViewPreventiveMaintenance = canViewAssets && !!currentMembership?.isActive;
   // El backlog de avisos es del cliente dueño de los activos, igual que
   // Activos/Criticidad/Inspecciones. Se muestra a todo el que puede
   // REPORTAR (incluidos technician y requester); quien solo puede leer ve
@@ -276,6 +278,17 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               !collapsed && "mr-2"
             )} />
             {!collapsed && 'Inspecciones'}
+          </Button>
+        )}
+
+        {canViewPreventiveMaintenance && (
+          <Button
+            variant={currentView === 'preventive-maintenance' ? "default" : "ghost"}
+            className={cn("w-full justify-start", collapsed && "justify-center px-2")}
+            onClick={() => onViewChange?.('preventive-maintenance')}
+          >
+            <CalendarClock className={cn("h-4 w-4", !collapsed && "mr-2")} />
+            {!collapsed && 'Mantenimiento preventivo'}
           </Button>
         )}
 

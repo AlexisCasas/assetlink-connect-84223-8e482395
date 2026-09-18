@@ -21,6 +21,8 @@ import { EfficiencyDashboard } from '@/components/analytics/EfficiencyDashboard'
 import { CriticalityMatrixView } from '@/components/criticality/CriticalityMatrixView';
 import { InspectionsView } from '@/components/inspections/InspectionsView';
 import { BacklogView } from '@/components/backlog/BacklogView';
+import { PreventiveMaintenanceView } from '@/components/preventive-maintenance/PreventiveMaintenanceView';
+import { PreventiveMaintenanceSummaryCard } from '@/components/dashboard/PreventiveMaintenanceSummaryCard';
 import { useToast } from '@/hooks/use-toast';
 import { parseEntityHash, type DashboardView, type ParsedEntityHash } from '@/lib/entityNavigation';
 
@@ -168,6 +170,8 @@ const Dashboard = () => {
         return <CriticalityMatrixView />;
       case 'inspections':
         return <InspectionsView focusPlanId={focus.inspectionPlanId} focusRunId={focus.inspectionRunId} />;
+      case 'preventive-maintenance':
+        return <PreventiveMaintenanceView focusPlanId={focus.preventivePlanId} focusOccurrenceId={focus.preventiveOccurrenceId} focusAssetId={focus.preventiveAssetId} />;
       case 'backlog':
         // BacklogView se defiende sola de un #backlog directo desde una
         // organización que no es cliente; el gating del sidebar nunca es la
@@ -185,6 +189,7 @@ const Dashboard = () => {
         return (
           <div className="space-y-6 p-6">
             <TrafficLightSummaryCard />
+            <PreventiveMaintenanceSummaryCard />
             <DashboardMetricsCards />
           </div>
         );

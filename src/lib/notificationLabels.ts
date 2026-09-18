@@ -16,6 +16,9 @@ export const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   inspection_due_soon_future: 'Inspección próxima a vencer',
   inspection_overdue_future: 'Inspección vencida',
   maintenance_notice_created: 'Nuevo aviso de avería',
+  preventive_maintenance_planned: 'Mantenimiento preventivo planificado',
+  preventive_maintenance_completed: 'Mantenimiento preventivo completado',
+  preventive_maintenance_skipped: 'Mantenimiento preventivo omitido',
   quote_submitted: 'Cotización recibida',
   quote_approved: 'Cotización aprobada',
   quote_rejected: 'Cotización no seleccionada',
@@ -32,6 +35,9 @@ const OPERATIONAL_NOTIFICATION_TYPES = new Set([
   'inspection_due_soon_future',
   'inspection_overdue_future',
   'maintenance_notice_created',
+  'preventive_maintenance_planned',
+  'preventive_maintenance_completed',
+  'preventive_maintenance_skipped',
 ]);
 
 export const isOperationalNotificationType = (type: string) => OPERATIONAL_NOTIFICATION_TYPES.has(type);
@@ -84,6 +90,10 @@ export const notificationEntityReference = (entityType: string | null, metadata:
         return `Inspección: ${planTitle} · ${daysBefore}`;
       }
       return `Inspección: ${planTitle}`;
+    }
+    case 'preventive_maintenance_occurrence': {
+      const sequence = typeof meta.occurrence_sequence === 'number' ? ` #${meta.occurrence_sequence}` : '';
+      return `Mantenimiento preventivo${sequence}`;
     }
     default:
       return null;
