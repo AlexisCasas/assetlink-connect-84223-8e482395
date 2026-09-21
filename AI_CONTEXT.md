@@ -1835,12 +1835,17 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   `request_creation_id` como `requests.id`; activo y servicio preventivo quedan
   bloqueados, mientras el tipo internal/external sigue editable antes de enviar.
 - Triggers de OT fijan timestamps y completan/vinculan la ocurrencia en la misma
-  transacción. En planes por medidor, cerrar sin lectura efectiva a la hora de
-  cierre aborta también la transición de la OT.
+  transacción. En planes por medidor, el cierre exige una lectura vigente del
+  mismo medidor en la ventana `planned_at <= recorded_at <= completed_at`; se
+  usa la más reciente. Fuera de esa ventana, anulación o ausencia abortan
+  también la transición de la OT.
 - Vista `#preventive-maintenance` con Cartillas, Planes, Próximos/Pendientes y
   Medidores; resumen en Dashboard y bloque compacto en AssetDetail. Deep links
   aceptan `plan`, `occurrence`, `asset` y `org` mediante `entityNavigation`.
-- Verificado localmente desde esquema vacío: `supabase db reset --local`, **154
+- Las mutaciones de medidores invalidan por organización/activo los hooks de
+  medidores y preventivo: Planes, Próximos/Pendientes, Dashboard y AssetDetail
+  recuperan el `timing_status` desde sus RPCs sin cálculo cliente ni F5.
+- Verificado localmente desde esquema vacío: `supabase db reset --local`, **180
   checks pgTAP** (incluye dos conexiones concurrentes reales) y build. El `tsc`
   completo no reporta errores en este módulo, pero conserva 6 errores
   preexistentes en `AdminConsole`, `BranchesList`, `QuoteListDialog` e `Index`.

@@ -1,6 +1,6 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(86);
+SELECT plan(90);
 
 SELECT has_table('public', 'maintenance_cards', 'maintenance_cards exists');
 SELECT has_table('public', 'maintenance_card_tasks', 'maintenance_card_tasks exists');
@@ -225,9 +225,18 @@ SELECT throws_matching($$
   UPDATE public.work_orders SET status = 'completed', completed_at = now() WHERE title = 'OT preventiva'
 $$, '.*Registra una lectura actual del medidor Horómetro.*', 'meter maintenance cannot complete without effective reading and names the meter');
 SELECT ok((SELECT status <> 'completed' AND completed_at IS NULL FROM public.work_orders WHERE title = 'OT preventiva'), 'failed preventive completion rolls back work-order status and timestamp');
+SELECT is((SELECT status FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'OT preventiva')), 'planned', 'failed preventive completion leaves the occurrence planned');
+SELECT is((SELECT completion_meter_reading_id FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'OT preventiva')), NULL::uuid, 'failed preventive completion stores no meter reading');
+SELECT is((SELECT completion_meter_value FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'OT preventiva')), NULL::numeric, 'failed preventive completion stores no meter value');
+SELECT is((SELECT count(*) FROM public.preventive_maintenance_occurrences WHERE plan_id = (SELECT plan_id FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'OT preventiva'))), 1::bigint, 'failed preventive completion creates no next occurrence');
 SELECT lives_ok($$
-  SELECT public.record_asset_meter_reading((SELECT id FROM public.asset_meters WHERE name = 'Horómetro'), 105, now() - interval '1 hour', 'cierre')
-$$, 'historical compatible completion reading records');
+  SELECT public.record_asset_meter_reading(
+    (SELECT id FROM public.asset_meters WHERE name = 'Horómetro'),
+    105,
+    (SELECT planned_at FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'OT preventiva')),
+    'cierre'
+  )
+$$, 'completion reading recorded exactly at the planned occurrence is valid');
 SELECT lives_ok($$ UPDATE public.work_orders SET status = 'completed', completed_at = now() WHERE title = 'OT preventiva' $$, 'terminal transition completes occurrence');
 SELECT is((SELECT status FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'OT preventiva')), 'completed', 'occurrence is completed atomically');
 SELECT is(

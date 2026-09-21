@@ -59,7 +59,7 @@ export function PreventiveMaintenanceView({ focusPlanId, focusOccurrenceId, focu
   const [planningOccurrence, setPlanningOccurrence] = useState<PreventiveOccurrence | null>(null);
   const [meterAssetId, setMeterAssetId] = useState('');
   const [activeTab, setActiveTab] = useState<PreventiveTab>(() => focusOccurrenceId ? 'occurrences' : focusPlanId || focusAssetId ? 'plans' : 'cards');
-  const planMeters = useAssetMeters(planDraft.assetId);
+  const planMeters = useAssetMeters(planDraft.assetId, organizationId);
   const handledCreateAssetRef = useRef<string | null>(null);
 
   useEffect(() => {

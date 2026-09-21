@@ -1,6 +1,6 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(59);
+SELECT plan(81);
 
 INSERT INTO auth.users (id, email)
 VALUES
@@ -29,7 +29,8 @@ VALUES
 INSERT INTO public.assets (id, organization_id, code, name)
 VALUES
   ('42000000-0000-0000-0000-000000000001', '22000000-0000-0000-0000-000000000001', 'QA-A', 'Unidad QA A'),
-  ('42000000-0000-0000-0000-000000000002', '22000000-0000-0000-0000-000000000002', 'QA-B', 'Unidad QA B');
+  ('42000000-0000-0000-0000-000000000002', '22000000-0000-0000-0000-000000000002', 'QA-B', 'Unidad QA B'),
+  ('42000000-0000-0000-0000-000000000003', '22000000-0000-0000-0000-000000000001', 'QA-12', 'Unidad QA-12 aislada');
 
 INSERT INTO public.warehouses (id, organization_id, name)
 VALUES ('52000000-0000-0000-0000-000000000001', '22000000-0000-0000-0000-000000000001', 'QA Almacén');
@@ -147,7 +148,6 @@ SELECT lives_ok($$ SELECT public.record_asset_meter_reading((SELECT id FROM publ
 SELECT is((SELECT item->>'timing_status' FROM jsonb_array_elements(public.get_preventive_maintenance_plans('22000000-0000-0000-0000-000000000001')) item WHERE item->>'trigger_type' = 'meter'), 'due', 'exact meter threshold remains due');
 SELECT lives_ok($$ SELECT public.record_asset_meter_reading((SELECT id FROM public.asset_meters WHERE name = 'Odómetro'), 45050, now() - interval '2 minutes', NULL) $$, 'overdue reading records');
 SELECT is((SELECT item->>'timing_status' FROM jsonb_array_elements(public.get_preventive_maintenance_plans('22000000-0000-0000-0000-000000000001')) item WHERE item->>'trigger_type' = 'meter'), 'overdue', 'value above threshold is overdue');
-SELECT lives_ok($$ SELECT public.record_asset_meter_reading((SELECT id FROM public.asset_meters WHERE name = 'Odómetro'), 45180, now() - interval '1 minute', 'QA completion') $$, '45180 completion reading records');
 INSERT INTO public.requests (
   id, request_number, description, asset, location, service_type, deadline, status,
   created_by, organization_id, asset_id, request_type
@@ -164,6 +164,13 @@ SELECT lives_ok($$
     (SELECT id FROM public.requests WHERE request_number = 'QA-METER-50180')
   )
 $$, 'meter occurrence links to its durable request');
+SELECT lives_ok($$
+  SELECT public.record_asset_meter_reading(
+    (SELECT id FROM public.asset_meters WHERE name = 'Odómetro'), 45180,
+    (SELECT planned_at FROM public.preventive_maintenance_occurrences o JOIN public.preventive_maintenance_plans p ON p.id = o.plan_id WHERE p.trigger_type = 'meter' AND o.status = 'planned'),
+    'QA completion'
+  )
+$$, '45180 completion reading records at the planned occurrence time');
 INSERT INTO public.work_orders (
   request_id, client_organization_id, provider_organization_id, status,
   title, asset_id, work_order_type, priority
@@ -176,6 +183,105 @@ SELECT is((SELECT due_meter_value FROM public.preventive_maintenance_occurrences
 SELECT is((SELECT count(*) FROM public.preventive_maintenance_occurrences o JOIN public.preventive_maintenance_plans p ON p.id = o.plan_id WHERE p.trigger_type = 'meter' AND o.status IN ('open', 'planned')), 1::bigint, 'meter completion leaves exactly one current occurrence');
 
 SELECT lives_ok($$
+  SELECT public.create_asset_meter(
+    '22000000-0000-0000-0000-000000000001', '42000000-0000-0000-0000-000000000003',
+    'QA-12 Medidor', 'km', 100, now() - interval '1 day', 'baseline QA-12'
+  )
+$$, 'QA-12 creates an isolated meter with only its baseline reading');
+SELECT lives_ok($$
+  SELECT public.save_preventive_maintenance_plan(
+    '22000000-0000-0000-0000-000000000001', '42000000-0000-0000-0000-000000000003',
+    (SELECT id FROM public.maintenance_cards WHERE code = 'MP-5000'), 'meter', 'medium', 'internal',
+    NULL, 0, NULL, NULL, NULL, NULL,
+    (SELECT id FROM public.asset_meters WHERE name = 'QA-12 Medidor'), 50,
+    (SELECT r.id FROM public.asset_meter_readings r JOIN public.asset_meters m ON m.id = r.meter_id WHERE m.name = 'QA-12 Medidor'), 10, NULL
+  )
+$$, 'QA-12 creates a meter plan from the isolated baseline');
+INSERT INTO public.requests (
+  id, request_number, description, asset, location, service_type, deadline, status,
+  created_by, organization_id, asset_id, request_type
+)
+SELECT o.request_creation_id, 'QA-12-BASELINE-ONLY', 'Preventivo QA-12', 'Unidad QA-12 aislada', 'QA',
+  'preventivo', now() + interval '3 days', 'draft', 'qa-owner@test.local', o.organization_id,
+  o.asset_id, 'internal'
+FROM public.preventive_maintenance_occurrences o
+JOIN public.preventive_maintenance_plans p ON p.id = o.plan_id
+WHERE p.meter_id = (SELECT id FROM public.asset_meters WHERE name = 'QA-12 Medidor');
+SELECT lives_ok($$
+  SELECT public.plan_preventive_maintenance_occurrence(
+    (SELECT o.id FROM public.preventive_maintenance_occurrences o JOIN public.preventive_maintenance_plans p ON p.id = o.plan_id WHERE p.meter_id = (SELECT id FROM public.asset_meters WHERE name = 'QA-12 Medidor')),
+    (SELECT id FROM public.requests WHERE request_number = 'QA-12-BASELINE-ONLY')
+  )
+$$, 'QA-12 links the planned occurrence without an operational reading');
+INSERT INTO public.work_orders (
+  request_id, client_organization_id, provider_organization_id, status,
+  title, asset_id, work_order_type, priority
+)
+SELECT r.id, r.organization_id, r.organization_id, 'pending', 'QA-12 baseline-only OT',
+  r.asset_id, 'internal', 'medium'
+FROM public.requests r WHERE r.request_number = 'QA-12-BASELINE-ONLY';
+SELECT throws_matching($$ UPDATE public.work_orders SET status = 'completed' WHERE title = 'QA-12 baseline-only OT' $$, '.*Registra una lectura actual del medidor QA-12 Medidor antes de completar este mantenimiento preventivo.*', 'QA-12 rejects a baseline recorded before the occurrence was planned');
+SELECT is((SELECT count(*) FROM public.asset_meter_readings r JOIN public.asset_meters m ON m.id = r.meter_id WHERE m.name = 'QA-12 Medidor' AND r.voided_at IS NULL), 1::bigint, 'QA-12 has no operational reading beyond its baseline');
+SELECT is((SELECT status FROM public.work_orders WHERE title = 'QA-12 baseline-only OT'), 'pending', 'failed completed transition rolls the work order back');
+SELECT is((SELECT completed_at FROM public.work_orders WHERE title = 'QA-12 baseline-only OT'), NULL::timestamptz, 'failed completed transition does not persist completed_at');
+SELECT is((SELECT status FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'QA-12 baseline-only OT')), 'planned', 'failed completed transition leaves the occurrence planned');
+SELECT is((SELECT completion_meter_reading_id FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'QA-12 baseline-only OT')), NULL::uuid, 'failed completed transition leaves completion reading null');
+SELECT is((SELECT completion_meter_value FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'QA-12 baseline-only OT')), NULL::numeric, 'failed completed transition leaves completion value null');
+SELECT is((SELECT count(*) FROM public.preventive_maintenance_occurrences o JOIN public.preventive_maintenance_plans p ON p.id = o.plan_id WHERE p.meter_id = (SELECT id FROM public.asset_meters WHERE name = 'QA-12 Medidor') AND o.status = 'open'), 0::bigint, 'failed completed transition creates no next occurrence');
+SELECT throws_matching($$ UPDATE public.work_orders SET status = 'closed' WHERE title = 'QA-12 baseline-only OT' $$, '.*Registra una lectura actual del medidor QA-12 Medidor.*', 'QA-12 protects the closed terminal transition too');
+SELECT lives_ok($$
+  SELECT public.record_asset_meter_reading(
+    (SELECT id FROM public.asset_meters WHERE name = 'QA-12 Medidor'), 110,
+    (SELECT planned_at + interval '2 seconds' FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'QA-12 baseline-only OT')),
+    'lectura futura QA-12'
+  )
+$$, 'QA-12 records a reading after the proposed completion timestamp');
+SELECT throws_matching($$
+  UPDATE public.work_orders SET status = 'completed', completed_at = (
+    SELECT planned_at + interval '1 second' FROM public.preventive_maintenance_occurrences
+    WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'QA-12 baseline-only OT')
+  ) WHERE title = 'QA-12 baseline-only OT'
+$$, '.*Registra una lectura actual del medidor QA-12 Medidor.*', 'QA-12 rejects a future-only reading');
+SELECT lives_ok($$
+  SELECT public.record_asset_meter_reading(
+    (SELECT id FROM public.asset_meters WHERE name = 'QA-12 Medidor'), 101,
+    (SELECT planned_at FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'QA-12 baseline-only OT')),
+    'lectura exacta QA-12'
+  )
+$$, 'QA-12 accepts a reading exactly at planned_at');
+SELECT lives_ok($$
+  SELECT public.record_asset_meter_reading(
+    (SELECT id FROM public.asset_meters WHERE name = 'QA-12 Medidor'), 105,
+    (SELECT planned_at + interval '500 milliseconds' FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'QA-12 baseline-only OT')),
+    'lectura posterior válida QA-12'
+  )
+$$, 'QA-12 accepts a reading after planned_at');
+SELECT lives_ok($$
+  SELECT public.record_asset_meter_reading(
+    (SELECT id FROM public.asset_meters WHERE name = 'QA-12 Medidor'), 110,
+    (SELECT planned_at + interval '750 milliseconds' FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'QA-12 baseline-only OT')),
+    'lectura posterior anulada QA-12'
+  )
+$$, 'QA-12 records a later candidate reading');
+SELECT lives_ok($$
+  UPDATE public.asset_meter_readings SET voided_at = now(), void_reason = 'QA lectura anulada'
+  WHERE meter_id = (SELECT id FROM public.asset_meters WHERE name = 'QA-12 Medidor') AND value = 110
+$$, 'QA-12 voids the latest candidate reading');
+SELECT lives_ok($$
+  UPDATE public.work_orders SET status = 'completed', completed_at = (
+    SELECT planned_at + interval '1 second' FROM public.preventive_maintenance_occurrences
+    WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'QA-12 baseline-only OT')
+  ) WHERE title = 'QA-12 baseline-only OT'
+$$, 'QA-12 completes with a reading in the planned-to-completed window');
+SELECT is(
+  (SELECT completion_meter_reading_id FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'QA-12 baseline-only OT')),
+  (SELECT id FROM public.asset_meter_readings WHERE meter_id = (SELECT id FROM public.asset_meters WHERE name = 'QA-12 Medidor') AND value = 105 AND voided_at IS NULL),
+  'QA-12 selects the latest effective reading at or before completion'
+);
+SELECT is((SELECT completion_meter_value FROM public.preventive_maintenance_occurrences WHERE work_order_id = (SELECT id FROM public.work_orders WHERE title = 'QA-12 baseline-only OT')), 105::numeric, 'QA-12 persists the selected completion value');
+SELECT is((SELECT due_meter_value FROM public.preventive_maintenance_occurrences o JOIN public.preventive_maintenance_plans p ON p.id = o.plan_id WHERE p.meter_id = (SELECT id FROM public.asset_meters WHERE name = 'QA-12 Medidor') AND o.status = 'open'), 155::numeric, 'QA-12 creates the next cycle from the selected completion value');
+
+SELECT lives_ok($$
   SELECT public.correct_asset_meter_reading((SELECT id FROM public.asset_meter_readings WHERE value = 40000 AND voided_at IS NULL), 40100, 'QA baseline correction', NULL)
 $$, 'baseline reading can be corrected after plan creation');
 SELECT lives_ok($$
@@ -184,10 +290,10 @@ SELECT lives_ok($$
     (SELECT id FROM public.maintenance_cards WHERE code = 'MP-5000'), 'meter', 'high', 'external',
     NULL, 0, NULL, NULL, NULL, NULL, (SELECT id FROM public.asset_meters WHERE name = 'Odómetro'), 5000,
     (SELECT id FROM public.asset_meter_readings WHERE value = 40000), 500,
-    (SELECT id FROM public.preventive_maintenance_plans WHERE trigger_type = 'meter')
+    (SELECT id FROM public.preventive_maintenance_plans WHERE trigger_type = 'meter' AND asset_id = '42000000-0000-0000-0000-000000000001')
   )
 $$, 'corrected historical baseline does not block mutable plan edits');
-SELECT is((SELECT baseline_value FROM public.preventive_maintenance_plans WHERE trigger_type = 'meter'), 40000::numeric, 'plan baseline remains immutable after correction');
+SELECT is((SELECT baseline_value FROM public.preventive_maintenance_plans WHERE trigger_type = 'meter' AND asset_id = '42000000-0000-0000-0000-000000000001'), 40000::numeric, 'plan baseline remains immutable after correction');
 
 SELECT lives_ok($$ SELECT public.set_preventive_maintenance_plan_active((SELECT id FROM public.preventive_maintenance_plans WHERE frequency = 'custom'), false, 'QA deactivate') $$, 'open custom plan deactivates');
 SELECT is((SELECT status FROM public.preventive_maintenance_occurrences o JOIN public.preventive_maintenance_plans p ON p.id = o.plan_id WHERE p.frequency = 'custom'), 'cancelled', 'deactivation preserves occurrence as cancelled history');

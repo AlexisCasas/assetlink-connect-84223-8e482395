@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { notifyPreventiveMaintenanceRefresh, subscribePreventiveMaintenanceRefresh } from '@/lib/preventiveMaintenanceRefresh';
 import type { Json } from '@/integrations/supabase/types';
 import type {
   MaintenanceCard,
@@ -18,13 +19,14 @@ export function usePreventiveMaintenance(organizationId: string | null | undefin
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const refreshSource = useRef(Symbol('preventive-maintenance'));
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (background = false) => {
     if (!organizationId) {
       setCards([]); setPlans([]); setOccurrences([]); setError(null);
       return;
     }
-    setLoading(true); setError(null);
+    if (!background) { setLoading(true); setError(null); }
     try {
       const [cardsResult, plansResult, occurrencesResult] = await Promise.all([
         supabase.rpc('get_maintenance_cards', { p_organization_id: organizationId, p_include_inactive: true }),
@@ -42,26 +44,35 @@ export function usePreventiveMaintenance(organizationId: string | null | undefin
       const allPlans = (plansResult.data ?? []) as unknown as PreventivePlan[];
       setPlans(assetId ? allPlans.filter((plan) => plan.asset_id === assetId) : allPlans);
       setOccurrences((occurrencesResult.data ?? []) as unknown as PreventiveOccurrence[]);
+      return true;
     } catch (cause) {
-      setCards([]); setPlans([]); setOccurrences([]);
+      if (!background) { setCards([]); setPlans([]); setOccurrences([]); }
       setError(errorText(cause, 'No se pudo cargar mantenimiento preventivo.'));
-    } finally { setLoading(false); }
+      return false;
+    } finally { if (!background) setLoading(false); }
   }, [assetId, organizationId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => subscribePreventiveMaintenanceRefresh((change) => {
+    if (change.source === refreshSource.current || change.organizationId !== organizationId) return;
+    if (assetId && change.assetId && change.assetId !== assetId) return;
+    void refresh(true);
+  }), [assetId, organizationId, refresh]);
 
   const mutate = useCallback(async (operation: () => PromiseLike<{ error: { message: string } | null }>) => {
     setSaving(true); setError(null);
     try {
       const result = await operation();
       if (result.error) throw result.error;
-      await refresh();
+      notifyPreventiveMaintenanceRefresh({ organizationId, assetId, source: refreshSource.current });
+      await refresh(true);
       return true;
     } catch (cause) {
       setError(errorText(cause, 'No se pudo completar la operación.'));
       return false;
     } finally { setSaving(false); }
-  }, [refresh]);
+  }, [assetId, organizationId, refresh]);
 
   const saveCard = useCallback((draft: MaintenanceCardDraft, cardId?: string) => {
     if (!organizationId) return Promise.resolve(false);

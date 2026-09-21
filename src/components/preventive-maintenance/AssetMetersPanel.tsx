@@ -19,7 +19,7 @@ const localNow = () => {
 };
 
 export function AssetMetersPanel({ assetId, organizationId, canManage }: Props) {
-  const meterState = useAssetMeters(assetId);
+  const meterState = useAssetMeters(assetId, organizationId);
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [readingMeterId, setReadingMeterId] = useState<string | null>(null);

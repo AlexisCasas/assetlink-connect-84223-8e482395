@@ -1,32 +1,61 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { notifyPreventiveMaintenanceRefresh, subscribePreventiveMaintenanceRefresh } from '@/lib/preventiveMaintenanceRefresh';
 import type { AssetMeter } from '@/types/preventiveMaintenance';
 
-export function useAssetMeters(assetId: string | null | undefined) {
+const errorText = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
+
+export function useAssetMeters(assetId: string | null | undefined, organizationId?: string | null) {
   const [meters, setMeters] = useState<AssetMeter[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refreshSource = useRef(Symbol('asset-meters'));
+
+  const refresh = useCallback(async (background = false) => {
     if (!assetId) { setMeters([]); setError(null); return; }
-    setLoading(true); setError(null);
-    const { data, error: rpcError } = await supabase.rpc('get_asset_meters', {
-      p_asset_id: assetId, p_include_inactive: true,
-    });
-    if (rpcError) { setMeters([]); setError(rpcError.message); }
-    else setMeters((data ?? []) as unknown as AssetMeter[]);
-    setLoading(false);
+    if (!background) { setLoading(true); setError(null); }
+    try {
+      const { data, error: rpcError } = await supabase.rpc('get_asset_meters', {
+        p_asset_id: assetId, p_include_inactive: true,
+      });
+      if (rpcError) throw rpcError;
+      setMeters((data ?? []) as unknown as AssetMeter[]);
+      setError(null);
+      return true;
+    } catch (cause) {
+      if (!background) setMeters([]);
+      setError(errorText(cause, 'No se pudieron cargar los medidores.'));
+      return false;
+    } finally {
+      if (!background) setLoading(false);
+    }
   }, [assetId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  useEffect(() => subscribePreventiveMaintenanceRefresh((change) => {
+    if (change.source !== refreshSource.current && change.assetId === assetId) {
+      void refresh(true);
+    }
+  }), [assetId, refresh]);
+
   const mutate = useCallback(async (operation: () => PromiseLike<{ error: { message: string } | null }>) => {
     setSaving(true); setError(null);
-    const result = await operation();
-    if (result.error) { setError(result.error.message); setSaving(false); return false; }
-    await refresh(); setSaving(false); return true;
-  }, [refresh]);
+    try {
+      const result = await operation();
+      if (result.error) throw result.error;
+      notifyPreventiveMaintenanceRefresh({ organizationId, assetId, source: refreshSource.current });
+      await refresh(true);
+      return true;
+    } catch (cause) {
+      setError(errorText(cause, 'No se pudo guardar la lectura del medidor.'));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [assetId, organizationId, refresh]);
 
   const createMeter = useCallback((organizationId: string, name: string, unit: string, initialValue: number, recordedAt: string) => {
     if (!assetId) return Promise.resolve(false);

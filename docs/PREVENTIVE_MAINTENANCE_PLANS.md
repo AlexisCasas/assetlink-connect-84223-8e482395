@@ -38,7 +38,7 @@ Cada frontera crítica es una sola transacción de PostgreSQL:
 1. `save_preventive_maintenance_plan` inserta plan y ocurrencia #1; si el snapshot o la ocurrencia fallan, el plan también revierte.
 2. `plan_preventive_maintenance_occurrence` bloquea primero el plan y luego la ocurrencia, valida tenant/activo/servicio/estado e impone `requests.id = request_creation_id`. Repetir el mismo vínculo es no-op exitoso.
 3. El trigger `sync_preventive_occurrence_from_work_order` adjunta la OT al insertar y, en la primera transición a `completed/closed`, completa el ciclo, registra evento/notifica y crea exactamente el siguiente. Todo revierte con la transición de OT si algo falla.
-4. Una OT preventiva por medidor solo cierra si existe una lectura efectiva con `recorded_at <= completed_at`; de lo contrario aborta indicando el nombre del medidor que debe actualizarse.
+4. Una OT preventiva por medidor solo cierra si existe una lectura efectiva del mismo medidor registrada en la ventana `occurrence.planned_at <= recorded_at <= work_orders.completed_at`. El trigger selecciona la más reciente de esa ventana; una lectura anulada o futura no sirve. Si no existe, aborta toda la transición indicando el nombre del medidor que debe actualizarse.
 5. `skip_preventive_maintenance_occurrence` acepta solo ciclos abiertos, exige motivo y es idempotente.
 
 La disciplina de locks es plan → ocurrencia. Los índices parciales únicos refuerzan un solo ciclo vigente, una sola solicitud/OT por ocurrencia y una sola OT interna por solicitud. La suite usa dos conexiones `dblink` simultáneas para verificar doble planificación y doble transición terminal.
@@ -79,6 +79,8 @@ La vista `preventive-maintenance` contiene:
 
 `AssetDetail` muestra un resumen por activo y Dashboard muestra conteos activos/próximos/vencidos/sin lectura.
 
+Al registrar, corregir, retirar o reemplazar una lectura, los hooks de medidores y mantenimiento preventivo publican una invalidación local por organización/activo. Las vistas de Planes, Próximos/Pendientes, Dashboard y AssetDetail vuelven a pedir sus RPCs al servidor sin recalcular `timing_status` en el cliente ni vaciar los datos visibles durante el refetch.
+
 ## Pruebas y verificación
 
 ```text
@@ -90,9 +92,9 @@ npm run lint
 
 Las pruebas están en:
 
-- `supabase/tests/preventive_maintenance_plans.test.sql` (86 aserciones funcionales/RLS/invariantes);
+- `supabase/tests/preventive_maintenance_plans.test.sql` (90 aserciones funcionales/RLS/invariantes);
 - `supabase/tests/preventive_maintenance_concurrency.test.sql` (9 aserciones con conexiones concurrentes).
-- `supabase/tests/preventive_maintenance_qa.test.sql` (59 aserciones de gates QA: snapshot, calendar, terminal directo, meter, reactivación y roles).
+- `supabase/tests/preventive_maintenance_qa.test.sql` (81 aserciones de gates QA, incluido QA-12 aislado para la ventana de lectura de cierre).
 
 ## Despliegue y rollback
 
