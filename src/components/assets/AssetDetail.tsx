@@ -38,6 +38,8 @@ import { CriticalityAssessmentHistory } from '@/components/criticality/Criticali
 import type { CriticalityAssessment } from '@/types/criticalityMatrix';
 import { useMaintenanceNotices } from '@/hooks/useMaintenanceNotices';
 import { MaintenanceNoticeDialog } from '@/components/backlog/MaintenanceNoticeDialog';
+import { usePreventiveMaintenance } from '@/hooks/usePreventiveMaintenance';
+import { navigateToEntity } from '@/lib/entityNavigation';
 
 interface AssetDetailProps {
   state: UseAssetsResult;
@@ -100,6 +102,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   // El hook solo consulta cuando el diálogo está abierto: la ficha del
   // activo no necesita cargar todo el backlog para mostrar un botón.
   const { createNotice } = useMaintenanceNotices(noticeDialogOpen ? asset?.organizationId : null);
+  const preventive = usePreventiveMaintenance(asset?.organizationId, asset?.id);
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -386,6 +389,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
         <Tabs defaultValue="summary" className="space-y-4">
           <TabsList className="inline-flex w-max gap-1 rounded-lg border border-onefacility-border bg-onefacility-surface p-1">
             <TabsTrigger value="summary" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Resumen</TabsTrigger>
+            <TabsTrigger value="preventive" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Preventivo</TabsTrigger>
             <TabsTrigger value="history" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Historial</TabsTrigger>
           </TabsList>
 
@@ -599,6 +603,21 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
             </div>
           )}
         </div>
+          </TabsContent>
+
+          <TabsContent value="preventive" className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div><h3 className="font-medium">Mantenimiento preventivo · {preventive.plans.filter((plan) => plan.is_active).length} planes activos</h3><p className="text-xs text-muted-foreground">Próximo ciclo y estado calculados por el servidor.</p></div>
+              <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => navigateToEntity({ view: 'preventive-maintenance' })}>Ver planes</Button>{canManageAssets && <Button size="sm" onClick={() => navigateToEntity({ view: 'preventive-maintenance', preventiveAssetId: asset.id })}>Crear plan</Button>}</div>
+            </div>
+            {preventive.loading ? <p className="text-sm text-muted-foreground">Cargando…</p> : preventive.plans.length === 0 ? (
+              <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Este activo no tiene planes preventivos.</p>
+            ) : preventive.plans.map((plan) => (
+              <div key={plan.id} className="rounded-md border p-3">
+                <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{plan.card_code} · {plan.card_name}</span><Badge variant={plan.is_active ? 'default' : 'secondary'}>{plan.is_active ? 'Activo' : 'Inactivo'}</Badge><Badge variant="outline">{plan.timing_status === 'no_reading' ? 'Sin lectura de medidor' : plan.timing_status === 'overdue' ? 'Vencido' : plan.timing_status === 'due' ? 'Por atender' : 'Próximo'}</Badge></div>
+                <p className="mt-1 text-sm text-muted-foreground">Ciclo #{plan.current_occurrence?.sequence ?? '—'} · {plan.current_occurrence?.due_at ? new Date(plan.current_occurrence.due_at).toLocaleString() : `${plan.current_occurrence?.due_meter_value ?? '—'} ${plan.meter_unit ?? ''}`}</p>
+              </div>
+            ))}
           </TabsContent>
 
           <TabsContent value="history" className="space-y-6">

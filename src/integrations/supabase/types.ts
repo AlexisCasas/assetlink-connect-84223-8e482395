@@ -7,8 +7,9 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  // The project is deployed behind PostgREST 14.5. Local CLI generation uses
+  // the bundled local gateway version, so keep the deployed compatibility
+  // marker and graphql schema that are part of the checked-in contract.
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -335,6 +336,130 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_meter_readings: {
+        Row: {
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          meter_id: string
+          notes: string | null
+          recorded_at: string
+          supersedes_reading_id: string | null
+          value: number
+          void_reason: string | null
+          voided_at: string | null
+          voided_by_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          meter_id: string
+          notes?: string | null
+          recorded_at: string
+          supersedes_reading_id?: string | null
+          value: number
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          meter_id?: string
+          notes?: string | null
+          recorded_at?: string
+          supersedes_reading_id?: string | null
+          value?: number
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_meter_readings_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "asset_meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_meter_readings_supersedes_reading_id_fkey"
+            columns: ["supersedes_reading_id"]
+            isOneToOne: false
+            referencedRelation: "asset_meter_readings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_meters: {
+        Row: {
+          asset_id: string
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          replaces_meter_id: string | null
+          retired_at: string | null
+          retirement_reason: string | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          replaces_meter_id?: string | null
+          retired_at?: string | null
+          retirement_reason?: string | null
+          unit: string
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          replaces_meter_id?: string | null
+          retired_at?: string | null
+          retirement_reason?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_meters_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_meters_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_meters_replaces_meter_id_fkey"
+            columns: ["replaces_meter_id"]
+            isOneToOne: false
+            referencedRelation: "asset_meters"
             referencedColumns: ["id"]
           },
         ]
@@ -1494,6 +1619,154 @@ export type Database = {
           },
         ]
       }
+      maintenance_card_materials: {
+        Row: {
+          card_id: string
+          created_at: string
+          description: string
+          id: string
+          material_id: string | null
+          notes: string | null
+          quantity: number
+          sequence: number
+          unit: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          description: string
+          id?: string
+          material_id?: string | null
+          notes?: string | null
+          quantity: number
+          sequence: number
+          unit: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          material_id?: string | null
+          notes?: string | null
+          quantity?: number
+          sequence?: number
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_card_materials_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_card_materials_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_card_tasks: {
+        Row: {
+          card_id: string
+          created_at: string
+          description: string | null
+          estimated_hours: number | null
+          id: string
+          is_required: boolean
+          sequence: number
+          title: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          is_required?: boolean
+          sequence: number
+          title: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          is_required?: boolean
+          sequence?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_card_tasks_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_cards: {
+        Row: {
+          category: string | null
+          code: string
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          estimated_hours: number | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          procedure_notes: string | null
+          safety_notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          code: string
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          procedure_notes?: string | null
+          safety_notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          code?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          procedure_notes?: string | null
+          safety_notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_cards_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maintenance_notice_counters: {
         Row: {
           last_number: number
@@ -2118,6 +2391,242 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      preventive_maintenance_occurrences: {
+        Row: {
+          asset_id: string
+          cancel_reason: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          completion_meter_reading_id: string | null
+          completion_meter_value: number | null
+          created_at: string
+          due_at: string | null
+          due_meter_value: number | null
+          id: string
+          organization_id: string
+          plan_id: string
+          planned_at: string | null
+          request_creation_id: string
+          request_id: string | null
+          scope_snapshot: Json
+          sequence: number
+          skip_reason: string | null
+          skipped_at: string | null
+          status: string
+          updated_at: string
+          work_order_id: string | null
+        }
+        Insert: {
+          asset_id: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          completed_at?: string | null
+          completion_meter_reading_id?: string | null
+          completion_meter_value?: number | null
+          created_at?: string
+          due_at?: string | null
+          due_meter_value?: number | null
+          id?: string
+          organization_id: string
+          plan_id: string
+          planned_at?: string | null
+          request_creation_id?: string
+          request_id?: string | null
+          scope_snapshot: Json
+          sequence: number
+          skip_reason?: string | null
+          skipped_at?: string | null
+          status?: string
+          updated_at?: string
+          work_order_id?: string | null
+        }
+        Update: {
+          asset_id?: string
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          completed_at?: string | null
+          completion_meter_reading_id?: string | null
+          completion_meter_value?: number | null
+          created_at?: string
+          due_at?: string | null
+          due_meter_value?: number | null
+          id?: string
+          organization_id?: string
+          plan_id?: string
+          planned_at?: string | null
+          request_creation_id?: string
+          request_id?: string | null
+          scope_snapshot?: Json
+          sequence?: number
+          skip_reason?: string | null
+          skipped_at?: string | null
+          status?: string
+          updated_at?: string
+          work_order_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preventive_maintenance_occurre_completion_meter_reading_id_fkey"
+            columns: ["completion_meter_reading_id"]
+            isOneToOne: false
+            referencedRelation: "asset_meter_readings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preventive_maintenance_occurrences_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preventive_maintenance_occurrences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preventive_maintenance_occurrences_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "preventive_maintenance_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preventive_maintenance_occurrences_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preventive_maintenance_occurrences_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      preventive_maintenance_plans: {
+        Row: {
+          asset_id: string
+          baseline_reading_id: string | null
+          baseline_value: number | null
+          card_id: string
+          created_at: string
+          created_by_user_id: string | null
+          custom_interval: number | null
+          custom_unit: string | null
+          default_request_type: string
+          first_due_at: string | null
+          frequency: string | null
+          id: string
+          interval_value: number | null
+          is_active: boolean
+          meter_id: string | null
+          meter_lead_value: number | null
+          organization_id: string
+          planning_lead_days: number
+          priority: string
+          responsible_member_id: string | null
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          asset_id: string
+          baseline_reading_id?: string | null
+          baseline_value?: number | null
+          card_id: string
+          created_at?: string
+          created_by_user_id?: string | null
+          custom_interval?: number | null
+          custom_unit?: string | null
+          default_request_type?: string
+          first_due_at?: string | null
+          frequency?: string | null
+          id?: string
+          interval_value?: number | null
+          is_active?: boolean
+          meter_id?: string | null
+          meter_lead_value?: number | null
+          organization_id: string
+          planning_lead_days?: number
+          priority?: string
+          responsible_member_id?: string | null
+          trigger_type: string
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string
+          baseline_reading_id?: string | null
+          baseline_value?: number | null
+          card_id?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          custom_interval?: number | null
+          custom_unit?: string | null
+          default_request_type?: string
+          first_due_at?: string | null
+          frequency?: string | null
+          id?: string
+          interval_value?: number | null
+          is_active?: boolean
+          meter_id?: string | null
+          meter_lead_value?: number | null
+          organization_id?: string
+          planning_lead_days?: number
+          priority?: string
+          responsible_member_id?: string | null
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preventive_maintenance_plans_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preventive_maintenance_plans_baseline_reading_id_fkey"
+            columns: ["baseline_reading_id"]
+            isOneToOne: false
+            referencedRelation: "asset_meter_readings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preventive_maintenance_plans_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preventive_maintenance_plans_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "asset_meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preventive_maintenance_plans_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preventive_maintenance_plans_responsible_member_id_fkey"
+            columns: ["responsible_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -3612,6 +4121,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      build_preventive_scope_snapshot: {
+        Args: { p_plan_id: string }
+        Returns: Json
+      }
       bulk_calculate_asset_criticality: {
         Args: { p_organization_id: string; p_rows: Json }
         Returns: Json
@@ -3645,11 +4158,19 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: boolean
       }
+      can_manage_preventive_maintenance: {
+        Args: { p_organization_id: string }
+        Returns: boolean
+      }
       can_provider_quote_request: {
         Args: {
           target_provider_organization_id: string
           target_request_id: string
         }
+        Returns: boolean
+      }
+      can_record_asset_meter_reading: {
+        Args: { p_organization_id: string }
         Returns: boolean
       }
       can_report_maintenance_notice: {
@@ -3706,6 +4227,64 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "maintenance_notices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      correct_asset_meter_reading: {
+        Args: {
+          p_notes?: string
+          p_reading_id: string
+          p_reason: string
+          p_value: number
+        }
+        Returns: {
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          meter_id: string
+          notes: string | null
+          recorded_at: string
+          supersedes_reading_id: string | null
+          value: number
+          void_reason: string | null
+          voided_at: string | null
+          voided_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_meter_readings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_asset_meter: {
+        Args: {
+          p_asset_id: string
+          p_initial_value?: number
+          p_name: string
+          p_notes?: string
+          p_organization_id: string
+          p_recorded_at?: string
+          p_unit: string
+        }
+        Returns: {
+          asset_id: string
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          replaces_meter_id: string | null
+          retired_at: string | null
+          retirement_reason: string | null
+          unit: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_meters"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3851,6 +4430,39 @@ export type Database = {
           target_type: string
         }
         Returns: string
+      }
+      create_preventive_occurrence_locked: {
+        Args: { p_due_at: string; p_due_meter_value: number; p_plan_id: string }
+        Returns: {
+          asset_id: string
+          cancel_reason: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          completion_meter_reading_id: string | null
+          completion_meter_value: number | null
+          created_at: string
+          due_at: string | null
+          due_meter_value: number | null
+          id: string
+          organization_id: string
+          plan_id: string
+          planned_at: string | null
+          request_creation_id: string
+          request_id: string | null
+          scope_snapshot: Json
+          sequence: number
+          skip_reason: string | null
+          skipped_at: string | null
+          status: string
+          updated_at: string
+          work_order_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "preventive_maintenance_occurrences"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       create_template_from_current_matrix: {
         Args: {
@@ -4026,6 +4638,27 @@ export type Database = {
           status: string
           title: string
         }[]
+      }
+      get_asset_integrated_history_before_preventive: {
+        Args: { p_asset_id: string }
+        Returns: {
+          actor_email: string
+          actor_name: string
+          description: string
+          event_date: string
+          event_label: string
+          event_type: string
+          id: string
+          metadata: Json
+          source_id: string
+          source_table: string
+          status: string
+          title: string
+        }[]
+      }
+      get_asset_meters: {
+        Args: { p_asset_id: string; p_include_inactive?: boolean }
+        Returns: Json
       }
       get_asset_traffic_light: {
         Args: { p_organization_id: string }
@@ -4237,6 +4870,10 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: Json
       }
+      get_maintenance_cards: {
+        Args: { p_include_inactive?: boolean; p_organization_id: string }
+        Returns: Json
+      }
       get_maintenance_notices: {
         Args: { p_organization_id: string }
         Returns: {
@@ -4295,6 +4932,18 @@ export type Database = {
           work_order_number: string
           work_order_type: string
         }[]
+      }
+      get_preventive_maintenance_occurrences: {
+        Args: {
+          p_asset_id?: string
+          p_organization_id: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      get_preventive_maintenance_plans: {
+        Args: { p_organization_id: string }
+        Returns: Json
       }
       get_provider_relationship_directory: {
         Args: { p_client_organization_id: string }
@@ -4421,6 +5070,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      notify_preventive_occurrence: {
+        Args: {
+          p_event_type: string
+          p_message: string
+          p_occurrence_id: string
+          p_title: string
+        }
+        Returns: undefined
+      }
       notify_role_members: {
         Args: {
           p_actor_user_id: string
@@ -4436,6 +5094,47 @@ export type Database = {
         }
         Returns: undefined
       }
+      plan_preventive_maintenance_occurrence: {
+        Args: { p_occurrence_id: string; p_request_id: string }
+        Returns: {
+          asset_id: string
+          cancel_reason: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          completion_meter_reading_id: string | null
+          completion_meter_value: number | null
+          created_at: string
+          due_at: string | null
+          due_meter_value: number | null
+          id: string
+          organization_id: string
+          plan_id: string
+          planned_at: string | null
+          request_creation_id: string
+          request_id: string | null
+          scope_snapshot: Json
+          sequence: number
+          skip_reason: string | null
+          skipped_at: string | null
+          status: string
+          updated_at: string
+          work_order_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "preventive_maintenance_occurrences"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      preventive_frequency_interval: {
+        Args: {
+          p_custom_interval?: number
+          p_custom_unit?: string
+          p_frequency: string
+        }
+        Returns: string
+      }
       preview_bulk_asset_criticality: {
         Args: { p_organization_id: string; p_rows: Json }
         Returns: {
@@ -4450,9 +5149,67 @@ export type Database = {
           warnings: Json
         }[]
       }
+      record_asset_meter_reading: {
+        Args: {
+          p_meter_id: string
+          p_notes?: string
+          p_recorded_at?: string
+          p_value: number
+        }
+        Returns: {
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          meter_id: string
+          notes: string | null
+          recorded_at: string
+          supersedes_reading_id: string | null
+          value: number
+          void_reason: string | null
+          voided_at: string | null
+          voided_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_meter_readings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       reject_quote: {
         Args: { reason?: string; target_quote_id: string }
         Returns: undefined
+      }
+      replace_asset_meter: {
+        Args: {
+          p_initial_value: number
+          p_meter_id: string
+          p_name: string
+          p_notes?: string
+          p_reason: string
+          p_recorded_at: string
+          p_unit: string
+        }
+        Returns: {
+          asset_id: string
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          replaces_meter_id: string | null
+          retired_at: string | null
+          retirement_reason: string | null
+          unit: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_meters"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       replace_criticality_matrix: {
         Args: { p_matrix: Json; p_organization_id: string }
@@ -4483,6 +5240,116 @@ export type Database = {
       resolve_caller_planner_member: {
         Args: { p_organization_id: string }
         Returns: string
+      }
+      retire_asset_meter: {
+        Args: { p_meter_id: string; p_reason: string }
+        Returns: {
+          asset_id: string
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          replaces_meter_id: string | null
+          retired_at: string | null
+          retirement_reason: string | null
+          unit: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_meters"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      save_maintenance_card: {
+        Args: {
+          p_card_id?: string
+          p_category?: string
+          p_code: string
+          p_description?: string
+          p_estimated_hours?: number
+          p_materials?: Json
+          p_name: string
+          p_organization_id: string
+          p_procedure_notes?: string
+          p_safety_notes?: string
+          p_tasks?: Json
+        }
+        Returns: {
+          category: string | null
+          code: string
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          estimated_hours: number | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          procedure_notes: string | null
+          safety_notes: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "maintenance_cards"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      save_preventive_maintenance_plan: {
+        Args: {
+          p_asset_id: string
+          p_baseline_reading_id?: string
+          p_card_id: string
+          p_custom_interval?: number
+          p_custom_unit?: string
+          p_default_request_type?: string
+          p_first_due_at?: string
+          p_frequency?: string
+          p_interval_value?: number
+          p_meter_id?: string
+          p_meter_lead_value?: number
+          p_organization_id: string
+          p_plan_id?: string
+          p_planning_lead_days?: number
+          p_priority?: string
+          p_responsible_member_id?: string
+          p_trigger_type: string
+        }
+        Returns: {
+          asset_id: string
+          baseline_reading_id: string | null
+          baseline_value: number | null
+          card_id: string
+          created_at: string
+          created_by_user_id: string | null
+          custom_interval: number | null
+          custom_unit: string | null
+          default_request_type: string
+          first_due_at: string | null
+          frequency: string | null
+          id: string
+          interval_value: number | null
+          is_active: boolean
+          meter_id: string | null
+          meter_lead_value: number | null
+          organization_id: string
+          planning_lead_days: number
+          priority: string
+          responsible_member_id: string | null
+          trigger_type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "preventive_maintenance_plans"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_checklist_response_option_active: {
         Args: { p_is_active: boolean; p_option_id: string }
@@ -4586,6 +5453,63 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_maintenance_card_active: {
+        Args: { p_card_id: string; p_is_active: boolean }
+        Returns: {
+          category: string | null
+          code: string
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          estimated_hours: number | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          procedure_notes: string | null
+          safety_notes: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "maintenance_cards"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_preventive_maintenance_plan_active: {
+        Args: { p_is_active: boolean; p_plan_id: string; p_reason?: string }
+        Returns: {
+          asset_id: string
+          baseline_reading_id: string | null
+          baseline_value: number | null
+          card_id: string
+          created_at: string
+          created_by_user_id: string | null
+          custom_interval: number | null
+          custom_unit: string | null
+          default_request_type: string
+          first_due_at: string | null
+          frequency: string | null
+          id: string
+          interval_value: number | null
+          is_active: boolean
+          meter_id: string | null
+          meter_lead_value: number | null
+          organization_id: string
+          planning_lead_days: number
+          priority: string
+          responsible_member_id: string | null
+          trigger_type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "preventive_maintenance_plans"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_provider_relationship_status: {
         Args: {
           p_client_organization_id: string
@@ -4619,6 +5543,39 @@ export type Database = {
           is_public: boolean
           provider_organization_ids: string[]
         }[]
+      }
+      skip_preventive_maintenance_occurrence: {
+        Args: { p_occurrence_id: string; p_reason: string }
+        Returns: {
+          asset_id: string
+          cancel_reason: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          completion_meter_reading_id: string | null
+          completion_meter_value: number | null
+          created_at: string
+          due_at: string | null
+          due_meter_value: number | null
+          id: string
+          organization_id: string
+          plan_id: string
+          planned_at: string | null
+          request_creation_id: string
+          request_id: string | null
+          scope_snapshot: Json
+          sequence: number
+          skip_reason: string | null
+          skipped_at: string | null
+          status: string
+          updated_at: string
+          work_order_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "preventive_maintenance_occurrences"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       storage_request_id_from_name: {
         Args: { object_name: string }
@@ -5210,12 +6167,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5239,11 +6196,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5264,11 +6221,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5289,11 +6246,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5306,11 +6263,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5320,9 +6277,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: ["cliente", "proveedor", "team_member"],

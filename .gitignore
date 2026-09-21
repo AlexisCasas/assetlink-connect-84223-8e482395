@@ -11,3 +11,6 @@ supabase/.temp/
 .env.functions.local
 
 .vercel/
+
+.env.local
+.env.preview
