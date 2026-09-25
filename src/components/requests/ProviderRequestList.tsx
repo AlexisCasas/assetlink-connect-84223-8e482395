@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { AssignmentDialog } from './AssignmentDialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Settings2, ArrowUpDown, Download, GripVertical, Eye, FileText, UserCog, Pencil, FilePlus, Package } from 'lucide-react';
+import { Search, Settings2, ArrowUpDown, Download, GripVertical, Eye, FileText, Pencil, FilePlus, Package } from 'lucide-react';
 import { RequestDetailDialog } from './RequestDetailDialog';
 import { QuoteDetailDialog } from './QuoteDetailDialog';
 import { QuoteForm } from './QuoteForm';
@@ -565,19 +565,6 @@ export const ProviderRequestList = ({ focusRequestId, focusQuoteId }: ProviderRe
                   <Pencil className="h-4 w-4 mr-1" /> Editar borrador
                 </Button>
               )}
-
-              {false && <Button
-                size="sm"
-                variant="outline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedRequests([request.id]);
-                  setShowAssignmentDialog(true);
-                }}
-              >
-                <UserCog className="h-4 w-4 mr-1" />
-                Asignar
-              </Button>}
             </div>
           </TableCell>
         );
