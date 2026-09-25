@@ -482,6 +482,7 @@ export type Database = {
           created_at: string
           created_by_user_id: string | null
           criticality: string | null
+          default_responsible_member_id: string | null
           description: string | null
           id: string
           image_url: string | null
@@ -509,6 +510,7 @@ export type Database = {
           created_at?: string
           created_by_user_id?: string | null
           criticality?: string | null
+          default_responsible_member_id?: string | null
           description?: string | null
           id?: string
           image_url?: string | null
@@ -536,6 +538,7 @@ export type Database = {
           created_at?: string
           created_by_user_id?: string | null
           criticality?: string | null
+          default_responsible_member_id?: string | null
           description?: string | null
           id?: string
           image_url?: string | null
@@ -568,6 +571,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "client_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_default_responsible_member_id_fkey"
+            columns: ["default_responsible_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
             referencedColumns: ["id"]
           },
           {
@@ -5172,6 +5182,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_eligible_follow_up_responsible: {
+        Args: { p_member_id: string; p_organization_id: string }
+        Returns: boolean
+      }
       is_organization_member: {
         Args: { _organization_id: string }
         Returns: boolean
@@ -5185,6 +5199,7 @@ export type Database = {
         Args: { request_priority: number }
         Returns: string
       }
+      member_display_name: { Args: { p_member_id: string }; Returns: string }
       next_maintenance_notice_number: {
         Args: { p_organization_id: string }
         Returns: string
@@ -5834,6 +5849,7 @@ export type Database = {
       }
       triage_maintenance_notice: {
         Args: {
+          p_clear_responsible?: boolean
           p_notice_id: string
           p_priority?: string
           p_responsible_member_id?: string

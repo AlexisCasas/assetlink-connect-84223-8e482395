@@ -47,6 +47,7 @@ const toAsset = (row: AssetRow): Asset => ({
   imageUrl: row.image_url,
   technicalData: (row.technical_data as Record<string, unknown> | null) ?? {},
   metadata: (row.metadata as Record<string, unknown> | null) ?? {},
+  defaultResponsibleMemberId: row.default_responsible_member_id,
   createdByUserId: row.created_by_user_id,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -327,6 +328,7 @@ export function useAssets() {
       if (changes.purchaseDate !== undefined) payload.purchase_date = changes.purchaseDate;
       if (changes.warrantyUntil !== undefined) payload.warranty_until = changes.warrantyUntil;
       if (changes.locationText !== undefined) payload.location_text = changes.locationText;
+      if (changes.defaultResponsibleMemberId !== undefined) payload.default_responsible_member_id = changes.defaultResponsibleMemberId;
 
       const { data, error: updateError } = await supabase.from('assets').update(payload).eq('id', assetId).select('*').single();
       if (updateError || !data) throw new Error(failureMessage);

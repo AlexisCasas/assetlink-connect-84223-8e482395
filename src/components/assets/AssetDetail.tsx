@@ -29,7 +29,10 @@ import { cn } from '@/lib/utils';
 import type { UseAssetsResult } from '@/hooks/useAssets';
 import type { UseAssetTrafficLightResult } from '@/hooks/useAssetTrafficLight';
 import type { Asset, AssetCriticality, AssetNodeType, AssetStatus } from '@/types/asset';
-import { ASSET_NODE_TYPE_ORDER, ASSET_NODE_TYPE_LABELS, ASSET_EDITABLE_STATUSES, ASSET_CRITICALITY_ORDER, ASSET_CRITICALITY_LABELS, getAssetStatusBadgeClass } from '@/lib/assetLabels';
+import { ASSET_NODE_TYPE_ORDER, ASSET_NODE_TYPE_LABELS, ASSET_EDITABLE_STATUSES, ASSET_CRITICALITY_ORDER, ASSET_CRITICALITY_LABELS, RESPONSIBLE_UNAVAILABLE_LABEL, getAssetStatusBadgeClass } from '@/lib/assetLabels';
+import { PlannerSelect } from '@/components/members/PlannerSelect';
+import { useCoordinationContacts } from '@/hooks/useCoordinationContacts';
+import { useOrganizationPlanners } from '@/hooks/useOrganizationPlanners';
 import { TRAFFIC_LIGHT_BADGE_CLASS, TRAFFIC_LIGHT_DOT_CLASS, TRAFFIC_LIGHT_LABELS, TRAFFIC_LIGHT_SOURCE_LABELS } from '@/lib/trafficLightLabels';
 import { AssetHistory } from './AssetHistory';
 import { useCriticalityMatrix } from '@/hooks/useCriticalityMatrix';
@@ -69,6 +72,7 @@ interface EditForm {
   branchId: string;
   assetCategoryId: string;
   locationText: string;
+  defaultResponsibleMemberId: string | null;
 }
 
 const toEditForm = (asset: Asset): EditForm => ({
@@ -87,6 +91,7 @@ const toEditForm = (asset: Asset): EditForm => ({
   branchId: asset.branchId ?? '',
   assetCategoryId: asset.assetCategoryId ?? '',
   locationText: asset.locationText ?? '',
+  defaultResponsibleMemberId: asset.defaultResponsibleMemberId,
 });
 
 export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
@@ -103,6 +108,11 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   // activo no necesita cargar todo el backlog para mostrar un botón.
   const { createNotice } = useMaintenanceNotices(noticeDialogOpen ? asset?.organizationId : null);
   const preventive = usePreventiveMaintenance(asset?.organizationId, asset?.id);
+  // Default responsible display: managers resolve it against the eligible
+  // directory (active owner/admin/manager); any other member can only list
+  // active members, which is enough to name an available responsible.
+  const { contacts, loading: loadingContacts } = useCoordinationContacts(asset?.defaultResponsibleMemberId ? asset.organizationId : null);
+  const { planners, loading: loadingPlanners } = useOrganizationPlanners(canManageAssets && asset?.defaultResponsibleMemberId ? asset.organizationId : null);
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -152,6 +162,22 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
 
   const tl = trafficLight.getAsset(asset.id);
   const hasChildren = allAssets.some((a) => a.parentAssetId === asset.id);
+
+  // Managers check against the eligible directory (active owner/admin/
+  // manager); other members only against active members.
+  const responsibleDirectory = canManageAssets
+    ? planners.map((planner) => ({ memberId: planner.memberId, name: planner.name }))
+    : contacts.map((contact) => ({ memberId: contact.memberId, name: contact.name }));
+  const loadingResponsible = canManageAssets ? loadingPlanners : loadingContacts;
+  const defaultResponsible = asset.defaultResponsibleMemberId
+    ? responsibleDirectory.find((member) => member.memberId === asset.defaultResponsibleMemberId) ?? null
+    : null;
+  const defaultResponsibleUnavailable = !!asset.defaultResponsibleMemberId && !loadingResponsible && !defaultResponsible;
+  const defaultResponsibleLabel = !asset.defaultResponsibleMemberId
+    ? 'Sin responsable'
+    : defaultResponsible
+      ? defaultResponsible.name
+      : loadingResponsible ? 'Cargando…' : RESPONSIBLE_UNAVAILABLE_LABEL;
 
   const technicalData = asset.technicalData as Record<string, unknown>;
   const technicalText = (key: string) => {
@@ -212,6 +238,11 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
       branchId: form.branchId || null,
       assetCategoryId: form.assetCategoryId || null,
       locationText: form.locationText.trim() || null,
+      // Only sent when it actually changed: an untouched historical
+      // responsible (possibly inactive now) is never re-submitted.
+      ...(form.defaultResponsibleMemberId !== asset.defaultResponsibleMemberId
+        ? { defaultResponsibleMemberId: form.defaultResponsibleMemberId }
+        : {}),
     });
 
     if (ok) {
@@ -311,6 +342,20 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label>Responsable predeterminado</Label>
+                <PlannerSelect
+                  organizationId={asset.organizationId}
+                  value={form.defaultResponsibleMemberId}
+                  onChange={(memberId) => setField('defaultResponsibleMemberId', memberId)}
+                  disabled={saving}
+                  unavailableValueLabel={RESPONSIBLE_UNAVAILABLE_LABEL}
+                  emptyMessage="No hay miembros owner/admin/manager activos para asignar."
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Responsable de seguimiento del activo. Se propone al crear avisos, planes preventivos e inspecciones nuevos; no modifica procesos existentes ni se hereda a los activos hijos.
+                </p>
               </div>
               <div>
                 <Label>Fecha de compra</Label>
@@ -537,6 +582,13 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
             <div>
               <label className="text-sm font-medium text-muted-foreground">Número de Serie</label>
               <p className="text-sm bg-muted/30 p-2 rounded mt-1">{asset.serialNumber || 'No especificado'}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Responsable predeterminado</label>
+              <p className="text-sm bg-muted/30 p-2 rounded mt-1">{defaultResponsibleLabel}</p>
+              {defaultResponsibleUnavailable && canManageAssets && (
+                <p className="mt-1 text-xs text-muted-foreground">No se usará en procesos nuevos. Edita el activo para asignar otro responsable.</p>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Criticidad (efectiva)</label>

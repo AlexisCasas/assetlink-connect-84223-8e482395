@@ -9,6 +9,11 @@ interface PlannerSelectProps {
   disabled?: boolean;
   /** Shown instead of the default "no planners yet" copy when the list is empty. */
   emptyMessage?: string;
+  /** When set and the current `value` is not an active planner anymore
+   * (inactive or no longer owner/admin/manager), it is shown as a disabled
+   * option with this label instead of silently rendering an empty select.
+   * It can be kept, but never re-selected once changed. */
+  unavailableValueLabel?: string;
 }
 
 /**
@@ -16,8 +21,10 @@ interface PlannerSelectProps {
  * organization only — same shape as TechnicianSelect, backed by
  * useOrganizationPlanners/get_assignable_planners instead.
  */
-export function PlannerSelect({ organizationId, value, onChange, disabled, emptyMessage }: PlannerSelectProps) {
+export function PlannerSelect({ organizationId, value, onChange, disabled, emptyMessage, unavailableValueLabel }: PlannerSelectProps) {
   const { planners, loading, error } = useOrganizationPlanners(organizationId);
+  const showUnavailableValue = !!unavailableValueLabel && !!value && !loading
+    && !planners.some((planner) => planner.memberId === value);
 
   return (
     <div className="space-y-1">
@@ -31,6 +38,9 @@ export function PlannerSelect({ organizationId, value, onChange, disabled, empty
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="none">Sin asignar</SelectItem>
+          {showUnavailableValue && (
+            <SelectItem value={value!} disabled>{unavailableValueLabel}</SelectItem>
+          )}
           {planners.map((planner) => (
             <SelectItem key={planner.memberId} value={planner.memberId}>
               {planner.name}{planner.email ? ` (${planner.email})` : ''}

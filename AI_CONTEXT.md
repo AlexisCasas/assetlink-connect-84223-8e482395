@@ -1919,3 +1919,34 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   en `supabase/tests/criticality_thresholds.test.sql`) y contrato Excel de
   extremo a extremo (43 checks) contra la base local, en Node
   con los módulos reales. No aplicado al proyecto remoto.
+
+## Fase 1 · Punto 3 — Responsable predeterminado por activo
+
+- Rama `feature/phase1-asset-default-responsible`. Migración
+  `20260926120000_asset_default_responsible.sql` (no modifica migraciones
+  anteriores). Detalle en `docs/ASSET_DEFAULT_RESPONSIBLE.md`.
+- `assets.default_responsible_member_id` (FK `organization_members` ON DELETE
+  SET NULL + índice, sin backfill). Responsable de **seguimiento/gestión**:
+  solo **owner/admin/manager** (`is_eligible_follow_up_responsible`, helper
+  interno). No es técnico de OT ni `requests.internal_responsible_member_id`.
+- **Sin herencia jerárquica**: nunca se busca en ancestros.
+- **Default solo para procesos nuevos**: avisos (`create_maintenance_notice`
+  lo copia si sigue elegible, aviso `open` sin triage; notificación
+  deduplicada por el índice existente), preventivo e inspecciones (precarga
+  de interfaz solo para planes nuevos y solo con `assetId`). Los procesos
+  existentes **nunca se sincronizan** con el activo.
+- Miembro inactivo o que dejó de ser elegible: la referencia **se conserva**
+  como historial, pero **no se reutiliza**; la ficha muestra "Responsable no
+  disponible (inactivo o ya no elegible)". Trigger de integridad valida solo
+  en INSERT o cuando cambia (responsable/tenant): no bloquea otras ediciones.
+- Triage: nueva firma con `p_clear_responsible` (la de 4 argumentos se
+  eliminó); "Sin asignar" ahora desasigna de verdad y conservar el
+  responsable no lo revalida.
+- Bug preexistente corregido: `check_preventive_plan_consistency` ya no
+  revalida el responsable en cada UPDATE (un plan con responsable inactivo se
+  puede desactivar/reactivar/editar).
+- Auditoría server-side `asset_default_responsible_changed` (ids + nombres
+  best-effort) y etiqueta en `get_asset_integrated_history`.
+- Verificado localmente: `supabase db reset --local`, **412 checks pgTAP**
+  (88 nuevos + 144 criticidad + 180 preventivo) y 18 checks de API contra
+  PostgREST local con usuarios reales. No aplicado al proyecto remoto.

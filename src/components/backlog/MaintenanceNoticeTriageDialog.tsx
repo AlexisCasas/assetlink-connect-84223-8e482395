@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useOrganizationPlanners } from '@/hooks/useOrganizationPlanners';
 import type { MaintenanceNotice, MaintenanceNoticePriority, TriageMaintenanceNoticeInput } from '@/types/maintenanceNotice';
 import { MAINTENANCE_NOTICE_PRIORITY_LABELS } from '@/types/maintenanceNotice';
+import { RESPONSIBLE_UNAVAILABLE_LABEL } from '@/lib/assetLabels';
 
 interface MaintenanceNoticeTriageDialogProps {
   open: boolean;
@@ -54,6 +55,13 @@ export function MaintenanceNoticeTriageDialog({
 
   if (!notice) return null;
 
+  const originalResponsible = notice.responsibleMemberId ?? NO_RESPONSIBLE;
+  // The current responsible may no longer be an active owner/admin/manager
+  // (e.g. inherited from the asset and deactivated later): it stays visible
+  // and can be kept, but it cannot be re-selected once changed.
+  const showUnavailableResponsible = !!notice.responsibleMemberId && !loadingPlanners
+    && !planners.some((planner) => planner.memberId === notice.responsibleMemberId);
+
   const handleSubmit = async () => {
     setSaving(true);
     try {
@@ -61,7 +69,10 @@ export function MaintenanceNoticeTriageDialog({
         noticeId: notice.id,
         priority,
         triageNotes: triageNotes.trim() || undefined,
-        responsibleMemberId: responsibleMemberId === NO_RESPONSIBLE ? null : responsibleMemberId,
+        // undefined = conservar (sin revalidar), null = desasignar, UUID = asignar.
+        responsibleMemberId: responsibleMemberId === originalResponsible
+          ? undefined
+          : responsibleMemberId === NO_RESPONSIBLE ? null : responsibleMemberId,
       });
       toast({ title: 'Aviso revisado', description: `${notice.noticeNumber} quedó marcado como revisado.` });
       onOpenChange(false);
@@ -103,6 +114,11 @@ export function MaintenanceNoticeTriageDialog({
               <SelectTrigger><SelectValue placeholder="Sin responsable" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_RESPONSIBLE}>Sin responsable</SelectItem>
+                {showUnavailableResponsible && (
+                  <SelectItem value={notice.responsibleMemberId!} disabled>
+                    {notice.responsibleName ? `${notice.responsibleName} — ` : ''}{RESPONSIBLE_UNAVAILABLE_LABEL}
+                  </SelectItem>
+                )}
                 {planners.map((planner) => (
                   <SelectItem key={planner.memberId} value={planner.memberId}>
                     {planner.name} — {planner.email}

@@ -47,6 +47,11 @@ export interface Asset {
   imageUrl: string | null;
   technicalData: Record<string, unknown>;
   metadata: Record<string, unknown>;
+  /** Responsable predeterminado (organization_members.id): follow-up owner of
+   * the asset — owner/admin/manager only, validated server-side. A default
+   * for NEW processes only; it may point to a member who later became
+   * inactive/ineligible (kept as history, never reused). No inheritance. */
+  defaultResponsibleMemberId: string | null;
   createdByUserId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -102,4 +107,8 @@ export interface CreateAssetInput {
   locationText?: string | null;
 }
 
-export type UpdateAssetInput = Partial<CreateAssetInput>;
+/** The default responsible is only edited after creation (not part of the
+ * create dialog in this MVP). */
+export type UpdateAssetInput = Partial<CreateAssetInput> & {
+  defaultResponsibleMemberId?: string | null;
+};

@@ -188,6 +188,12 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
 
   const wasOpenRef = useRef(false);
   const initializedForRef = useRef<string | null>(null);
+  // Responsible prefill for NEW plans from the selected asset's default
+  // responsible. A manual choice (including "Sin asignar") or a restored
+  // draft is never overwritten; only an empty value or one this prefill set
+  // itself can be replaced when the asset changes.
+  const responsibleTouchedRef = useRef(false);
+  const autoPrefilledResponsibleRef = useRef<string | null>(null);
 
   const draftKey = draftStorageKey(organizationId, plan);
 
@@ -226,6 +232,8 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
       setAlertRules(next.alertRules);
       setCustomDaysInput('');
       setFormError(null);
+      responsibleTouchedRef.current = !!restored;
+      autoPrefilledResponsibleRef.current = null;
 
       initializedForRef.current = planKey;
     }
@@ -240,6 +248,25 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
     if (!open || !draftKey) return;
     writeDraft(draftKey, { templateId, title, description, branchId, areaAssetId, assetId, responsibleMemberId, frequency, customInterval, customUnit, startDate, nextDueAt, alertRules });
   }, [open, draftKey, templateId, title, description, branchId, areaAssetId, assetId, responsibleMemberId, frequency, customInterval, customUnit, startDate, nextDueAt, alertRules]);
+
+  // Only a specific asset (assetId) proposes its default responsible — never
+  // an area (areaAssetId) or a branch, and never an ancestor. With several
+  // targets, assetId decides.
+  const handleAssetChange = (value: string) => {
+    const nextAssetId = value === 'none' ? '' : value;
+    setAssetId(nextAssetId);
+    if (plan || responsibleTouchedRef.current) return;
+    if (responsibleMemberId !== '' && responsibleMemberId !== autoPrefilledResponsibleRef.current) return;
+    const defaultResponsible = nextAssetId
+      ? assets.find((asset) => asset.id === nextAssetId)?.defaultResponsibleMemberId ?? null
+      : null;
+    // Eligible = still an active owner/admin/manager (get_assignable_planners).
+    const eligible = defaultResponsible && planners.some((planner) => planner.memberId === defaultResponsible)
+      ? defaultResponsible
+      : '';
+    setResponsibleMemberId(eligible);
+    autoPrefilledResponsibleRef.current = eligible || null;
+  };
 
   const responsibleOptions = [
     ...planners.map((p) => ({ id: p.memberId, label: `${p.name} (planner)` })),
@@ -393,7 +420,7 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
             </div>
             <div className="space-y-1">
               <Label>Activo</Label>
-              <Select value={assetId || 'none'} onValueChange={(v) => setAssetId(v === 'none' ? '' : v)} disabled={saving}>
+              <Select value={assetId || 'none'} onValueChange={handleAssetChange} disabled={saving}>
                 <SelectTrigger><SelectValue placeholder="Sin activo" /></SelectTrigger>
                 <SelectContent className="bg-popover">
                   <SelectItem value="none">Sin activo</SelectItem>
@@ -407,7 +434,7 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
 
           <div className="space-y-1">
             <Label>Responsable</Label>
-            <Select value={responsibleMemberId || 'none'} onValueChange={(v) => setResponsibleMemberId(v === 'none' ? '' : v)} disabled={saving}>
+            <Select value={responsibleMemberId || 'none'} onValueChange={(v) => { responsibleTouchedRef.current = true; setResponsibleMemberId(v === 'none' ? '' : v); }} disabled={saving}>
               <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
               <SelectContent className="bg-popover">
                 <SelectItem value="none">Sin asignar</SelectItem>
