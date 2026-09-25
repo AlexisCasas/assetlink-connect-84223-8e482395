@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAssets } from '@/hooks/useAssets';
 import { buildAssetPathMap } from '@/lib/assetTree';
+import { ASSET_CRITICALITY_LABELS } from '@/lib/assetLabels';
 import {
   buildBulkErrorsWorkbook,
   buildBulkTemplateWorkbook,
@@ -218,10 +219,10 @@ export function CriticalityBulkAssessmentDialog({
                 <div className="flex flex-wrap gap-2 text-sm">
                   <Badge variant="secondary">{result.evaluated} evaluados</Badge>
                   <Badge variant="outline">{invalidCount} omitidos</Badge>
-                  <Badge variant="destructive">{result.counts.critical} críticos</Badge>
-                  <Badge>{result.counts.high} altos</Badge>
-                  <Badge variant="secondary">{result.counts.medium} medios</Badge>
-                  <Badge variant="outline">{result.counts.low} bajos</Badge>
+                  <Badge variant="destructive">{ASSET_CRITICALITY_LABELS.critical}: {result.counts.critical}</Badge>
+                  <Badge>{ASSET_CRITICALITY_LABELS.high}: {result.counts.high}</Badge>
+                  <Badge variant="secondary">{ASSET_CRITICALITY_LABELS.medium}: {result.counts.medium}</Badge>
+                  <Badge variant="outline">{ASSET_CRITICALITY_LABELS.low}: {result.counts.low}</Badge>
                 </div>
               </div>
             )}

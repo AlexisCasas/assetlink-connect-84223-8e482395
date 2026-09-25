@@ -1884,3 +1884,38 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   por la aplicación productiva.
 - No se modificaron Supabase, RLS, Edge Functions, migraciones ni lógica de
   negocio.
+
+## Fase 1 · Punto 2 — Umbrales de criticidad configurables
+
+- Rama `feature/phase1-criticality-final`. Migración
+  `20260925120000_criticality_configurable_thresholds.sql` (no modifica
+  migraciones anteriores). Detalle en `docs/CONFIGURABLE_CRITICALITY_MATRIX.md`
+  ("Umbrales de clasificación") y `docs/CRITICALITY_V2_TEMPLATES_EXCEL.md`
+  (hoja `Configuración`).
+- `criticality_thresholds` (una fila por organización): `medium_min`,
+  `high_min`, `critical_min`. Sin fila = 25/50/75, comportamiento anterior.
+  `is_default` compara valores. Validación en SQL: `>= 0`, máximo 2 decimales,
+  estrictamente ascendentes. Fórmula y enum interno sin cambios; `critical` se
+  muestra como "Muy Alta".
+- Fuente única: `classify_criticality_score` dentro de
+  `validate_and_score_asset_criticality`. El diálogo de evaluación ya no
+  duplica fórmula ni umbrales: usa `preview_bulk_asset_criticality` con una
+  fila, sin score parcial y con protección frente a respuestas fuera de orden.
+- Snapshot `threshold_*` en cada evaluación (backfill 25/50/75); eventos
+  nuevos en español con umbrales en el payload; historial intacto.
+- Plantillas y Excel v2 transportan umbrales; `replace_criticality_configuration`
+  aplica matriz + umbrales de forma atómica. Excel/plantillas legacy conservan
+  los umbrales actuales.
+- "Exportar matriz" exporta solo la configuración activa/efectiva actual
+  (parámetros y opciones activos + umbrales efectivos). Los registros
+  desactivados se conservan en OneFacility como historial pero no forman parte
+  del archivo; antes se exportaban y rompían la reimportación tras cualquier
+  reemplazo. Un parámetro activo sin opciones activas bloquea la exportación
+  con un mensaje claro.
+- Seguridad: RLS solo `SELECT`, escritura por RPC `SECURITY DEFINER`
+  (owner/admin/manager o platform_admin), helpers internos sin `GRANT`.
+- Verificado localmente: `supabase db reset --local`, backfill sobre
+  evaluaciones creadas con el motor anterior, **324 checks pgTAP** (144 nuevos
+  en `supabase/tests/criticality_thresholds.test.sql`) y contrato Excel de
+  extremo a extremo (43 checks) contra la base local, en Node
+  con los módulos reales. No aplicado al proyecto remoto.

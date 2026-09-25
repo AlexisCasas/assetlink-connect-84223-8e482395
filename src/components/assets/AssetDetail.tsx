@@ -114,7 +114,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   // Matrix is scoped to the asset's own organization — hook must be called
   // unconditionally (asset can still be null here), so organizationId is
   // undefined until an asset is selected.
-  const { activeParameters, calculateCriticality, loadAssessments, saving: assessmentSaving } = useCriticalityMatrix(asset?.organizationId);
+  const { activeParameters, calculateCriticality, previewAssessment, loadAssessments, saving: assessmentSaving } = useCriticalityMatrix(asset?.organizationId);
 
   // Switching the selected asset (or losing selection) must drop any
   // in-progress edit instead of showing a stale form over different data.
@@ -676,9 +676,11 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
         onOpenChange={setAssessmentDialogOpen}
         assetId={asset.id}
         assetName={asset.name}
+        organizationId={asset.organizationId}
         activeParameters={activeParameters}
         saving={assessmentSaving}
         onSave={calculateCriticality}
+        onPreview={previewAssessment}
         onSaved={() => {
           setHistoryRefreshToken((token) => token + 1);
           void refreshAssets();

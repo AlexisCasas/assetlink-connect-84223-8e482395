@@ -3,27 +3,33 @@ import { FileSpreadsheet, Upload } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { parseMatrixWorkbook } from '@/lib/criticalityExcel';
-import { validateMatrixRows, type MatrixImportPreview } from '@/lib/criticalityImportValidation';
+import { validateMatrixWorkbook, type MatrixImportPreview } from '@/lib/criticalityImportValidation';
 import { CriticalityMatrixImportPreview } from './CriticalityMatrixImportPreview';
-import type { CriticalityMatrixPayloadParameter } from '@/types/criticalityMatrix';
+import type { CriticalityMatrixPayloadParameter, CriticalityThresholdValues } from '@/types/criticalityMatrix';
 
 interface CriticalityMatrixImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   hasActiveMatrix: boolean;
+  /** Current effective thresholds, shown next to the ones the file carries. */
+  currentThresholds: CriticalityThresholdValues | null;
   saving: boolean;
-  onApply: (parameters: CriticalityMatrixPayloadParameter[]) => Promise<boolean>;
+  /** Applies matrix + thresholds atomically (replace_criticality_configuration).
+   * thresholds = null for a legacy file: current thresholds are kept. */
+  onApply: (parameters: CriticalityMatrixPayloadParameter[], thresholds: CriticalityThresholdValues | null) => Promise<boolean>;
 }
 
 /**
  * Selecting a file NEVER writes anything: parse → validate → preview →
- * explicit confirmation → replace_criticality_matrix (which revalidates the
- * whole payload server-side again).
+ * explicit confirmation → replace_criticality_configuration (matrix and, when
+ * the file has a "Configuración" sheet, thresholds — in one transaction; the
+ * server revalidates the whole payload again).
  */
 export function CriticalityMatrixImportDialog({
   open,
   onOpenChange,
   hasActiveMatrix,
+  currentThresholds,
   saving,
   onApply,
 }: CriticalityMatrixImportDialogProps) {
@@ -54,8 +60,7 @@ export function CriticalityMatrixImportDialog({
 
     setParsing(true);
     try {
-      const rows = await parseMatrixWorkbook(file);
-      setPreview(validateMatrixRows(rows));
+      setPreview(validateMatrixWorkbook(await parseMatrixWorkbook(file)));
     } catch (error) {
       setParseError(error instanceof Error ? error.message : 'No se pudo leer el archivo.');
     } finally {
@@ -65,7 +70,7 @@ export function CriticalityMatrixImportDialog({
 
   const handleApply = async () => {
     if (!preview || preview.errors.length > 0) return;
-    if (await onApply(preview.parameters)) {
+    if (await onApply(preview.parameters, preview.thresholds)) {
       onOpenChange(false);
     }
   };
@@ -105,12 +110,13 @@ export function CriticalityMatrixImportDialog({
         {parsing && <p className="text-sm text-muted-foreground">Leyendo archivo…</p>}
         {parseError && <p className="text-sm text-destructive">{parseError}</p>}
 
-        {preview && <CriticalityMatrixImportPreview preview={preview} />}
+        {preview && <CriticalityMatrixImportPreview preview={preview} currentThresholds={currentThresholds} />}
 
         {canApply && hasActiveMatrix && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-            Al importar se reemplazará la matriz activa. La configuración anterior queda desactivada
-            (no se borra) y las evaluaciones históricas se conservan intactas.
+            Al importar se reemplazará la matriz activa{preview?.thresholds ? ' y los umbrales de clasificación' : ''}.
+            La configuración anterior queda desactivada (no se borra) y las evaluaciones históricas se conservan
+            intactas, con la clasificación y los umbrales con que se calcularon.
           </div>
         )}
 

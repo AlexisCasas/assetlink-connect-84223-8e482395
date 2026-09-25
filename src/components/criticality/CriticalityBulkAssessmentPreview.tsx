@@ -1,17 +1,11 @@
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ASSET_CRITICALITY_LABELS } from '@/lib/assetLabels';
 import type { BulkCriticalityPreviewRow } from '@/types/criticalityMatrix';
 
 interface CriticalityBulkAssessmentPreviewProps {
   rows: BulkCriticalityPreviewRow[];
 }
-
-const CRITICALITY_LABELS: Record<string, string> = {
-  low: 'Baja',
-  medium: 'Media',
-  high: 'Alta',
-  critical: 'Crítica',
-};
 
 const criticalityVariant = (value: string | null) => {
   if (value === 'critical') return 'destructive' as const;
@@ -60,7 +54,7 @@ export function CriticalityBulkAssessmentPreview({ rows }: CriticalityBulkAssess
                 <TableCell>
                   {row.calculatedCriticality ? (
                     <Badge variant={criticalityVariant(row.calculatedCriticality)}>
-                      {CRITICALITY_LABELS[row.calculatedCriticality] ?? row.calculatedCriticality}
+                      {ASSET_CRITICALITY_LABELS[row.calculatedCriticality] ?? row.calculatedCriticality}
                     </Badge>
                   ) : '—'}
                 </TableCell>

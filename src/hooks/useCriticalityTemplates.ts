@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { toCriticalityCategories, toThresholdValues } from '@/lib/criticalityThresholds';
 import type {
   CriticalityTemplateDetail,
   CriticalityTemplateScope,
@@ -76,6 +77,10 @@ export function useCriticalityTemplates(organizationId: string | null | undefine
         category: string | null;
         is_active: boolean;
         created_at: string;
+        thresholds: { medium_min: number; high_min: number; critical_min: number } | null;
+        min_possible_score: number | string | null;
+        max_possible_score: number | string | null;
+        unreachable_categories: string[] | null;
         parameters: Array<{
           id: string; code: string; name: string; description: string | null;
           weight: number; sequence: number; is_active: boolean;
@@ -91,6 +96,10 @@ export function useCriticalityTemplates(organizationId: string | null | undefine
         category: raw.category,
         isActive: raw.is_active,
         createdAt: raw.created_at,
+        thresholds: raw.thresholds ? toThresholdValues(raw.thresholds) : null,
+        minPossibleScore: raw.min_possible_score === null ? null : Number(raw.min_possible_score),
+        maxPossibleScore: raw.max_possible_score === null ? null : Number(raw.max_possible_score),
+        unreachableCategories: toCriticalityCategories(raw.unreachable_categories),
         parameters: (raw.parameters ?? []).map((parameter) => ({
           id: parameter.id,
           code: parameter.code,
@@ -115,9 +124,11 @@ export function useCriticalityTemplates(organizationId: string | null | undefine
     }
   }, []);
 
-  /** Replaces the organization's active matrix with the template's content,
-   * in a single transaction. The previous configuration is deactivated, never
-   * deleted, and historical assessments stay untouched. */
+  /** Replaces the organization's active matrix with the template's content —
+   * and its thresholds, when the template carries them (legacy templates keep
+   * the current thresholds) — in a single transaction. The previous
+   * configuration is deactivated, never deleted, and historical assessments
+   * stay untouched. */
   const applyTemplate = useCallback(async (templateId: string): Promise<boolean> => {
     if (!organizationId) return false;
     setSaving(true);

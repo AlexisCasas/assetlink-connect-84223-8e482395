@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { History } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ASSET_CRITICALITY_LABELS } from '@/lib/assetLabels';
+import { formatThresholdTriplet } from '@/lib/criticalityThresholds';
 import type { CriticalityAssessment } from '@/types/criticalityMatrix';
 
 interface CriticalityAssessmentHistoryProps {
@@ -61,6 +62,9 @@ export function CriticalityAssessmentHistory({ assetId, refreshToken, loadAssess
               <p className="mt-1 text-xs text-muted-foreground">
                 {assessment.createdByName ? `Por: ${assessment.createdByName}` : null}
                 {assessment.manualCriticality ? ` · Criticidad manual previa: ${ASSET_CRITICALITY_LABELS[assessment.manualCriticality]}` : ''}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground" title="Media desde / Alta desde / Muy Alta desde, tal como estaban al evaluar">
+                Umbrales usados: {formatThresholdTriplet(assessment.thresholds)}
               </p>
               {assessment.notes && <p className="mt-1 text-xs">{assessment.notes}</p>}
             </div>

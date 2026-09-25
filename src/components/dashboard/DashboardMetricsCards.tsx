@@ -85,7 +85,7 @@ export function DashboardMetricsCards() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <MetricCard title="Activos" value={String(metrics.totalAssets)} icon={Boxes} />
-      <MetricCard title="Activos críticos" value={String(metrics.criticalAssets)} icon={ShieldAlert} tone={metrics.criticalAssets > 0 ? 'warning' : 'default'} />
+      <MetricCard title="Activos con criticidad muy alta" value={String(metrics.criticalAssets)} icon={ShieldAlert} tone={metrics.criticalAssets > 0 ? 'warning' : 'default'} />
       <MetricCard title="Solicitudes abiertas" value={String(metrics.openRequests)} icon={FileText} />
       <MetricCard title="OT abiertas" value={String(metrics.openWorkOrders)} icon={ClipboardList} />
       <MetricCard title="OT vencidas" value={String(metrics.overdueWorkOrders)} icon={AlertTriangle} tone={metrics.overdueWorkOrders > 0 ? 'destructive' : 'default'} />
