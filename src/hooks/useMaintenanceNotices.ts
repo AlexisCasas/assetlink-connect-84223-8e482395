@@ -161,7 +161,10 @@ export function useMaintenanceNotices(organizationId: string | null | undefined)
         // null = "no cambiar este campo" en la RPC.
         p_priority: input.priority ?? null,
         p_triage_notes: input.triageNotes ?? null,
+        // responsibleMemberId: undefined = conservar, null = desasignar
+        // (p_clear_responsible), UUID = asignar.
         p_responsible_member_id: input.responsibleMemberId ?? null,
+        p_clear_responsible: input.responsibleMemberId === null,
       });
       if (rpcError) throw rpcError;
       await refresh();

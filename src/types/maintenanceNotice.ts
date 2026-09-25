@@ -95,6 +95,8 @@ export interface TriageMaintenanceNoticeInput {
   noticeId: string;
   priority?: MaintenanceNoticePriority;
   triageNotes?: string;
+  /** undefined = keep the current responsible (not revalidated), null =
+   * unassign, UUID = assign (validated server-side). */
   responsibleMemberId?: string | null;
 }
 

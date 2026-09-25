@@ -23,6 +23,11 @@ export const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
   archived: 'Archivado',
 };
 
+/** Shown when an asset (or process) still references a responsible who is no
+ * longer an active owner/admin/manager. The reference is kept as history
+ * but never reused for new processes. */
+export const RESPONSIBLE_UNAVAILABLE_LABEL = 'Responsable no disponible (inactivo o ya no elegible)';
+
 export const ASSET_CRITICALITY_ORDER: AssetCriticality[] = ['low', 'medium', 'high', 'critical'];
 
 /** Single source of the criticality labels shown in the UI. The internal
