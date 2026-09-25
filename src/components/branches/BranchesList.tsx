@@ -69,7 +69,6 @@ export const BranchesList = () => {
     const { error } = await setBranchActive(b.id, !b.isActive);
     if (error) { toast({ title: 'Error', description: error, variant: 'destructive' }); return; }
     toast({ title: b.isActive ? 'Sucursal desactivada' : 'Sucursal activada' });
-    await load();
   };
 
   return (

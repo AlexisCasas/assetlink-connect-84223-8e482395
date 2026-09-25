@@ -18,6 +18,8 @@ type Member = { id: string; user_id: string; email: string | null; name: string 
 const roles: OrganizationMemberRole[] = ['owner', 'admin', 'manager', 'requester', 'quote_manager', 'technician', 'operator', 'viewer'];
 const organizationTypes: OrganizationType[] = ['client_company', 'provider_company', 'facility_manager', 'subcontractor_company'];
 const typeLabels: Record<OrganizationType, string> = { client_company: 'Cliente', provider_company: 'Proveedor', facility_manager: 'Facility manager', subcontractor_company: 'Subcontratista', platform_admin: 'Administrador plataforma' };
+const toSettingsRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 
 export function AdminConsole() {
   const { memberships, organizations } = useAuth();
@@ -48,7 +50,7 @@ export function AdminConsole() {
   const [message, setMessage] = useState('');
 
   const invoke = async (functionName: string, body: unknown) => { const { data, error } = await supabase.functions.invoke(functionName, { body }); if (error) throw error; return data; };
-  const loadOrganizations = async () => { setLoadingOrganizations(true); try { const { data, error } = await supabase.from('organizations').select('*').order('created_at', { ascending: false }); if (error) throw error; setItems((data ?? []).map((organization) => ({ id: organization.id, name: organization.name, legalName: organization.legal_name, organizationType: organization.organization_type, taxId: organization.tax_id, status: organization.status as Organization['status'], settings: organization.settings, createdBy: organization.created_by, createdAt: organization.created_at, updatedAt: organization.updated_at }))); } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudieron cargar organizaciones.'); } finally { setLoadingOrganizations(false); } };
+  const loadOrganizations = async () => { setLoadingOrganizations(true); try { const { data, error } = await supabase.from('organizations').select('*').order('created_at', { ascending: false }); if (error) throw error; setItems((data ?? []).map((organization) => ({ id: organization.id, name: organization.name, legalName: organization.legal_name, organizationType: organization.organization_type, taxId: organization.tax_id, status: organization.status as Organization['status'], settings: toSettingsRecord(organization.settings), createdBy: organization.created_by, createdAt: organization.created_at, updatedAt: organization.updated_at }))); } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudieron cargar organizaciones.'); } finally { setLoadingOrganizations(false); } };
   const loadMembers = async (organization: Organization) => { setSelectedOrganization(organization); setLoadingMembers(true); try { const data = await invoke('admin-list-organization-members', { organization_id: organization.id }); setMembers(data.members ?? []); } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudieron cargar miembros.'); } finally { setLoadingMembers(false); } };
   const openMembersDialog = (organization: Organization) => { setIsMembersDialogOpen(true); void loadMembers(organization); };
   useEffect(() => { if (isPlatformAdmin) void loadOrganizations(); }, [isPlatformAdmin]);

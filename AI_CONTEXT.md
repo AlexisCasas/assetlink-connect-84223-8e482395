@@ -1849,3 +1849,38 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   checks pgTAP** (incluye dos conexiones concurrentes reales) y build. El `tsc`
   completo no reporta errores en este módulo, pero conserva 6 errores
   preexistentes en `AdminConsole`, `BranchesList`, `QuoteListDialog` e `Index`.
+
+## Fase 23 / Fase 1 — Estabilización del baseline
+
+- `BranchesList` llamaba a `load()`, función inexistente, tras
+  `setBranchActive`; el toggle de sucursal activa/inactiva quedaba precedido
+  de un `ReferenceError` no capturado aunque el guardado y el toast de éxito
+  ya se habían completado. `setBranchActive` recarga por sí solo, así que la
+  llamada sobrante se eliminó sin tocar el hook `useBranches`.
+- `ProviderRequestList` eliminó el bloque `{false && <Button>Asignar…}`,
+  código muerto que ocultaba deliberadamente la acción de asignación legacy;
+  el import `UserCog`, que quedó sin uso, se retiró junto con él.
+  `AssignmentDialog` y el flujo legacy de asignaciones no se tocaron.
+- Correcciones de tipos sin `any` ni comportamiento nuevo: `Textarea` y
+  `CommandDialog` (shadcn/ui) pasaron de interfaces vacías a `type` alias
+  equivalentes; `AdminConsole` añadió `toSettingsRecord`, un estrechamiento
+  del `settings` de `organizations` con el mismo patrón que `AuthContext`
+  usa para `OrganizationRow`, sin cambiar el modelo de `Organization` ni lo
+  que se persiste en Supabase.
+- `QuoteListDialog` simplificó el texto del botón de aprobación: la rama
+  `quote.status === 'approved' ? 'Aprobada' : 'Aprobar'` era inalcanzable
+  porque el bloque solo renderiza para cotizaciones `submitted`; queda el
+  literal `'Aprobar'` sin cambiar condiciones ni acciones del flujo.
+- `tailwind.config.ts` migró `require("tailwindcss-animate")` a `import`
+  ESM; solo afecta al build, sin cambios de configuración de Tailwind.
+- `npm run build` correcto. `npm run lint`: 61 errores / 38 warnings (antes
+  65/38); la deuda restante (`no-explicit-any` en flujo productivo, código
+  legacy de chat/asignaciones, `seedData`, warnings de exhaustive-deps y
+  `pages/Index.tsx`) queda deliberadamente sin corregir en esta fase.
+- El typecheck real, `npx tsc --noEmit -p tsconfig.app.json` (el `tsc
+  --noEmit` de la raíz no compila nada: `tsconfig.json` solo declara
+  `references`), pasó de 6 a 3 errores; los 3 restantes están en
+  `pages/Index.tsx`, archivo legacy inalcanzable desde `main.tsx` y no usado
+  por la aplicación productiva.
+- No se modificaron Supabase, RLS, Edge Functions, migraciones ni lógica de
+  negocio.

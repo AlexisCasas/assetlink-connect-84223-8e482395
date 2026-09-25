@@ -481,7 +481,7 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
                         className="flex-1"
                       >
                         <ThumbsUp className="h-4 w-4 mr-2" />
-                        {quote.status === 'approved' ? 'Aprobada' : 'Aprobar'}
+                        Aprobar
                       </Button>
                       <Button
                         size="sm"
