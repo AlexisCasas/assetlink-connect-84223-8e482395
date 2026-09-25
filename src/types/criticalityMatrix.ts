@@ -90,7 +90,51 @@ export interface CriticalityTemplateDetail {
   category: string | null;
   isActive: boolean;
   createdAt: string;
+  /** null for legacy templates saved before thresholds existed: applying
+   * them keeps the organization's current thresholds. */
+  thresholds: CriticalityThresholdValues | null;
+  /** Score range the template's matrix can produce, computed server-side. */
+  minPossibleScore: number | null;
+  maxPossibleScore: number | null;
+  /** Categories the template's own thresholds can never reach with its own
+   * matrix (server-side; empty for legacy templates). */
+  unreachableCategories: AssetCriticality[];
   parameters: CriticalityTemplateParameter[];
+}
+
+/** The three configurable cut points. Each one is the INCLUSIVE lower bound
+ * of its category: Baja < mediumMin ≤ Media < highMin ≤ Alta < criticalMin ≤ Muy Alta. */
+export interface CriticalityThresholdValues {
+  mediumMin: number;
+  highMin: number;
+  criticalMin: number;
+}
+
+/** get_criticality_thresholds / set_criticality_thresholds. Every derived
+ * value (isDefault, score range, unreachable categories) comes from SQL. */
+export interface CriticalityThresholds extends CriticalityThresholdValues {
+  organizationId: string;
+  /** True when the effective values are exactly the defaults — whether or
+   * not a row exists (a "Restablecer" writes an explicit 25/50/75 row). */
+  isDefault: boolean;
+  defaults: CriticalityThresholdValues;
+  updatedAt: string | null;
+  updatedByName: string | null;
+  activeMatrix: {
+    parameterCount: number;
+    minPossibleScore: number | null;
+    maxPossibleScore: number | null;
+  };
+  unreachableCategories: AssetCriticality[];
+}
+
+/** Server-side preview of one evaluation (preview_bulk_asset_criticality
+ * with a single row). Never computed in the browser. */
+export interface CriticalityAssessmentPreview {
+  valid: boolean;
+  score: number | null;
+  calculatedCriticality: AssetCriticality | null;
+  errors: string[];
 }
 
 /** One asset's answers, as sent to preview_bulk_asset_criticality /
@@ -164,8 +208,11 @@ export interface CriticalityAssessment {
   assetId: string;
   organizationId: string;
   score: number;
-  /** Result of this evaluation's weighted score against the MVP thresholds. */
+  /** Result of this evaluation's weighted score against the thresholds the
+   * organization had at that moment (see `thresholds`). */
   calculatedCriticality: AssetCriticality;
+  /** Frozen snapshot of the thresholds used. Later changes never rewrite it. */
+  thresholds: CriticalityThresholdValues;
   /** Snapshot of assets.criticality right before this evaluation ran. */
   manualCriticality: AssetCriticality | null;
   /** Always equal to calculatedCriticality in this MVP — no manual override

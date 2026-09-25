@@ -144,11 +144,51 @@ Código parámetro | Parámetro | Descripción | Peso % | Orden parámetro |
 Código opción | Opción | Puntaje | Orden opción | Activo
 ```
 
+**"Exportar matriz" exporta la configuración activa (efectiva) actual**:
+parámetros activos, sus opciones activas y los umbrales efectivos (hoja
+`Configuración`). Los parámetros y opciones desactivados — versiones
+anteriores reemplazadas por una plantilla o una importación, o configuración
+apagada a mano — se conservan en OneFacility como historial, pero **no forman
+parte del archivo**. Así un código que existe activo y en versiones
+históricas aparece una sola vez, y un archivo exportado siempre se puede
+reimportar tal cual (`effectiveMatrixForExport` en `src/lib/criticalityExcel.ts`).
+
+- La columna `Activo` se mantiene por compatibilidad del contrato y para que el
+  usuario pueda apagar filas antes de importar; los archivos generados por
+  OneFacility siempre traen `Sí`.
+- Si un parámetro activo no tiene ninguna opción activa, la exportación se
+  **bloquea** con un mensaje claro (`El parámetro "<nombre>" no tiene opciones
+  activas. Activa al menos una opción antes de exportar la matriz.`) en vez de
+  generar un archivo que luego sería rechazado. Sin matriz activa tampoco se
+  exporta.
+- No hay versionado de matrices: el historial desactivado no se exporta ni se
+  reimporta.
+
 Más una hoja `Instrucciones`. Archivo: `criticidad_<organizacion>_<fecha>.xlsx`.
 
 Flujo de importación: seleccionar `.xlsx` → parsear local → validar →
-**preview** → confirmar → `replace_criticality_matrix`. Seleccionar el archivo
-**nunca escribe nada**. El backend revalida todo de nuevo.
+**preview** → confirmar → `replace_criticality_configuration`. Seleccionar el
+archivo **nunca escribe nada**. El backend revalida todo de nuevo.
+
+### Hoja `Configuración` (umbrales de clasificación, contrato v2)
+
+Desde `20260925120000_criticality_configurable_thresholds.sql` la exportación
+añade una hoja `Configuración` (Clave | Valor | Descripción) con
+`Versión del contrato` = 2, `Media desde`, `Alta desde` y `Muy Alta desde`.
+Las columnas de la hoja `Matriz` **no cambiaron**.
+
+- Excel legacy (sin hoja `Configuración`): importa la matriz y **conserva** los
+  umbrales actuales de la organización.
+- Excel v2: importa matriz **y** umbrales en una sola transacción mediante
+  `replace_criticality_configuration(org, matrix, thresholds)`, que valida los
+  umbrales antes de tocar nada, delega la matriz en `replace_criticality_matrix`
+  (contrato intacto) y recién después escribe los umbrales. Umbral o matriz
+  inválidos abortan todo. El frontend nunca encadena dos RPC.
+- El preview de importación muestra los umbrales que se aplicarán junto a los
+  actuales (o avisa de que se conservarán, en un archivo legacy).
+- Plantillas: guardan los umbrales efectivos de la organización; aplicarlas
+  establece matriz + umbrales en la misma transacción. Plantillas legacy
+  (umbrales `NULL`) aplican solo la matriz y conservan los umbrales actuales.
 
 ### Hoja `Evaluaciones` (evaluación masiva)
 
@@ -234,7 +274,12 @@ claramente mejor que el de `xlsx@0.18.5`.
 ## Limitaciones conocidas
 
 - Cero plantillas `system` cargadas (a propósito, pendiente de negocio).
-- Umbrales siguen fijos (25/50/75) — configurables sigue fuera de alcance.
+- Umbrales configurables por organización desde Fase 1 · Punto 2 (ver
+  `docs/CONFIGURABLE_CRITICALITY_MATRIX.md`, "Umbrales de clasificación").
+- La exportación incluía antes también las versiones desactivadas, lo que
+  hacía imposible reimportar el archivo tras cualquier reemplazo (códigos
+  duplicados). Corregido en Fase 1 · Punto 2: se exporta solo la matriz
+  efectiva.
 - Sin versionado formal de matrices ni workflow de aprobación.
 - Los dropdowns de Excel se omiten cuando la lista de opciones supera el
   límite de 255 caracteres de la lista inline.

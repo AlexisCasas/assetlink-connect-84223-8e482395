@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { toReplaceConfigurationArgs } from '@/lib/criticalityImportValidation';
 import type { AssetCriticality } from '@/types/asset';
 import type {
   BulkCriticalityPreviewRow,
@@ -8,10 +9,12 @@ import type {
   CriticalityAnswer,
   CriticalityAssessment,
   CriticalityAssessmentAnswer,
+  CriticalityAssessmentPreview,
   CriticalityMatrixPayloadParameter,
   CriticalityOptionInput,
   CriticalityParameter,
   CriticalityParameterInput,
+  CriticalityThresholdValues,
 } from '@/types/criticalityMatrix';
 
 interface RawOption {
@@ -77,6 +80,9 @@ interface RawAssessment {
   created_by_name: string | null;
   created_at: string;
   answers: RawAssessmentAnswer[];
+  threshold_medium_min: number | string;
+  threshold_high_min: number | string;
+  threshold_critical_min: number | string;
 }
 
 const toAssessmentAnswer = (row: RawAssessmentAnswer): CriticalityAssessmentAnswer => ({
@@ -102,7 +108,15 @@ const toAssessment = (row: RawAssessment): CriticalityAssessment => ({
   createdByName: row.created_by_name,
   createdAt: row.created_at,
   answers: (row.answers ?? []).map(toAssessmentAnswer),
+  thresholds: {
+    mediumMin: Number(row.threshold_medium_min),
+    highMin: Number(row.threshold_high_min),
+    criticalMin: Number(row.threshold_critical_min),
+  },
 });
+
+const toAnswerPayload = (answers: CriticalityAnswer[]) =>
+  answers.map((answer) => ({ parameter_id: answer.parameterId, option_id: answer.optionId }));
 
 /**
  * Configurable criticality matrix for one organization
@@ -267,33 +281,23 @@ export function useCriticalityMatrix(organizationId: string | null | undefined) 
     }
   }, []);
 
-  /** Replaces the whole active matrix in one transaction (Excel import or
-   * template apply). The backend revalidates the entire payload, deactivates
-   * — never deletes — the previous configuration, and only then inserts. */
-  const replaceMatrix = useCallback(async (parameters: CriticalityMatrixPayloadParameter[]): Promise<boolean> => {
+  /** Excel import: replaces the whole active matrix and — when the file has a
+   * "Configuración" sheet — the thresholds, in ONE transaction
+   * (replace_criticality_configuration). thresholds = null (legacy file)
+   * keeps the organization's current thresholds. The backend revalidates the
+   * entire payload, deactivates — never deletes — the previous configuration,
+   * and aborts everything if either part is invalid. */
+  const replaceConfiguration = useCallback(async (
+    parameters: CriticalityMatrixPayloadParameter[],
+    thresholds: CriticalityThresholdValues | null,
+  ): Promise<boolean> => {
     if (!organizationId) return false;
     setSaving(true);
     setError(null);
     try {
-      const { error: rpcError } = await supabase.rpc('replace_criticality_matrix', {
+      const { error: rpcError } = await supabase.rpc('replace_criticality_configuration', {
         p_organization_id: organizationId,
-        p_matrix: {
-          parameters: parameters.map((parameter) => ({
-            code: parameter.code,
-            name: parameter.name,
-            description: parameter.description ?? null,
-            weight: parameter.weight,
-            sequence: parameter.sequence,
-            is_active: parameter.isActive,
-            options: parameter.options.map((option) => ({
-              code: option.code,
-              label: option.label,
-              score: option.score,
-              sequence: option.sequence,
-              is_active: option.isActive,
-            })),
-          })),
-        },
+        ...toReplaceConfigurationArgs(parameters, thresholds),
       });
       if (rpcError) throw rpcError;
       await refresh();
@@ -339,7 +343,7 @@ export function useCriticalityMatrix(organizationId: string | null | undefined) 
       p_rows: rows.map((row) => ({
         row_number: row.rowNumber,
         asset_id: row.assetId,
-        answers: row.answers.map((answer) => ({ parameter_id: answer.parameterId, option_id: answer.optionId })),
+        answers: toAnswerPayload(row.answers),
       })),
     });
     if (rpcError) throw rpcError;
@@ -355,6 +359,19 @@ export function useCriticalityMatrix(organizationId: string | null | undefined) 
       warnings: ((row.warnings ?? []) as unknown as string[]),
     }));
   }, [organizationId]);
+
+  /** Preview of ONE evaluation for the "Evaluar criticidad" dialog. It reuses
+   * preview_bulk_asset_criticality with a single row, so score and class come
+   * from the exact SQL engine calculate_asset_criticality uses (same
+   * permissions, no writes, tenant enforced) — the browser never scores or
+   * classifies. */
+  const previewAssessment = useCallback(async (assetId: string, answers: CriticalityAnswer[]): Promise<CriticalityAssessmentPreview> => {
+    const [row] = await previewBulk([{ rowNumber: 1, assetId, answers }]);
+    if (!row) {
+      return { valid: false, score: null, calculatedCriticality: null, errors: ['No se pudo calcular la vista previa.'] };
+    }
+    return { valid: row.valid, score: row.score, calculatedCriticality: row.calculatedCriticality, errors: row.errors };
+  }, [previewBulk]);
 
   /** Applies a subset the user already accepted in the preview. The backend
    * revalidates every row first and aborts the whole subset if any is no
@@ -405,9 +422,10 @@ export function useCriticalityMatrix(organizationId: string | null | undefined) 
     toggleParameterActive,
     toggleOptionActive,
     calculateCriticality,
-    replaceMatrix,
+    replaceConfiguration,
     clearActiveMatrix,
     previewBulk,
+    previewAssessment,
     applyBulk,
     loadAssessments,
   };

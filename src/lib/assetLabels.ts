@@ -25,11 +25,13 @@ export const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
 
 export const ASSET_CRITICALITY_ORDER: AssetCriticality[] = ['low', 'medium', 'high', 'critical'];
 
+/** Single source of the criticality labels shown in the UI. The internal
+ * enum keeps `critical`; it is presented as "Muy Alta". */
 export const ASSET_CRITICALITY_LABELS: Record<AssetCriticality, string> = {
   low: 'Baja',
   medium: 'Media',
   high: 'Alta',
-  critical: 'Crítica',
+  critical: 'Muy Alta',
 };
 
 export const getAssetStatusBadgeClass = (status: AssetStatus) => {

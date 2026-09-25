@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,54 +11,96 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { ASSET_CRITICALITY_LABELS } from '@/lib/assetLabels';
-import type { AssetCriticality } from '@/types/asset';
-import type { CriticalityAnswer, CriticalityAssessment, CriticalityParameter } from '@/types/criticalityMatrix';
+import { thresholdRanges } from '@/lib/criticalityThresholds';
+import { useCriticalityThresholds } from '@/hooks/useCriticalityThresholds';
+import type {
+  CriticalityAnswer,
+  CriticalityAssessment,
+  CriticalityAssessmentPreview,
+  CriticalityParameter,
+} from '@/types/criticalityMatrix';
 
 interface CriticalityAssessmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   assetId: string;
   assetName: string;
+  /** Organization of the asset — used only to show its thresholds legend. */
+  organizationId: string;
   activeParameters: CriticalityParameter[];
   saving: boolean;
   onSave: (assetId: string, answers: CriticalityAnswer[], notes: string | null) => Promise<CriticalityAssessment | null>;
+  /** Server-side preview (preview_bulk_asset_criticality with one row). */
+  onPreview: (assetId: string, answers: CriticalityAnswer[]) => Promise<CriticalityAssessmentPreview>;
   onSaved: () => void;
 }
 
-/** Same MVP thresholds as calculate_asset_criticality in
- * 20260829190000_configurable_criticality_matrix.sql — preview only, the
- * server always recomputes and is the authority for what gets stored. */
-const classify = (score: number): AssetCriticality => {
-  if (score < 25) return 'low';
-  if (score < 50) return 'medium';
-  if (score < 75) return 'high';
-  return 'critical';
-};
+type PreviewState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; result: CriticalityAssessmentPreview }
+  | { status: 'error' };
 
-export function CriticalityAssessmentDialog({ open, onOpenChange, assetId, assetName, activeParameters, saving, onSave, onSaved }: CriticalityAssessmentDialogProps) {
+const PREVIEW_DEBOUNCE_MS = 250;
+
+export function CriticalityAssessmentDialog({
+  open,
+  onOpenChange,
+  assetId,
+  assetName,
+  organizationId,
+  activeParameters,
+  saving,
+  onSave,
+  onPreview,
+  onSaved,
+}: CriticalityAssessmentDialogProps) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PreviewState>({ status: 'idle' });
+  // Monotonic id of the latest preview request: a response is only applied
+  // if it still belongs to the latest request, so a slow answer for an older
+  // selection can never overwrite the preview of the current one.
+  const previewRequestRef = useRef(0);
+  const { thresholds } = useCriticalityThresholds(open ? organizationId : null);
 
   useEffect(() => {
     if (!open) return;
     setAnswers({});
     setNotes('');
     setFormError(null);
+    setPreview({ status: 'idle' });
   }, [open, assetId]);
-
-  const preview = useMemo(() => {
-    let score = 0;
-    for (const parameter of activeParameters) {
-      const optionId = answers[parameter.id];
-      const option = parameter.options.find((o) => o.id === optionId);
-      if (option) score += Math.round((option.score * parameter.weight / 100) * 100) / 100;
-    }
-    return { score: Math.round(score * 100) / 100, criticality: classify(score) };
-  }, [activeParameters, answers]);
 
   const answeredCount = activeParameters.filter((parameter) => !!answers[parameter.id]).length;
   const allAnswered = activeParameters.length > 0 && answeredCount === activeParameters.length;
+
+  const payload = useMemo<CriticalityAnswer[]>(
+    () => activeParameters.map((parameter) => ({ parameterId: parameter.id, optionId: answers[parameter.id] ?? null })),
+    [activeParameters, answers],
+  );
+
+  useEffect(() => {
+    const requestId = ++previewRequestRef.current;
+    // No partial score: the server only scores a complete evaluation, and the
+    // browser never computes one on its own.
+    if (!open || !allAnswered) {
+      setPreview({ status: 'idle' });
+      return;
+    }
+    setPreview({ status: 'loading' });
+    const timer = window.setTimeout(() => {
+      onPreview(assetId, payload)
+        .then((result) => {
+          if (requestId === previewRequestRef.current) setPreview({ status: 'ready', result });
+        })
+        .catch(() => {
+          if (requestId === previewRequestRef.current) setPreview({ status: 'error' });
+        });
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [open, allAnswered, assetId, payload, onPreview]);
 
   const handleSubmit = async () => {
     if (!allAnswered) {
@@ -67,10 +109,6 @@ export function CriticalityAssessmentDialog({ open, onOpenChange, assetId, asset
     }
     setFormError(null);
 
-    const payload: CriticalityAnswer[] = activeParameters.map((parameter) => ({
-      parameterId: parameter.id,
-      optionId: answers[parameter.id],
-    }));
     const result = await onSave(assetId, payload, notes.trim() || null);
     if (result) {
       onOpenChange(false);
@@ -121,12 +159,26 @@ export function CriticalityAssessmentDialog({ open, onOpenChange, assetId, asset
               <Textarea id="assessment-notes" value={notes} onChange={(e) => setNotes(e.target.value)} disabled={saving} />
             </div>
 
-            <div className="rounded-md border bg-muted/30 p-3">
+            <div className="space-y-2 rounded-md border bg-muted/30 p-3">
               <p className="text-sm font-medium">
-                Vista previa: score {preview.score} — criticidad estimada {ASSET_CRITICALITY_LABELS[preview.criticality]}
+                {preview.status === 'idle' && `Responde los ${activeParameters.length} parámetros para ver la vista previa (${answeredCount} de ${activeParameters.length}).`}
+                {preview.status === 'loading' && 'Calculando vista previa…'}
+                {preview.status === 'error' && 'No se pudo calcular la vista previa. Puedes guardar igualmente: el resultado lo calcula el servidor.'}
+                {preview.status === 'ready' && (preview.result.valid && preview.result.calculatedCriticality
+                  ? `Vista previa: score ${preview.result.score} — criticidad ${ASSET_CRITICALITY_LABELS[preview.result.calculatedCriticality]}`
+                  : `Vista previa no disponible: ${preview.result.errors.join(' · ') || 'respuestas incompletas.'}`)}
               </p>
+              {thresholds && (
+                <div className="flex flex-wrap gap-1.5">
+                  {thresholdRanges(thresholds).map((range) => (
+                    <Badge key={range.criticality} variant="outline" className="text-xs font-normal">
+                      {range.label}: {range.range}
+                    </Badge>
+                  ))}
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
-                {answeredCount} de {activeParameters.length} parámetros respondidos. Esta es información operativa para orientar la decisión, no un resultado final hasta guardar.
+                El score y la criticidad los calcula el servidor con los umbrales vigentes de la organización. Es información operativa para orientar la decisión; el resultado se registra al guardar.
               </p>
             </div>
 

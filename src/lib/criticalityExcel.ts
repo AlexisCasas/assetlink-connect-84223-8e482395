@@ -1,4 +1,4 @@
-import type { CriticalityParameter } from '@/types/criticalityMatrix';
+import type { CriticalityParameter, CriticalityThresholdValues } from '@/types/criticalityMatrix';
 
 /**
  * Excel contract for the criticality module. ExcelJS is imported dynamically
@@ -15,6 +15,21 @@ export const MATRIX_SHEET_NAME = 'Matriz';
 export const INSTRUCTIONS_SHEET_NAME = 'Instrucciones';
 export const BULK_SHEET_NAME = 'Evaluaciones';
 export const OPTIONS_SHEET_NAME = 'Opciones';
+export const CONFIGURATION_SHEET_NAME = 'Configuración';
+
+/** Version of the configuration Excel contract. Version 1 (legacy) is a
+ * workbook without the "Configuración" sheet: it carries only the matrix, and
+ * importing it keeps the organization's current thresholds. Version 2 adds
+ * the "Configuración" sheet with the classification thresholds. */
+export const CRITICALITY_EXCEL_CONTRACT_VERSION = '2';
+
+/** Row labels (column A) of the "Configuración" sheet; the value is column B. */
+export const CONFIGURATION_KEYS = {
+  version: 'Versión del contrato',
+  mediumMin: 'Media desde',
+  highMin: 'Alta desde',
+  criticalMin: 'Muy Alta desde',
+} as const;
 
 /** Exact, stable column order of the "Matriz" sheet — one row per option, the
  * parameter columns repeated on each of its option rows. */
@@ -48,6 +63,20 @@ export interface ParsedMatrixRow {
   score: string;
   optionSequence: string;
   active: string;
+}
+
+/** Raw text of the "Configuración" sheet — validated later, never trusted. */
+export interface ParsedConfigurationSheet {
+  version: string;
+  mediumMin: string;
+  highMin: string;
+  criticalMin: string;
+}
+
+export interface ParsedMatrixWorkbook {
+  rows: ParsedMatrixRow[];
+  /** null = legacy workbook without a "Configuración" sheet. */
+  configuration: ParsedConfigurationSheet | null;
 }
 
 export interface ParsedBulkRow {
@@ -146,16 +175,65 @@ const INSTRUCTIONS: string[][] = [
   ['8. Que la suma de pesos sea 100% es lo recomendado, pero NO es obligatorio:'],
   ['   si no suma 100 verás una advertencia, no un error.'],
   [''],
+  ['Hoja "Configuración" (umbrales de clasificación):'],
+  ['9. No cambies los nombres de la columna "Clave" ni la "Versión del contrato".'],
+  ['10. "Media desde", "Alta desde" y "Muy Alta desde" son el score mínimo (inclusive) de cada categoría:'],
+  ['    números >= 0, con hasta 2 decimales y estrictamente ascendentes.'],
+  ['11. Si importas un archivo antiguo sin hoja "Configuración", se conservan los umbrales actuales.'],
+  [''],
+  ['El archivo contiene solo la matriz vigente (parámetros y opciones activos). Las versiones desactivadas'],
+  ['se conservan en OneFacility como historial, pero no forman parte del archivo.'],
+  [''],
   ['Al importar, OneFacility vuelve a validar todo el archivo y reemplaza la matriz activa.'],
   ['La configuración anterior queda desactivada (nunca se borra) y las evaluaciones'],
   ['históricas se conservan intactas.'],
 ];
 
-/** Exports the live matrix — active and inactive — one row per option. */
+/** Why an export was refused — shown to the user as-is. */
+export class MatrixExportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MatrixExportError';
+  }
+}
+
+/**
+ * The effective matrix: ACTIVE parameters with their ACTIVE options only.
+ * Deactivated parameters/options are history (previous versions replaced by a
+ * template or an import, or configuration switched off) — they stay in
+ * OneFacility but never go into the exported file. Throws MatrixExportError
+ * instead of producing a file that would be rejected on import.
+ */
+export function effectiveMatrixForExport(parameters: CriticalityParameter[]): CriticalityParameter[] {
+  const effective = parameters
+    .filter((parameter) => parameter.isActive)
+    .map((parameter) => ({ ...parameter, options: parameter.options.filter((option) => option.isActive) }));
+
+  if (effective.length === 0) {
+    throw new MatrixExportError('No hay una matriz activa que exportar. Configura o activa al menos un parámetro.');
+  }
+
+  const withoutOptions = effective.find((parameter) => parameter.options.length === 0);
+  if (withoutOptions) {
+    throw new MatrixExportError(
+      `El parámetro "${withoutOptions.name}" no tiene opciones activas. Activa al menos una opción antes de exportar la matriz.`,
+    );
+  }
+
+  return effective;
+}
+
+/** Exports the EFFECTIVE matrix (effectiveMatrixForExport: active parameters
+ * and active options only), one row per option, plus the "Configuración"
+ * sheet with the organization's effective thresholds. The "Activo" column is
+ * kept for contract compatibility and so the user can switch rows off before
+ * importing; generated files always carry "Sí". */
 export async function buildMatrixWorkbook(
   parameters: CriticalityParameter[],
   organizationName: string,
+  thresholds: CriticalityThresholdValues,
 ): Promise<Blob> {
+  const effective = effectiveMatrixForExport(parameters);
   const ExcelJS = await loadExcelJs();
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'OneFacility';
@@ -166,23 +244,31 @@ export async function buildMatrixWorkbook(
   sheet.getRow(1).font = { bold: true };
   sheet.columns = MATRIX_COLUMNS.map((header) => ({ width: Math.max(14, header.length + 4) }));
 
-  parameters.forEach((parameter) => {
-    const optionRows = parameter.options.length > 0 ? parameter.options : [null];
-    optionRows.forEach((option) => {
+  effective.forEach((parameter) => {
+    parameter.options.forEach((option) => {
       sheet.addRow([
         parameter.code,
         parameter.name,
         parameter.description ?? '',
         parameter.weight,
         parameter.sequence,
-        option?.code ?? '',
-        option?.label ?? '',
-        option?.score ?? '',
-        option?.sequence ?? '',
-        (option ? option.isActive : parameter.isActive) ? 'Sí' : 'No',
+        option.code,
+        option.label,
+        option.score,
+        option.sequence,
+        'Sí',
       ]);
     });
   });
+
+  const configuration = workbook.addWorksheet(CONFIGURATION_SHEET_NAME);
+  configuration.columns = [{ width: 24 }, { width: 14 }, { width: 70 }];
+  configuration.addRow(['Clave', 'Valor', 'Descripción']);
+  configuration.getRow(1).font = { bold: true };
+  configuration.addRow([CONFIGURATION_KEYS.version, CRITICALITY_EXCEL_CONTRACT_VERSION, 'No modificar.']);
+  configuration.addRow([CONFIGURATION_KEYS.mediumMin, thresholds.mediumMin, 'Score mínimo (inclusive) para criticidad Media.']);
+  configuration.addRow([CONFIGURATION_KEYS.highMin, thresholds.highMin, 'Score mínimo (inclusive) para criticidad Alta.']);
+  configuration.addRow([CONFIGURATION_KEYS.criticalMin, thresholds.criticalMin, 'Score mínimo (inclusive) para criticidad Muy Alta.']);
 
   const instructions = workbook.addWorksheet(INSTRUCTIONS_SHEET_NAME);
   instructions.columns = [{ width: 110 }];
@@ -193,7 +279,7 @@ export async function buildMatrixWorkbook(
   return toBlob(await workbook.xlsx.writeBuffer());
 }
 
-export async function parseMatrixWorkbook(file: File): Promise<ParsedMatrixRow[]> {
+export async function parseMatrixWorkbook(file: File): Promise<ParsedMatrixWorkbook> {
   const ExcelJS = await loadExcelJs();
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(await file.arrayBuffer());
@@ -232,7 +318,28 @@ export async function parseMatrixWorkbook(file: File): Promise<ParsedMatrixRow[]
     });
   });
 
-  return rows;
+  return { rows, configuration: parseConfigurationSheet(workbook.getWorksheet(CONFIGURATION_SHEET_NAME)) };
+}
+
+type Worksheet = import('exceljs').Worksheet;
+
+/** Reads the "Configuración" key/value sheet. Missing sheet → null (legacy
+ * contract). Missing keys come back as '' so validation can report them. */
+function parseConfigurationSheet(sheet: Worksheet | undefined): ParsedConfigurationSheet | null {
+  if (!sheet) return null;
+  const values = new Map<string, string>();
+  sheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const cells = row.values as AnyCellValue[];
+    const key = cellText(cells[1]);
+    if (key !== '') values.set(key, cellText(cells[2]));
+  });
+  return {
+    version: values.get(CONFIGURATION_KEYS.version) ?? '',
+    mediumMin: values.get(CONFIGURATION_KEYS.mediumMin) ?? '',
+    highMin: values.get(CONFIGURATION_KEYS.highMin) ?? '',
+    criticalMin: values.get(CONFIGURATION_KEYS.criticalMin) ?? '',
+  };
 }
 
 /**

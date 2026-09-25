@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCriticalityTemplates } from '@/hooks/useCriticalityTemplates';
 import { CriticalityTemplatePreview } from './CriticalityTemplatePreview';
-import type { CriticalityTemplateDetail } from '@/types/criticalityMatrix';
+import type { CriticalityTemplateDetail, CriticalityThresholdValues } from '@/types/criticalityMatrix';
 
 interface CriticalityTemplatesDialogProps {
   open: boolean;
@@ -21,6 +21,8 @@ interface CriticalityTemplatesDialogProps {
   /** Whether the organization already has an active matrix — drives the
    * "esto reemplazará tu configuración" confirmation. */
   hasActiveMatrix: boolean;
+  /** Current effective thresholds, shown next to the template's. */
+  currentThresholds: CriticalityThresholdValues | null;
   onApplied: () => void;
 }
 
@@ -29,6 +31,7 @@ export function CriticalityTemplatesDialog({
   onOpenChange,
   organizationId,
   hasActiveMatrix,
+  currentThresholds,
   onApplied,
 }: CriticalityTemplatesDialogProps) {
   const { templates, loading, saving, error, refresh, loadTemplate, applyTemplate } = useCriticalityTemplates(organizationId);
@@ -123,14 +126,15 @@ export function CriticalityTemplatesDialog({
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Vista previa: {selected.name}
             </p>
-            <CriticalityTemplatePreview template={selected} />
+            <CriticalityTemplatePreview template={selected} currentThresholds={currentThresholds} />
           </div>
         )}
 
         {confirming && hasActiveMatrix && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-            Ya existe una matriz configurada. Aplicar esta plantilla reemplazará la configuración activa.
-            Las evaluaciones históricas no serán eliminadas.
+            Ya existe una matriz configurada. Aplicar esta plantilla reemplazará la configuración activa
+            {selected?.thresholds ? ' y los umbrales de clasificación' : ' (los umbrales actuales se conservan)'}.
+            Las evaluaciones históricas no serán eliminadas y conservan su clasificación y umbrales.
           </div>
         )}
 

@@ -199,6 +199,9 @@ export type Database = {
           notes: string | null
           organization_id: string
           score: number
+          threshold_critical_min: number
+          threshold_high_min: number
+          threshold_medium_min: number
         }
         Insert: {
           asset_id: string
@@ -211,6 +214,9 @@ export type Database = {
           notes?: string | null
           organization_id: string
           score?: number
+          threshold_critical_min: number
+          threshold_high_min: number
+          threshold_medium_min: number
         }
         Update: {
           asset_id?: string
@@ -223,6 +229,9 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           score?: number
+          threshold_critical_min?: number
+          threshold_high_min?: number
+          threshold_medium_min?: number
         }
         Relationships: [
           {
@@ -1010,9 +1019,12 @@ export type Database = {
           category: string | null
           created_at: string
           created_by_user_id: string | null
+          critical_min: number | null
           description: string | null
+          high_min: number | null
           id: string
           is_active: boolean
+          medium_min: number | null
           name: string
           organization_id: string | null
           scope: string
@@ -1022,9 +1034,12 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          critical_min?: number | null
           description?: string | null
+          high_min?: number | null
           id?: string
           is_active?: boolean
+          medium_min?: number | null
           name: string
           organization_id?: string | null
           scope?: string
@@ -1034,9 +1049,12 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by_user_id?: string | null
+          critical_min?: number | null
           description?: string | null
+          high_min?: number | null
           id?: string
           is_active?: boolean
+          medium_min?: number | null
           name?: string
           organization_id?: string | null
           scope?: string
@@ -1230,6 +1248,44 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "criticality_matrix_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      criticality_thresholds: {
+        Row: {
+          created_at: string
+          critical_min: number
+          high_min: number
+          medium_min: number
+          organization_id: string
+          updated_at: string
+          updated_by_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          critical_min: number
+          high_min: number
+          medium_min: number
+          organization_id: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          critical_min?: number
+          high_min?: number
+          medium_min?: number
+          organization_id?: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "criticality_thresholds_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -4086,6 +4142,10 @@ export type Database = {
         Returns: Json
       }
       approve_quote: { Args: { target_quote_id: string }; Returns: undefined }
+      assert_valid_criticality_thresholds: {
+        Args: { p_critical_min: number; p_high_min: number; p_medium_min: number }
+        Returns: undefined
+      }
       assign_work_order_technician: {
         Args: { target_member_id: string; target_work_order_id: string }
         Returns: {
@@ -4142,6 +4202,9 @@ export type Database = {
           notes: string | null
           organization_id: string
           score: number
+          threshold_critical_min: number
+          threshold_high_min: number
+          threshold_medium_min: number
         }
         SetofOptions: {
           from: "*"
@@ -4186,6 +4249,15 @@ export type Database = {
         Returns: boolean
       }
       can_user_read_request: { Args: { _request_id: string }; Returns: boolean }
+      classify_criticality_score: {
+        Args: {
+          p_critical_min: number
+          p_high_min: number
+          p_medium_min: number
+          p_score: number
+        }
+        Returns: string
+      }
       clear_active_criticality_matrix: {
         Args: { p_organization_id: string }
         Returns: Json
@@ -4475,9 +4547,12 @@ export type Database = {
           category: string | null
           created_at: string
           created_by_user_id: string | null
+          critical_min: number | null
           description: string | null
+          high_min: number | null
           id: string
           is_active: boolean
+          medium_min: number | null
           name: string
           organization_id: string | null
           scope: string
@@ -4525,7 +4600,49 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      criticality_active_score_range: {
+        Args: { p_organization_id: string }
+        Returns: {
+          max_possible_score: number
+          min_possible_score: number
+          parameter_count: number
+        }[]
+      }
+      criticality_default_thresholds: {
+        Args: never
+        Returns: {
+          critical_min: number
+          high_min: number
+          medium_min: number
+        }[]
+      }
+      criticality_label_es: {
+        Args: { p_criticality: string }
+        Returns: string
+      }
       criticality_slugify: { Args: { p_text: string }; Returns: string }
+      criticality_thresholds_from_jsonb: {
+        Args: { p_thresholds: Json }
+        Returns: {
+          critical_min: number
+          high_min: number
+          medium_min: number
+        }[]
+      }
+      criticality_thresholds_payload: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      criticality_unreachable_categories: {
+        Args: {
+          p_critical_min: number
+          p_high_min: number
+          p_max_score: number
+          p_medium_min: number
+          p_min_score: number
+        }
+        Returns: string[]
+      }
       delete_work_order_activity: {
         Args: { p_activity_id: string }
         Returns: undefined
@@ -4620,6 +4737,9 @@ export type Database = {
           notes: string
           organization_id: string
           score: number
+          threshold_critical_min: number
+          threshold_high_min: number
+          threshold_medium_min: number
         }[]
       }
       get_asset_integrated_history: {
@@ -4748,6 +4868,10 @@ export type Database = {
           total_weight: number
         }[]
       }
+      get_criticality_thresholds: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
       get_dashboard_metrics: {
         Args: { p_organization_id: string }
         Returns: {
@@ -4761,6 +4885,15 @@ export type Database = {
           total_assets: number
           upcoming_inspections: number
           updated_at: string
+        }[]
+      }
+      get_effective_criticality_thresholds: {
+        Args: { p_organization_id: string }
+        Returns: {
+          critical_min: number
+          high_min: number
+          is_default: boolean
+          medium_min: number
         }[]
       }
       get_efficiency_activity_metrics: {
@@ -5211,6 +5344,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      replace_criticality_configuration: {
+        Args: {
+          p_matrix: Json
+          p_organization_id: string
+          p_thresholds?: Json
+        }
+        Returns: Json
+      }
       replace_criticality_matrix: {
         Args: { p_matrix: Json; p_organization_id: string }
         Returns: Json
@@ -5432,6 +5573,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_criticality_thresholds: {
+        Args: {
+          p_critical_min: number
+          p_high_min: number
+          p_medium_min: number
+          p_organization_id: string
+        }
+        Returns: Json
       }
       set_inspection_plan_alert_rule_active: {
         Args: { p_is_active: boolean; p_rule_id: string }
@@ -6106,6 +6256,15 @@ export type Database = {
           p_expected_organization_id?: string
         }
         Returns: Json
+      }
+      write_criticality_thresholds: {
+        Args: {
+          p_critical_min: number
+          p_high_min: number
+          p_medium_min: number
+          p_organization_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

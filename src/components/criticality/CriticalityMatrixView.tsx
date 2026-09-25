@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Gauge, Plus, Pencil, EyeOff, Eye, AlertTriangle, ListChecks, LayoutTemplate, FileSpreadsheet, Upload, Download, Save, FilePlus2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCriticalityMatrix } from '@/hooks/useCriticalityMatrix';
 import { useCriticalityTemplates } from '@/hooks/useCriticalityTemplates';
+import { useCriticalityThresholds } from '@/hooks/useCriticalityThresholds';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +24,8 @@ import { CriticalityTemplatesDialog } from './CriticalityTemplatesDialog';
 import { CriticalitySaveTemplateDialog } from './CriticalitySaveTemplateDialog';
 import { CriticalityMatrixImportDialog } from './CriticalityMatrixImportDialog';
 import { CriticalityBulkAssessmentDialog } from './CriticalityBulkAssessmentDialog';
+import { CriticalityThresholdsCard } from './CriticalityThresholdsCard';
+import { CriticalityThresholdsDialog } from './CriticalityThresholdsDialog';
 import { buildMatrixWorkbook, downloadBlob, matrixFileName } from '@/lib/criticalityExcel';
 import type { CriticalityOption, CriticalityOptionInput, CriticalityParameter, CriticalityParameterInput } from '@/types/criticalityMatrix';
 
@@ -40,12 +43,20 @@ export function CriticalityMatrixView() {
     saveOption,
     toggleParameterActive,
     toggleOptionActive,
-    replaceMatrix,
+    replaceConfiguration,
     clearActiveMatrix,
     previewBulk,
     applyBulk,
   } = useCriticalityMatrix(currentOrganization?.id);
   const { saving: templateSaving, saveCurrentMatrixAsTemplate } = useCriticalityTemplates(currentOrganization?.id);
+  const {
+    thresholds,
+    loading: thresholdsLoading,
+    saving: thresholdsSaving,
+    error: thresholdsError,
+    refresh: refreshThresholds,
+    saveThresholds,
+  } = useCriticalityThresholds(currentOrganization?.id);
   const { toast } = useToast();
 
   const [parameterDialogOpen, setParameterDialogOpen] = useState(false);
@@ -59,6 +70,12 @@ export function CriticalityMatrixView() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [thresholdsDialogOpen, setThresholdsDialogOpen] = useState(false);
+
+  // The score range and the unreachable-category warnings depend on the active
+  // matrix, so they are re-read from the server whenever the matrix changes
+  // (parameter/option edits, import, template, blank matrix).
+  useEffect(() => { void refreshThresholds(); }, [matrix, refreshThresholds]);
 
   if (!currentOrganization) {
     return <EmptyState message="Sin organización asignada" />;
@@ -80,9 +97,10 @@ export function CriticalityMatrixView() {
   };
 
   const handleExportMatrix = async () => {
+    if (!thresholds) return;
     setExporting(true);
     try {
-      const blob = await buildMatrixWorkbook(matrix, currentOrganization.name);
+      const blob = await buildMatrixWorkbook(matrix, currentOrganization.name, thresholds);
       downloadBlob(blob, matrixFileName(currentOrganization.name));
       toast({ title: 'Matriz exportada' });
     } catch (exportError) {
@@ -154,7 +172,7 @@ export function CriticalityMatrixView() {
           <Button variant="outline" onClick={() => setImportOpen(true)} disabled={loading}>
             <Upload className="mr-2 h-4 w-4" /> Importar matriz
           </Button>
-          <Button variant="outline" onClick={() => void handleExportMatrix()} disabled={loading || exporting || matrix.length === 0}>
+          <Button variant="outline" onClick={() => void handleExportMatrix()} disabled={loading || exporting || !hasActiveMatrix || !thresholds}>
             <Download className="mr-2 h-4 w-4" /> {exporting ? 'Exportando…' : 'Exportar matriz'}
           </Button>
           {canManageMatrix && (
@@ -184,6 +202,14 @@ export function CriticalityMatrixView() {
           )}
         </div>
       )}
+
+      <CriticalityThresholdsCard
+        thresholds={thresholds}
+        loading={thresholdsLoading}
+        error={thresholdsError}
+        canManage={canManageMatrix}
+        onEdit={() => setThresholdsDialogOpen(true)}
+      />
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Cargando matriz de criticidad…</p>
@@ -284,6 +310,7 @@ export function CriticalityMatrixView() {
         onOpenChange={setTemplatesOpen}
         organizationId={currentOrganization.id}
         hasActiveMatrix={hasActiveMatrix}
+        currentThresholds={thresholds}
         onApplied={() => {
           void refresh();
           toast({ title: 'Plantilla aplicada', description: 'La matriz activa fue reemplazada. Las evaluaciones históricas se conservan.' });
@@ -307,11 +334,15 @@ export function CriticalityMatrixView() {
         open={importOpen}
         onOpenChange={setImportOpen}
         hasActiveMatrix={hasActiveMatrix}
+        currentThresholds={thresholds}
         saving={saving}
-        onApply={async (parameters) => {
-          const ok = await replaceMatrix(parameters);
+        onApply={async (parameters, importedThresholds) => {
+          const ok = await replaceConfiguration(parameters, importedThresholds);
           toast(ok
-            ? { title: 'Matriz importada', description: 'La configuración anterior quedó desactivada, no eliminada.' }
+            ? {
+              title: importedThresholds ? 'Matriz y umbrales importados' : 'Matriz importada',
+              description: 'La configuración anterior quedó desactivada, no eliminada.',
+            }
             : { title: 'No se pudo importar la matriz', description: error ?? 'Intenta nuevamente.', variant: 'destructive' });
           return ok;
         }}
@@ -327,6 +358,22 @@ export function CriticalityMatrixView() {
         onApply={applyBulk}
         onApplied={() => void refresh()}
       />
+
+      {thresholds && (
+        <CriticalityThresholdsDialog
+          open={thresholdsDialogOpen}
+          onOpenChange={setThresholdsDialogOpen}
+          thresholds={thresholds}
+          saving={thresholdsSaving}
+          onSave={async (values) => {
+            const saveError = await saveThresholds(values);
+            if (!saveError) {
+              toast({ title: 'Umbrales guardados', description: 'Se aplicarán a las evaluaciones nuevas.' });
+            }
+            return saveError;
+          }}
+        />
+      )}
 
       <AlertDialog open={clearConfirmOpen} onOpenChange={(open) => !saving && setClearConfirmOpen(open)}>
         <AlertDialogContent>

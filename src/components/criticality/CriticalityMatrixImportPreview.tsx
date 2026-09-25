@@ -1,15 +1,18 @@
-import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, SlidersHorizontal, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { MatrixImportPreview } from '@/lib/criticalityImportValidation';
+import { formatThresholdTriplet, thresholdRanges } from '@/lib/criticalityThresholds';
+import type { CriticalityThresholdValues } from '@/types/criticalityMatrix';
 
 interface CriticalityMatrixImportPreviewProps {
   preview: MatrixImportPreview;
+  currentThresholds: CriticalityThresholdValues | null;
 }
 
 /** What the file WOULD become, before anything is sent. The backend
  * revalidates all of it anyway — this is only so the user can see and fix
  * problems first. */
-export function CriticalityMatrixImportPreview({ preview }: CriticalityMatrixImportPreviewProps) {
+export function CriticalityMatrixImportPreview({ preview, currentThresholds }: CriticalityMatrixImportPreviewProps) {
   const blocking = preview.errors.length > 0;
 
   return (
@@ -28,6 +31,32 @@ export function CriticalityMatrixImportPreview({ preview }: CriticalityMatrixImp
           <Badge variant="secondary" className="gap-1">
             <CheckCircle2 className="h-3 w-3" /> Sin errores bloqueantes
           </Badge>
+        )}
+      </div>
+
+      <div className="space-y-1.5 rounded-md border p-3 text-sm">
+        <p className="flex items-center gap-2 font-medium">
+          <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" /> Umbrales de clasificación
+        </p>
+        {preview.thresholds ? (
+          <>
+            <p>
+              Se aplicarán: <span className="font-medium">{formatThresholdTriplet(preview.thresholds)}</span>
+              {currentThresholds && <span className="text-muted-foreground"> (actuales: {formatThresholdTriplet(currentThresholds)})</span>}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {thresholdRanges(preview.thresholds).map((item) => (
+                <Badge key={item.criticality} variant="outline" className="text-xs font-normal">{item.label}: {item.range}</Badge>
+              ))}
+            </div>
+          </>
+        ) : preview.hasConfigurationSheet ? (
+          <p className="text-destructive">La hoja "Configuración" tiene errores: corrígelos para poder importar.</p>
+        ) : (
+          <p className="text-muted-foreground">
+            Archivo sin hoja "Configuración" (formato anterior): se importa solo la matriz y se conservan los umbrales actuales
+            {currentThresholds ? ` (${formatThresholdTriplet(currentThresholds)})` : ''}.
+          </p>
         )}
       </div>
 

@@ -1,9 +1,19 @@
-import type { ParsedBulkWorkbook, ParsedMatrixRow } from '@/lib/criticalityExcel';
+import {
+  CONFIGURATION_KEYS,
+  CONFIGURATION_SHEET_NAME,
+  CRITICALITY_EXCEL_CONTRACT_VERSION,
+  type ParsedBulkWorkbook,
+  type ParsedConfigurationSheet,
+  type ParsedMatrixRow,
+  type ParsedMatrixWorkbook,
+} from '@/lib/criticalityExcel';
+import { parseThresholdInput, validateThresholdValues } from '@/lib/criticalityThresholds';
 import type {
   BulkCriticalityPreviewRow,
   BulkCriticalityRow,
   CriticalityMatrixPayloadParameter,
   CriticalityParameter,
+  CriticalityThresholdValues,
 } from '@/types/criticalityMatrix';
 
 /**
@@ -28,6 +38,10 @@ export interface MatrixImportPreview {
   totalWeight: number;
   parameterCount: number;
   optionCount: number;
+  /** Thresholds the import will apply; null when the file has no
+   * "Configuración" sheet (legacy) — current thresholds are then kept. */
+  thresholds: CriticalityThresholdValues | null;
+  hasConfigurationSheet: boolean;
 }
 
 export interface BulkImportPreparation {
@@ -77,7 +91,7 @@ export function validateMatrixRows(rows: ParsedMatrixRow[]): MatrixImportPreview
 
   if (rows.length === 0) {
     errors.push({ message: 'La hoja "Matriz" no tiene filas de datos.' });
-    return { parameters: [], errors, warnings, totalWeight: 0, parameterCount: 0, optionCount: 0 };
+    return { parameters: [], errors, warnings, totalWeight: 0, parameterCount: 0, optionCount: 0, thresholds: null, hasConfigurationSheet: false };
   }
 
   rows.forEach((row) => {
@@ -222,6 +236,100 @@ export function validateMatrixRows(rows: ParsedMatrixRow[]): MatrixImportPreview
     totalWeight,
     parameterCount: parameters.length,
     optionCount: parameters.reduce((sum, parameter) => sum + parameter.options.length, 0),
+    thresholds: null,
+    hasConfigurationSheet: false,
+  };
+}
+
+/**
+ * Structural check of the "Configuración" sheet. The backend
+ * (replace_criticality_configuration) revalidates the same rules; this only
+ * lets the preview show problems before anything is sent.
+ */
+export function validateConfigurationSheet(configuration: ParsedConfigurationSheet): {
+  thresholds: CriticalityThresholdValues | null;
+  errors: ImportIssue[];
+} {
+  const errors: ImportIssue[] = [];
+  const sheet = `Hoja "${CONFIGURATION_SHEET_NAME}"`;
+
+  if (configuration.version !== CRITICALITY_EXCEL_CONTRACT_VERSION) {
+    errors.push({
+      message: configuration.version === ''
+        ? `${sheet}: falta "${CONFIGURATION_KEYS.version}".`
+        : `${sheet}: versión de contrato "${configuration.version}" no soportada (se esperaba ${CRITICALITY_EXCEL_CONTRACT_VERSION}).`,
+    });
+  }
+
+  const fields = [
+    ['mediumMin', CONFIGURATION_KEYS.mediumMin],
+    ['highMin', CONFIGURATION_KEYS.highMin],
+    ['criticalMin', CONFIGURATION_KEYS.criticalMin],
+  ] as const;
+  const values: Partial<CriticalityThresholdValues> = {};
+  fields.forEach(([field, label]) => {
+    const raw = configuration[field];
+    const value = parseThresholdInput(raw);
+    if (value === null) {
+      errors.push({
+        message: raw === ''
+          ? `${sheet}: falta "${label}".`
+          : `${sheet}: "${label}" debe ser un número >= 0 con como máximo 2 decimales (valor: "${raw}").`,
+      });
+    } else {
+      values[field] = value;
+    }
+  });
+
+  if (errors.length > 0) return { thresholds: null, errors };
+
+  const thresholds = values as CriticalityThresholdValues;
+  validateThresholdValues(thresholds).forEach((message) => errors.push({ message: `${sheet}: ${message}` }));
+  return { thresholds: errors.length > 0 ? null : thresholds, errors };
+}
+
+/** Arguments of replace_criticality_configuration (snake_case payload).
+ * thresholds = null (legacy file) keeps the organization's current ones. */
+export function toReplaceConfigurationArgs(
+  parameters: CriticalityMatrixPayloadParameter[],
+  thresholds: CriticalityThresholdValues | null,
+) {
+  return {
+    p_thresholds: thresholds
+      ? { medium_min: thresholds.mediumMin, high_min: thresholds.highMin, critical_min: thresholds.criticalMin }
+      : null,
+    p_matrix: {
+      parameters: parameters.map((parameter) => ({
+        code: parameter.code,
+        name: parameter.name,
+        description: parameter.description ?? null,
+        weight: parameter.weight,
+        sequence: parameter.sequence,
+        is_active: parameter.isActive,
+        options: parameter.options.map((option) => ({
+          code: option.code,
+          label: option.label,
+          score: option.score,
+          sequence: option.sequence,
+          is_active: option.isActive,
+        })),
+      })),
+    },
+  };
+}
+
+/** Matrix sheet + optional "Configuración" sheet, as one preview. Any
+ * threshold error blocks the whole import: matrix and thresholds are applied
+ * together or not at all. */
+export function validateMatrixWorkbook(parsed: ParsedMatrixWorkbook): MatrixImportPreview {
+  const preview = validateMatrixRows(parsed.rows);
+  if (!parsed.configuration) return preview;
+  const { thresholds, errors } = validateConfigurationSheet(parsed.configuration);
+  return {
+    ...preview,
+    errors: [...preview.errors, ...errors],
+    thresholds,
+    hasConfigurationSheet: true,
   };
 }
 

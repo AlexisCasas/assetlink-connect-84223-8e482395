@@ -34,16 +34,25 @@ Ejemplo con los 5 parámetros de referencia:
 | Disponibilidad de repuesto | 10% | No disponible | 100 | 10.0 |
 | **Score total** | | | | **57.5** |
 
-## Umbrales MVP (fijos, no configurables todavía)
+## Umbrales de clasificación (configurables por organización)
+
+Migración `20260925120000_criticality_configurable_thresholds.sql` (Fase 1 · Punto 2). Cada organización configura tres puntos de corte; cada uno es el límite **inferior inclusivo** de su categoría:
 
 ```
-score < 25            → low (Baja)
-25 <= score < 50       → medium (Media)
-50 <= score < 75       → high (Alta)
-score >= 75            → critical (Crítica)
+score < medium_min                 → low (Baja)
+medium_min <= score < high_min     → medium (Media)
+high_min <= score < critical_min   → high (Alta)
+score >= critical_min              → critical (Muy Alta)
 ```
 
-No existe tabla `criticality_thresholds` en este MVP — se decidió mantener el alcance simple. Ver "Próximos pasos".
+- **Por defecto 25 / 50 / 75**, exactamente el comportamiento anterior. Una organización sin fila en `criticality_thresholds` usa esos valores; no se insertó ninguna fila al migrar.
+- `is_default` se decide por **valores**, no por la existencia de la fila: "Restablecer valores por defecto" guarda 25/50/75 explícitos y sigue siendo `is_default = true`.
+- Validación (en SQL, repetida en la UI solo como ayuda): numéricos, `>= 0`, máximo 2 decimales (se rechaza, nunca se redondea en silencio), estrictamente ascendentes. `medium_min = 0` está permitido, con advertencia porque "Baja" queda inalcanzable.
+- Enum interno sin cambios (`low/medium/high/critical`); en la interfaz `critical` se muestra como **"Muy Alta"** (`ASSET_CRITICALITY_LABELS`, fuente única de etiquetas).
+- **Fuente única de verdad**: `classify_criticality_score` es el único `CASE` de clasificación y solo lo usa `validate_and_score_asset_criticality`. `CriticalityAssessmentDialog` ya no calcula score ni clasifica: su vista previa llama a `preview_bulk_asset_criticality` con una sola fila (`previewAssessment`), solo cuando todos los parámetros están respondidos (sin score parcial) y descartando respuestas fuera de orden.
+- **Snapshot histórico**: cada evaluación guarda `threshold_medium_min/high_min/critical_min`. Las evaluaciones anteriores se rellenaron con 25/50/75, exacto porque `calculate_asset_criticality` es el único escritor y siempre usó esos valores. Cambiar los umbrales **nunca** recalcula evaluaciones ni `assets.criticality`.
+- Eventos nuevos (`criticality_assessed`): descripción en español ("Criticidad evaluada: Muy Alta (score 80.00)") y umbrales en el payload. Los eventos históricos no se modifican.
+- RPC: `get_criticality_thresholds` (miembro activo o platform_admin; devuelve también el rango de score posible de la matriz activa y las categorías inalcanzables, calculados en SQL) y `set_criticality_thresholds` (owner/admin/manager o platform_admin). RLS de `criticality_thresholds` solo `SELECT`; sin escritura directa.
 
 ## `calculate_asset_criticality`: todas las respuestas o ninguna
 
@@ -105,7 +114,7 @@ lo descrito en este documento:
 
 ## Próximos pasos (fuera de alcance de este MVP)
 
-- Umbrales configurables por organización (tabla `criticality_thresholds` con `low_min`/`medium_min`/`high_min`/`critical_min`) — evaluada para este MVP y descartada deliberadamente para no arriesgar el alcance; los umbrales quedan fijos (25/50/75).
+- ~~Umbrales configurables por organización~~ — implementado en Fase 1 · Punto 2 (ver "Umbrales de clasificación").
 - Plantillas de matriz por industria — la infraestructura ya existe en V2 (`scope='system'`), pendiente solo la validación de negocio del contenido.
 - Criticidad automática alimentada por datos reales de fallas (frecuencia real de reportes técnicos, tiempo de parada real desde `work_order_activity_reports`, en vez de una opción elegida manualmente).
 - Recomendación automática de parámetros/pesos con IA.
