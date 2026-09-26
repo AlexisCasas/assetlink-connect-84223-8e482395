@@ -2071,3 +2071,41 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   sensibles), el QR real de extremo a extremo, y un PDF real de 520 eventos
   inspeccionado con `pdf-parse` (39 páginas, pie repetido, sin símbolos sin
   normalizar).
+
+## Fase 1 · Punto 6 (prerrequisito) — Organization access hardening
+
+- Rama `fix/organization-access-hardening`. Migración
+  `20260926203242_organization_access_hardening.sql`; detalle en
+  `docs/ORGANIZATION_ACCESS_HARDENING.md`.
+- Vulnerabilidad cerrada: `anon`/`authenticated` tenían todos los privilegios
+  de tabla (default privileges de Supabase) sobre `organizations`,
+  `organization_members`, `organization_invitations`, `activity_logs` y
+  `audit_logs`, y había policies RLS de escritura para owner/admin. Un admin
+  de tenant podía autopromoverse a owner, desactivar al owner, insertar
+  miembros, reescribir auditoría y cambiar `organization_type` a
+  `platform_admin` (→ `is_platform_admin()` true, lectura cross-tenant).
+- Ahora `authenticated` solo tiene `SELECT` (vía RLS existente) sobre las
+  cinco tablas, más `UPDATE (name, legal_name, tax_id)` sobre
+  `organizations`. Esa es la única escritura cliente legítima
+  (`OrganizationProfile.tsx`), con la policy owner/admin sin cambios. `anon`
+  no tiene ningún acceso. Se eliminaron las policies de INSERT/UPDATE/DELETE
+  de `organization_members` y la de INSERT de `activity_logs`.
+- `service_role` recibe `SELECT/INSERT/UPDATE/DELETE` explícitos sobre las
+  cinco tablas: en el remoto es un no-op, pero en local hacía falta. Supabase
+  CLI v2.106 con `[api] auto_expose_new_tables` sin definir crea las tablas de
+  `public` sin DML para `anon`/`authenticated`/`service_role` en un
+  `db reset`, así que los privilegios locales y remotos **no** coinciden por
+  defecto.
+- Regla: las escrituras de membresías e invitaciones pasan solo por Edge
+  Functions con `service_role` o por RPCs `SECURITY DEFINER`. No se tocó
+  `ALTER DEFAULT PRIVILEGES`: toda tabla sensible nueva debe declarar su
+  propio `REVOKE`/`GRANT`.
+- Sin cambios en Edge Functions ni frontend. Las reglas de jerarquía de roles
+  (p. ej. un admin que asigna owner vía `admin-*`) quedan para el PR de
+  invitaciones productivas.
+- Verificado: **515 checks pgTAP** (412 previos + 103 nuevos en
+  `organization_access_hardening.test.sql`, ejecutados como
+  `authenticated`/`anon`). Control negativo: con la vulnerabilidad reabierta,
+  54 de esos checks fallan. E2E local con `supabase functions serve`: 7 Edge
+  Functions `admin-*`, la consulta de `OrganizationProfile` y 10 intentos de
+  escalamiento vía PostgREST bloqueados con `42501`.
