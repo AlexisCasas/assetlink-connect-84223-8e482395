@@ -98,7 +98,8 @@ const toEditForm = (asset: Asset): EditForm => ({
 export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   const { selectedAsset: asset, assets: allAssets, canManageAssets, categories, branches, error, saving, archiveAsset, restoreAsset, updateAsset, refreshAssets } = state;
   const { toast } = useToast();
-  const { currentMembership } = useAuth();
+  const { user, currentOrganization, currentMembership } = useAuth();
+  const [generatingReport, setGeneratingReport] = useState(false);
   const [noticeDialogOpen, setNoticeDialogOpen] = useState(false);
   // Reportar una avería es más amplio que administrar activos: un técnico o
   // un solicitante reportan, aunque no puedan editar la ficha. El backend
@@ -201,6 +202,40 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
     setRestoring(false);
     if (ok) toast({ title: 'Activo restaurado', description: `"${asset.name}" se restauró correctamente.` });
     else toast({ title: 'No se pudo restaurar', description: 'Revisa los datos e inténtalo nuevamente.', variant: 'destructive' });
+  };
+
+  // "Generar Reporte": a read-only, on-demand PDF snapshot of the asset's
+  // current state — never persisted, never an asset_event. Everything
+  // (loadAssetReportData/buildAssetReportData/@react-pdf/renderer) is loaded
+  // via dynamic import so it never enters the app's initial bundle just
+  // because this button exists. See docs/ASSET_REPORT.md.
+  const handleGenerateReport = async () => {
+    if (!currentOrganization) return;
+    setGeneratingReport(true);
+    try {
+      const { generateAssetReport } = await import('@/lib/assetReport/generateAssetReport');
+      const result = await generateAssetReport({
+        asset,
+        allAssets,
+        organizationName: currentOrganization.name,
+        generatedByName: user?.name ?? null,
+      });
+      if (result.status === 'ok') {
+        toast({ title: 'Reporte generado', description: `Se descargó el reporte de "${asset.name}".` });
+      } else if (result.status === 'load-failed') {
+        toast({
+          title: 'No se pudo generar el reporte',
+          description: `Fallaron estas secciones: ${result.failedSectionLabels.join(', ')}. Inténtalo nuevamente.`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: 'No se pudo generar el PDF', description: 'Inténtalo nuevamente.', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'No se pudo generar el reporte', description: 'Inténtalo nuevamente.', variant: 'destructive' });
+    } finally {
+      setGeneratingReport(false);
+    }
   };
 
   const startEdit = () => {
@@ -683,10 +718,12 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap gap-2 pt-4">
-          <Button variant="outline" size="sm" disabled>
-            <FileText className="h-4 w-4 mr-2" />
-            Generar Reporte
-          </Button>
+          {canManageAssets && (
+            <Button variant="outline" size="sm" onClick={() => void handleGenerateReport()} disabled={generatingReport}>
+              <FileText className="h-4 w-4 mr-2" />
+              {generatingReport ? 'Generando…' : 'Generar Reporte'}
+            </Button>
+          )}
           <Button variant="outline" size="sm" disabled>
             <User className="h-4 w-4 mr-2" />
             Asignar Técnico
