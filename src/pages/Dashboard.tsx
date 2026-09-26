@@ -118,7 +118,7 @@ const Dashboard = () => {
             </div>
           );
         }
-        return <AssetsView />;
+        return <AssetsView focusAssetId={focus.assetId} />;
       case 'requests':
         if (user?.role === 'cliente') {
           return <RequestList focusRequestId={focus.requestId} focusQuoteId={focus.quoteId} />;

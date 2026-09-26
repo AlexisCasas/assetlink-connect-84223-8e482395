@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -31,8 +31,17 @@ const NoOrganizationScreen = () => {
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, loading, organizations } = useAuth();
+  const location = useLocation();
   if (loading) return null;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) {
+    // Carries only this app's own current pathname/hash (never search, never
+    // anything from another origin) so Login.tsx can resume the original
+    // deep link — a scanned asset QR included — after signing in. This is
+    // NOT itself trusted as a safe navigation target: Login.tsx re-validates
+    // it against a strict allowlist (resolveSafeLoginReturnTarget) before
+    // ever navigating with it.
+    return <Navigate to="/login" replace state={{ from: { pathname: location.pathname, hash: location.hash } }} />;
+  }
   if (organizations.length === 0) return <NoOrganizationScreen />;
   return <>{children}</>;
 };

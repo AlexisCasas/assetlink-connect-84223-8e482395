@@ -44,6 +44,12 @@ export interface EntityNavigationTarget {
   preventivePlanId?: string;
   preventiveOccurrenceId?: string;
   preventiveAssetId?: string;
+  /** Opens an asset's own detail sheet in #assets (QR / "abrir activo" deep
+   * links). Deliberately a DIFFERENT query key ("assetId") from
+   * preventiveAssetId ("asset"): that one means "create a plan for this
+   * asset" in #preventive-maintenance, this one means "open this asset's
+   * sheet" in #assets. Never conflate the two. */
+  assetId?: string;
 }
 
 /** What parseEntityHash extracts from window.location.hash: a logical view
@@ -64,6 +70,7 @@ const QUERY_KEYS = {
   preventivePlanId: 'plan',
   preventiveOccurrenceId: 'occurrence',
   preventiveAssetId: 'asset',
+  assetId: 'assetId',
 } as const;
 
 /**
@@ -99,6 +106,37 @@ export function parseEntityHash(hash: string): ParsedEntityHash {
     if (value) result[key] = value;
   });
   return result;
+}
+
+export interface SafeLoginReturnTarget {
+  pathname: '/';
+  hash: string;
+}
+
+/**
+ * Login.tsx calls this with `location.state?.from` (attached by
+ * ProtectedRoute in App.tsx before redirecting an unauthenticated visit to
+ * /login) to safely resume the original deep link — including a scanned
+ * asset QR — after signing in, WITHOUT ever becoming an open redirect.
+ *
+ * Accepts ONLY an internal target: `pathname` exactly `"/"` and a `hash`
+ * whose leading segment is a known view (the same ALL_DASHBOARD_VIEWS
+ * allowlist parseEntityHash already enforces). Anything else — an external
+ * origin, a protocol-relative `"//host"`, `"javascript:"`, a foreign
+ * pathname, or an unrecognized view — returns null so the caller falls back
+ * to a bare `/`. Because the check is a fixed-string allowlist, no crafted
+ * input can ever pass it into something react-router would treat as
+ * leaving this app.
+ */
+export function resolveSafeLoginReturnTarget(from: unknown): SafeLoginReturnTarget | null {
+  if (!from || typeof from !== 'object') return null;
+  const candidate = from as { pathname?: unknown; hash?: unknown };
+  if (candidate.pathname !== '/') return null;
+
+  const hash = typeof candidate.hash === 'string' ? candidate.hash : '';
+  if (hash === '') return { pathname: '/', hash: '' };
+  if (!parseEntityHash(hash).view) return null;
+  return { pathname: '/', hash };
 }
 
 /** Sets window.location.hash to the canonical hash for `target`. This alone
