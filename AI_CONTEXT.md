@@ -1997,3 +1997,77 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   `VITE_PUBLIC_APP_URL` y — de extremo a extremo — el QR real (`qrcode.react`
   vía `react-dom/server`, rasterizado con `sharp`) decodificado con un lector
   real (`jsQR`) contra el payload exacto esperado.
+
+## Fase 1 · Punto 5 — Reporte del activo (PDF)
+
+- Rama `feature/phase1-asset-report`, sobre el merge del fix de overflow del
+  diálogo QR. **Sin migración SQL**: el reporte se compone íntegramente con
+  RPCs/tablas ya existentes. Detalle completo en `docs/ASSET_REPORT.md`.
+- Botón "Generar Reporte" de `AssetDetail` activado, visible solo para
+  owner/admin/manager (`canManageAssets`) — gobierno de producto, no una
+  frontera de seguridad nueva; cada fuente sigue protegida por su
+  RLS/`SECURITY DEFINER` de siempre.
+- Es una fotografía del estado del activo al momento de generarlo:
+  **nunca** inserta `asset_events`, nunca toca `assets.updated_at`, nunca
+  sube nada a Storage/R2, nunca crea `asset_documents`. 100% lectura +
+  generación local (verificado por grep: cero `.insert(`/`.update(`/
+  `.delete(`/`.upsert(` en `src/lib/assetReport/`).
+- Modelo `AssetReportData` (`src/lib/assetReport/types.ts`): snapshot en
+  memoria construido una sola vez por clic, separando carga
+  (`loadAssetReportData.ts`, `Promise.allSettled` sobre 11 fuentes) →
+  construcción pura (`buildAssetReportData.ts`) → presentación PDF
+  (`AssetReportDocument.tsx`) → descarga (`generateAssetReport.tsx`, el
+  único punto de entrada, cargado con `import()` dinámico desde
+  `AssetDetail` — nunca un import estático de `@react-pdf/renderer`).
+- Si cualquiera de las 11 fuentes falla, se aborta el reporte completo y se
+  muestran todas las secciones fallidas — nunca un PDF parcial. Un resultado
+  vacío (0 filas) no es un fallo.
+- Fuentes reutilizadas tal cual (una por sección, sin reconstruir nada):
+  `assets`, `client_branches`, `asset_categories`, `get_assignable_planners`,
+  `get_asset_criticality_assessments`, `get_asset_traffic_light`,
+  `get_preventive_maintenance_plans`, `get_inspection_plans` +
+  `get_inspection_runs` (correlacionados por `planId`, nunca por nombre de
+  texto; última ejecución elegida por fecha explícita, no por orden de
+  array), `get_maintenance_notices`, `get_asset_integrated_history` (única
+  fuente del historial, con su `ORDER BY event_date DESC` intacto).
+  Preventivo filtra por `asset_id` exacto; inspecciones por `assetId`
+  exacto, **nunca** `areaAssetId` ni `branchId`.
+- Historial completo, sin truncar: probado con 520 eventos sintéticos → 39
+  páginas, ~285 KB. Sin paginación nueva en el backend.
+- QR: reutiliza `buildAssetQrUrl` (Punto 4) y `qrcode.react`, nunca
+  `assets.qr_code`. Se renderiza a SVG estático (`react-dom/server`), se
+  extraen sus dos `<path>` y se redibujan vectorialmente con
+  `<Svg>/<Path>` de `@react-pdf/renderer` — sin canvas, sin peticiones de
+  red. Verificado con render real + rasterizado (`sharp`) + decodificación
+  (`jsQR`) contra la URL canónica exacta.
+- Librería PDF: `@react-pdf/renderer@4.9.0` (MIT, peer React 18
+  compatible, verificado con `npm view` antes de instalar con versión
+  exacta). Sin fuentes embebidas — símbolos fuera de las fuentes estándar
+  (`→`, `≤`, `≥`) se normalizan solo al construir el PDF (`pdfText` en
+  `utils.ts`), nunca en el dato almacenado. Chunk propio
+  (`generateAssetReport-*.js`, ~487 KB gzip) separado del bundle inicial.
+- Diseño A4: encabezado fijo compacto en todas las páginas, bloque
+  completo (título/organización/QR/fecha) solo en la página 1, pie fijo con
+  "Página X de Y" y la leyenda "Estado al momento de generación". Historial
+  siempre en página nueva. Filas como tarjetas con borde (no tabla de
+  cuadrícula clásica — `@react-pdf/renderer` no repite encabezados de tabla
+  entre páginas de forma nativa). Todo color va acompañado de texto —
+  legible en blanco y negro.
+- Foto: solo si `assets.image_url` es real; nunca `/placeholder.svg`.
+  Ninguna funcionalidad de carga se desarrolló en este punto.
+- Nombre de archivo:
+  `reporte-activo-<codigo-o-nombre>-<uuid8>-YYYYMMDD.pdf`
+  (`buildAssetReportFilename`, reutiliza `sanitizeFilenameSegment` de
+  `assetQr.ts`).
+- Datos sensibles nunca incluidos: `actorEmail`, `file_url`/URLs firmadas,
+  `metadata`/`payload` crudos, tokens. Del historial solo se muestran los
+  campos explícitamente permitidos por tipo de evento.
+- Verificado localmente: `supabase db reset --local` + **412 checks pgTAP**
+  como regresión (sin cambios de esquema), y **22 checks en Node** (script
+  temporal fuera del repo, mismo patrón que el Punto 4) cubriendo el
+  snapshot puro (mínimo/completo/NULL/caracteres especiales/filtrado exacto
+  por asset/criticidad vigente-no vigente/semáforo por color y archivado/
+  selección de última inspección por fecha explícita/historial sin datos
+  sensibles), el QR real de extremo a extremo, y un PDF real de 520 eventos
+  inspeccionado con `pdf-parse` (39 páginas, pie repetido, sin símbolos sin
+  normalizar).
