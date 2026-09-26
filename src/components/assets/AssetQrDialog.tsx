@@ -41,12 +41,15 @@ const downloadBlob = (blob: Blob, filename: string): void => {
 };
 
 /** Clones the live <svg> (so the visible one is never mutated), guarantees
- * the xmlns namespace the QR library sets by default, and serializes it to
- * a standalone XML string usable for both the .svg download and the print
- * label's embedded markup. */
+ * the xmlns namespace the QR library sets by default, strips the Tailwind
+ * `class` attribute used only for the on-screen responsive sizing (it has no
+ * effect — and no meaning — once the file leaves this app's stylesheet), and
+ * serializes it to a standalone XML string usable for both the .svg download
+ * and the print label's embedded markup. */
 const serializeSvg = (svg: SVGSVGElement): string => {
   const clone = svg.cloneNode(true) as SVGSVGElement;
   if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.removeAttribute('class');
   return new XMLSerializer().serializeToString(clone);
 };
 
@@ -131,7 +134,7 @@ export function AssetQrDialog({ open, onOpenChange, asset, organizationId, canMa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-lg">
         <DialogHeader>
           <DialogTitle>Código QR — {asset.name}</DialogTitle>
           <DialogDescription>
@@ -139,12 +142,22 @@ export function AssetQrDialog({ open, onOpenChange, asset, organizationId, canMa
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col items-center gap-3">
-          <div className="rounded-lg border bg-white p-4">
-            <QRCodeSVG ref={svgRef} value={url} size={QR_DISPLAY_SIZE} level="M" marginSize={4} />
+        {/* min-w-0: DialogContent is a CSS grid, and a grid/flex item's
+         * default min-width is `auto` (its content's intrinsic width), not
+         * 0 — without this, a long child (the link row below) would expand
+         * this column past the dialog's own explicit width instead of
+         * wrapping/truncating inside it. */}
+        <div className="flex w-full min-w-0 flex-col items-center gap-3">
+          <div className="mx-auto w-full max-w-[288px] rounded-lg border bg-white p-4">
+            {/* w-full + h-auto make the SVG shrink with its container on
+             * narrow viewports; the container's own max-width keeps the
+             * displayed QR capped at ~256px (288px box minus the p-4
+             * padding) on anything wide enough to show it at full size. */}
+            <QRCodeSVG ref={svgRef} value={url} size={QR_DISPLAY_SIZE} level="M" marginSize={4} className="h-auto w-full" />
           </div>
           {/* Off-screen, higher-resolution render used only for the PNG
-           * download — never shown to the user. */}
+           * download — never shown to the user, always exported at the same
+           * 1024px regardless of how the visible QR above is displayed. */}
           <div aria-hidden="true" style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}>
             <QRCodeCanvas ref={pngCanvasRef} value={url} size={QR_DOWNLOAD_PNG_SIZE} level="M" marginSize={4} />
           </div>
@@ -154,20 +167,23 @@ export function AssetQrDialog({ open, onOpenChange, asset, organizationId, canMa
             {asset.code && <p className="text-xs text-muted-foreground">{asset.code}</p>}
           </div>
 
-          <div className="flex w-full items-center gap-2">
-            <code className="flex-1 truncate rounded-md border bg-muted/40 px-2 py-1.5 text-xs" title={url}>
+          <div className="flex w-full min-w-0 items-center gap-2">
+            <code
+              className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-md border bg-muted/40 px-2 py-1.5 text-xs"
+              title={url}
+            >
               {url}
             </code>
-            <Button size="icon" variant="outline" onClick={() => void handleCopyLink()} title="Copiar enlace">
+            <Button size="icon" variant="outline" className="shrink-0" onClick={() => void handleCopyLink()} title="Copiar enlace">
               <Copy className="h-4 w-4" />
             </Button>
           </div>
 
           {isPublicAppUrlLocal && (
-            <div className="flex w-full items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+            <div className="flex w-full min-w-0 items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
-              <span>
-                QR de desarrollo. Este enlace apunta a <strong>{publicAppUrl}</strong>. Configura{' '}
+              <span className="min-w-0 break-words">
+                QR de desarrollo. Este enlace apunta a <strong className="break-all">{publicAppUrl}</strong>. Configura{' '}
                 <code>VITE_PUBLIC_APP_URL</code> antes de imprimir etiquetas definitivas.
               </span>
             </div>
@@ -178,7 +194,7 @@ export function AssetQrDialog({ open, onOpenChange, asset, organizationId, canMa
           </p>
         </div>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+        <DialogFooter className="flex-col gap-2 space-x-0 sm:flex-row sm:justify-between sm:space-x-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
           {canManageAssets && (
             <div className="flex flex-wrap gap-2">
