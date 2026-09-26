@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -55,6 +55,8 @@ export function AssetTree({ state, trafficLight }: AssetTreeProps) {
   const { assetTree, assets, categories, branches, loading, error, canManageAssets, showArchived, setShowArchived, selectedAssetId, selectAsset, createAsset } = state;
 
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const treeContainerRef = useRef<HTMLDivElement>(null);
+  const lastScrolledAssetIdRef = useRef<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogParentId, setDialogParentId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -68,6 +70,52 @@ export function AssetTree({ state, trafficLight }: AssetTreeProps) {
 
   const findAssetById = (id: string) => assets.find((asset) => asset.id === id) ?? null;
   const selectedParent = dialogParentId ? findAssetById(dialogParentId) : null;
+
+  // Reveals a deep/nested selected node without any extra query: walks
+  // parentAssetId over the already-loaded flat `assets` list (in-memory
+  // only) and expands whichever ancestors aren't already open. This covers
+  // both a QR/deep-link selection (AssetsView calls selectAsset for an
+  // asset that may be several levels deep) and any future programmatic
+  // selection — a plain click never needs it, its own node is already
+  // visible.
+  useEffect(() => {
+    if (!selectedAssetId) return;
+    const byId = new Map(assets.map((asset) => [asset.id, asset]));
+    const ancestorIds: string[] = [];
+    let current = byId.get(selectedAssetId)?.parentAssetId ?? null;
+    while (current) {
+      ancestorIds.push(current);
+      current = byId.get(current)?.parentAssetId ?? null;
+    }
+    if (ancestorIds.length === 0) return;
+    setExpandedNodes((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      ancestorIds.forEach((id) => {
+        if (!next.has(id)) {
+          next.add(id);
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [selectedAssetId, assets]);
+
+  // Scrolls the selected node into view once, the first time its row
+  // actually exists in the DOM for this selection (right away if it was
+  // already visible, or right after the ancestor-expansion effect above
+  // renders it). Depending on `expandedNodes` lets a first miss retry once
+  // expansion lands, but `lastScrolledAssetIdRef` stops a manual expand/
+  // collapse of some unrelated branch from re-triggering a scroll jump for
+  // a selection that was already brought into view.
+  useEffect(() => {
+    if (!selectedAssetId || lastScrolledAssetIdRef.current === selectedAssetId) return;
+    const node = treeContainerRef.current?.querySelector<HTMLElement>(`[data-asset-id="${selectedAssetId}"]`);
+    if (node) {
+      node.scrollIntoView({ block: 'nearest' });
+      lastScrolledAssetIdRef.current = selectedAssetId;
+    }
+  }, [selectedAssetId, expandedNodes]);
 
   const toggleNode = (nodeId: string) => {
     setExpandedNodes((current) => {
@@ -123,6 +171,7 @@ export function AssetTree({ state, trafficLight }: AssetTreeProps) {
     return (
       <div key={node.id} className="select-none">
         <div
+          data-asset-id={node.id}
           className={cn(
             'group flex items-center py-2 px-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors',
             isSelected && 'bg-primary/10 border-l-2 border-l-primary',
@@ -228,7 +277,7 @@ export function AssetTree({ state, trafficLight }: AssetTreeProps) {
             <Button variant="link" size="sm" onClick={() => setShowArchived(true)}>Ver archivados</Button>
           </div>
         ) : (
-          <div className="space-y-1">
+          <div ref={treeContainerRef} className="space-y-1">
             {assetTree.map((node) => renderNode(node))}
           </div>
         )}

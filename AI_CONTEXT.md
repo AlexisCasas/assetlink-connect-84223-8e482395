@@ -1950,3 +1950,50 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
 - Verificado localmente: `supabase db reset --local`, **412 checks pgTAP**
   (88 nuevos + 144 criticidad + 180 preventivo) y 18 checks de API contra
   PostgREST local con usuarios reales. No aplicado al proyecto remoto.
+
+## Fase 1 · Punto 4 — QR de activos
+
+- Rama `feature/phase1-asset-qr`, sobre el merge del Punto 3 (`f5ebfe9`).
+  **Sin migración SQL**: nada de este punto necesita tabla, columna, RLS ni
+  RPC nueva. Detalle en `docs/ASSET_QR.md`.
+- Identidad del QR: exclusivamente `assets.id`. `assets.qr_code` permanece
+  reservada, intacta y sin uso funcional (no se lee ni se escribe).
+- Payload: `<VITE_PUBLIC_APP_URL>/#assets?org=<org_uuid>&assetId=<asset_uuid>`,
+  construido con `buildAssetQrUrl` (`src/lib/assetQr.ts`) reutilizando
+  `buildEntityHash`. Nunca depende de nombre/código/sede/jerarquía/estado.
+- `EntityNavigationTarget` gana `assetId?: string` con clave de query
+  `assetId`, deliberadamente distinta de la clave `asset` que ya usaba
+  `preventiveAssetId` (`#preventive-maintenance?asset=…`, sin cambios) — cero
+  colisión, verificado con round-trips reales de `parseEntityHash`/`buildEntityHash`.
+- `Dashboard` pasa `focusAssetId` a `AssetsView`, que resuelve el foco una
+  sola vez por `organizationId + assetId` tras cargar los activos: si existe
+  lo selecciona (activando "Ver archivados" si corresponde), y si no existe,
+  es de otro tenant o la RLS lo oculta, muestra siempre el mismo aviso
+  genérico. `AssetTree` expande los ancestros del nodo enfocado y hace scroll
+  hasta él en memoria, sin ninguna consulta adicional.
+- Login/retorno: `ProtectedRoute` (`App.tsx`) guarda `{pathname, hash}` de
+  esta misma app en `location.state` al redirigir a `/login`;
+  `resolveSafeLoginReturnTarget` (`entityNavigation.ts`) solo acepta
+  `pathname:'/'` + un hash cuya vista esté en `ALL_DASHBOARD_VIEWS` — lista
+  blanca de comparación exacta, así que ninguna URL externa, `//host`,
+  `javascript:` o vista desconocida puede pasarla. Documentado: una futura
+  OAuth externa real necesitaría persistencia distinta (no `location.state`).
+- Multiempresa: reutiliza tal cual la lógica `?org=` existente de Dashboard.
+- Generación 100% local con `qrcode.react@4.2.0` (verificada antes de
+  instalar: ISC, sin dependencias runtime, peer React 18 compatible) — SVG
+  256px nivel M para pantalla/descarga, canvas oculto 1024px para el PNG.
+  Descarga PNG/SVG y etiqueta de impresión 70×40mm (iframe oculto, sin
+  ventanas emergentes) con nombre/código del activo escapados
+  estrictamente antes de insertarse en el HTML; nada se sube a Storage/R2/BD.
+- Permisos: ver QR y copiar enlace para cualquier miembro con acceso a
+  Activos; descargar e imprimir solo owner/admin/manager (`canManageAssets`,
+  sin ampliar RLS). El payload nunca lleva JWT/tokens/datos personales; el
+  UUID no es autorización, toda lectura sigue pasando por sesión + tenant + RLS.
+- Verificado localmente: `supabase db reset --local` + **412 checks pgTAP**
+  como regresión (sin cambios de esquema), y **69 checks en Node** (script
+  temporal fuera del repo) cubriendo construcción/round-trip del deep link,
+  contrato preventivo intacto, `resolveSafeLoginReturnTarget` contra intentos
+  de open redirect, filename/escapado HTML, normalización de
+  `VITE_PUBLIC_APP_URL` y — de extremo a extremo — el QR real (`qrcode.react`
+  vía `react-dom/server`, rasterizado con `sharp`) decodificado con un lector
+  real (`jsQR`) contra el payload exacto esperado.

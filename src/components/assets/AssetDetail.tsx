@@ -31,6 +31,7 @@ import type { UseAssetTrafficLightResult } from '@/hooks/useAssetTrafficLight';
 import type { Asset, AssetCriticality, AssetNodeType, AssetStatus } from '@/types/asset';
 import { ASSET_NODE_TYPE_ORDER, ASSET_NODE_TYPE_LABELS, ASSET_EDITABLE_STATUSES, ASSET_CRITICALITY_ORDER, ASSET_CRITICALITY_LABELS, RESPONSIBLE_UNAVAILABLE_LABEL, getAssetStatusBadgeClass } from '@/lib/assetLabels';
 import { PlannerSelect } from '@/components/members/PlannerSelect';
+import { AssetQrDialog } from '@/components/assets/AssetQrDialog';
 import { useCoordinationContacts } from '@/hooks/useCoordinationContacts';
 import { useOrganizationPlanners } from '@/hooks/useOrganizationPlanners';
 import { TRAFFIC_LIGHT_BADGE_CLASS, TRAFFIC_LIGHT_DOT_CLASS, TRAFFIC_LIGHT_LABELS, TRAFFIC_LIGHT_SOURCE_LABELS } from '@/lib/trafficLightLabels';
@@ -118,6 +119,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState<EditForm | null>(null);
   const [assessmentDialogOpen, setAssessmentDialogOpen] = useState(false);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [latestAssessment, setLatestAssessment] = useState<CriticalityAssessment | null>(null);
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
 
@@ -451,11 +453,11 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
               <Camera className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex flex-col items-center justify-center p-4 border rounded-lg">
-            <QrCode className="h-16 w-16 text-muted-foreground mb-2" />
-            <p className="text-xs text-muted-foreground text-center">
-              {asset.qrCode ? asset.qrCode : 'Código QR pendiente'}
-            </p>
+          <div className="flex flex-col items-center justify-center gap-2 p-4 border rounded-lg">
+            <QrCode className="h-12 w-12 text-muted-foreground" />
+            <Button size="sm" variant="outline" onClick={() => setQrDialogOpen(true)}>
+              Código QR
+            </Button>
           </div>
         </div>
 
@@ -738,6 +740,14 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
           void refreshAssets();
           toast({ title: 'Criticidad evaluada', description: `Se guardó una nueva evaluación de criticidad para "${asset.name}".` });
         }}
+      />
+
+      <AssetQrDialog
+        open={qrDialogOpen}
+        onOpenChange={setQrDialogOpen}
+        asset={{ id: asset.id, name: asset.name, code: asset.code }}
+        organizationId={asset.organizationId}
+        canManageAssets={canManageAssets}
       />
     </Card>
   );

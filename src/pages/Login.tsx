@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { resolveSafeLoginReturnTarget } from '@/lib/entityNavigation';
 
 const Login = () => {
   const isDemoUiEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_SEED === 'true';
@@ -15,7 +16,25 @@ const Login = () => {
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+
+  // Where to go after a successful sign-in: the original deep link
+  // ProtectedRoute stashed (e.g. a scanned asset QR that required a login
+  // first), re-validated against a strict allowlist so this can never become
+  // an open redirect — an external origin, "//host", "javascript:", or an
+  // unrecognized view all fall back to a bare "/". Works the same whether
+  // the user already had a session (ProtectedRoute never redirected here) or
+  // just signed in on this form.
+  //
+  // NOTE: this relies on react-router's `location.state`, which does NOT
+  // survive a real cross-origin redirect. If Google OAuth (loginWithGoogle
+  // in AuthContext) is ever wired up on this page, its round trip through
+  // Lovable's own auth domain would lose this state — that flow would need
+  // to persist the return target itself (e.g. sessionStorage) before
+  // starting the redirect, not react-router state.
+  const returnTarget = resolveSafeLoginReturnTarget((location.state as { from?: unknown } | null)?.from)
+    ?? { pathname: '/' as const, hash: '' };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +46,7 @@ const Login = () => {
       const ok = await login(email, password, 'cliente');
       if (ok) {
         toast({ title: 'Inicio de sesión exitoso' });
-        navigate('/', { replace: true });
+        navigate(returnTarget, { replace: true });
       } else {
         toast({
           title: 'Error',
@@ -46,7 +65,7 @@ const Login = () => {
     setSubmitting(false);
     if (ok) {
       toast({ title: 'Acceso demo' });
-      navigate('/', { replace: true });
+      navigate(returnTarget, { replace: true });
     } else {
       toast({ title: 'Error', description: 'No se pudo iniciar sesión demo', variant: 'destructive' });
     }
