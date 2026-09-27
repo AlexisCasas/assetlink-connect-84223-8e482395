@@ -19,6 +19,8 @@ export const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   preventive_maintenance_planned: 'Mantenimiento preventivo planificado',
   preventive_maintenance_completed: 'Mantenimiento preventivo completado',
   preventive_maintenance_skipped: 'Mantenimiento preventivo omitido',
+  preventive_maintenance_due: 'Mantenimiento preventivo próximo a vencer',
+  preventive_maintenance_overdue: 'Mantenimiento preventivo vencido',
   quote_submitted: 'Cotización recibida',
   quote_approved: 'Cotización aprobada',
   quote_rejected: 'Cotización no seleccionada',
@@ -38,6 +40,8 @@ const OPERATIONAL_NOTIFICATION_TYPES = new Set([
   'preventive_maintenance_planned',
   'preventive_maintenance_completed',
   'preventive_maintenance_skipped',
+  'preventive_maintenance_due',
+  'preventive_maintenance_overdue',
 ]);
 
 export const isOperationalNotificationType = (type: string) => OPERATIONAL_NOTIFICATION_TYPES.has(type);

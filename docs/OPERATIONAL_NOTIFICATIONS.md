@@ -94,22 +94,30 @@ fila de broadcast: inserta una fila **por cada miembro calificado**
 = ese miembro), para que RLS la oculte correctamente de cualquier otro
 rol de la misma organización.
 
-## 5. `generate_operational_due_notifications()` — sin cron externo
+## 5. `generate_operational_due_notifications()` — superado por pg_cron (Fase 1 · Punto 8)
 
-No hay scheduler ni Edge Function con cron en esta fase. La función se
-llama desde el frontend, en tres puntos (todos con manejo best-effort —
-un fallo aquí nunca bloquea la carga real de datos):
-
-- `useOrganizationNotifications.ts` → cada vez que se cargan notificaciones
-  (montaje del centro de notificaciones, apertura del dropdown de la
-  campana — que vive en el Sidebar, siempre montado, así que esto cubre
-  en la práctica cualquier navegación dentro de la app).
-- `useWorkOrders.ts` → cada `refetch()` de la lista de órdenes de trabajo.
+**Actualizado en Fase 1 · Punto 8** (ver `docs/AUTOMATIC_ALERTS.md`): la
+generación de `work_order_due_soon`/`work_order_overdue` ya no depende de
+que alguien tenga la app abierta. Un job `pg_cron` (`automatic-alert-generation`,
+cada hora) llama a `generate_operational_due_notifications_internal()` —una
+copia sin `auth.uid()` del mismo criterio, invocable solo por el wrapper—
+a través de `run_automatic_alert_generation()`. El frontend
+(`useOrganizationNotifications.ts`) dejó de llamar a la función pública.
 
 Ventana: `due_at` entre ahora y +24 horas → `work_order_due_soon`;
 `due_at < ahora` → `work_order_overdue`. Ambas excluyen OT en estado
-`completed`/`closed`. Idempotente por diseño (§3) — llamarla con la
-frecuencia que sea nunca duplica.
+`completed`/`closed`, y ahora además exigen organización activa y
+destinatario activo. Idempotente por diseño (§3) — correr el generador con
+la frecuencia que sea nunca duplica.
+
+**Deuda temporal documentada**: `generate_operational_due_notifications()`
+(la función pública original, con su propio `auth.uid()`) sigue existiendo
+y **conserva su `GRANT EXECUTE` a `authenticated`** — no se revocó en la
+migración del Punto 8 a propósito, para no romper nada si el cron o el
+frontend fallaran en producción antes de verificarse. El frontend ya no la
+llama. Revocar ese grant queda para una migración exclusiva posterior, una
+vez confirmado el cron + frontend en producción — ver
+`docs/AUTOMATIC_ALERTS.md`.
 
 ## 6. Seguridad
 
@@ -153,9 +161,9 @@ frecuencia que sea nunca duplica.
   `notifications`/`unreadCount`/`markAsRead`/`markAllAsRead` ya
   funcionaban correctamente para el modelo nuevo sin tocarlos (la
   consulta sigue siendo por `organization_id`; RLS ya filtra por
-  destinatario de forma transparente). Único agregado: la llamada
-  best-effort a `generate_operational_due_notifications()` al inicio de
-  `loadNotifications`.
+  destinatario de forma transparente). Desde Fase 1 · Punto 8 es un hook
+  de solo lectura/marcado — ya no dispara ninguna generación de alertas
+  (eso corre server-side vía `pg_cron`, ver §5 y `docs/AUTOMATIC_ALERTS.md`).
 - `NotificationList.tsx`: badge de prioridad, referencia textual a la
   entidad, filtro "Todas" / "Operativas" (cliente-side, sobre los datos ya
   cargados — sin nueva consulta).
@@ -208,12 +216,10 @@ frecuencia que sea nunca duplica.
 
 - **Email, WhatsApp, push, cualquier canal externo** — fuera de alcance
   explícito de esta fase.
-- **Scheduler/cron real** — `generate_operational_due_notifications()` se
-  dispara desde la carga de la app, no desde un job periódico
-  independiente; una OT que se vuelve vencida sin que nadie abra la app
-  no genera notificación hasta la siguiente carga.
+- **Scheduler/cron real** — resuelto en Fase 1 · Punto 8, ver
+  `docs/AUTOMATIC_ALERTS.md`.
 - **Preferencias de notificación** (silenciar tipos, elegir canal, etc.)
   — no implementado.
-- **Inspecciones próximas/vencidas** — tipos reservados
-  (`inspection_due_soon_future`/`inspection_overdue_future`), sin tabla
-  de inspecciones ni lógica; se implementará cuando exista ese módulo.
+- **Inspecciones próximas/vencidas** — implementado en Fase 1 · Punto 8
+  (`inspection_due_soon_future`/`inspection_overdue_future`), ver
+  `docs/INSPECTION_SCHEDULING_ALERTS.md` y `docs/AUTOMATIC_ALERTS.md`.

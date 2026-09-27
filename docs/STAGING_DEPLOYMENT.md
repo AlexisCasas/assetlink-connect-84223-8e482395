@@ -100,6 +100,31 @@ Antes de invitar usuarios reales en staging/producción, ver
 9. Probar el flujo completo con un correo real (no ficticio): invitar,
    aceptar como usuario nuevo, invitar a un usuario ya existente, aceptar.
 
+## Alertas automáticas (Fase 1 · Punto 8)
+
+Antes de desplegar en staging/producción, ver `docs/AUTOMATIC_ALERTS.md`
+para el detalle completo. Checklist mínimo:
+
+1. La migración `20260927150952_automatic_alerts_schedule.sql` hace
+   `CREATE EXTENSION IF NOT EXISTS pg_cron` — en un proyecto Supabase
+   hospedado esto requiere que `pg_cron` esté disponible/habilitado para el
+   proyecto (Database → Extensions). Si el `db push` falla en ese paso,
+   habilitar la extensión desde el dashboard antes de reintentar.
+2. Los horarios de `cron.schedule` están en **UTC/GMT** (documentado por
+   Supabase), no en la zona horaria local del servidor ni del navegador.
+3. Después de desplegar, confirmar en `cron.job` que existen y están
+   activos `automatic-alert-generation` (`5 * * * *`) y
+   `automatic-alert-history-cleanup` (`30 3 * * *`), y tras la primera hora
+   confirmar en `cron.job_run_details` que `automatic-alert-generation`
+   corrió con `status = 'succeeded'`.
+4. **Deuda temporal a revocar después**: `generate_operational_due_notifications()`
+   y `generate_inspection_due_notifications()` (las funciones públicas
+   originales) conservan su `GRANT EXECUTE` a `authenticated` en esta
+   migración a propósito — el frontend ya no las llama, pero el grant no se
+   revoca todavía. Una vez verificado que el cron + frontend funcionan
+   correctamente en producción, aplicar una migración exclusiva que las
+   revoque (ver `docs/AUTOMATIC_ALERTS.md`).
+
 ## Comportamiento ante configuración incompleta
 
 La aplicación valida `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` al cargar.

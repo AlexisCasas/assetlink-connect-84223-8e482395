@@ -68,6 +68,14 @@ Las acciones generan una sola fila `asset_events`: `preventive_plan_created`, `m
 
 Planificado/completado/omitido notifican al responsable y a owner/admin/manager mediante deduplicación existente. El `entity_type` es `preventive_maintenance_occurrence`; el enlace canónico es `#preventive-maintenance?plan=<uuid>&occurrence=<uuid>`.
 
+**Alertas de vencimiento (Fase 1 · Punto 8)**: además de los tres eventos de ciclo de vida de arriba, `generate_preventive_due_notifications()` (ver `docs/AUTOMATIC_ALERTS.md`) corre cada hora vía `pg_cron` y emite `preventive_maintenance_due`/`preventive_maintenance_overdue` para toda ocurrencia `open`/`planned` de un plan activo cuya ficha no esté archivada y cuya organización esté activa:
+
+- **Planes calendario**: `due` cuando `due_at - planning_lead_days <= now() <= due_at`; `overdue` cuando `now() > due_at`.
+- **Planes por medidor**: se usa la última lectura *efectiva* (`voided_at IS NULL`, la más reciente por `recorded_at`) del medidor del plan; `due` cuando esa lectura cae en `[due_meter_value - meter_lead_value, due_meter_value]`; `overdue` cuando la supera. Un medidor inactivo o sin ninguna lectura efectiva no genera alerta.
+- Destinatarios: el `responsible_member_id` del plan (si existe y está activo) + owner/admin/manager activos, deduplicados — un responsable que además es manager recibe una sola notificación, no dos.
+- Reutiliza el mismo `entity_type` (`preventive_maintenance_occurrence`) y la misma navegación que los tres eventos de ciclo de vida — no se agregó un mapeo nuevo en `notificationEntityReference`.
+- `due` usa la prioridad propia del plan; `overdue` siempre usa `'urgent'`.
+
 ## UI
 
 La vista `preventive-maintenance` contiene:
@@ -106,7 +114,7 @@ Con datos productivos no se recomienda un `DROP`: desactivar la UI y los planes,
 
 ## Limitaciones y pendientes
 
-- La planificación es deliberadamente manual/event-driven; esta entrega no incorpora cron, scheduler ni generación masiva automática.
+- La planificación de ciclos (crear/completar/omitir una ocurrencia) sigue siendo deliberadamente manual/event-driven; esta entrega no incorpora generación masiva automática de ocurrencias. Lo que sí se automatizó en Fase 1 · Punto 8 es la **alerta** de vencimiento de ocurrencias ya existentes (`preventive_maintenance_due`/`preventive_maintenance_overdue`, cada hora vía `pg_cron`) — ver `docs/AUTOMATIC_ALERTS.md`.
 - Los materiales del snapshot son informativos: no reservan ni descuentan inventario.
 - La orden externa se registra mediante referencia, proveedor y enlace; su ciclo de vida fuera de OneFacility no se sincroniza automáticamente.
 - Antes del despliegue conviene ejecutar las pruebas manuales con usuarios reales de cada rol y confirmar los enlaces profundos desde el centro de notificaciones.
