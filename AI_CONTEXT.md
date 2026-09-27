@@ -2217,3 +2217,107 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   sin regresiones sobre el baseline. Nota local: tras `db reset` con
   `functions serve` ya lanzado, Auth puede enviar las plantillas de fábrica;
   para QA de correos hacer `supabase stop/start` antes.
+
+## Fase 1 · Punto 7 — Cloudflare R2 Foundation
+
+- Rama `feature/phase1-r2-foundation`. Fundación de infraestructura,
+  **sin UI** (fotos/documentos de activos es Punto 10). Migración
+  `20260927012526_asset_file_access_authorization.sql`. Detalle completo en
+  `docs/R2_FOUNDATION.md`.
+- No toca `asset_documents`, `assets.image_url`, `AssetDetail.tsx`,
+  `useAssets.ts` ni ningún bucket legacy de Supabase Storage — ambos
+  sistemas de almacenamiento coexisten.
+- SDK verificado antes de usar: `npm view aws4fetch` → versión `1.0.20`,
+  licencia MIT, sin dependencias. Se usa como `npm:aws4fetch@1.0.20`,
+  únicamente dentro de `supabase/functions/_shared/r2.ts` (Edge Runtime) —
+  nunca en el bundle del frontend (verificado por grep en `dist/`).
+- RPC `authorize_asset_file_access(p_asset_id, p_operation)`,
+  `SECURITY DEFINER`, replica exactamente las reglas RLS de `assets`:
+  `read` para cualquier miembro activo (incluido technician/viewer;
+  archivado sigue siendo legible); `write`/`delete` solo owner/admin/manager
+  (archivado siempre rechaza, incluso para el owner). `REVOKE ALL FROM
+  PUBLIC, anon` — `anon` no tiene ni el privilegio de ejecutar la función
+  (falla con `42501` de Postgres antes de la lógica interna).
+- Object key generada **exclusivamente en el servidor**
+  (`_shared/assetFileKeys.ts`): `organizations/<org>/assets/<asset>/
+  {photos,documents}/<uuid>.<ext>`. El cliente nunca envía una key en
+  `create-upload`, solo `asset_id`/`kind`/`content_type`/`size_bytes`.
+  `parseAssetFileKey` usa dos regex totalmente anclados (uno por kind) que
+  impiden por construcción traversal, `%`-encoding, segmentos extra,
+  mayúsculas y una mezcla kind/extensión inválida (`photos/*.pdf`).
+- **Cross-check org/asset de la key**: toda acción salvo `create-upload`
+  compara el `organization_id` embebido en la key contra el que devuelve la
+  RPC para el `asset_id` **también embebido en esa misma key** — cierra el
+  caso de una key con el segmento de organización editado a mano.
+  Verificado en vivo: 403 real.
+- Única Edge Function `asset-files` (4 acciones: `create-upload`,
+  `confirm-upload`, `create-download`, `delete`) en vez de cuatro funciones
+  separadas — autorización/parseo/config de R2 son idénticos entre
+  acciones. **DELETE nunca es firmado**, siempre server-side (una URL de
+  borrado filtrada sería una capacidad destructiva al portador).
+- `confirm-upload` no escribe nada en BD (foundation): HEAD real → tamaño
+  real (nunca el `size_bytes` que declaró el cliente) → Content-Type real →
+  `Range GET` de 16 bytes + verificación de magic bytes (JPEG/PNG/WEBP/PDF).
+  Si algo falla, `DELETE` server-side + 422 — nunca queda un objeto a medio
+  validar bajo una key con forma legítima.
+- MIME: fotos `image/jpeg|png|webp` (10 MB), documentos `application/pdf`
+  (25 MB). Nunca SVG/HTML/JS/Office en esta fase. `Content-Type` es parte
+  de la firma del PUT.
+- `getR2Config()` falla cerrado, nunca loguea valores, valida formato de
+  `R2_ACCOUNT_ID`/`R2_BUCKET_NAME`, y además rechaza explícitamente los 4
+  placeholders literales de `.env.example` — hallazgo real de las pruebas
+  unitarias: `your-r2-bucket-name` es, por accidente, un nombre de bucket
+  sintácticamente válido, y `your-r2-access-key-id` pasa la heurística de
+  longitud mínima; la validación de formato por sí sola no los atrapaba.
+  `R2_PUBLIC_BASE_URL` se eliminó de `.env.example` (bucket privado, sin
+  URL pública).
+- `src/lib/assetFiles.ts`: cliente fino y tipado, sin UI, fija el contrato
+  para Punto 10 (`createAssetUpload`, `confirmAssetUpload`,
+  `createAssetDownload`, `deleteAssetFile`, `putFileToUploadUrl`).
+- Verificado: **629/629 pgTAP** (599 previos + 30 nuevos en
+  `asset_file_access_authorization.test.sql`; control negativo: 15/30
+  detectan una regresión si se neutraliza la RPC). **69/69 pruebas puras**
+  (keys, MIME, tamaños, magic bytes, `getR2Config`) en script temporal
+  fuera del repo. **21/21 wiring smoke** local (`supabase functions serve`
+  real + credenciales R2 sintácticamente válidas pero falsas): autorización
+  real por rol, cross-tenant real, activo archivado real, manipulación de
+  keys rechazada, `anon` con 403; encontrado y corregido en el camino: el
+  `42501` de Postgres para `anon` no coincidía con ningún patrón de mensaje
+  y caía a 400 — ahora se mapea explícitamente a 403.
+- **E2E real contra Cloudflare R2 (`one-facility-dev-private`), ejecutado**:
+  bucket real, credenciales reales en `supabase/functions/.env`,
+  `supabase functions serve --env-file supabase/functions/.env`. Fixtures
+  solo en Supabase local. **68/68 checks** — happy path completo (PUT real
+  → confirm-upload con HEAD/magic bytes reales → GET real → **SHA-256
+  idéntico** → delete → 404 real), manager, technician rechazado,
+  cross-tenant sin ninguna URL devuelta, 8 variantes de key manipulada
+  rechazadas, las 4 MIME permitidas subidas realmente, 3 MIME inválidos
+  rechazados antes de firmar, MIME spoof detectado y borrado por
+  confirm-upload (404 confirmado), oversize rechazado antes de firmar, URL
+  expirada rechazada por R2 (403 real, solo para la prueba — los 300 s de
+  producción no cambiaron), activo archivado (read sí, write/delete no),
+  CORS verificado a nivel HTTP (preflight + GET/PUT reales con `Origin:
+  http://localhost:8080`), cleanup completo con 0 objetos remanentes
+  (verificado con un `ListObjectsV2` directo, no expuesto por
+  `asset-files`).
+- **Hallazgo real y corrección de código durante el E2E**: `aws4fetch` con
+  `signQuery: true` por defecto solo firma la cabecera `host`
+  (`X-Amz-SignedHeaders=host`) — un PUT con `Content-Type` distinto al
+  firmado era aceptado por R2 (200), contradiciendo la documentación de
+  Cloudflare. Corregido añadiendo `allHeaders: true` a `signPutUrl`
+  (`_shared/r2.ts`): `X-Amz-SignedHeaders` pasa a `content-type;host` y R2
+  ahora rechaza correctamente (403) un `Content-Type` distinto —
+  confirmado con una subida real.
+- **`Content-Length`**: comportamiento observado sin cambio de
+  arquitectura (por instrucción explícita). La firma de producción actual
+  no incluye `Content-Length`, así que un cuerpo más grande que el
+  `size_bytes` declarado es aceptado por R2 (200) — la garantía real de
+  tamaño sigue siendo, sin cambios, el `HEAD` real de `confirm-upload`. Una
+  prueba ad-hoc confirmó que firmar `Content-Length` (con `allHeaders:
+  true`) SÍ haría que R2 exigiera el tamaño exacto, pero no se implementó.
+- Ninguna URL firmada quedó persistida: barrido de todas las columnas
+  `text`/`varchar`/`jsonb`/`json` del esquema `public` buscando
+  `X-Amz-Signature` → 0 coincidencias. `grep` de `R2_ACCESS_KEY_ID`/
+  `R2_SECRET_ACCESS_KEY` en `src/` y de credenciales/`aws4fetch` en
+  `dist/` → limpio en ambos, con el bucket real ya conectado.
+  Build/typecheck/lint sin regresiones sobre el baseline; pgTAP 629/629.

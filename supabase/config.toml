@@ -24,6 +24,9 @@ verify_jwt = true
 [functions.send-organization-invitation]
 verify_jwt = true
 
+[functions.asset-files]
+verify_jwt = true
+
 # Local-only Auth configuration for the invitation flow (Fase 1 · Punto 6B).
 # Never pushed to remote from this repo (`supabase config push` is not run):
 # staging/production Auth settings — Site URL, Redirect URLs, SMTP, template

@@ -6,7 +6,9 @@ Este documento prepara el despliegue; no ejecuta despliegues ni contiene secreto
 
 - Frontend: Vercel.
 - Backend, Auth, PostgreSQL y Storage: Supabase Cloud.
-- Cloudflare R2: pendiente y opcional; no bloquea staging.
+- Cloudflare R2: fundación desplegada (Fase 1 · Punto 7, `asset-files`),
+  sin UI todavía (Punto 10). Requerido para que esa Edge Function funcione,
+  pero no bloquea el resto de staging.
 
 ## Variables de Vercel
 
@@ -102,5 +104,28 @@ Antes de invitar usuarios reales en staging/producción, ver
 
 La aplicación valida `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` al cargar.
 Si falta alguna, en vez de pantalla blanca muestra una pantalla de configuración
-pendiente. En desarrollo también registra un error claro en la consola. R2 no
-se valida porque todavía es opcional.
+pendiente. En desarrollo también registra un error claro en la consola.
+
+Los 4 secretos R2 (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+`R2_BUCKET_NAME`) son server-side (Edge Function `asset-files`) y fallan
+cerrado: si falta alguno o tiene un formato inválido, la función responde
+500 sin loguear ningún valor — nunca cae a un bucket o cuenta por defecto.
+Ver `docs/R2_FOUNDATION.md`.
+
+## Cloudflare R2 (Fase 1 · Punto 7)
+
+Antes de que `asset-files` pueda operar contra un R2 real:
+
+1. Crear el bucket **completamente privado** (`one-facility-prod-private`;
+   opcionalmente `one-facility-dev-private` para staging/dev). Nunca
+   público, nunca con dominio `r2.dev` ni dominio personalizado.
+2. Crear un token de API "Object Read & Write" **limitado a ese bucket**
+   (nunca un token de cuenta completo), uno distinto por entorno.
+3. Configurar CORS del bucket — ver `docs/R2_FOUNDATION.md` para el JSON
+   exacto (métodos `PUT`/`GET` únicamente; `HEAD`/`DELETE` los ejecuta el
+   servidor y no pasan por el navegador).
+4. Cargar los 4 secretos en Supabase Functions (nunca en Vercel, nunca con
+   prefijo `VITE_`).
+5. Desplegar `asset-files` (`supabase functions deploy asset-files`).
+6. No hay UI todavía (Punto 10) — validar con las pruebas descritas en
+   `docs/R2_FOUNDATION.md`.

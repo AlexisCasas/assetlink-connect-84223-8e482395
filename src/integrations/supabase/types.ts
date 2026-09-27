@@ -4211,6 +4211,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      authorize_asset_file_access: {
+        Args: { p_asset_id: string; p_operation: string }
+        Returns: string
+      }
       build_preventive_scope_snapshot: {
         Args: { p_plan_id: string }
         Returns: Json
