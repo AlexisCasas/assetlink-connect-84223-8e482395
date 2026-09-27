@@ -71,6 +71,33 @@ Antes de desplegar funciones, cargar sus secretos en Supabase Cloud. Luego:
 9. Confirmar en consola que el flujo no genera 403 de `providers`,
    `assignments` ni tablas legacy de chat.
 
+## Invitaciones productivas de usuarios (Fase 1 · Punto 6B)
+
+Antes de invitar usuarios reales en staging/producción, ver
+`docs/USER_INVITATIONS.md` para el detalle completo. Checklist mínimo:
+
+1. **SMTP propio configurado** en Auth → SMTP Settings. El servicio integrado
+   de Supabase solo entrega a direcciones del equipo del proyecto y tiene un
+   límite de 2 correos/hora — no sirve para usuarios externos reales.
+2. **Site URL** = dominio productivo/staging real.
+3. **Redirect URLs** incluye `<dominio>/invitations/accept`.
+4. **Plantillas** "Invite user" y "Magic Link" configuradas con el patrón
+   `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=invite` (o
+   `type=magiclink`) — nunca el enlace `{{ .ConfirmationURL }}` por defecto.
+5. **OTP expiry** = 86400 (24h).
+6. **"Confirm email"** activado y **"Allow new users to sign up"
+   desactivado** — crítico: sin esto, cualquiera podría autoregistrarse con
+   el correo invitado y aceptar la invitación.
+7. Secreto de Edge Function `PUBLIC_APP_URL` cargado (dominio real, con
+   `https://`). Sin él, `send-organization-invitation` falla cerrado.
+8. Desplegar `send-organization-invitation` y las Edge Functions `admin-*`
+   modificadas (`admin-update-organization-member`,
+   `admin-create-organization`, `admin-create-user-and-add-member`,
+   `admin-add-existing-member`); `admin-invite-organization-member` puede
+   seguir desplegada (responde 410) o retirarse.
+9. Probar el flujo completo con un correo real (no ficticio): invitar,
+   aceptar como usuario nuevo, invitar a un usuario ya existente, aceptar.
+
 ## Comportamiento ante configuración incompleta
 
 La aplicación valida `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` al cargar.

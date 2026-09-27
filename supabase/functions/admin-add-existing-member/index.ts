@@ -1,5 +1,4 @@
 import {
-  assertOrganizationAdmin,
   assertPlatformAdmin,
   createServiceClient,
   errorResponse,
@@ -12,6 +11,15 @@ import {
 } from '../_shared/adminAuth.ts';
 
 const allowedRoles = new Set(['owner', 'admin', 'manager', 'requester', 'quote_manager', 'technician', 'operator', 'viewer']);
+
+// Fase 1 · Punto 6B: this is NOT the productive flow (that is
+// send-organization-invitation → accept_organization_invitation, which
+// always requires the invited person's own consent). This function adds a
+// membership immediately, without any acceptance step, so it is now
+// restricted to platform admin only — no longer usable by a tenant
+// owner/admin — and not wired into any new UI. Kept for platform-level
+// internal tooling (e.g. AdminConsole), not deprecated outright because
+// nothing confirmed it is fully unused there.
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -38,12 +46,7 @@ Deno.serve(async (req) => {
     if (organization.organization_type === 'platform_admin') return errorResponse('Platform administrator memberships are not managed by this function', 403);
     if (organization.status !== 'active') return errorResponse('Organization is not active', 409);
 
-    try {
-      await assertPlatformAdmin(caller.id);
-    } catch (error) {
-      if (!isForbidden(error)) throw error;
-      await assertOrganizationAdmin(caller.id, organizationId);
-    }
+    await assertPlatformAdmin(caller.id);
 
     const { data: existingUser, error: userError } = await service.auth.admin.getUserById(userId);
     if (userError || !existingUser.user) return errorResponse('user_id does not identify an existing user');

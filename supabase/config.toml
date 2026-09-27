@@ -20,3 +20,32 @@ verify_jwt = true
 
 [functions.admin-archive-organization]
 verify_jwt = true
+
+[functions.send-organization-invitation]
+verify_jwt = true
+
+# Local-only Auth configuration for the invitation flow (Fase 1 · Punto 6B).
+# Never pushed to remote from this repo (`supabase config push` is not run):
+# staging/production Auth settings — Site URL, Redirect URLs, SMTP, template
+# content, OTP expiry — are configured directly in the Supabase dashboard.
+# See docs/USER_INVITATIONS.md "SMTP y configuración externa".
+[auth]
+site_url = "http://127.0.0.1:5173"
+additional_redirect_urls = ["http://127.0.0.1:5173/invitations/accept"]
+jwt_expiry = 3600
+enable_signup = false
+
+[auth.email]
+enable_confirmations = true
+# 24h: the longest a Supabase OTP can live. The invitation itself lasts 7
+# days (organization_invitations.expires_at) — resending regenerates a
+# fresh, valid OTP without touching the invitation's own expiry window.
+otp_expiry = 86400
+
+[auth.email.template.invite]
+subject = "Te invitaron a One Facility"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.magic_link]
+subject = "Tu acceso a One Facility"
+content_path = "./supabase/templates/magic_link.html"

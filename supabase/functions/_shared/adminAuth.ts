@@ -18,11 +18,17 @@ export const createServiceClient = (): SupabaseClient => createClient(
   { auth: { autoRefreshToken: false, persistSession: false } },
 );
 
-export const getAuthenticatedUser = async (req: Request): Promise<User> => {
+/** A client authenticated as the caller (anon key + their JWT in
+ * Authorization), used to run RPCs so Postgres resolves auth.uid() to the
+ * real caller and every authorization rule enforced in SQL — role,
+ * hierarchy, tenant — still applies exactly as it would from the browser.
+ * Never use createServiceClient() for these calls: that would bypass the
+ * RPC's own auth.uid()-based checks entirely. */
+export const createCallerClient = (req: Request): SupabaseClient => {
   const authorization = req.headers.get('Authorization');
   if (!authorization?.startsWith('Bearer ')) throw new Error('Unauthorized');
 
-  const userClient = createClient(
+  return createClient(
     environment('SUPABASE_URL'),
     environment('SUPABASE_ANON_KEY'),
     {
@@ -30,6 +36,10 @@ export const getAuthenticatedUser = async (req: Request): Promise<User> => {
       global: { headers: { Authorization: authorization } },
     },
   );
+};
+
+export const getAuthenticatedUser = async (req: Request): Promise<User> => {
+  const userClient = createCallerClient(req);
   const { data: { user }, error } = await userClient.auth.getUser();
   if (error || !user) throw new Error('Unauthorized');
   return user;

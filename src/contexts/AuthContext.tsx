@@ -28,6 +28,10 @@ interface AuthContextType {
   currentOrganization: Organization | null;
   currentMembership: OrganizationMember | null;
   setCurrentOrganization: (organizationId: string | null) => void;
+  /** Re-hydrates organizations/memberships for the current session (e.g.
+   * right after accept_organization_invitation) without a full sign-out/
+   * sign-in round trip. Returns false only if a sign-out raced ahead. */
+  refreshOrganizations: (preferredOrganizationId?: string) => Promise<boolean>;
   loading: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<boolean>;
   loginWithGoogle: () => Promise<void>;
@@ -142,12 +146,19 @@ async function loadOrganizations(userId: string) {
 
   if (error || !data) return { organizations: [] as Organization[], memberships: [] as OrganizationMember[] };
 
+  // An archived/suspended organization is dropped from BOTH arrays (never
+  // just filtered out of `organizations` while leaving a dangling
+  // membership behind) — a user must never keep operating inside an
+  // organization that is no longer active, including a platform admin
+  // whose own organization row happens to still be 'active' (unaffected).
+  const activeRows = data.filter((membership) => membership.organizations?.status === 'active');
+
   return {
-    organizations: data
+    organizations: activeRows
       .map((membership) => membership.organizations)
       .filter((organization): organization is OrganizationRow => organization !== null)
       .map(toOrganization),
-    memberships: data.map(toMembership),
+    memberships: activeRows.map(toMembership),
   };
 }
 
@@ -173,8 +184,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentOrganization, setCurrentOrganizationState] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const setAuthState = (nextUser: User | null, organizationData: { organizations: Organization[]; memberships: OrganizationMember[] }) => {
-    const nextOrganization = getPreferredOrganization(organizationData.organizations, currentOrganization?.id);
+  const setAuthState = (
+    nextUser: User | null,
+    organizationData: { organizations: Organization[]; memberships: OrganizationMember[] },
+    preferredOrganizationId?: string,
+  ) => {
+    const nextOrganization = getPreferredOrganization(organizationData.organizations, preferredOrganizationId ?? currentOrganization?.id);
     const organizationUser = nextUser
       ? { ...nextUser, role: toLegacyUserRole(nextOrganization) }
       : null;
@@ -346,6 +361,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Used after accept_organization_invitation (and available for any other
+  // flow that changes memberships server-side without a full sign-in
+  // event): re-hydrates organizations/memberships for the CURRENT session
+  // through the same single-flight loadOrganizations, then selects
+  // `preferredOrganizationId` if it made it through the reload (e.g. the
+  // organization just accepted) instead of whatever was previously current.
+  // Returns false if a sign-out raced ahead (same discard semantics as
+  // hydrateSession) so the caller never navigates on stale state.
+  const refreshOrganizations = async (preferredOrganizationId?: string): Promise<boolean> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return false;
+
+    const myGeneration = sessionGenerationRef.current;
+    const organizationData = await loadOrganizationsSingleFlight(authUser.id);
+    if (sessionGenerationRef.current !== myGeneration) return false;
+
+    setAuthState(
+      loadProfile({ user: { id: authUser.id, email: authUser.email, user_metadata: authUser.user_metadata } }),
+      organizationData,
+      preferredOrganizationId,
+    );
+    return true;
+  };
+
   const currentMembership = currentOrganization
     ? memberships.find((membership) => membership.organizationId === currentOrganization.id) ?? null
     : null;
@@ -360,6 +399,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         currentOrganization,
         currentMembership,
         setCurrentOrganization,
+        refreshOrganizations,
         loading,
         login,
         loginWithGoogle,

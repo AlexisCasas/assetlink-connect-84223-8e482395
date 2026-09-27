@@ -2109,3 +2109,111 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   54 de esos checks fallan. E2E local con `supabase functions serve`: 7 Edge
   Functions `admin-*`, la consulta de `OrganizationProfile` y 10 intentos de
   escalamiento vía PostgREST bloqueados con `42501`.
+
+## Fase 1 · Punto 6B — Invitación productiva de usuarios
+
+- Rama `feature/phase1-production-user-invitations`, sobre el hardening de
+  `fix/organization-access-hardening`. Migración
+  `20260926205830_production_user_invitations.sql`. Detalle completo en
+  `docs/USER_INVITATIONS.md`.
+- Flujo: owner/admin crea invitación → correo real (Invite o Magic Link
+  según exista o no la cuenta) → el usuario se autentica → **acepta
+  explícitamente** → recién ahí se crea la membership. Nunca automática por
+  crear la invitación o abrir el correo.
+- RPCs `SECURITY DEFINER` nuevas: `create_/resend_/revoke_/accept_organization_invitation`,
+  `get_my_organization_invitation`, `get_my_pending_invitations`,
+  `list_organization_access`, `update_organization_member`,
+  `can_manage_organization_role` (jerarquía centralizada: owner cualquier
+  rol, admin cualquier rol excepto owner, manager e inferiores nada), y
+  `get_auth_user_state_by_email`/`mark_invitation_sent` (solo
+  `service_role`, nunca `authenticated` — evita enumerar usuarios y evita
+  registrar un envío que en realidad falló).
+- `accept_organization_invitation` nunca recibe el rol del cliente; siempre
+  lo toma de la invitación. Idempotente (`already_accepted`). Gotcha de
+  PL/pgSQL real encontrado y corregido: `RETURNS TABLE(..., organization_id
+  uuid)` colisiona con `organization_members.organization_id` en `ON
+  CONFLICT (organization_id, user_id)` — resuelto con `#variable_conflict
+  use_column` (mismo problema y misma solución en `list_organization_access`
+  con su columna `kind`).
+- Estado efectivo (`pending` + `expires_at <= now()` → `expired`) sin cron;
+  `accept_organization_invitation` NO puede normalizar la fila físicamente
+  antes de un `RAISE EXCEPTION` en la misma llamada (Postgres deshace esa
+  escritura junto con la excepción) — verificado con una prueba dedicada.
+- Edge Function nueva `send-organization-invitation` (`create`/`resend`):
+  ejecuta la RPC con el JWT del caller (nunca `service_role`, para no
+  duplicar la autorización), y solo usa `service_role` para
+  `get_auth_user_state_by_email` y `mark_invitation_sent`. El envío de
+  correo usa un cliente anon-key dedicado para el magic link (nunca
+  `service_role`), igual que lo haría un usuario real.
+- `type` real de Supabase Auth verificado en local con Mailpit (no asumido):
+  `invite` para usuario nuevo, `magiclink` para usuario existente.
+- `admin-update-organization-member` reescrita: delega en
+  `update_organization_member` con el JWT del caller — ya no tiene lógica de
+  autorización propia ni la protección de "último owner" no atómica que
+  tenía antes.
+- `admin-create-user-and-add-member`: **ya no sobrescribe la contraseña de
+  un usuario existente** (era un vector real de toma de cuenta). Legacy,
+  solo staging/demo; oculta en AdminConsole cuando `VITE_APP_ENV ===
+  'production'`.
+- `admin-add-existing-member`: restringida a platform admin únicamente.
+  `admin-invite-organization-member`: retirada, responde 410.
+- `admin-create-organization` con `owner_email`: ya no inserta una
+  invitación "muerta" directa; usa el mismo flujo productivo (RPC + envío
+  real). Fallo parcial documentado: la organización creada nunca se
+  duplica si falla la invitación del owner.
+- Secreto de Edge Function nuevo `PUBLIC_APP_URL` (server-side, no
+  `VITE_PUBLIC_APP_URL`): falla cerrado si falta o es inválido — verificado
+  en vivo apagando el secreto (502 con `invitation_id` para reintentar, fila
+  intacta).
+- Ruta `/invitations/accept` fuera de `ProtectedRoute` (evita el dead-end de
+  `NoOrganizationScreen` para un usuario recién invitado sin memberships).
+  `resolveSafeLoginReturnTarget` ampliado para admitir exactamente
+  `/invitations/accept?invitation=<uuid>`, sin abrir open redirect.
+  `NoOrganizationScreen` ahora ofrece sus invitaciones pendientes
+  (`get_my_pending_invitations`).
+- `AuthContext.refreshOrganizations(preferredOrganizationId?)`: reutiliza el
+  single-flight existente; tras aceptar, refresca y selecciona la
+  organización sin F5. `loadOrganizations` ahora descarta organizaciones
+  archivadas/suspendidas de ambos arreglos (nunca deja una membership
+  huérfana).
+- Vista nueva **Usuarios** (`#users`), solo owner/admin de una organización
+  no `platform_admin` (nunca reemplaza Administración/AdminConsole, que
+  sigue siendo de plataforma). Un admin nunca ve `owner` como rol asignable.
+- Auditoría final — `can_manage_invitation_target`: si el correo invitado ya
+  tiene una membership (inactiva) en la organización, aceptar la reactiva
+  con el rol de la invitación. Antes un admin podía así reescribir un
+  **owner desactivado** como `viewer`. Ahora create/resend exigen poder
+  gestionar también el rol actual de esa membership: un admin no puede
+  invitar ni reenviar a un owner inactivo; un owner sí. Función interna, sin
+  `EXECUTE` para ningún rol cliente.
+- Auditoría final — reenvío a usuario creado por Invite y aún sin confirmar:
+  fallaba siempre (se le mandaba Magic Link con `shouldCreateUser:false`,
+  que GoTrue rechaza para cuentas sin confirmar). Ahora solo una cuenta
+  **confirmada** recibe Magic Link; una sin confirmar recibe Invite de nuevo
+  (mismo `auth.users.id`, sin duplicar).
+- Auditoría final — carrera de reenvíos: el cooldown solo miraba
+  `last_sent_at`, que se fija fuera de la transacción (tras el correo), así
+  que N reenvíos simultáneos enviaban N correos. Solución: columna
+  `last_send_attempt_at` (intento **reservado**), fijada por create y por
+  resend dentro del `SELECT ... FOR UPDATE`; el cooldown compara contra
+  `GREATEST(last_send_attempt_at, last_sent_at)`. `last_sent_at` y
+  `send_count` siguen siendo solo envíos **confirmados** (únicamente
+  `mark_invitation_sent`). Un fallo de envío no libera el intento (sin
+  retry storms). Verificado con 5 reenvíos simultáneos tras el cooldown real
+  de 61 s: 1 éxito, 4 rechazados, 1 correo, `send_count` +1, tanto para
+  Magic Link (confirmado) como para Invite (sin confirmar).
+- `send-organization-invitation` responde con un DTO explícito
+  (`id, organization_id, email, invited_name, role, status,
+  effective_status, expires_at, last_sent_at, send_count`), nunca la fila
+  completa (sin `token_hash`, `invited_by`, `accepted_by`, `revoked_by`,
+  `last_send_attempt_at`).
+- Verificado: **599/599 pgTAP** (515 previos + 84 en
+  `organization_invitations.test.sql`), regresión completa tras
+  `supabase db reset --local`. E2E real local con `supabase functions
+  serve` + Mailpit: flujo principal 30/30 (Invite y Magic Link reales,
+  `verifyOtp` real, aceptación, claves del DTO, cooldown, reenvío a usuario
+  sin confirmar, revocada rechazada) y concurrencia 14/14; fallo de entrega
+  y fail-closed de `PUBLIC_APP_URL` verificados en vivo. Build/typecheck/lint
+  sin regresiones sobre el baseline. Nota local: tras `db reset` con
+  `functions serve` ya lanzado, Auth puede enviar las plantillas de fábrica;
+  para QA de correos hacer `supabase stop/start` antes.

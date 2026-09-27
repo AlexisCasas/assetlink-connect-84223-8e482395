@@ -34,7 +34,7 @@ const Login = () => {
   // to persist the return target itself (e.g. sessionStorage) before
   // starting the redirect, not react-router state.
   const returnTarget = resolveSafeLoginReturnTarget((location.state as { from?: unknown } | null)?.from)
-    ?? { pathname: '/' as const, hash: '' };
+    ?? { pathname: '/' as const, search: '', hash: '' };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
