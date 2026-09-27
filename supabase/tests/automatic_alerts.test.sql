@@ -455,11 +455,26 @@ SELECT ok(NOT has_function_privilege('authenticated', 'public.generate_preventiv
 SELECT ok(NOT has_function_privilege('authenticated', 'public.notify_member_counted(uuid,uuid,text,text,text,text,uuid,text,jsonb)', 'EXECUTE'), 'authenticated cannot EXECUTE notify_member_counted');
 SELECT ok(NOT has_function_privilege('authenticated', 'public.cleanup_automatic_alert_history()', 'EXECUTE'), 'authenticated cannot EXECUTE cleanup_automatic_alert_history');
 
--- Deuda temporal documentada: los generadores PÚBLICOS legacy CONSERVAN su
--- grant — verificado explícitamente para no revocarlo por accidente.
-SELECT ok(has_function_privilege('authenticated', 'public.generate_operational_due_notifications()', 'EXECUTE'), 'DEUDA TEMPORAL: authenticated aún conserva EXECUTE sobre el generador público legacy de OT (a revocar en una migración posterior, ver docs/AUTOMATIC_ALERTS.md)');
-SELECT ok(has_function_privilege('authenticated', 'public.generate_inspection_due_notifications()', 'EXECUTE'), 'DEUDA TEMPORAL: authenticated aún conserva EXECUTE sobre el generador público legacy de inspecciones');
+-- Hardening final del rollout: los generadores públicos legacy ya no son
+-- ejecutables por authenticated. La generación depende del wrapper backend
+-- ejecutado por pg_cron.
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'public.generate_operational_due_notifications()',
+    'EXECUTE'
+  ),
+  'authenticated cannot EXECUTE the legacy operational notification generator after rollout hardening'
+);
 
+SELECT ok(
+  NOT has_function_privilege(
+    'authenticated',
+    'public.generate_inspection_due_notifications()',
+    'EXECUTE'
+  ),
+  'authenticated cannot EXECUTE the legacy inspection notification generator after rollout hardening'
+);
 -- automatic_alert_runs: sin acceso para clientes.
 SELECT ok(NOT has_table_privilege('authenticated', 'public.automatic_alert_runs', 'SELECT'), 'authenticated cannot read automatic_alert_runs');
 SELECT ok(NOT has_table_privilege('anon', 'public.automatic_alert_runs', 'SELECT'), 'anon cannot read automatic_alert_runs');

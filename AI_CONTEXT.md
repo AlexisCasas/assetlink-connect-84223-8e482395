@@ -2354,13 +2354,16 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   solo `status`+`SQLSTATE`+mensaje truncado, nunca texto de la consulta,
   stack trace ni secretos). `pg_cron` lo llama cada hora
   (`5 * * * *`, horario UTC/GMT).
-- **Deuda temporal documentada, decisión explícita**: las funciones
-  públicas legacy `generate_operational_due_notifications()` y
-  `generate_inspection_due_notifications()` conservan su `GRANT EXECUTE` a
-  `authenticated` en esta migración (rollout conservador). El frontend
-  (`useOrganizationNotifications.ts`) deja de llamarlas en este mismo PR,
-  pero la revocación del grant queda para una migración exclusiva
-  posterior, tras verificar cron + frontend en producción.
+- - **Hardening final del rollout de alertas**: la migración
+  `20260927171623_remove_legacy_alert_generation_access.sql` revoca `EXECUTE`
+  sobre `generate_operational_due_notifications()` y
+  `generate_inspection_due_notifications()` a `PUBLIC`, `anon` y
+  `authenticated`. `service_role` conserva `EXECUTE` explícito y `postgres`
+  conserva acceso como propietario. El frontend ya no invoca estos
+  generadores; `pg_cron` ejecuta exclusivamente
+  `run_automatic_alert_generation()`.
+- **Validación final**: nueva suite de 6 checks para grants/wrapper/cron;
+  regresión completa `705/705` pgTAP.
 - **Hallazgo real durante las pruebas de concurrencia**: `pg_try_advisory_xact_lock`
   es reentrante para la misma sesión/transacción — una prueba que primero
   llama al wrapper en la propia sesión pgTAP y luego lanza conexiones
@@ -2397,7 +2400,6 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   confirmado un `status = 'succeeded'` real en `cron.job_run_details` con
   su fila correspondiente en `automatic_alert_runs`, y restaurado el
   horario original (`5 * * * *`) vía `supabase db reset --local`.
-- Verificado: **699/699 pgTAP** (629 previos + 70 nuevos en
-  `automatic_alerts.test.sql`; control negativo sobre el hardening de
-  `organization_notifications`: 6 de las 70 aserciones fallan si se
-  reabre el `GRANT` general y se revierte el trigger a su forma anterior).
+- - Verificación final del Punto 8: **705/705 pgTAP** (699 previos + 6 checks
+  del hardening final de acceso legacy). Build OK; typecheck y lint mantienen
+  exactamente el baseline conocido.
