@@ -2403,3 +2403,60 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
 - - Verificación final del Punto 8: **705/705 pgTAP** (699 previos + 6 checks
   del hardening final de acceso legacy). Build OK; typecheck y lint mantienen
   exactamente el baseline conocido.
+
+## Fase 1 · Punto 9A — Permisos delegados Cliente -> Facility Manager (backend)
+
+- Rama `feature/phase1-facility-manager-permissions`. Migración
+  `20260927194923_facility_manager_delegated_permissions.sql`. Detalle en
+  `docs/FACILITY_MANAGER_DELEGATED_PERMISSIONS.md`. **Solo fundación
+  backend**: no amplía RLS de ningún módulo funcional ni toca frontend
+  (ni `types.ts`).
+- **Tres capas**, todas necesarias para el acceso operativo:
+  1. relación empresa -> empresa en `organization_relationships`
+     (`source` = cliente, `target` = FM, `'facility_management'`);
+  2. `facility_management_permissions`: qué delegó el cliente a la
+     **empresa** FM (enum de 21 capacidades `modulo.accion`);
+  3. `facility_management_relationship_members`: qué **personas** del FM
+     atienden a ese cliente. Las personas siguen siendo miembros solo de su
+     FM; ninguna tabla duplica cliente/FM/user_id/rol.
+- Quién administra qué: el cliente (owner/admin) crea la relación, concede
+  permisos, cambia status y ve el equipo, pero **no** asigna personas; el
+  FM (owner/admin) ve su cartera y asigna personas, pero **no** obtiene
+  acceso operativo por eso ni cambia permisos/status. Sin roles nuevos.
+- `has_facility_management_permission(client, permission)` (el helper que
+  usarán las RLS por módulo) exige relación activa, cliente/FM activos,
+  membresía activa **y asignada** y el permiso. No evalúa rol interno (eso
+  lo combina cada módulo) y nunca es `true` por ser owner/admin del FM ni
+  platform_admin. `get_my_facility_management_clients()` = clientes
+  operativos (asignado + active); `get_my_facility_management_portfolio()`
+  = cartera administrativa para owner/admin del FM (todos los status,
+  platform_admin excluido a propósito).
+- Máquina de estados: `pending -> active|suspended|ended`,
+  `active -> suspended|ended`, `suspended -> active|ended`,
+  `ended -> pending`. `suspended` conserva permisos y asignaciones con
+  acceso `false`; `ended` borra ambos (trigger, cualquier escritor);
+  `ended -> pending` no restaura nada. Una membresía desactivada tras
+  asignarse conserva la fila pero pierde acceso al instante, y lo recupera
+  al reactivarse.
+- `facility_management_relationship_members` sin `SELECT` para
+  authenticated: lectura solo por RPC. `organization_relationships` con ACL
+  explícito y sin las 3 policies históricas de escritura.
+- RPCs (`SECURITY DEFINER`, `search_path = ''`, nunca reciben `user_id`):
+  `has_facility_management_permission`, `create_facility_management_relationship`,
+  `set_facility_management_permissions`, `set_facility_management_relationship_status`,
+  `get_facility_management_relationships`, `set_facility_management_members`,
+  `get_facility_management_members`, `get_my_facility_management_clients`,
+  `get_my_facility_management_portfolio`. Auditoría siempre con
+  `organization_id` = cliente. SQLSTATE: `42501`, `22023`, `P0002`,
+  `55000`, `23514`.
+- **Hallazgo corregido**: la regla "una relación FM nace en pending"
+  (BEFORE INSERT) también se disparaba en el `INSERT ... ON CONFLICT DO
+  UPDATE` de la RPC legacy `set_provider_relationship_status`, rompiendo
+  Homologar/Suspender/Reactivar de filas FM en `ApprovedProvidersList`.
+  Ahora solo aplica a filas realmente nuevas; hay pruebas de regresión.
+- Deuda para 9B: la RPC legacy sigue escribiendo filas FM (sin auditar,
+  sin poder conceder permisos ni asignar); limitarla a
+  provider/subcontracting cuando exista la UI de Facility Managers.
+- Verificado: suite dedicada 328/328; controles negativos (sin condición de
+  asignación → 6 fallos; regla pending incondicional → 11; versión
+  anterior: ACL reabierto → 43, sin triggers → 13, helper sin filtros → 5).
