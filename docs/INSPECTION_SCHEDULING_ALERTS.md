@@ -29,7 +29,9 @@ El formulario pre-llena "30 días antes" + "Vencido" al crear un plan nuevo (nun
 
 ## Cálculo de la ventana de alerta
 
-Para `before_due`: se notifica cuando `now() >= next_due_at - days_before días` **y** `now() < next_due_at` (todavía no venció). Para `overdue`: se notifica cuando `next_due_at < now()`. Ambos se evalúan en `generate_inspection_due_notifications()`.
+Para `before_due`: se notifica cuando `now() >= next_due_at - days_before días` **y** `now() < next_due_at` (todavía no venció). Para `overdue`: se notifica cuando `next_due_at < now()`. Ambos se evalúan en `generate_inspection_due_notifications_internal()` (ver Fase 1 · Punto 8, `docs/AUTOMATIC_ALERTS.md`) — copia sin `auth.uid()` de la misma lógica que la función pública original, invocada por el wrapper de `pg_cron` cada hora.
+
+**Fijado a `TimeZone = 'UTC'` a nivel de función** (`SET timezone = 'UTC'` en la declaración de la función): el `entity_id` sintético (ver más abajo) se construye con `next_due_at::text`, cuyo formato depende del huso horario de la sesión que ejecuta la función. Antes del Punto 8 esto no importaba porque siempre corría con la sesión del propio usuario logueado; ahora que corre desde `pg_cron` (sesión `postgres`, huso `UTC` por defecto en Supabase) y también podría invocarse manualmente desde una sesión con otro huso, fijarlo explícitamente garantiza el mismo hash sin importar quién o qué la llame. Verificado empíricamente: la misma alerta produce el mismo `entity_id` bajo `TimeZone = 'UTC'` y bajo `TimeZone = 'America/Lima'`.
 
 Es normal y esperado que, cerca de la fecha de vencimiento, varias reglas `before_due` estén simultáneamente "dentro de ventana" (ej. a 25 días de vencer, las reglas de 90/60/30 días antes están todas activas) — cada una es un umbral independiente, no una selección del "más cercano".
 
@@ -94,15 +96,27 @@ custom     → + custom_interval custom_unit (make_interval)
 one_time   → sin siguiente ciclo (next_due_at no cambia)
 ```
 
-## Sin cron externo
+## Scheduler — pg_cron (Fase 1 · Punto 8)
 
-Igual que el resto del centro de notificaciones: `generate_inspection_due_notifications()` se llama best-effort desde `useOrganizationNotifications.ts` (cada carga del centro de notificaciones), envuelta en `try/catch` — un fallo ahí nunca bloquea la carga de las notificaciones ya existentes. No hay scheduler ni cron real en esta fase.
+**Actualizado**: ya no depende de que alguien tenga la app abierta.
+`generate_inspection_due_notifications_internal()` corre cada hora vía el
+job `automatic-alert-generation` (`pg_cron`) + `run_automatic_alert_generation()`
+— ver `docs/AUTOMATIC_ALERTS.md`. `useOrganizationNotifications.ts` dejó de
+llamar a la función pública original.
+
+**Deuda temporal documentada**: `generate_inspection_due_notifications()`
+(la función pública original) sigue existiendo y **conserva su `GRANT
+EXECUTE` a `authenticated`** — deliberadamente no revocado en la migración
+del Punto 8, para no romper nada si el cron o el frontend fallaran en
+producción antes de verificarse. El frontend ya no la llama. Revocar ese
+grant queda para una migración exclusiva posterior — ver
+`docs/AUTOMATIC_ALERTS.md`.
 
 **Comportamiento nuevo importante**: un plan sin reglas de alerta configuradas **ya no notifica automáticamente** (la fase anterior tenía una ventana implícita fija de 7 días antes, que desapareció). Un plan creado antes de esta migración, o cualquier plan al que nunca se le hayan asignado reglas, simplemente no genera alertas hasta que alguien le configure al menos una regla desde el formulario.
 
 ## Pendientes (fuera de alcance de este MVP)
 
-- Scheduler/cron real (hoy se dispara desde el frontend, best-effort).
+- Scheduler/cron real — resuelto en Fase 1 · Punto 8, ver `docs/AUTOMATIC_ALERTS.md`.
 - Email/WhatsApp/push.
 - Calendario avanzado.
 - Reglas escalonadas por severidad (ej. prioridad creciente a medida que se acerca el vencimiento).

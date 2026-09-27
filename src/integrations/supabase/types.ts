@@ -724,6 +724,36 @@ export type Database = {
           },
         ]
       }
+      automatic_alert_runs: {
+        Row: {
+          created_at: string
+          duration_ms: number
+          finished_at: string
+          had_errors: boolean
+          id: string
+          result: Json
+          started_at: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms: number
+          finished_at: string
+          had_errors?: boolean
+          id?: string
+          result: Json
+          started_at: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number
+          finished_at?: string
+          had_errors?: boolean
+          id?: string
+          result?: Json
+          started_at?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           created_at: string
@@ -4303,6 +4333,7 @@ export type Database = {
         }
         Returns: string
       }
+      cleanup_automatic_alert_history: { Args: never; Returns: undefined }
       clear_active_criticality_matrix: {
         Args: { p_organization_id: string }
         Returns: Json
@@ -4719,40 +4750,6 @@ export type Database = {
         }
         Returns: string[]
       }
-      dblink: { Args: { "": string }; Returns: Record<string, unknown>[] }
-      dblink_cancel_query: { Args: { "": string }; Returns: string }
-      dblink_close: { Args: { "": string }; Returns: string }
-      dblink_connect: { Args: { "": string }; Returns: string }
-      dblink_connect_u: { Args: { "": string }; Returns: string }
-      dblink_current_query: { Args: never; Returns: string }
-      dblink_disconnect:
-        | { Args: never; Returns: string }
-        | { Args: { "": string }; Returns: string }
-      dblink_error_message: { Args: { "": string }; Returns: string }
-      dblink_exec: { Args: { "": string }; Returns: string }
-      dblink_fdw_validator: {
-        Args: { catalog: unknown; options: string[] }
-        Returns: undefined
-      }
-      dblink_get_connections: { Args: never; Returns: string[] }
-      dblink_get_notify:
-        | { Args: { conname: string }; Returns: Record<string, unknown>[] }
-        | { Args: never; Returns: Record<string, unknown>[] }
-      dblink_get_pkey: {
-        Args: { "": string }
-        Returns: Database["public"]["CompositeTypes"]["dblink_pkey_results"][]
-        SetofOptions: {
-          from: "*"
-          to: "dblink_pkey_results"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      dblink_get_result: {
-        Args: { "": string }
-        Returns: Record<string, unknown>[]
-      }
-      dblink_is_busy: { Args: { "": string }; Returns: number }
       delete_work_order_activity: {
         Args: { p_activity_id: string }
         Returns: undefined
@@ -4803,10 +4800,19 @@ export type Database = {
         }
       }
       generate_inspection_due_notifications: { Args: never; Returns: undefined }
+      generate_inspection_due_notifications_internal: {
+        Args: never
+        Returns: number
+      }
       generate_operational_due_notifications: {
         Args: never
         Returns: undefined
       }
+      generate_operational_due_notifications_internal: {
+        Args: never
+        Returns: number
+      }
+      generate_preventive_due_notifications: { Args: never; Returns: number }
       get_activity_report_form_data: {
         Args: { p_activity_id: string }
         Returns: Json
@@ -5399,6 +5405,20 @@ export type Database = {
         }
         Returns: undefined
       }
+      notify_member_counted: {
+        Args: {
+          p_actor_user_id: string
+          p_entity_id: string
+          p_entity_type: string
+          p_member_id: string
+          p_message: string
+          p_metadata?: Json
+          p_priority?: string
+          p_title: string
+          p_type: string
+        }
+        Returns: number
+      }
       notify_preventive_occurrence: {
         Args: {
           p_event_type: string
@@ -5422,6 +5442,21 @@ export type Database = {
           p_type: string
         }
         Returns: undefined
+      }
+      notify_role_members_counted: {
+        Args: {
+          p_actor_user_id: string
+          p_entity_id: string
+          p_entity_type: string
+          p_message: string
+          p_metadata?: Json
+          p_organization_id: string
+          p_priority?: string
+          p_roles: Database["public"]["Enums"]["organization_member_role"][]
+          p_title: string
+          p_type: string
+        }
+        Returns: number
       }
       plan_preventive_maintenance_occurrence: {
         Args: { p_occurrence_id: string; p_request_id: string }
@@ -5655,6 +5690,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      run_automatic_alert_generation: { Args: never; Returns: Json }
       save_maintenance_card: {
         Args: {
           p_card_id?: string
@@ -6587,10 +6623,7 @@ export type Database = {
       service_type: "emergencia" | "correctivo" | "preventivo" | "proyecto"
     }
     CompositeTypes: {
-      dblink_pkey_results: {
-        position: number | null
-        colname: string | null
-      }
+      [_ in never]: never
     }
   }
 }

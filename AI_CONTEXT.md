@@ -2321,3 +2321,83 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   `R2_SECRET_ACCESS_KEY` en `src/` y de credenciales/`aws4fetch` en
   `dist/` → limpio en ambos, con el bucket real ya conectado.
   Build/typecheck/lint sin regresiones sobre el baseline; pgTAP 629/629.
+
+## Fase 1 · Punto 8 — Alertas automáticas
+
+- Rama `feature/phase1-automatic-alerts`. Migraciones
+  `20260927150951_automatic_alerts.sql` (hardening + generadores internos +
+  `automatic_alert_runs` + wrapper) y
+  `20260927150952_automatic_alerts_schedule.sql` (`pg_cron`, sin `pg_net` ni
+  Edge Function). Detalle completo en `docs/AUTOMATIC_ALERTS.md`.
+- **Hardening de `organization_notifications`**: `authenticated` pasa de
+  `UPDATE` general a `GRANT UPDATE (is_read, read_at)` únicamente; el
+  trigger `protect_organization_notification_update()` se extiende para
+  bloquear también cambios de `recipient_member_id`/`priority`/`metadata`
+  (defensa en profundidad — el `GRANT` de columna ya bloquea a
+  `authenticated` antes de que el trigger corra; el trigger sigue siendo
+  la única barrera para cualquier rol con `GRANT` de tabla más amplio,
+  p. ej. `postgres`). `notify_member()` ahora exige `om.is_active`
+  **globalmente**, para los ~15 tipos de evento existentes, no solo para
+  los nuevos.
+- **Tres generadores internos** (`_internal`/nuevo, sin `auth.uid()`, sin
+  `GRANT` a `PUBLIC`/`anon`/`authenticated`, invocables solo por el
+  wrapper): OT (mismo criterio due-soon ≤24h / overdue, + organización y
+  destinatario activos), inspecciones (mismo criterio before_due/overdue/
+  multi-regla, `SET timezone = 'UTC'` a nivel de función), y preventivo
+  (nuevo: `preventive_maintenance_due`/`overdue`, calendario y medidor con
+  última lectura efectiva). Ninguno cambia la firma de `notify_member`/
+  `notify_role_members`, de los que dependen ~15 funciones existentes.
+- **`run_automatic_alert_generation()`**: `pg_try_advisory_xact_lock` +
+  cada generador en su propio `BEGIN...EXCEPTION WHEN OTHERS` (aislamiento
+  — el fallo de uno nunca bloquea a los otros) + registro en
+  `automatic_alert_runs` (sin `SELECT` para clientes; el error guardado es
+  solo `status`+`SQLSTATE`+mensaje truncado, nunca texto de la consulta,
+  stack trace ni secretos). `pg_cron` lo llama cada hora
+  (`5 * * * *`, horario UTC/GMT).
+- **Deuda temporal documentada, decisión explícita**: las funciones
+  públicas legacy `generate_operational_due_notifications()` y
+  `generate_inspection_due_notifications()` conservan su `GRANT EXECUTE` a
+  `authenticated` en esta migración (rollout conservador). El frontend
+  (`useOrganizationNotifications.ts`) deja de llamarlas en este mismo PR,
+  pero la revocación del grant queda para una migración exclusiva
+  posterior, tras verificar cron + frontend en producción.
+- **Hallazgo real durante las pruebas de concurrencia**: `pg_try_advisory_xact_lock`
+  es reentrante para la misma sesión/transacción — una prueba que primero
+  llama al wrapper en la propia sesión pgTAP y luego lanza conexiones
+  `dblink` externas hace que las 10 externas queden `skipped` sin
+  excepción, porque la transacción de prueba (que nunca hace `COMMIT`
+  hasta el `ROLLBACK` final) ya tiene el lock tomado. Corregido ordenando
+  las 10 conexiones concurrentes **antes** de cualquier llamada directa en
+  la misma transacción.
+- **Segundo hallazgo real, post negative-control**: las conexiones
+  `dblink` hacen su propio `COMMIT` real, así que las filas que insertan en
+  `automatic_alert_runs` sobreviven al `ROLLBACK` del archivo de prueba
+  completo. Correr la suite dos veces seguidas contra la misma base local
+  sin `db reset` de por medio inflaba `automatic_alert_runs` con filas de
+  la corrida anterior, rompiendo una aserción que comparaba un conteo
+  absoluto. Corregido midiendo un **delta** desde una marca de
+  `clock_timestamp()` tomada antes de la sección de concurrencia — probado
+  corriendo la suite 3 veces seguidas sin reset, sin fallos.
+- **Tercer hallazgo real**: la aserción "al menos una de las 10 conexiones
+  concurrentes quedó `skipped`" es una carrera real entre 10 conexiones
+  async — si no se solapan lo suficiente en el tiempo, las 10 pueden ganar
+  el lock en secuencia sin contienda real. Reemplazada por una prueba
+  determinística: una sesión `dblink` separada toma el lock y lo mantiene
+  abierto (`BEGIN` sin `COMMIT`), la sesión de prueba llama al wrapper y
+  debe recibir `skipped` siempre, sin depender de ningún azar de tiempo.
+- **Índice parcial** `idx_work_orders_due_at_active` en
+  `work_orders(due_at) WHERE due_at IS NOT NULL AND status NOT IN
+  ('completed','closed')`, agregado tras evaluar con `EXPLAIN (ANALYZE,
+  BUFFERS)` real sobre 100,000 OT sintéticas (60,009 no terminales) en una
+  transacción descartable: mejora medible en ambas consultas del generador
+  de OT (due-soon: cost 4619→2424, ~19.4ms→~8.3ms; overdue: cost
+  3928→3044, ~19.6ms→~12.9ms).
+- **Verificado `pg_cron` disparando de verdad en local** (no solo que el
+  job existe en `cron.job`): reprogramado temporalmente a `* * * * *`,
+  confirmado un `status = 'succeeded'` real en `cron.job_run_details` con
+  su fila correspondiente en `automatic_alert_runs`, y restaurado el
+  horario original (`5 * * * *`) vía `supabase db reset --local`.
+- Verificado: **699/699 pgTAP** (629 previos + 70 nuevos en
+  `automatic_alerts.test.sql`; control negativo sobre el hardening de
+  `organization_notifications`: 6 de las 70 aserciones fallan si se
+  reabre el `GRANT` general y se revierte el trigger a su forma anterior).
