@@ -1,5 +1,6 @@
 import {
   assertPlatformAdmin,
+  createCallerClient,
   createServiceClient,
   errorResponse,
   getAuthenticatedUser,
@@ -10,6 +11,8 @@ import {
   normalizeEmail,
   requirePost,
 } from '../_shared/adminAuth.ts';
+import { buildInvitationAcceptUrl } from '../_shared/publicAppUrl.ts';
+import { resolveInvitationRecipientKind, sendInvitationEmail } from '../_shared/invitationEmail.ts';
 
 const organizationTypes = new Set([
   'client_company', 'provider_company', 'facility_manager',
@@ -59,6 +62,8 @@ Deno.serve(async (req) => {
       .single();
     if (organizationError || !organization) throw new Error('Unable to create organization');
 
+    let ownerInvitation: { status: 'sent' | 'delivery_failed'; invitation_id?: string; error?: string } | null = null;
+
     if (ownerUserId) {
       const { error } = await service.from('organization_members').insert({
         organization_id: organization.id,
@@ -68,13 +73,41 @@ Deno.serve(async (req) => {
       });
       if (error) throw new Error('Organization was created but its owner could not be assigned');
     } else if (ownerEmail) {
-      const { error } = await service.from('organization_invitations').insert({
-        organization_id: organization.id,
-        email: ownerEmail,
-        role: 'owner',
-        invited_by: caller.id,
-      });
-      if (error) throw new Error('Organization was created but its owner invitation could not be registered');
+      // Fase 1 · Punto 6B: no más invitaciones "muertas" insertadas
+      // directamente. Se crea vía la misma RPC/flujo productivo que
+      // send-organization-invitation, con el JWT del propio caller (ya
+      // verificado platform admin arriba) — nunca service_role para la
+      // creación en sí, para que can_manage_organization_role la autorice
+      // por la misma vía que cualquier otra invitación.
+      //
+      // Fallo parcial: si la invitación o el correo fallan, la organización
+      // YA fue creada y se devuelve igual (nunca se crea una organización
+      // duplicada por reintentar). El admin puede volver a invitar al owner
+      // para esta misma organización desde la vista de Usuarios.
+      try {
+        const callerClient = createCallerClient(req);
+        const { data: invitation, error: invitationError } = await callerClient.rpc('create_organization_invitation', {
+          p_organization_id: organization.id,
+          p_email: ownerEmail,
+          p_role: 'owner',
+          p_invited_name: null,
+        });
+        if (invitationError || !invitation) throw new Error(invitationError?.message ?? 'No se pudo crear la invitación del owner');
+
+        const redirectTo = buildInvitationAcceptUrl(invitation.id);
+        const recipientKind = await resolveInvitationRecipientKind(ownerEmail);
+        await sendInvitationEmail({ email: ownerEmail, invitedName: null, redirectTo, recipientKind });
+
+        const { error: markError } = await service.rpc('mark_invitation_sent', { p_invitation_id: invitation.id });
+        if (markError) throw new Error(markError.message);
+
+        ownerInvitation = { status: 'sent', invitation_id: invitation.id };
+      } catch (error) {
+        ownerInvitation = {
+          status: 'delivery_failed',
+          error: error instanceof Error ? error.message : 'No se pudo invitar al owner',
+        };
+      }
     }
 
     await service.from('activity_logs').insert({
@@ -86,7 +119,7 @@ Deno.serve(async (req) => {
       metadata: { owner_user_id: ownerUserId ?? null, owner_email: ownerEmail },
     });
 
-    return jsonResponse({ organization }, 201);
+    return jsonResponse({ organization, owner_invitation: ownerInvitation }, 201);
   } catch (error) {
     if (isForbidden(error)) return errorResponse('Forbidden', 403);
     if (error instanceof Error && error.message === 'Unauthorized') return errorResponse('Unauthorized', 401);

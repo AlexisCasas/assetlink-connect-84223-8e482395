@@ -34,7 +34,7 @@ import {
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin' | 'users') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -100,6 +100,14 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   // los avisos pero sin acciones, y las de gestión las vuelve a validar el
   // backend. Ocultar el ítem nunca es la autorización.
   const canViewBacklog = canViewAssets && !!currentMembership?.isActive && ['owner', 'admin', 'manager', 'technician', 'requester'].includes(currentMembership.role);
+  // Fase 1 · Punto 6B: "Usuarios" es la gestión productiva de la propia
+  // organización (invitar, roles, reenviar/cancelar invitaciones) — nunca
+  // se muestra en el tenant platform_admin, que usa Administración
+  // (AdminConsole) para gestionar OTRAS organizaciones. Solo owner/admin:
+  // el mismo gate que ya protege list_organization_access/
+  // update_organization_member en el servidor, replicado aquí solo para no
+  // mostrar un botón que el backend rechazaría.
+  const canViewUsers = !isPlatformAdminOrg && !!currentMembership?.isActive && ['owner', 'admin'].includes(currentMembership.role);
 
   return (
     <aside className={cn(
@@ -161,6 +169,8 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
         )}
 
         {canManage && <Button variant={currentView === 'admin' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('admin')}><Shield className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Administración'}</Button>}
+
+        {canViewUsers && <Button variant={currentView === 'users' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('users')}><Users className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Usuarios'}</Button>}
 
         {canViewWorkOrders && (
           <Button

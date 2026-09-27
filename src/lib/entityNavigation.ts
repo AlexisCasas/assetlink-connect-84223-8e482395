@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { OrganizationNotification } from '@/hooks/useOrganizationNotifications';
+import { isValidUuid } from '@/lib/providerHelpers';
 
 /** Single source of truth for Dashboard's hash-routed views — Dashboard.tsx
  * imports this instead of declaring its own union, so a view can never be
@@ -23,12 +24,13 @@ export type DashboardView =
   | 'preventive-maintenance'
   | 'backlog'
   | 'contact'
-  | 'admin';
+  | 'admin'
+  | 'users';
 
 export const ALL_DASHBOARD_VIEWS: DashboardView[] = [
   'dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications',
   'approved-providers', 'branches', 'work-orders', 'my-work-orders', 'inventory', 'efficiency',
-  'criticality', 'inspections', 'preventive-maintenance', 'backlog', 'contact', 'admin',
+  'criticality', 'inspections', 'preventive-maintenance', 'backlog', 'contact', 'admin', 'users',
 ];
 
 export interface EntityNavigationTarget {
@@ -108,35 +110,53 @@ export function parseEntityHash(hash: string): ParsedEntityHash {
   return result;
 }
 
-export interface SafeLoginReturnTarget {
-  pathname: '/';
-  hash: string;
-}
+export type SafeLoginReturnTarget =
+  | { pathname: '/'; search: ''; hash: string }
+  | { pathname: '/invitations/accept'; search: string; hash: '' };
 
 /**
  * Login.tsx calls this with `location.state?.from` (attached by
  * ProtectedRoute in App.tsx before redirecting an unauthenticated visit to
- * /login) to safely resume the original deep link — including a scanned
- * asset QR — after signing in, WITHOUT ever becoming an open redirect.
+ * /login) to safely resume the original deep link — a scanned asset QR, or
+ * an invitation-acceptance link — after signing in, WITHOUT ever becoming
+ * an open redirect.
  *
- * Accepts ONLY an internal target: `pathname` exactly `"/"` and a `hash`
- * whose leading segment is a known view (the same ALL_DASHBOARD_VIEWS
- * allowlist parseEntityHash already enforces). Anything else — an external
- * origin, a protocol-relative `"//host"`, `"javascript:"`, a foreign
- * pathname, or an unrecognized view — returns null so the caller falls back
- * to a bare `/`. Because the check is a fixed-string allowlist, no crafted
- * input can ever pass it into something react-router would treat as
- * leaving this app.
+ * Accepts ONLY two internal shapes:
+ *   - `pathname` exactly `"/"` with a `hash` whose leading segment is a
+ *     known view (the same ALL_DASHBOARD_VIEWS allowlist parseEntityHash
+ *     enforces);
+ *   - `pathname` exactly `"/invitations/accept"` with a `search` that is
+ *     EXACTLY `?invitation=<uuid>` — one param, that name, a valid uuid,
+ *     nothing else appended.
+ *
+ * Anything else — an external origin, a protocol-relative `"//host"`,
+ * `"javascript:"`, a foreign pathname, an unrecognized view, an extra query
+ * param, or a non-uuid invitation id — returns null so the caller falls
+ * back to a bare `/`. Because every check is a fixed-string/format
+ * allowlist, no crafted input can ever pass it into something react-router
+ * would treat as leaving this app.
  */
 export function resolveSafeLoginReturnTarget(from: unknown): SafeLoginReturnTarget | null {
   if (!from || typeof from !== 'object') return null;
-  const candidate = from as { pathname?: unknown; hash?: unknown };
-  if (candidate.pathname !== '/') return null;
+  const candidate = from as { pathname?: unknown; search?: unknown; hash?: unknown };
 
-  const hash = typeof candidate.hash === 'string' ? candidate.hash : '';
-  if (hash === '') return { pathname: '/', hash: '' };
-  if (!parseEntityHash(hash).view) return null;
-  return { pathname: '/', hash };
+  if (candidate.pathname === '/') {
+    const hash = typeof candidate.hash === 'string' ? candidate.hash : '';
+    if (hash === '') return { pathname: '/', search: '', hash: '' };
+    if (!parseEntityHash(hash).view) return null;
+    return { pathname: '/', search: '', hash };
+  }
+
+  if (candidate.pathname === '/invitations/accept') {
+    const search = typeof candidate.search === 'string' ? candidate.search : '';
+    const params = new URLSearchParams(search);
+    const keys = Array.from(params.keys());
+    const invitation = params.get('invitation');
+    if (keys.length !== 1 || keys[0] !== 'invitation' || !invitation || !isValidUuid(invitation)) return null;
+    return { pathname: '/invitations/accept', search: `?invitation=${invitation}`, hash: '' };
+  }
+
+  return null;
 }
 
 /** Sets window.location.hash to the canonical hash for `target`. This alone

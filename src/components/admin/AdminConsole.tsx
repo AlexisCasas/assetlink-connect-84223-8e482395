@@ -118,16 +118,24 @@ export function AdminConsole() {
             )}
           </div>
 
-          <Card>
-            <CardHeader><CardTitle className="text-base">Crear usuario</CardTitle></CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2">
-              <div><Label>Correo electrónico</Label><Input value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="email@empresa.com" /></div>
-              <div><Label>Nombre</Label><Input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nombre opcional" /></div>
-              <div><Label>Contraseña temporal</Label><Input type="password" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} placeholder="Mínimo 8 caracteres" /></div>
-              <div><Label>Rol</Label><Select value={memberRole} onValueChange={(value) => setMemberRole(value as OrganizationMemberRole)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{roles.map((role) => <SelectItem key={role} value={role}>{ORGANIZATION_ROLE_LABELS[role]}</SelectItem>)}</SelectContent></Select></div>
-              <Button className="md:col-span-2" disabled={savingMember || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(memberEmail) || (temporaryPassword.length > 0 && temporaryPassword.length < 8)} onClick={() => void createMember()}>{savingMember ? 'Creando…' : 'Crear usuario'}</Button>
-            </CardContent>
-          </Card>
+          {/* Legacy/staging-only (Fase 1 · Punto 6B): admin-create-user-and-add-member
+              activates a membership immediately, with no acceptance step,
+              and is meant for staging/demo data where invitation emails
+              can't be delivered to fictitious addresses — never for
+              production, where "Invitar usuario" (Usuarios, #users) is the
+              productive flow. Hidden outright in production builds. */}
+          {import.meta.env.VITE_APP_ENV !== 'production' && (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Crear usuario (solo staging/demo)</CardTitle></CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2">
+                <div><Label>Correo electrónico</Label><Input value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="email@empresa.com" /></div>
+                <div><Label>Nombre</Label><Input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nombre opcional" /></div>
+                <div><Label>Contraseña temporal</Label><Input type="password" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} placeholder="Mínimo 8 caracteres" /></div>
+                <div><Label>Rol</Label><Select value={memberRole} onValueChange={(value) => setMemberRole(value as OrganizationMemberRole)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{roles.map((role) => <SelectItem key={role} value={role}>{ORGANIZATION_ROLE_LABELS[role]}</SelectItem>)}</SelectContent></Select></div>
+                <Button className="md:col-span-2" disabled={savingMember || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(memberEmail) || (temporaryPassword.length > 0 && temporaryPassword.length < 8)} onClick={() => void createMember()}>{savingMember ? 'Creando…' : 'Crear usuario'}</Button>
+              </CardContent>
+            </Card>
+          )}
         </div>}
       </DialogContent>
     </Dialog>

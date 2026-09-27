@@ -17,6 +17,7 @@ import { WorkOrdersList } from '@/components/work-orders/WorkOrdersList';
 import { InventoryView } from '@/components/inventory/InventoryView';
 import { TechnicianWorkView } from '@/components/technician/TechnicianWorkView';
 import { AdminConsole } from '@/components/admin/AdminConsole';
+import { OrganizationUsersView } from '@/components/organization/OrganizationUsersView';
 import { EfficiencyDashboard } from '@/components/analytics/EfficiencyDashboard';
 import { CriticalityMatrixView } from '@/components/criticality/CriticalityMatrixView';
 import { InspectionsView } from '@/components/inspections/InspectionsView';
@@ -178,6 +179,11 @@ const Dashboard = () => {
         // autorización.
         return <BacklogView focusNoticeId={focus.noticeId} />;
       case 'admin': return <AdminConsole />;
+      case 'users':
+        // Sidebar ya oculta este ítem fuera de owner/admin de una
+        // organización no platform_admin; el gate real vive en el
+        // servidor (list_organization_access/update_organization_member).
+        return <div className="p-6"><OrganizationUsersView /></div>;
       default:
         // Real dashboard — see docs/REAL_DASHBOARD_METRICS.md.
         // DashboardMetricsCards gates itself to owner/admin/manager (same

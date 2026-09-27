@@ -7,12 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // The project is deployed behind PostgREST 14.5. Local CLI generation uses
-  // the bundled local gateway version, so keep the deployed compatibility
-  // marker and graphql schema that are part of the checked-in contract.
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -2105,12 +2099,17 @@ export type Database = {
           accepted_by: string | null
           created_at: string
           email: string
-          expires_at: string | null
+          expires_at: string
           id: string
           invited_by: string
+          invited_name: string | null
+          last_send_attempt_at: string | null
+          last_sent_at: string | null
           organization_id: string
           revoked_at: string | null
+          revoked_by: string | null
           role: Database["public"]["Enums"]["organization_member_role"]
+          send_count: number
           status: Database["public"]["Enums"]["organization_invitation_status"]
           token_hash: string | null
           updated_at: string
@@ -2120,12 +2119,17 @@ export type Database = {
           accepted_by?: string | null
           created_at?: string
           email: string
-          expires_at?: string | null
+          expires_at?: string
           id?: string
           invited_by: string
+          invited_name?: string | null
+          last_send_attempt_at?: string | null
+          last_sent_at?: string | null
           organization_id: string
           revoked_at?: string | null
+          revoked_by?: string | null
           role: Database["public"]["Enums"]["organization_member_role"]
+          send_count?: number
           status?: Database["public"]["Enums"]["organization_invitation_status"]
           token_hash?: string | null
           updated_at?: string
@@ -2135,12 +2139,17 @@ export type Database = {
           accepted_by?: string | null
           created_at?: string
           email?: string
-          expires_at?: string | null
+          expires_at?: string
           id?: string
           invited_by?: string
+          invited_name?: string | null
+          last_send_attempt_at?: string | null
+          last_sent_at?: string | null
           organization_id?: string
           revoked_at?: string | null
+          revoked_by?: string | null
           role?: Database["public"]["Enums"]["organization_member_role"]
+          send_count?: number
           status?: Database["public"]["Enums"]["organization_invitation_status"]
           token_hash?: string | null
           updated_at?: string
@@ -4147,13 +4156,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_organization_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          organization_id: string
+          status: string
+        }[]
+      }
       apply_criticality_template: {
         Args: { p_organization_id: string; p_template_id: string }
         Returns: Json
       }
       approve_quote: { Args: { target_quote_id: string }; Returns: undefined }
       assert_valid_criticality_thresholds: {
-        Args: { p_critical_min: number; p_high_min: number; p_medium_min: number }
+        Args: {
+          p_critical_min: number
+          p_high_min: number
+          p_medium_min: number
+        }
         Returns: undefined
       }
       assign_work_order_technician: {
@@ -4227,8 +4247,19 @@ export type Database = {
         Args: { p_template_id: string }
         Returns: boolean
       }
+      can_manage_invitation_target: {
+        Args: { p_email: string; p_organization_id: string }
+        Returns: boolean
+      }
       can_manage_maintenance_notice: {
         Args: { p_organization_id: string }
+        Returns: boolean
+      }
+      can_manage_organization_role: {
+        Args: {
+          p_organization_id: string
+          p_role: Database["public"]["Enums"]["organization_member_role"]
+        }
         Returns: boolean
       }
       can_manage_preventive_maintenance: {
@@ -4499,6 +4530,40 @@ export type Database = {
         }
         Returns: string
       }
+      create_organization_invitation: {
+        Args: {
+          p_email: string
+          p_invited_name?: string
+          p_organization_id: string
+          p_role: Database["public"]["Enums"]["organization_member_role"]
+        }
+        Returns: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          invited_name: string | null
+          last_send_attempt_at: string | null
+          last_sent_at: string | null
+          organization_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          role: Database["public"]["Enums"]["organization_member_role"]
+          send_count: number
+          status: Database["public"]["Enums"]["organization_invitation_status"]
+          token_hash: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_invitations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_organization_notification: {
         Args: {
           target_actor_user_id: string
@@ -4626,10 +4691,7 @@ export type Database = {
           medium_min: number
         }[]
       }
-      criticality_label_es: {
-        Args: { p_criticality: string }
-        Returns: string
-      }
+      criticality_label_es: { Args: { p_criticality: string }; Returns: string }
       criticality_slugify: { Args: { p_text: string }; Returns: string }
       criticality_thresholds_from_jsonb: {
         Args: { p_thresholds: Json }
@@ -4653,6 +4715,40 @@ export type Database = {
         }
         Returns: string[]
       }
+      dblink: { Args: { "": string }; Returns: Record<string, unknown>[] }
+      dblink_cancel_query: { Args: { "": string }; Returns: string }
+      dblink_close: { Args: { "": string }; Returns: string }
+      dblink_connect: { Args: { "": string }; Returns: string }
+      dblink_connect_u: { Args: { "": string }; Returns: string }
+      dblink_current_query: { Args: never; Returns: string }
+      dblink_disconnect:
+        | { Args: never; Returns: string }
+        | { Args: { "": string }; Returns: string }
+      dblink_error_message: { Args: { "": string }; Returns: string }
+      dblink_exec: { Args: { "": string }; Returns: string }
+      dblink_fdw_validator: {
+        Args: { catalog: unknown; options: string[] }
+        Returns: undefined
+      }
+      dblink_get_connections: { Args: never; Returns: string[] }
+      dblink_get_notify:
+        | { Args: { conname: string }; Returns: Record<string, unknown>[] }
+        | { Args: never; Returns: Record<string, unknown>[] }
+      dblink_get_pkey: {
+        Args: { "": string }
+        Returns: Database["public"]["CompositeTypes"]["dblink_pkey_results"][]
+        SetofOptions: {
+          from: "*"
+          to: "dblink_pkey_results"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      dblink_get_result: {
+        Args: { "": string }
+        Returns: Record<string, unknown>[]
+      }
+      dblink_is_busy: { Args: { "": string }; Returns: number }
       delete_work_order_activity: {
         Args: { p_activity_id: string }
         Returns: undefined
@@ -4827,6 +4923,14 @@ export type Database = {
           email: string
           member_id: string
           name: string
+          user_id: string
+        }[]
+      }
+      get_auth_user_state_by_email: {
+        Args: { p_email: string }
+        Returns: {
+          email_confirmed: boolean
+          exists_flag: boolean
           user_id: string
         }[]
       }
@@ -5055,6 +5159,29 @@ export type Database = {
           triaged_by_name: string
         }[]
       }
+      get_my_organization_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          effective_status: string
+          expires_at: string
+          invitation_id: string
+          invited_name: string
+          organization_id: string
+          organization_name: string
+          role: Database["public"]["Enums"]["organization_member_role"]
+        }[]
+      }
+      get_my_pending_invitations: {
+        Args: never
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          invited_name: string
+          organization_id: string
+          organization_name: string
+          role: Database["public"]["Enums"]["organization_member_role"]
+        }[]
+      }
       get_my_technician_work_orders: {
         Args: never
         Returns: {
@@ -5195,9 +5322,59 @@ export type Database = {
         Args: { _organization_id: string }
         Returns: boolean
       }
+      list_organization_access: {
+        Args: { p_organization_id: string }
+        Returns: {
+          accepted_at: string
+          created_at: string
+          effective_status: string
+          email: string
+          expires_at: string
+          id: string
+          invited_name: string
+          is_active: boolean
+          joined_at: string
+          kind: string
+          last_sent_at: string
+          name: string
+          revoked_at: string
+          role: Database["public"]["Enums"]["organization_member_role"]
+          send_count: number
+          user_id: string
+        }[]
+      }
       map_request_priority_to_work_order_priority: {
         Args: { request_priority: number }
         Returns: string
+      }
+      mark_invitation_sent: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          invited_name: string | null
+          last_send_attempt_at: string | null
+          last_sent_at: string | null
+          organization_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          role: Database["public"]["Enums"]["organization_member_role"]
+          send_count: number
+          status: Database["public"]["Enums"]["organization_invitation_status"]
+          token_hash: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_invitations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       member_display_name: { Args: { p_member_id: string }; Returns: string }
       next_maintenance_notice_number: {
@@ -5360,11 +5537,7 @@ export type Database = {
         }
       }
       replace_criticality_configuration: {
-        Args: {
-          p_matrix: Json
-          p_organization_id: string
-          p_thresholds?: Json
-        }
+        Args: { p_matrix: Json; p_organization_id: string; p_thresholds?: Json }
         Returns: Json
       }
       replace_criticality_matrix: {
@@ -5389,6 +5562,35 @@ export type Database = {
           to: "inspection_plan_alert_rules"
           isOneToOne: false
           isSetofReturn: true
+        }
+      }
+      resend_organization_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          invited_name: string | null
+          last_send_attempt_at: string | null
+          last_sent_at: string | null
+          organization_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          role: Database["public"]["Enums"]["organization_member_role"]
+          send_count: number
+          status: Database["public"]["Enums"]["organization_invitation_status"]
+          token_hash: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_invitations"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       resolve_asset_branch: { Args: { p_asset_id: string }; Returns: string }
@@ -5416,6 +5618,35 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "asset_meters"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      revoke_organization_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          invited_name: string | null
+          last_send_attempt_at: string | null
+          last_sent_at: string | null
+          organization_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          role: Database["public"]["Enums"]["organization_member_role"]
+          send_count: number
+          status: Database["public"]["Enums"]["organization_invitation_status"]
+          token_hash: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_invitations"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -5894,6 +6125,29 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_organization_member: {
+        Args: {
+          p_is_active?: boolean
+          p_membership_id: string
+          p_role?: Database["public"]["Enums"]["organization_member_role"]
+        }
+        Returns: {
+          id: string
+          invited_by: string | null
+          is_active: boolean
+          joined_at: string
+          organization_id: string
+          role: Database["public"]["Enums"]["organization_member_role"]
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_work_order_operations: {
         Args: {
           target_assigned_member_id: string
@@ -6329,7 +6583,10 @@ export type Database = {
       service_type: "emergencia" | "correctivo" | "preventivo" | "proyecto"
     }
     CompositeTypes: {
-      [_ in never]: never
+      dblink_pkey_results: {
+        position: number | null
+        colname: string | null
+      }
     }
   }
 }
@@ -6452,6 +6709,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["cliente", "proveedor", "team_member"],
