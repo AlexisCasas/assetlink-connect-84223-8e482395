@@ -110,14 +110,17 @@ Ventana: `due_at` entre ahora y +24 horas → `work_order_due_soon`;
 destinatario activo. Idempotente por diseño (§3) — correr el generador con
 la frecuencia que sea nunca duplica.
 
-**Deuda temporal documentada**: `generate_operational_due_notifications()`
-(la función pública original, con su propio `auth.uid()`) sigue existiendo
-y **conserva su `GRANT EXECUTE` a `authenticated`** — no se revocó en la
-migración del Punto 8 a propósito, para no romper nada si el cron o el
-frontend fallaran en producción antes de verificarse. El frontend ya no la
-llama. Revocar ese grant queda para una migración exclusiva posterior, una
-vez confirmado el cron + frontend en producción — ver
-`docs/AUTOMATIC_ALERTS.md`.
+**Cierre del rollout**:
+`generate_operational_due_notifications()` se conserva como función legacy por
+compatibilidad interna, pero la migración
+`20260927171623_remove_legacy_alert_generation_access.sql` revoca su `EXECUTE`
+a `PUBLIC`, `anon` y `authenticated`.
+
+El frontend ya no la invoca. La generación temporal de alertas de OT se ejecuta
+server-side mediante `run_automatic_alert_generation()` desde `pg_cron`.
+
+`service_role` y el propietario de la función conservan la capacidad de
+ejecución necesaria para operaciones backend.
 
 ## 6. Seguridad
 
@@ -223,3 +226,14 @@ vez confirmado el cron + frontend en producción — ver
 - **Inspecciones próximas/vencidas** — implementado en Fase 1 · Punto 8
   (`inspection_due_soon_future`/`inspection_overdue_future`), ver
   `docs/INSPECTION_SCHEDULING_ALERTS.md` y `docs/AUTOMATIC_ALERTS.md`.
+**Cierre del rollout**:
+`generate_operational_due_notifications()` se conserva como función legacy por
+compatibilidad interna, pero la migración
+`20260927171623_remove_legacy_alert_generation_access.sql` revoca su `EXECUTE`
+a `PUBLIC`, `anon` y `authenticated`.
+
+El frontend ya no la invoca. La generación temporal de alertas de OT se ejecuta
+server-side mediante `run_automatic_alert_generation()` desde `pg_cron`.
+
+`service_role` y el propietario de la función conservan la capacidad de
+ejecución necesaria para operaciones backend.

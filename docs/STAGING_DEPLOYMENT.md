@@ -117,13 +117,21 @@ para el detalle completo. Checklist mínimo:
    `automatic-alert-history-cleanup` (`30 3 * * *`), y tras la primera hora
    confirmar en `cron.job_run_details` que `automatic-alert-generation`
    corrió con `status = 'succeeded'`.
-4. **Deuda temporal a revocar después**: `generate_operational_due_notifications()`
-   y `generate_inspection_due_notifications()` (las funciones públicas
-   originales) conservan su `GRANT EXECUTE` a `authenticated` en esta
-   migración a propósito — el frontend ya no las llama, pero el grant no se
-   revoca todavía. Una vez verificado que el cron + frontend funcionan
-   correctamente en producción, aplicar una migración exclusiva que las
-   revoque (ver `docs/AUTOMATIC_ALERTS.md`).
+4. 4. **Hardening final de generadores legacy**:
+   aplicar la migración
+   `20260927171623_remove_legacy_alert_generation_access.sql`.
+
+   Después del despliegue confirmar que
+   `generate_operational_due_notifications()` y
+   `generate_inspection_due_notifications()` no tienen `EXECUTE` para
+   `PUBLIC`, `anon` ni `authenticated`.
+
+   Deben conservar acceso únicamente `service_role` y el propietario de las
+   funciones.
+
+5. Confirmar que el job `automatic-alert-generation` continúa ejecutándose
+   correctamente después del hardening y que su último registro en
+   `cron.job_run_details` tiene `status = 'succeeded'`.
 
 ## Comportamiento ante configuración incompleta
 

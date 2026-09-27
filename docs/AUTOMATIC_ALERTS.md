@@ -279,27 +279,44 @@ proyecto (Database → Extensions) — si el primer `db push` falla en el
 `CREATE EXTENSION`, hay que habilitarla ahí antes de reintentar. Ver
 checklist en `docs/STAGING_DEPLOYMENT.md`.
 
-## 8. Deuda temporal documentada — decisión explícita
+## 8. Cierre del rollout y hardening final
 
-`generate_operational_due_notifications()` y
-`generate_inspection_due_notifications()` (las funciones **públicas**
-originales, con su propio `auth.uid()`) **conservan su `GRANT EXECUTE` a
-`authenticated`** en la migración de este punto. No es un descuido: es un
-rollout conservador, decidido explícitamente.
+El rollout conservador de los generadores legacy quedó cerrado mediante la
+migración:
 
-- El frontend (`useOrganizationNotifications.ts`) deja de llamarlas en
-  este mismo PR — ya no hay ningún camino de cliente que las invoque.
-- El grant no se revoca todavía, para no romper nada si el cron o el
-  despliegue del frontend fallaran en producción antes de verificarse
-  ambos.
-- **Revocar ese grant queda para una migración exclusiva posterior**,
-  después de confirmar en producción que (a) el cron corre y genera las
-  notificaciones esperadas, y (b) el frontend desplegado efectivamente ya
-  no las llama. Verificado con pgTAP (`has_function_privilege`) que a día
-  de hoy `authenticated` sigue teniendo `EXECUTE` sobre ambas — es
-  intencional, no una regresión.
+`20260927171623_remove_legacy_alert_generation_access.sql`
 
-Ver también el checklist de despliegue en `docs/STAGING_DEPLOYMENT.md`.
+Las funciones públicas legacy:
+
+- `generate_operational_due_notifications()`
+- `generate_inspection_due_notifications()`
+
+ya no pueden ser ejecutadas por `PUBLIC`, `anon` ni `authenticated`.
+
+La migración deja explícitamente `EXECUTE` únicamente para `service_role`
+además del propietario de las funciones (`postgres`).
+
+El frontend ya no depende de estos generadores: `useOrganizationNotifications.ts`
+se limita a leer notificaciones y marcarlas como leídas.
+
+La generación productiva depende exclusivamente del flujo backend:
+
+`pg_cron`
+→ `run_automatic_alert_generation()`
+→ generadores internos
+→ `organization_notifications`
+
+El cierre fue verificado con una suite específica de 6 pruebas pgTAP que
+comprueba:
+
+- bloqueo real para `authenticated`;
+- `service_role` conserva `EXECUTE`;
+- `postgres` conserva `EXECUTE`;
+- el wrapper automático continúa operativo;
+- el job `automatic-alert-generation` permanece activo y apunta al wrapper.
+
+También se verificó en producción que el cron horario ejecuta el wrapper con
+`status = 'succeeded'`.
 
 ## 9. Frontend
 
@@ -336,8 +353,7 @@ Ver también el checklist de despliegue en `docs/STAGING_DEPLOYMENT.md`.
   recibe `skipped` siempre, sin depender de ningún azar de tiempo),
   aislamiento de errores por generador (se fuerza una falla real
   renombrando una tabla dentro de un `SAVEPOINT`, revertido después), las
-  dos capas del hardening de `organization_notifications`, grants
-  (incluida la deuda temporal, verificada explícitamente como presente),
+  dos capas del hardening de `organization_notifications`, grants finales, incluyendo la revocación del acceso legacy a authenticated,
   y existencia/actividad de los dos cron jobs.
 - **Control negativo** sobre el hardening: reabriendo el `GRANT UPDATE`
   general y revirtiendo el trigger a su forma anterior (sin
@@ -353,16 +369,14 @@ Ver también el checklist de despliegue en `docs/STAGING_DEPLOYMENT.md`.
   archivo 3 veces seguidas contra la misma base local sin `db reset` de
   por medio, sin fallos.
 - **`supabase db reset --local`**: ambas migraciones aplican limpio.
-- **`supabase test db --local`**: 699/699 (629 previos + 70 nuevos).
+- **`supabase test db --local`**: 705/705 (699 previos + 6 checks del hardening final).
 - `npm run build`, `npx tsc --noEmit -p tsconfig.app.json`, `npm run
   lint`, `git diff --check`: ver el reporte de cierre de esta fase para
   los números exactos.
 
 ## 11. Pendiente (documentado, no construido en esta fase)
 
-- **Revocar el `GRANT EXECUTE` legacy** de
-  `generate_operational_due_notifications()`/
-  `generate_inspection_due_notifications()` — ver §8.
+
 - Email/WhatsApp/push para estas alertas — fuera de alcance, igual que en
   `docs/OPERATIONAL_NOTIFICATIONS.md`.
 - Preferencias de notificación (silenciar tipos, elegir canal) — no

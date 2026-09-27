@@ -104,13 +104,16 @@ job `automatic-alert-generation` (`pg_cron`) + `run_automatic_alert_generation()
 — ver `docs/AUTOMATIC_ALERTS.md`. `useOrganizationNotifications.ts` dejó de
 llamar a la función pública original.
 
-**Deuda temporal documentada**: `generate_inspection_due_notifications()`
-(la función pública original) sigue existiendo y **conserva su `GRANT
-EXECUTE` a `authenticated`** — deliberadamente no revocado en la migración
-del Punto 8, para no romper nada si el cron o el frontend fallaran en
-producción antes de verificarse. El frontend ya no la llama. Revocar ese
-grant queda para una migración exclusiva posterior — ver
-`docs/AUTOMATIC_ALERTS.md`.
+**Cierre del rollout**:
+`generate_inspection_due_notifications()` permanece como función legacy, pero
+la migración `20260927171623_remove_legacy_alert_generation_access.sql` revoca
+su `EXECUTE` a `PUBLIC`, `anon` y `authenticated`.
+
+El frontend ya no la llama. Las alertas temporales de inspecciones se generan
+exclusivamente desde el backend mediante `run_automatic_alert_generation()`
+ejecutado por `pg_cron`.
+
+`service_role` y el propietario de la función conservan el acceso backend.
 
 **Comportamiento nuevo importante**: un plan sin reglas de alerta configuradas **ya no notifica automáticamente** (la fase anterior tenía una ventana implícita fija de 7 días antes, que desapareció). Un plan creado antes de esta migración, o cualquier plan al que nunca se le hayan asignado reglas, simplemente no genera alertas hasta que alguien le configure al menos una regla desde el formulario.
 
