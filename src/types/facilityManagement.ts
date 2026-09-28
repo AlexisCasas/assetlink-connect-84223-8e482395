@@ -68,8 +68,8 @@ export interface FacilityManagementOperationalClient {
   permissions: FacilityManagementPermission[];
 }
 
-/** Delegated modules wired in 9C.1. */
-export type FacilityManagementOperationalModule = 'assets' | 'criticality';
+/** Delegated modules (9C.1 + 9C.2). Values are the Dashboard view names. */
+export type FacilityManagementOperationalModule = 'assets' | 'criticality' | 'inspections' | 'preventive-maintenance';
 
 export interface FacilityManagementPermissionGroup {
   key: string;

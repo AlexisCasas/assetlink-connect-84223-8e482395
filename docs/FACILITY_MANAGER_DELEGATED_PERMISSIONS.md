@@ -11,10 +11,11 @@
   Facility Manager (§13).
 
 **Acceso operativo delegado por módulo (9C):** desde **9C.1** son efectivos
-`assets.*` y `criticality.*` (ver `docs/FACILITY_MANAGER_ASSETS_CRITICALITY.md`).
-El resto de módulos (inspecciones, preventivo, avisos, solicitudes,
-cotizaciones, OT, reportes) todavía no abre nada: sus RLS no cambiaron.
-**9C.2 = Inspecciones + Preventivo.**
+`assets.*` y `criticality.*` (ver `docs/FACILITY_MANAGER_ASSETS_CRITICALITY.md`);
+desde **9C.2**, `inspections.*` y `preventive_maintenance.*` (ver
+`docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md`). El resto de módulos
+(avisos, solicitudes, cotizaciones, OT, reportes), además de inventario y R2,
+todavía no abre nada. **9C.3 = Avisos de avería / Backlog.**
 
 ## 1. Las tres capas
 
@@ -281,8 +282,14 @@ suite pgTAP.
   "cliente operado" (`ManagedClientGate`, `?managedClient=` validado contra
   `get_my_facility_management_clients`). Ver
   `docs/FACILITY_MANAGER_ASSETS_CRITICALITY.md`.
-- **9C.2:** Inspecciones + Preventivo.
-- Siguientes: avisos, solicitudes, cotizaciones, OT, reportes.
+- **9C.2 (hecho):** Inspecciones + Preventivo, con el mismo contexto de
+  cliente operado. Ver `docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md`.
+  - technician ejecuta, pero no planifica;
+  - `responsible_member_id` sigue siendo del cliente;
+  - inventario, solicitudes preventivas y R2 quedan fuera.
+- **9C.3:** Avisos de avería / Backlog.
+- Siguientes: solicitudes (9C.4, que incluye la solicitud preventiva),
+  cotizaciones, OT, reportes.
 
 ## 11. Verificación
 

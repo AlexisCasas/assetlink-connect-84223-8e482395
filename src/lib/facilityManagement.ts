@@ -154,10 +154,50 @@ export const canFacilityManagerEvaluateAssetCriticality = (client: OperationalCl
 export const canFacilityManagerEditAssetCriticalityValue = (client: OperationalClientAccess) =>
   canFacilityManagerManageAssets(client) && canFacilityManagerManageCriticality(client);
 
+// ---------------------------------------------------------------------------
+// 9C.2: Inspecciones + Preventivo. Espejo de can_view_inspections /
+// can_plan_inspections / can_execute_inspections_as_facility_manager y de
+// can_view/plan_preventive_maintenance + can_record_preventive_meter_reading.
+// ---------------------------------------------------------------------------
+const FM_OPERATOR_ROLES: readonly OrganizationMemberRole[] = ['owner', 'admin', 'manager', 'technician'];
+
+export const canFacilityManagerViewInspections = (client: OperationalClientAccess) =>
+  FM_OPERATOR_ROLES.includes(client.membershipRole) && grants(client, 'inspections.view');
+
+/** Plantillas, ítems, opciones, planes y alertas. */
+export const canFacilityManagerManageInspections = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'inspections.view', 'inspections.manage');
+
+/** Crear una ejecución desde un plan y completar el checklist. Un technician
+ * ejecuta sin poder planificar. */
+export const canFacilityManagerExecuteInspections = (client: OperationalClientAccess) =>
+  FM_OPERATOR_ROLES.includes(client.membershipRole) && grants(client, 'inspections.view', 'inspections.manage');
+
+export const canFacilityManagerViewPreventive = (client: OperationalClientAccess) =>
+  FM_OPERATOR_ROLES.includes(client.membershipRole) && grants(client, 'preventive_maintenance.view');
+
+/** Fichas, planes y omitir ciclos. */
+export const canFacilityManagerManagePreventive = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'preventive_maintenance.view', 'preventive_maintenance.manage');
+
+export const canFacilityManagerRecordMeterReading = (client: OperationalClientAccess) =>
+  FM_OPERATOR_ROLES.includes(client.membershipRole) && grants(client, 'preventive_maintenance.view', 'preventive_maintenance.manage');
+
+/** Crear, corregir, retirar y reemplazar medidores. */
+export const canFacilityManagerManageMeters = (client: OperationalClientAccess) =>
+  canFacilityManagerManagePreventive(client);
+
+const MODULE_VIEW_CHECKS: Record<FacilityManagementOperationalModule, (client: OperationalClientAccess) => boolean> = {
+  assets: canFacilityManagerViewAssets,
+  criticality: canFacilityManagerViewCriticality,
+  inspections: canFacilityManagerViewInspections,
+  'preventive-maintenance': canFacilityManagerViewPreventive,
+};
+
 export const canFacilityManagerOpenModule = (
   client: OperationalClientAccess,
   module: FacilityManagementOperationalModule,
-) => (module === 'assets' ? canFacilityManagerViewAssets(client) : canFacilityManagerViewCriticality(client));
+) => MODULE_VIEW_CHECKS[module](client);
 
 export const FACILITY_MANAGEMENT_NAV_LABELS: Record<FacilityManagementMode, string> = {
   client: 'Facility Managers',

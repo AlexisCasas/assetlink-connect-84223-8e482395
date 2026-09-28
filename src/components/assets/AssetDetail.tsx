@@ -97,12 +97,14 @@ const toEditForm = (asset: Asset): EditForm => ({
 
 export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   const { scope, selectedAsset: asset, assets: allAssets, canManageAssets, categories, branches, error, saving, archiveAsset, restoreAsset, updateAsset, refreshAssets } = state;
-  // Delegated Facility Manager mode (9C.1): only Assets + Criticality are
-  // delegated. Every other module this sheet normally pulls in (preventive,
-  // notices, traffic light, integrated history, report, QR, the client's
-  // member directory) stays off — hooks still run, but with a null id so
-  // they never query.
+  // Delegated Facility Manager mode: Assets + Criticality (9C.1) and, with
+  // its own permission, Preventive (9C.2). Every other module this sheet
+  // normally pulls in (notices, traffic light, integrated history, report,
+  // QR, the client's member directory) stays off — hooks still run, but with
+  // a null id so they never query.
   const crossModule = scope.includesCrossModuleData;
+  // Navigation to #preventive-maintenance must keep the delegated client.
+  const delegatedNavigation = scope.mode === 'facility_manager' && scope.organizationId ? { managedClientId: scope.organizationId } : {};
   const { toast } = useToast();
   const { user, currentOrganization, currentMembership } = useAuth();
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -115,7 +117,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   // El hook solo consulta cuando el diálogo está abierto: la ficha del
   // activo no necesita cargar todo el backlog para mostrar un botón.
   const { createNotice } = useMaintenanceNotices(crossModule && noticeDialogOpen ? asset?.organizationId : null);
-  const preventive = usePreventiveMaintenance(crossModule ? asset?.organizationId : null, asset?.id);
+  const preventive = usePreventiveMaintenance(scope.canViewPreventive ? asset?.organizationId : null, asset?.id);
   // Default responsible display: managers resolve it against the eligible
   // directory (active owner/admin/manager); any other member can only list
   // active members, which is enough to name an available responsible.
@@ -497,7 +499,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
         <Tabs defaultValue="summary" className="space-y-4">
           <TabsList className="inline-flex w-max gap-1 rounded-lg border border-onefacility-border bg-onefacility-surface p-1">
             <TabsTrigger value="summary" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Resumen</TabsTrigger>
-            {crossModule && <TabsTrigger value="preventive" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Preventivo</TabsTrigger>}
+            {scope.canViewPreventive && <TabsTrigger value="preventive" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Preventivo</TabsTrigger>}
             {(crossModule || scope.canViewCriticality) && <TabsTrigger value="history" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Historial</TabsTrigger>}
           </TabsList>
 
@@ -728,11 +730,11 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
         </div>
           </TabsContent>
 
-          {crossModule && (
+          {scope.canViewPreventive && (
           <TabsContent value="preventive" className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div><h3 className="font-medium">Mantenimiento preventivo · {preventive.plans.filter((plan) => plan.is_active).length} planes activos</h3><p className="text-xs text-muted-foreground">Próximo ciclo y estado calculados por el servidor.</p></div>
-              <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => navigateToEntity({ view: 'preventive-maintenance' })}>Ver planes</Button>{canManageAssets && <Button size="sm" onClick={() => navigateToEntity({ view: 'preventive-maintenance', preventiveAssetId: asset.id })}>Crear plan</Button>}</div>
+              <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => navigateToEntity({ view: 'preventive-maintenance', ...delegatedNavigation })}>Ver planes</Button>{scope.canManagePreventive && <Button size="sm" onClick={() => navigateToEntity({ view: 'preventive-maintenance', preventiveAssetId: asset.id, ...delegatedNavigation })}>Crear plan</Button>}</div>
             </div>
             {preventive.loading ? <p className="text-sm text-muted-foreground">Cargando…</p> : preventive.plans.length === 0 ? (
               <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Este activo no tiene planes preventivos.</p>

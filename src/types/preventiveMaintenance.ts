@@ -24,6 +24,9 @@ export interface MaintenanceCardMaterial {
   material_name?: string | null;
   current_stock?: number | null;
   material_is_active?: boolean | null;
+  /** Delegated (Facility Manager) reads only: the line is linked to the
+   * client's inventory catalog, whose ids/stock are never sent to the FM. */
+  client_linked_material?: boolean;
 }
 
 export interface MaintenanceCard {
@@ -75,7 +78,9 @@ export interface PreventiveOccurrence {
   status: PreventiveOccurrenceStatus;
   due_at: string | null;
   due_meter_value: number | null;
-  request_creation_id: string;
+  /** Null for a delegated Facility Manager: Requests / Work Orders are not
+   * delegated, so their ids are never sent (9C.2). Always set in direct mode. */
+  request_creation_id: string | null;
   request_id: string | null;
   work_order_id: string | null;
   scope_snapshot: Record<string, unknown>;

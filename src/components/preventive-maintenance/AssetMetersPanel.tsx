@@ -10,7 +10,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAssetMeters } from '@/hooks/useAssetMeters';
 import { useToast } from '@/hooks/use-toast';
 
-interface Props { assetId: string; organizationId: string; canManage: boolean; }
+interface Props {
+  assetId: string;
+  organizationId: string;
+  /** Create, correct, retire and replace meters. */
+  canManage: boolean;
+  /** Omitted = historic behavior (offered to everyone; the backend decides). */
+  canRecordReading?: boolean;
+}
 
 const localNow = () => {
   const date = new Date();
@@ -18,7 +25,7 @@ const localNow = () => {
   return date.toISOString().slice(0, 16);
 };
 
-export function AssetMetersPanel({ assetId, organizationId, canManage }: Props) {
+export function AssetMetersPanel({ assetId, organizationId, canManage, canRecordReading = true }: Props) {
   const meterState = useAssetMeters(assetId, organizationId);
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
@@ -84,7 +91,7 @@ export function AssetMetersPanel({ assetId, organizationId, canManage }: Props) 
               <span className="text-2xl font-semibold">{meter.readings[0]?.value ?? 'Sin lectura'}</span>
               {meter.readings[0] && <span className="text-xs text-muted-foreground">al {new Date(meter.readings[0].recorded_at).toLocaleString()}</span>}
               <div className="ml-auto flex gap-2">
-                {meter.is_active && <Button size="sm" variant="outline" onClick={() => { setValue(String(meter.readings[0]?.value ?? 0)); setRecordedAt(localNow()); setReadingMeterId(meter.id); }}>Registrar</Button>}
+                {canRecordReading && meter.is_active && <Button size="sm" variant="outline" onClick={() => { setValue(String(meter.readings[0]?.value ?? 0)); setRecordedAt(localNow()); setReadingMeterId(meter.id); }}>Registrar</Button>}
                 {canManage && meter.is_active && <Button size="sm" variant="ghost" onClick={() => void replace(meter.id, meter.name, meter.unit)}><RotateCcw className="mr-1 h-4 w-4" />Reemplazar</Button>}
                 {canManage && meter.is_active && <Button size="sm" variant="ghost" onClick={() => void retire(meter.id)}><XCircle className="mr-1 h-4 w-4" />Retirar</Button>}
               </div>

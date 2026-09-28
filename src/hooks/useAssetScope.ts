@@ -4,8 +4,10 @@ import {
   canFacilityManagerEditAssetCriticalityValue,
   canFacilityManagerEvaluateAssetCriticality,
   canFacilityManagerManageAssets,
+  canFacilityManagerManagePreventive,
   canFacilityManagerViewAssetCriticalityAssessments,
   canFacilityManagerViewAssets,
+  canFacilityManagerViewPreventive,
 } from '@/lib/facilityManagement';
 import type { FacilityManagementOperationalClient } from '@/types/facilityManagement';
 
@@ -27,10 +29,15 @@ export interface AssetScope {
   /** Manual edit of assets.criticality in the asset form. Delegated mode
    * requires assets.manage AND criticality.view/manage (backend enforced). */
   canEditCriticalityValue: boolean;
-  /** Traffic light, integrated history, preventive, maintenance notices,
-   * PDF report, QR and the client's member directory. Direct mode only in
-   * 9C.1: those modules are not delegated yet. */
+  /** Traffic light, integrated history, maintenance notices, PDF report, QR
+   * and the client's member directory. Direct mode only: those modules are
+   * not delegated yet. */
   includesCrossModuleData: boolean;
+  /** "Preventivo" tab of the asset sheet. Delegated since 9C.2 with its own
+   * permission (preventive_maintenance.view), independent of assets.*. */
+  canViewPreventive: boolean;
+  /** "Crear plan" from the asset sheet. */
+  canManagePreventive: boolean;
   /** default_responsible_member_id stays client-only (also enforced by a
    * backend trigger). */
   canEditDefaultResponsible: boolean;
@@ -69,6 +76,8 @@ export function useDirectAssetScope(): AssetScope {
       canEvaluateCriticality: canManageAssets,
       canEditCriticalityValue: canManageAssets,
       includesCrossModuleData: true,
+      canViewPreventive: true,
+      canManagePreventive: canManageAssets,
       canEditDefaultResponsible: canManageAssets,
     };
   }, [currentOrganization, currentMembership]);
@@ -87,6 +96,8 @@ export function buildDelegatedAssetScope(client: FacilityManagementOperationalCl
     canEvaluateCriticality: canFacilityManagerEvaluateAssetCriticality(client),
     canEditCriticalityValue: canFacilityManagerEditAssetCriticalityValue(client),
     includesCrossModuleData: false,
+    canViewPreventive: canFacilityManagerViewPreventive(client),
+    canManagePreventive: canFacilityManagerManagePreventive(client),
     canEditDefaultResponsible: false,
   };
 }

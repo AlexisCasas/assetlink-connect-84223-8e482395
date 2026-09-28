@@ -33,6 +33,12 @@ interface InspectionRunDialogProps {
     notes: string | null,
   ) => Promise<boolean>;
   onSaved: () => void;
+  /** View-only access (e.g. a delegated FM with inspections.view only): the
+   * run can be opened but not answered or submitted. */
+  readOnly?: boolean;
+  /** "Crear aviso de avería" belongs to Maintenance Notices, which is not
+   * delegated to Facility Managers yet (9C.3). */
+  allowMaintenanceNotices?: boolean;
 }
 
 interface AnswerDraft {
@@ -51,7 +57,7 @@ const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('es
  * and an optional evidence link/metadata per item. started_at is captured
  * the moment the dialog opens; completed_at at save time.
  */
-export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, saving, onSave, onSaved }: InspectionRunDialogProps) {
+export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, saving, onSave, onSaved, readOnly = false, allowMaintenanceNotices = true }: InspectionRunDialogProps) {
   const [detail, setDetail] = useState<InspectionRunDetail | null>(null);
   // Ítem sobre el que se está creando un aviso de avería. Nunca se crea un
   // aviso automáticamente al detectar una no conformidad: detectar y decidir
@@ -174,7 +180,7 @@ export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, 
               {detail.assetName && <p>Activo: {detail.assetName}</p>}
               {detail.areaAssetName && <p>Área: {detail.areaAssetName}</p>}
               {detail.branchName && <p>Sede: {detail.branchName}</p>}
-              {detail.responsibleName && <p>Responsable: {detail.responsibleName}</p>}
+              {(detail.responsibleName || detail.responsibleMemberId) && <p>Responsable: {detail.responsibleName ?? 'asignado por el cliente'}</p>}
               {detail.status === 'completed' && <p>Completada: {formatDate(detail.completedAt)} — Resultado: {detail.result}</p>}
             </div>
 
@@ -196,7 +202,7 @@ export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, 
                   >
                     {detail.responseOptions.map((option) => (
                       <div key={option.id} className="flex items-center space-x-2">
-                        <RadioGroupItem value={option.id} id={`${item.id}-${option.id}`} disabled={saving} />
+                        <RadioGroupItem value={option.id} id={`${item.id}-${option.id}`} disabled={saving || readOnly} />
                         <Label htmlFor={`${item.id}-${option.id}`} className="cursor-pointer text-sm font-normal">{option.label}</Label>
                       </div>
                     ))}
@@ -206,7 +212,7 @@ export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, 
                     placeholder="Observación (opcional)"
                     value={answers[item.id]?.observations ?? ''}
                     onChange={(e) => setAnswer(item.id, { observations: e.target.value })}
-                    disabled={saving}
+                    disabled={saving || readOnly}
                   />
                   {(() => {
                     // Solo sobre una respuesta YA guardada y marcada como no
@@ -221,7 +227,7 @@ export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, 
                     // usuario lo elige él mismo del selector de la
                     // organización, con selección obligatoria.
                     const savedAnswer = detail.answers.find((answer) => answer.templateItemId === item.id);
-                    if (detail.status !== 'completed' || !savedAnswer?.isFailure) return null;
+                    if (!allowMaintenanceNotices || detail.status !== 'completed' || !savedAnswer?.isFailure) return null;
                     return (
                       <Button
                         variant="outline"
@@ -239,13 +245,13 @@ export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, 
                       placeholder="Nombre de evidencia (opcional)"
                       value={answers[item.id]?.evidenceFileName ?? ''}
                       onChange={(e) => setAnswer(item.id, { evidenceFileName: e.target.value })}
-                      disabled={saving}
+                      disabled={saving || readOnly}
                     />
                     <Input
                       placeholder="Link de evidencia (opcional)"
                       value={answers[item.id]?.evidenceFileUrl ?? ''}
                       onChange={(e) => setAnswer(item.id, { evidenceFileUrl: e.target.value })}
-                      disabled={saving}
+                      disabled={saving || readOnly}
                     />
                   </div>
                 </div>
@@ -254,7 +260,7 @@ export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, 
 
             <div className="space-y-1">
               <Label htmlFor="run-notes">Notas generales</Label>
-              <Textarea id="run-notes" value={notes} onChange={(e) => setNotes(e.target.value)} disabled={saving} />
+              <Textarea id="run-notes" value={notes} onChange={(e) => setNotes(e.target.value)} disabled={saving || readOnly} />
             </div>
 
             {detail.status !== 'completed' && (
@@ -270,7 +276,7 @@ export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, 
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cerrar</Button>
-              {detail.status !== 'completed' && (
+              {detail.status !== 'completed' && !readOnly && (
                 <Button onClick={() => void handleSubmit()} disabled={saving || !allRequiredAnswered}>
                   {saving ? 'Guardando…' : 'Guardar ejecución'}
                 </Button>
