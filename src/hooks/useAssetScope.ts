@@ -5,6 +5,7 @@ import {
   canFacilityManagerEvaluateAssetCriticality,
   canFacilityManagerManageAssets,
   canFacilityManagerManagePreventive,
+  canFacilityManagerReportMaintenanceNotice,
   canFacilityManagerViewAssetCriticalityAssessments,
   canFacilityManagerViewAssets,
   canFacilityManagerViewPreventive,
@@ -38,6 +39,9 @@ export interface AssetScope {
   canViewPreventive: boolean;
   /** "Crear plan" from the asset sheet. */
   canManagePreventive: boolean;
+  /** "Crear aviso" from the asset sheet (maintenance_notices.report; the
+   * asset is fixed). Delegated since 9C.3. */
+  canReportMaintenanceNotice: boolean;
   /** default_responsible_member_id stays client-only (also enforced by a
    * backend trigger). */
   canEditDefaultResponsible: boolean;
@@ -78,6 +82,8 @@ export function useDirectAssetScope(): AssetScope {
       includesCrossModuleData: true,
       canViewPreventive: true,
       canManagePreventive: canManageAssets,
+      canReportMaintenanceNotice: hasActiveMembership
+        && ['owner', 'admin', 'manager', 'technician', 'requester'].includes(currentMembership!.role),
       canEditDefaultResponsible: canManageAssets,
     };
   }, [currentOrganization, currentMembership]);
@@ -98,6 +104,7 @@ export function buildDelegatedAssetScope(client: FacilityManagementOperationalCl
     includesCrossModuleData: false,
     canViewPreventive: canFacilityManagerViewPreventive(client),
     canManagePreventive: canFacilityManagerManagePreventive(client),
+    canReportMaintenanceNotice: canFacilityManagerReportMaintenanceNotice(client),
     canEditDefaultResponsible: false,
   };
 }

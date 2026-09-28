@@ -17,6 +17,7 @@ const MODULE_LABELS: Record<FacilityManagementOperationalModule, string> = {
   criticality: 'Criticidad',
   inspections: 'Inspecciones',
   'preventive-maintenance': 'Mantenimiento preventivo',
+  backlog: 'Backlog de avisos',
 };
 
 interface Props {

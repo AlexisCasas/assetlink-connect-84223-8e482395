@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RequestAssetPicker } from '@/components/requests/RequestAssetPicker';
 import { useToast } from '@/hooks/use-toast';
+import { useFacilityManagementMaintenanceNoticeAssets } from '@/hooks/useFacilityManagementReferenceDirectories';
 import type {
   CreateMaintenanceNoticeInput,
   MaintenanceNoticePriority,
@@ -33,6 +34,9 @@ interface MaintenanceNoticeDialogProps {
   source?: { type: 'inspection_run'; runId: string; itemId: string };
   defaultTitle?: string;
   defaultDescription?: string;
+  /** Delegated Facility Manager: the asset comes from the minimal directory
+   * of that client (maintenance_notices.report does not imply assets.view). */
+  assetDirectoryClientId?: string | null;
 }
 
 const PRIORITIES: MaintenanceNoticePriority[] = ['low', 'medium', 'high', 'urgent'];
@@ -47,8 +51,10 @@ export function MaintenanceNoticeDialog({
   source,
   defaultTitle = '',
   defaultDescription = '',
+  assetDirectoryClientId = null,
 }: MaintenanceNoticeDialogProps) {
   const { toast } = useToast();
+  const directoryAssets = useFacilityManagementMaintenanceNoticeAssets(open && !fixedAsset ? assetDirectoryClientId : null);
   const [assetId, setAssetId] = useState(fixedAsset?.id ?? '');
   const [title, setTitle] = useState(defaultTitle);
   const [description, setDescription] = useState(defaultDescription);
@@ -116,6 +122,18 @@ export function MaintenanceNoticeDialog({
             <div className="space-y-2">
               <Label>Activo</Label>
               <p className="rounded-md border bg-muted/30 p-2 text-sm">{fixedAsset.label}</p>
+            </div>
+          ) : assetDirectoryClientId ? (
+            <div className="space-y-2">
+              <Label>Activo *</Label>
+              <Select value={assetId} onValueChange={setAssetId}>
+                <SelectTrigger aria-label="Activo del aviso"><SelectValue placeholder="Selecciona un activo" /></SelectTrigger>
+                <SelectContent>
+                  {directoryAssets.map((asset) => (
+                    <SelectItem key={asset.id} value={asset.id}>{asset.code ? `${asset.code} · ` : ''}{asset.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           ) : (
             <RequestAssetPicker

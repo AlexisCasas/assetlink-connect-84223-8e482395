@@ -4346,6 +4346,10 @@ export type Database = {
         Args: { p_template_id: string }
         Returns: boolean
       }
+      can_create_maintenance_notice: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
       can_evaluate_asset_criticality: {
         Args: { _organization_id: string }
         Returns: boolean
@@ -4404,6 +4408,10 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: boolean
       }
+      can_triage_maintenance_notice: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
       can_user_manage_request_access: {
         Args: { _request_id: string }
         Returns: boolean
@@ -4422,6 +4430,10 @@ export type Database = {
         Returns: boolean
       }
       can_view_inspections: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
+      can_view_maintenance_notices: {
         Args: { _organization_id: string }
         Returns: boolean
       }
@@ -5226,6 +5238,15 @@ export type Database = {
         Args: { _client_organization_id: string }
         Returns: Json
       }
+      get_facility_management_maintenance_notice_assets: {
+        Args: { _client_organization_id: string }
+        Returns: {
+          code: string
+          id: string
+          name: string
+          status: string
+        }[]
+      }
       get_facility_management_members: {
         Args: { _relationship_id: string }
         Returns: {
@@ -5948,6 +5969,49 @@ export type Database = {
         }
       }
       run_automatic_alert_generation: { Args: never; Returns: Json }
+      sanitize_maintenance_notice_for_delegate: {
+        Args: {
+          _notice: Database["public"]["Tables"]["maintenance_notices"]["Row"]
+        }
+        Returns: {
+          asset_code_snapshot: string | null
+          asset_id: string
+          asset_name_snapshot: string | null
+          asset_path_snapshot: string | null
+          branch_id_snapshot: string | null
+          branch_name_snapshot: string | null
+          converted_at: string | null
+          converted_by_user_id: string | null
+          converted_request_id: string | null
+          created_at: string
+          description: string
+          dismissal_reason: string | null
+          dismissed_at: string | null
+          dismissed_by_user_id: string | null
+          id: string
+          notice_number: string
+          organization_id: string
+          priority: string
+          reported_at: string
+          reported_by_user_id: string | null
+          responsible_member_id: string | null
+          source_id: string | null
+          source_metadata: Json
+          source_type: string
+          status: string
+          title: string
+          triage_notes: string | null
+          triaged_at: string | null
+          triaged_by_user_id: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "maintenance_notices"
+          to: "maintenance_notices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       sanitize_preventive_scope_snapshot: {
         Args: { _snapshot: Json }
         Returns: Json

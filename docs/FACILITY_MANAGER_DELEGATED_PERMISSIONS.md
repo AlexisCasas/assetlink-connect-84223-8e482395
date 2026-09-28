@@ -13,9 +13,10 @@
 **Acceso operativo delegado por módulo (9C):** desde **9C.1** son efectivos
 `assets.*` y `criticality.*` (ver `docs/FACILITY_MANAGER_ASSETS_CRITICALITY.md`);
 desde **9C.2**, `inspections.*` y `preventive_maintenance.*` (ver
-`docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md`). El resto de módulos
-(avisos, solicitudes, cotizaciones, OT, reportes), además de inventario y R2,
-todavía no abre nada. **9C.3 = Avisos de avería / Backlog.**
+`docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md`); desde **9C.3**,
+`maintenance_notices.*` (ver `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`).
+El resto de módulos (solicitudes, cotizaciones, OT, reportes), además de
+inventario y R2, todavía no abre nada. **9C.4 = Requests.**
 
 ## 1. Las tres capas
 
@@ -287,9 +288,16 @@ suite pgTAP.
   - technician ejecuta, pero no planifica;
   - `responsible_member_id` sigue siendo del cliente;
   - inventario, solicitudes preventivas y R2 quedan fuera.
-- **9C.3:** Avisos de avería / Backlog.
-- Siguientes: solicitudes (9C.4, que incluye la solicitud preventiva),
-  cotizaciones, OT, reportes.
+- **9C.3 (hecho):** Avisos de avería / Backlog. Ver
+  `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`.
+  - viewer solo lee; technician y requester reportan; owner, admin y manager
+    gestionan;
+  - convertir un aviso en solicitud no se delega;
+  - el responsable sigue siendo del cliente;
+  - la respuesta delegada va minimizada: sin ids de solicitud ni de
+    ejecución, nombres sin email y criticidad solo con `criticality.view`.
+- Siguientes: solicitudes (9C.4, que incluye convertir un aviso y la
+  solicitud preventiva), cotizaciones, OT, reportes.
 
 ## 11. Verificación
 

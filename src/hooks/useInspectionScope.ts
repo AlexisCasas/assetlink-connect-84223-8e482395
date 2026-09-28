@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
+  canFacilityManagerReportMaintenanceNotice,
   canFacilityManagerExecuteInspections,
   canFacilityManagerManageInspections,
   canFacilityManagerViewInspections,
@@ -33,6 +34,11 @@ export interface InspectionScope {
   /** Namespace of the plan-draft sessionStorage key (UX only, never
    * authority). Includes FM + client in delegated mode. */
   draftScopeKey: string | null;
+  /** "Crear aviso de avería" on a failed answer (maintenance_notices.report;
+   * being in this module already implies inspections.view). */
+  canReportMaintenanceNotices: boolean;
+  /** Delegated: the notice asset comes from the minimal notice directory. */
+  maintenanceNoticeAssetDirectoryClientId: string | null;
 }
 
 /** Exactly the rules InspectionsView applied before 9C.2. */
@@ -50,6 +56,8 @@ export function useDirectInspectionScope(): InspectionScope {
     preferRunsTab: isTechnician,
     canChooseResponsible: true,
     draftScopeKey: currentOrganization?.id ?? null,
+    canReportMaintenanceNotices: true,
+    maintenanceNoticeAssetDirectoryClientId: null,
   }), [currentOrganization, currentMembership, canPlanWork, isTechnician]);
 }
 
@@ -66,5 +74,7 @@ export function buildDelegatedInspectionScope(client: FacilityManagementOperatio
     preferRunsTab: !canPlan,
     canChooseResponsible: false,
     draftScopeKey: `fm:${client.facilityManagerOrganizationId}:${client.clientOrganizationId}`,
+    canReportMaintenanceNotices: canFacilityManagerReportMaintenanceNotice(client),
+    maintenanceNoticeAssetDirectoryClientId: client.clientOrganizationId,
   };
 }

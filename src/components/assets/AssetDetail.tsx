@@ -112,11 +112,12 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   // Reportar una avería es más amplio que administrar activos: un técnico o
   // un solicitante reportan, aunque no puedan editar la ficha. El backend
   // vuelve a validarlo en create_maintenance_notice.
-  const canReportNotice = crossModule && !!currentMembership?.isActive
-    && ['owner', 'admin', 'manager', 'technician', 'requester'].includes(currentMembership.role);
+  // Delegado (9C.3): con maintenance_notices.report, sobre el activo fijo
+  // de esta ficha (a la que ya se entró con assets.view).
+  const canReportNotice = scope.canReportMaintenanceNotice;
   // El hook solo consulta cuando el diálogo está abierto: la ficha del
   // activo no necesita cargar todo el backlog para mostrar un botón.
-  const { createNotice } = useMaintenanceNotices(crossModule && noticeDialogOpen ? asset?.organizationId : null);
+  const { createNotice } = useMaintenanceNotices(canReportNotice && noticeDialogOpen ? asset?.organizationId : null);
   const preventive = usePreventiveMaintenance(scope.canViewPreventive ? asset?.organizationId : null, asset?.id);
   // Default responsible display: managers resolve it against the eligible
   // directory (active owner/admin/manager); any other member can only list
@@ -795,7 +796,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
         </div>
       </CardContent>
 
-      {crossModule && (
+      {canReportNotice && (
         <MaintenanceNoticeDialog
           open={noticeDialogOpen}
           onOpenChange={setNoticeDialogOpen}

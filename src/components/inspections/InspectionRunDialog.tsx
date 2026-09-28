@@ -36,9 +36,12 @@ interface InspectionRunDialogProps {
   /** View-only access (e.g. a delegated FM with inspections.view only): the
    * run can be opened but not answered or submitted. */
   readOnly?: boolean;
-  /** "Crear aviso de avería" belongs to Maintenance Notices, which is not
-   * delegated to Facility Managers yet (9C.3). */
+  /** "Crear aviso de avería" (maintenance_notices.report). A delegated
+   * Facility Manager needs it on top of inspections.view (9C.3). */
   allowMaintenanceNotices?: boolean;
+  /** Delegated: when the run only has a branch, the notice asset comes from
+   * the minimal notice directory instead of the client's asset tree. */
+  noticeAssetDirectoryClientId?: string | null;
 }
 
 interface AnswerDraft {
@@ -57,7 +60,7 @@ const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('es
  * and an optional evidence link/metadata per item. started_at is captured
  * the moment the dialog opens; completed_at at save time.
  */
-export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, saving, onSave, onSaved, readOnly = false, allowMaintenanceNotices = true }: InspectionRunDialogProps) {
+export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, saving, onSave, onSaved, readOnly = false, allowMaintenanceNotices = true, noticeAssetDirectoryClientId = null }: InspectionRunDialogProps) {
   const [detail, setDetail] = useState<InspectionRunDetail | null>(null);
   // Ítem sobre el que se está creando un aviso de avería. Nunca se crea un
   // aviso automáticamente al detectar una no conformidad: detectar y decidir
@@ -311,6 +314,7 @@ export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, 
             onOpenChange={(next) => { if (!next) setNoticeItem(null); }}
             onCreate={createNotice}
             fixedAsset={fixedAsset}
+            assetDirectoryClientId={noticeAssetDirectoryClientId}
             source={{ type: 'inspection_run', runId: detail.id, itemId: noticeItem.templateItemId }}
             defaultTitle={noticeItem.itemQuestion}
             defaultDescription={[

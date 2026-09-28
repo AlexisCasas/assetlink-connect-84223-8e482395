@@ -503,7 +503,8 @@ export function InspectionsView({ focusPlanId, focusRunId, scope: explicitScope 
         onOpenChange={setRunDialogOpen}
         runId={activeRunId}
         readOnly={!scope.canExecute}
-        allowMaintenanceNotices={!isDelegated}
+        allowMaintenanceNotices={scope.canReportMaintenanceNotices}
+        noticeAssetDirectoryClientId={scope.maintenanceNoticeAssetDirectoryClientId}
         loadRunDetail={loadRunDetail}
         saving={runSaving}
         onSave={submitRun}

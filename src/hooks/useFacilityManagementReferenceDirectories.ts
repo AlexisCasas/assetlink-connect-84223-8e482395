@@ -42,6 +42,21 @@ export function useFacilityManagementInspectionTargets(clientOrganizationId: str
   return { branches: query.data?.branches ?? [], assets: query.data?.assets ?? [], loading: query.isLoading && !!clientOrganizationId };
 }
 
+/** Delegated FM only: minimal asset directory to report a maintenance notice
+ * (get_facility_management_maintenance_notice_assets). Pass null to disable. */
+export function useFacilityManagementMaintenanceNoticeAssets(clientOrganizationId: string | null) {
+  const query = useQuery({
+    queryKey: ['fm-notice-assets', clientOrganizationId],
+    enabled: !!clientOrganizationId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_facility_management_maintenance_notice_assets', { _client_organization_id: clientOrganizationId! });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  return query.data ?? [];
+}
+
 /** Delegated FM only: minimal asset directory for preventive plans and
  * meters (get_facility_management_preventive_assets). Pass null to disable. */
 export function useFacilityManagementPreventiveAssets(clientOrganizationId: string | null) {
