@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDirectAssetScope, type AssetScope } from '@/hooks/useAssetScope';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import type {
@@ -147,33 +148,24 @@ const toClientBranch = (row: { id: string; name: string; city: string; site: str
 
 export type { CreateAssetInput, UpdateAssetInput };
 
-export function useAssets() {
-  const { currentOrganization, currentMembership, user } = useAuth();
+/** Without arguments: the active organization's own assets (direct mode,
+ * unchanged behavior for every existing caller). With an explicit scope:
+ * operates on that scope's organization with that scope's flags — used by
+ * the Facility Manager delegated mode without touching AuthContext. */
+export function useAssets(explicitScope?: AssetScope) {
+  const { user } = useAuth();
+  const directScope = useDirectAssetScope();
+  const scope = explicitScope ?? directScope;
   const queryClient = useQueryClient();
-  const organizationId = currentOrganization?.id;
+  const organizationId = scope.organizationId ?? undefined;
+  const isDelegated = scope.mode === 'facility_manager';
 
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
 
-  // --- Permissions -----------------------------------------------------
-  const isClientCompany = currentOrganization?.organizationType === 'client_company';
-  const hasActiveMembership = !!currentMembership?.isActive;
-  const canManageAssets = isClientCompany && hasActiveMembership && ['owner', 'admin', 'manager'].includes(currentMembership!.role);
-
-  let canViewAssets = false;
-  let accessReason: string | undefined;
-  if (!currentOrganization) {
-    accessReason = 'Selecciona una organización cliente.';
-  } else if (!isClientCompany) {
-    accessReason = currentOrganization.organizationType === 'platform_admin'
-      ? 'Los activos se administran desde la organización cliente, no desde la organización de plataforma.'
-      : 'Los activos aún no están disponibles para organizaciones proveedoras.';
-  } else if (!hasActiveMembership) {
-    accessReason = 'No tienes una membresía activa en esta organización.';
-  } else {
-    canViewAssets = true;
-  }
+  // --- Permissions (UX only; RLS re-checks) -------------------------------
+  const { canViewAssets, canManageAssets, accessReason } = scope;
 
   // --- Queries -----------------------------------------------------------
   const assetsQuery = useQuery({
@@ -197,8 +189,15 @@ export function useAssets() {
   });
 
   const branchesQuery = useQuery({
-    queryKey: ['asset-branches', organizationId],
+    queryKey: ['asset-branches', organizationId, scope.mode],
     queryFn: async () => {
+      // Delegated FM: the client's branches come from a narrow RPC (no
+      // client_email), never from a widened client_branches RLS.
+      if (isDelegated) {
+        const { data, error } = await supabase.rpc('get_facility_management_client_branches', { _client_organization_id: organizationId! });
+        if (error) throw error;
+        return (data ?? []).map(toClientBranch);
+      }
       const { data, error } = await supabase
         .from('client_branches')
         .select('id, name, city, site, address, is_active')
@@ -235,7 +234,7 @@ export function useAssets() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['assets', organizationId] }),
       queryClient.invalidateQueries({ queryKey: ['asset-categories', organizationId] }),
-      queryClient.invalidateQueries({ queryKey: ['asset-branches', organizationId] }),
+      queryClient.invalidateQueries({ queryKey: ['asset-branches', organizationId, scope.mode] }),
     ]);
   };
 
@@ -378,6 +377,7 @@ export function useAssets() {
   };
 
   return {
+    scope,
     assets,
     assetTree,
     selectedAsset,

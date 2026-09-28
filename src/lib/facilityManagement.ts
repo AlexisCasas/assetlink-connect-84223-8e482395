@@ -1,7 +1,9 @@
 import { Constants } from '@/integrations/supabase/types';
-import type { Organization, OrganizationMember, OrganizationRelationshipStatus } from '@/types/organization';
+import type { Organization, OrganizationMember, OrganizationMemberRole, OrganizationRelationshipStatus } from '@/types/organization';
 import type {
   FacilityManagementMode,
+  FacilityManagementOperationalClient,
+  FacilityManagementOperationalModule,
   FacilityManagementPermission,
   FacilityManagementPermissionGroup,
 } from '@/types/facilityManagement';
@@ -112,6 +114,50 @@ export const getFacilityManagementMode = (
   if (organization.organizationType === 'facility_manager') return 'facility_manager';
   return null;
 };
+
+// ---------------------------------------------------------------------------
+// Acceso OPERATIVO delegado (9C.1). Única fuente frontend de la matriz de
+// roles; espejo de has_facility_management_operational_access_all y de las
+// capacidades can_*_criticality del backend. Es UX: RLS/RPCs vuelven a
+// validar todo. *.manage nunca sustituye a *.view.
+// ---------------------------------------------------------------------------
+const FM_ASSET_VIEW_ROLES: readonly OrganizationMemberRole[] = ['owner', 'admin', 'manager', 'technician'];
+const FM_MANAGER_ROLES: readonly OrganizationMemberRole[] = ['owner', 'admin', 'manager'];
+
+type OperationalClientAccess = Pick<FacilityManagementOperationalClient, 'membershipRole' | 'permissions'>;
+
+const grants = (client: OperationalClientAccess, ...required: FacilityManagementPermission[]) =>
+  required.every((permission) => client.permissions.includes(permission));
+
+export const canFacilityManagerViewAssets = (client: OperationalClientAccess) =>
+  FM_ASSET_VIEW_ROLES.includes(client.membershipRole) && grants(client, 'assets.view');
+
+export const canFacilityManagerManageAssets = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'assets.view', 'assets.manage');
+
+export const canFacilityManagerViewCriticality = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'criticality.view');
+
+export const canFacilityManagerManageCriticality = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'criticality.view', 'criticality.manage');
+
+/** Historial de evaluaciones de un activo: poder ver el activo y la criticidad. */
+export const canFacilityManagerViewAssetCriticalityAssessments = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'assets.view', 'criticality.view');
+
+/** Evaluar criticidad de un activo: no exige assets.manage, sí verlo. */
+export const canFacilityManagerEvaluateAssetCriticality = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'assets.view', 'criticality.view', 'criticality.manage');
+
+/** Editar a mano assets.criticality: gestionar el activo Y la criticidad
+ * (el backend lo exige en trg_assets_enforce_delegated_write_limits). */
+export const canFacilityManagerEditAssetCriticalityValue = (client: OperationalClientAccess) =>
+  canFacilityManagerManageAssets(client) && canFacilityManagerManageCriticality(client);
+
+export const canFacilityManagerOpenModule = (
+  client: OperationalClientAccess,
+  module: FacilityManagementOperationalModule,
+) => (module === 'assets' ? canFacilityManagerViewAssets(client) : canFacilityManagerViewCriticality(client));
 
 export const FACILITY_MANAGEMENT_NAV_LABELS: Record<FacilityManagementMode, string> = {
   client: 'Facility Managers',

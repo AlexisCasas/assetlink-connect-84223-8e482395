@@ -4346,6 +4346,14 @@ export type Database = {
         Args: { p_template_id: string }
         Returns: boolean
       }
+      can_evaluate_asset_criticality: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
+      can_manage_criticality_matrix: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
       can_manage_invitation_target: {
         Args: { p_email: string; p_organization_id: string }
         Returns: boolean
@@ -4389,6 +4397,14 @@ export type Database = {
         Returns: boolean
       }
       can_user_read_request: { Args: { _request_id: string }; Returns: boolean }
+      can_view_asset_criticality_assessments: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
+      can_view_criticality_matrix: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
       classify_criticality_score: {
         Args: {
           p_critical_min: number
@@ -5171,6 +5187,17 @@ export type Database = {
           reported_activities_count: number
         }[]
       }
+      get_facility_management_client_branches: {
+        Args: { _client_organization_id: string }
+        Returns: {
+          address: string
+          city: string
+          id: string
+          is_active: boolean
+          name: string
+          site: string
+        }[]
+      }
       get_facility_management_members: {
         Args: { _relationship_id: string }
         Returns: {
@@ -5474,6 +5501,22 @@ export type Database = {
           status_from: string
           status_to: string
         }[]
+      }
+      has_facility_management_operational_access: {
+        Args: {
+          _allowed_roles: Database["public"]["Enums"]["organization_member_role"][]
+          _client_organization_id: string
+          _permission: Database["public"]["Enums"]["facility_management_permission"]
+        }
+        Returns: boolean
+      }
+      has_facility_management_operational_access_all: {
+        Args: {
+          _allowed_roles: Database["public"]["Enums"]["organization_member_role"][]
+          _client_organization_id: string
+          _permissions: Database["public"]["Enums"]["facility_management_permission"][]
+        }
+        Returns: boolean
       }
       has_facility_management_permission: {
         Args: {

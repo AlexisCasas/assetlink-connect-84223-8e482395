@@ -96,7 +96,13 @@ const toEditForm = (asset: Asset): EditForm => ({
 });
 
 export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
-  const { selectedAsset: asset, assets: allAssets, canManageAssets, categories, branches, error, saving, archiveAsset, restoreAsset, updateAsset, refreshAssets } = state;
+  const { scope, selectedAsset: asset, assets: allAssets, canManageAssets, categories, branches, error, saving, archiveAsset, restoreAsset, updateAsset, refreshAssets } = state;
+  // Delegated Facility Manager mode (9C.1): only Assets + Criticality are
+  // delegated. Every other module this sheet normally pulls in (preventive,
+  // notices, traffic light, integrated history, report, QR, the client's
+  // member directory) stays off — hooks still run, but with a null id so
+  // they never query.
+  const crossModule = scope.includesCrossModuleData;
   const { toast } = useToast();
   const { user, currentOrganization, currentMembership } = useAuth();
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -104,17 +110,17 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   // Reportar una avería es más amplio que administrar activos: un técnico o
   // un solicitante reportan, aunque no puedan editar la ficha. El backend
   // vuelve a validarlo en create_maintenance_notice.
-  const canReportNotice = !!currentMembership?.isActive
+  const canReportNotice = crossModule && !!currentMembership?.isActive
     && ['owner', 'admin', 'manager', 'technician', 'requester'].includes(currentMembership.role);
   // El hook solo consulta cuando el diálogo está abierto: la ficha del
   // activo no necesita cargar todo el backlog para mostrar un botón.
-  const { createNotice } = useMaintenanceNotices(noticeDialogOpen ? asset?.organizationId : null);
-  const preventive = usePreventiveMaintenance(asset?.organizationId, asset?.id);
+  const { createNotice } = useMaintenanceNotices(crossModule && noticeDialogOpen ? asset?.organizationId : null);
+  const preventive = usePreventiveMaintenance(crossModule ? asset?.organizationId : null, asset?.id);
   // Default responsible display: managers resolve it against the eligible
   // directory (active owner/admin/manager); any other member can only list
   // active members, which is enough to name an available responsible.
-  const { contacts, loading: loadingContacts } = useCoordinationContacts(asset?.defaultResponsibleMemberId ? asset.organizationId : null);
-  const { planners, loading: loadingPlanners } = useOrganizationPlanners(canManageAssets && asset?.defaultResponsibleMemberId ? asset.organizationId : null);
+  const { contacts, loading: loadingContacts } = useCoordinationContacts(crossModule && asset?.defaultResponsibleMemberId ? asset.organizationId : null);
+  const { planners, loading: loadingPlanners } = useOrganizationPlanners(crossModule && canManageAssets && asset?.defaultResponsibleMemberId ? asset.organizationId : null);
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -127,7 +133,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   // Matrix is scoped to the asset's own organization — hook must be called
   // unconditionally (asset can still be null here), so organizationId is
   // undefined until an asset is selected.
-  const { activeParameters, calculateCriticality, previewAssessment, loadAssessments, saving: assessmentSaving } = useCriticalityMatrix(asset?.organizationId);
+  const { activeParameters, calculateCriticality, previewAssessment, loadAssessments, saving: assessmentSaving } = useCriticalityMatrix(scope.canViewCriticality ? asset?.organizationId : undefined);
 
   // Switching the selected asset (or losing selection) must drop any
   // in-progress edit instead of showing a stale form over different data.
@@ -139,7 +145,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   // Latest evaluation drives the "score" line next to Criticidad — refetched
   // whenever the selected asset changes or a new evaluation is saved.
   useEffect(() => {
-    if (!asset) {
+    if (!asset || !scope.canViewCriticality) {
       setLatestAssessment(null);
       return;
     }
@@ -148,7 +154,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
       .then((assessments) => { if (!cancelled) setLatestAssessment(assessments[0] ?? null); })
       .catch(() => { if (!cancelled) setLatestAssessment(null); });
     return () => { cancelled = true; };
-  }, [asset?.id, historyRefreshToken, loadAssessments]);
+  }, [asset?.id, historyRefreshToken, loadAssessments, scope.canViewCriticality]);
 
   if (!asset) {
     return (
@@ -175,12 +181,16 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   const defaultResponsible = asset.defaultResponsibleMemberId
     ? responsibleDirectory.find((member) => member.memberId === asset.defaultResponsibleMemberId) ?? null
     : null;
-  const defaultResponsibleUnavailable = !!asset.defaultResponsibleMemberId && !loadingResponsible && !defaultResponsible;
+  const defaultResponsibleUnavailable = crossModule && !!asset.defaultResponsibleMemberId && !loadingResponsible && !defaultResponsible;
+  // A delegated FM never receives the client's member directory: it only
+  // learns whether the client assigned someone.
   const defaultResponsibleLabel = !asset.defaultResponsibleMemberId
     ? 'Sin responsable'
-    : defaultResponsible
-      ? defaultResponsible.name
-      : loadingResponsible ? 'Cargando…' : RESPONSIBLE_UNAVAILABLE_LABEL;
+    : !crossModule
+      ? 'Asignado por el cliente'
+      : defaultResponsible
+        ? defaultResponsible.name
+        : loadingResponsible ? 'Cargando…' : RESPONSIBLE_UNAVAILABLE_LABEL;
 
   const technicalData = asset.technicalData as Record<string, unknown>;
   const technicalText = (key: string) => {
@@ -265,7 +275,9 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
       status: form.status,
       code: form.code.trim() || null,
       description: form.description.trim() || null,
-      criticality: form.criticality || null,
+      // Only sent when the scope may edit it (delegated FM without the
+      // criticality permissions never submits it; backend enforces too).
+      ...(scope.canEditCriticalityValue ? { criticality: form.criticality || null } : {}),
       manufacturer: form.manufacturer.trim() || null,
       model: form.model.trim() || null,
       serialNumber: form.serialNumber.trim() || null,
@@ -370,29 +382,43 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
               </div>
               <div>
                 <Label>Criticidad</Label>
-                <Select value={form.criticality || 'none'} onValueChange={(value) => setField('criticality', value === 'none' ? '' : value as AssetCriticality)}>
-                  <SelectTrigger><SelectValue placeholder="Sin especificar" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin especificar</SelectItem>
-                    {ASSET_CRITICALITY_ORDER.map((criticality) => (
-                      <SelectItem key={criticality} value={criticality}>{ASSET_CRITICALITY_LABELS[criticality]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {scope.canEditCriticalityValue ? (
+                  <Select value={form.criticality || 'none'} onValueChange={(value) => setField('criticality', value === 'none' ? '' : value as AssetCriticality)}>
+                    <SelectTrigger><SelectValue placeholder="Sin especificar" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin especificar</SelectItem>
+                      {ASSET_CRITICALITY_ORDER.map((criticality) => (
+                        <SelectItem key={criticality} value={criticality}>{ASSET_CRITICALITY_LABELS[criticality]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="mt-1 rounded bg-muted/30 p-2 text-sm text-muted-foreground" data-testid="criticality-readonly">
+                    {asset.criticality ? ASSET_CRITICALITY_LABELS[asset.criticality] : 'Sin especificar'} — requiere permisos de criticidad para cambiarla.
+                  </p>
+                )}
               </div>
               <div>
                 <Label>Responsable predeterminado</Label>
-                <PlannerSelect
-                  organizationId={asset.organizationId}
-                  value={form.defaultResponsibleMemberId}
-                  onChange={(memberId) => setField('defaultResponsibleMemberId', memberId)}
-                  disabled={saving}
-                  unavailableValueLabel={RESPONSIBLE_UNAVAILABLE_LABEL}
-                  emptyMessage="No hay miembros owner/admin/manager activos para asignar."
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Responsable de seguimiento del activo. Se propone al crear avisos, planes preventivos e inspecciones nuevos; no modifica procesos existentes ni se hereda a los activos hijos.
-                </p>
+                {scope.canEditDefaultResponsible ? (
+                  <>
+                    <PlannerSelect
+                      organizationId={asset.organizationId}
+                      value={form.defaultResponsibleMemberId}
+                      onChange={(memberId) => setField('defaultResponsibleMemberId', memberId)}
+                      disabled={saving}
+                      unavailableValueLabel={RESPONSIBLE_UNAVAILABLE_LABEL}
+                      emptyMessage="No hay miembros owner/admin/manager activos para asignar."
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Responsable de seguimiento del activo. Se propone al crear avisos, planes preventivos e inspecciones nuevos; no modifica procesos existentes ni se hereda a los activos hijos.
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-1 rounded bg-muted/30 p-2 text-sm text-muted-foreground">
+                    {defaultResponsibleLabel} — solo el cliente puede cambiar el responsable predeterminado.
+                  </p>
+                )}
               </div>
               <div>
                 <Label>Fecha de compra</Label>
@@ -471,13 +497,13 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
         <Tabs defaultValue="summary" className="space-y-4">
           <TabsList className="inline-flex w-max gap-1 rounded-lg border border-onefacility-border bg-onefacility-surface p-1">
             <TabsTrigger value="summary" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Resumen</TabsTrigger>
-            <TabsTrigger value="preventive" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Preventivo</TabsTrigger>
-            <TabsTrigger value="history" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Historial</TabsTrigger>
+            {crossModule && <TabsTrigger value="preventive" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Preventivo</TabsTrigger>}
+            {(crossModule || scope.canViewCriticality) && <TabsTrigger value="history" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Historial</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="summary" className="space-y-6">
         {/* Asset Image and QR Code */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={cn('grid grid-cols-1 gap-4', crossModule && 'md:grid-cols-2')}>
           <div className="relative">
             <img
               src={asset.imageUrl || '/placeholder.svg'}
@@ -488,12 +514,14 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
               <Camera className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex flex-col items-center justify-center gap-2 p-4 border rounded-lg">
-            <QrCode className="h-12 w-12 text-muted-foreground" />
-            <Button size="sm" variant="outline" onClick={() => setQrDialogOpen(true)}>
-              Código QR
-            </Button>
-          </div>
+          {crossModule && (
+            <div className="flex flex-col items-center justify-center gap-2 p-4 border rounded-lg">
+              <QrCode className="h-12 w-12 text-muted-foreground" />
+              <Button size="sm" variant="outline" onClick={() => setQrDialogOpen(true)}>
+                Código QR
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Location */}
@@ -508,7 +536,9 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
         </div>
 
         {/* Semáforo operativo — calculado en vivo desde OT/inspecciones/estado
-            reales, nunca un color manual. Ver docs/ASSET_TRAFFIC_LIGHT.md. */}
+            reales, nunca un color manual. Ver docs/ASSET_TRAFFIC_LIGHT.md.
+            No disponible en acceso delegado (mezcla módulos no delegados). */}
+        {crossModule && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <TrafficCone className="h-4 w-4 text-muted-foreground" />
@@ -606,6 +636,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
             </div>
           )}
         </div>
+        )}
 
         <Separator />
 
@@ -635,12 +666,15 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
                   <Badge variant="secondary">Score: {latestAssessment.score} (última evaluación)</Badge>
                 )}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {latestAssessment && latestAssessment.calculatedCriticality === asset.criticality
-                  ? 'Calculada con la matriz de criticidad configurada.'
-                  : 'Valor manual — no hay una evaluación calculada vigente para este activo.'}
-              </p>
-              {canManageAssets && (
+              {/* Only meaningful when the assessments were actually loaded. */}
+              {scope.canViewCriticality && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {latestAssessment && latestAssessment.calculatedCriticality === asset.criticality
+                    ? 'Calculada con la matriz de criticidad configurada.'
+                    : 'Valor manual — no hay una evaluación calculada vigente para este activo.'}
+                </p>
+              )}
+              {scope.canEvaluateCriticality && (
                 <Button variant="outline" size="sm" className="mt-2" onClick={() => setAssessmentDialogOpen(true)}>
                   <Gauge className="h-3.5 w-3.5 mr-2" /> Evaluar criticidad
                 </Button>
@@ -694,6 +728,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
         </div>
           </TabsContent>
 
+          {crossModule && (
           <TabsContent value="preventive" className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div><h3 className="font-medium">Mantenimiento preventivo · {preventive.plans.filter((plan) => plan.is_active).length} planes activos</h3><p className="text-xs text-muted-foreground">Próximo ciclo y estado calculados por el servidor.</p></div>
@@ -708,17 +743,20 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
               </div>
             ))}
           </TabsContent>
+          )}
 
+          {(crossModule || scope.canViewCriticality) && (
           <TabsContent value="history" className="space-y-6">
-            <CriticalityAssessmentHistory assetId={asset.id} refreshToken={historyRefreshToken} loadAssessments={loadAssessments} />
-            <Separator />
-            <AssetHistory assetId={asset.id} refreshToken={historyRefreshToken} />
+            {scope.canViewCriticality && <CriticalityAssessmentHistory assetId={asset.id} refreshToken={historyRefreshToken} loadAssessments={loadAssessments} />}
+            {scope.canViewCriticality && crossModule && <Separator />}
+            {crossModule && <AssetHistory assetId={asset.id} refreshToken={historyRefreshToken} />}
           </TabsContent>
+          )}
         </Tabs>
 
         {/* Action Buttons */}
         <div className="flex flex-wrap gap-2 pt-4">
-          {canManageAssets && (
+          {crossModule && canManageAssets && (
             <Button variant="outline" size="sm" onClick={() => void handleGenerateReport()} disabled={generatingReport}>
               <FileText className="h-4 w-4 mr-2" />
               {generatingReport ? 'Generando…' : 'Generar Reporte'}
@@ -755,13 +793,16 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
         </div>
       </CardContent>
 
-      <MaintenanceNoticeDialog
-        open={noticeDialogOpen}
-        onOpenChange={setNoticeDialogOpen}
-        onCreate={createNotice}
-        fixedAsset={{ id: asset.id, label: asset.code ? `${asset.name} (${asset.code})` : asset.name }}
-      />
+      {crossModule && (
+        <MaintenanceNoticeDialog
+          open={noticeDialogOpen}
+          onOpenChange={setNoticeDialogOpen}
+          onCreate={createNotice}
+          fixedAsset={{ id: asset.id, label: asset.code ? `${asset.name} (${asset.code})` : asset.name }}
+        />
+      )}
 
+      {scope.canEvaluateCriticality && (
       <CriticalityAssessmentDialog
         open={assessmentDialogOpen}
         onOpenChange={setAssessmentDialogOpen}
@@ -778,14 +819,17 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
           toast({ title: 'Criticidad evaluada', description: `Se guardó una nueva evaluación de criticidad para "${asset.name}".` });
         }}
       />
+      )}
 
-      <AssetQrDialog
-        open={qrDialogOpen}
-        onOpenChange={setQrDialogOpen}
-        asset={{ id: asset.id, name: asset.name, code: asset.code }}
-        organizationId={asset.organizationId}
-        canManageAssets={canManageAssets}
-      />
+      {crossModule && (
+        <AssetQrDialog
+          open={qrDialogOpen}
+          onOpenChange={setQrDialogOpen}
+          asset={{ id: asset.id, name: asset.name, code: asset.code }}
+          organizationId={asset.organizationId}
+          canManageAssets={canManageAssets}
+        />
+      )}
     </Card>
   );
 }
