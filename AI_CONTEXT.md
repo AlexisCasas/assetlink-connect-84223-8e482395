@@ -2568,3 +2568,32 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   cliente → 31; manage sin view → 2; sin regla de criticidad en el trigger →
   5; sin allowlist → 7; sin controles de INSERT → 10); smoke visual local
   35/35 (+ regresión 9B 46/46).
+
+## Fase 1 · Punto 9C.1H — Hardening de meta-privilegios en tablas públicas
+
+- 55/72 tablas de `public` concedían a `anon`/`authenticated`
+  `TRUNCATE`/`REFERENCES`/`TRIGGER`/`MAINTAIN`, privilegios de objeto que
+  RLS no gobierna. Migración
+  `20260928062721_public_table_meta_privilege_hardening.sql`: retira SOLO
+  esos cuatro (nunca `REVOKE ALL` ni CRUD) de PUBLIC/anon/authenticated en
+  las tablas existentes y en el default ACL de `postgres`. `service_role`,
+  owners, RLS y policies sin cambios.
+- Default ACL LOCAL != PRODUCCIÓN: en producción `postgres` y
+  `supabase_admin` conceden CRUD + los cuatro a anon/authenticated (PUBLIC
+  sin entrada); en local el de `postgres` solo tenía los cuatro. Tras la
+  migración en producción anon/authenticated conservan CRUD en el default
+  ACL de `postgres`. Los tests exigen la AUSENCIA de los cuatro, no un CRUD
+  concreto.
+- `supabase_admin`: la migración solo lo modifica si
+  `pg_has_role(current_user, 'supabase_admin', 'SET')`; con `postgres`
+  (local y hosted) emite NOTICE y queda pendiente de plataforma/operación.
+  Ninguna tabla de `public` pertenece a supabase_admin, así que las 72
+  actuales sí quedan endurecidas; una tabla futura creada realmente por
+  supabase_admin volvería a heredar los cuatro.
+- Verificado: pgTAP dedicado 33/33 (1 skip condicional), regresión
+  completa 1329/1329; simulación del default ACL productivo en local →
+  CRUD conservado; ruta privilegiada como supabase_admin → correcta.
+  Controles negativos: tablas existentes → 5 fallos; default ACL postgres →
+  6; paso supabase_admin omitido (suite como supabase_admin) → 2; solo
+  TRUNCATE → 2; solo MAINTAIN → 1; `REVOKE ALL` → 8. Ver
+  docs/PUBLIC_TABLE_META_PRIVILEGE_HARDENING.md.
