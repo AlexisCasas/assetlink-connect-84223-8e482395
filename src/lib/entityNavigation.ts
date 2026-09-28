@@ -54,6 +54,11 @@ export interface EntityNavigationTarget {
    * asset" in #preventive-maintenance, this one means "open this asset's
    * sheet" in #assets. Never conflate the two. */
   assetId?: string;
+  /** Facility Manager delegated mode (#assets / #criticality): the client
+   * organization being operated. VISUAL CONTEXT ONLY — it is validated
+   * against get_my_facility_management_clients() before any query, and RLS/
+   * RPCs re-check every access. Never an authorization input. */
+  managedClientId?: string;
 }
 
 /** What parseEntityHash extracts from window.location.hash: a logical view
@@ -75,6 +80,7 @@ const QUERY_KEYS = {
   preventiveOccurrenceId: 'occurrence',
   preventiveAssetId: 'asset',
   assetId: 'assetId',
+  managedClientId: 'managedClient',
 } as const;
 
 /**

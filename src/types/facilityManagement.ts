@@ -56,6 +56,21 @@ export interface FacilityManagementMember {
 
 export type FacilityManagementMode = 'client' | 'facility_manager';
 
+/** get_my_facility_management_clients: a client this user OPERATES for (active
+ * relationship, active client + FM, active membership assigned to it). */
+export interface FacilityManagementOperationalClient {
+  relationshipId: string;
+  clientOrganizationId: string;
+  clientOrganizationName: string;
+  facilityManagerOrganizationId: string;
+  facilityManagerOrganizationName: string;
+  membershipRole: OrganizationMemberRole;
+  permissions: FacilityManagementPermission[];
+}
+
+/** Delegated modules wired in 9C.1. */
+export type FacilityManagementOperationalModule = 'assets' | 'criticality';
+
 export interface FacilityManagementPermissionGroup {
   key: string;
   label: string;

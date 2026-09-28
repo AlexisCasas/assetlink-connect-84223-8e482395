@@ -2516,3 +2516,55 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   `can_user_read_request` y `set_request_audience` anteriores → fallan las
   pruebas provider-facing); regresión completa 1108/1108; smoke visual
   local con Chromium headless contra Supabase local, 46/46 checks.
+
+## Fase 1 · Punto 9C.1 — Acceso operativo de Facility Manager a Activos + Criticidad
+
+- Rama `feature/phase1-fm-assets-criticality`. Migración
+  `20260928042257_facility_manager_assets_criticality_access.sql`. Detalle en
+  `docs/FACILITY_MANAGER_ASSETS_CRITICALITY.md`. Solo `assets.*` y
+  `criticality.*` son efectivos; el resto de permisos delegados sigue sin
+  abrir nada (9C.2 = Inspecciones + Preventivo).
+- Helper central `has_facility_management_operational_access(_all)(client,
+  permiso(s), roles)`: relación active + cliente/FM active + membresía activa
+  en ESE FM + asignada a ESA relación + permisos en ESA relación + rol. Nunca
+  mezcla FM distintos. `*.manage` nunca sustituye a `*.view`.
+- Matriz FM: assets.view → owner/admin/manager/technician; assets.manage,
+  criticality.view/manage y evaluar criticidad → owner/admin/manager.
+  Evaluar = assets.view + criticality.view + criticality.manage.
+- Backend: policies ADICIONALES en `assets` (SELECT/INSERT/UPDATE),
+  `asset_categories` (SELECT), `asset_events` (INSERT acotado al flujo);
+  sucursales por RPC `get_facility_management_client_branches` (sin
+  `client_email`); trigger `trg_assets_enforce_delegated_write_limits`
+  (escritor authenticated no miembro del cliente): allowlist de columnas
+  en UPDATE (comparación de fila completa, columnas futuras protegidas por
+  defecto), `criticality` condicionada a criticality.view+manage, INSERT
+  con `created_by_user_id = auth.uid()`, responsable/`qr_code`/`image_url`
+  nulos y `metadata`/`technical_data` por defecto; no mueve activos de
+  tenant ni toca `default_responsible_member_id` (CLIENT-ONLY).
+  `check_asset_consistency` ahora SECURITY DEFINER con `search_path = ''`
+  (mismo cuerpo). RPCs de
+  criticidad: solo cambia su llamada de autorización, vía
+  `can_view_criticality_matrix` / `can_manage_criticality_matrix` /
+  `can_view_asset_criticality_assessments` / `can_evaluate_asset_criticality`
+  (directo idéntico OR delegado). Semáforo e historial integrado NO se
+  amplían (mezclan módulos no delegados). El acceso directo del cliente no
+  cambia.
+- Frontend: `currentOrganization` sigue siendo el FM (nunca se cambia al
+  cliente ni se crea membresía). Contexto "cliente operado" con
+  `useFacilityManagementOperationalClients` + `useManagedClient` +
+  `ManagedClientGate` (`?managedClient=` es solo contexto visual, validado
+  contra `get_my_facility_management_clients`; un id no autorizado no monta
+  nada). `AssetScope` (`useAssetScope.ts`) permite reutilizar
+  `AssetsView`/`AssetDetail`/`CriticalityMatrixView` sin duplicarlos;
+  `useAssets()` sin argumentos conserva el modo directo para todos los
+  demás llamadores. En modo delegado no se consultan ni muestran semáforo,
+  preventivo, avisos, historial integrado, reporte PDF, QR ni el directorio
+  de miembros del cliente. Sidebar FM: "Activos de clientes" /
+  "Criticidad de clientes" solo con cliente operativo + permiso + rol;
+  Dashboard aplica el mismo gate en `#assets`/`#criticality`.
+- Verificado: pgTAP dedicado 188/188, regresión completa 1296/1296
+  (controles negativos: sin asignación → 3 fallos; technician en
+  assets.manage → 2; technician en criticidad → 8; sin restricción de
+  cliente → 31; manage sin view → 2; sin regla de criticidad en el trigger →
+  5; sin allowlist → 7; sin controles de INSERT → 10); smoke visual local
+  35/35 (+ regresión 9B 46/46).

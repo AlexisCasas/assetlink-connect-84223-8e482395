@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import { useAssets } from '@/hooks/useAssets';
+import type { AssetScope } from '@/hooks/useAssetScope';
 import { useAssetTrafficLight } from '@/hooks/useAssetTrafficLight';
 import { useToast } from '@/hooks/use-toast';
 import { AssetTree } from '@/components/assets/AssetTree';
@@ -15,6 +15,9 @@ interface AssetsViewProps {
    * here it only remains to resolve the asset WITHIN the now-active
    * organization. */
   focusAssetId?: string;
+  /** Explicit scope (Facility Manager delegated mode). Omitted = the active
+   * organization's own assets, exactly as before. */
+  scope?: AssetScope;
 }
 
 /** Owns the single `useAssets()` source of truth so AssetTree and AssetDetail
@@ -23,10 +26,12 @@ interface AssetsViewProps {
  * tree's dots and the detail panel's "Semáforo operativo" section always
  * agree — computed live from real sources, never a mirror table, see
  * docs/ASSET_TRAFFIC_LIGHT.md. */
-export function AssetsView({ focusAssetId }: AssetsViewProps) {
-  const { currentOrganization } = useAuth();
-  const state = useAssets();
-  const trafficLight = useAssetTrafficLight(currentOrganization?.id);
+export function AssetsView({ focusAssetId, scope }: AssetsViewProps) {
+  const state = useAssets(scope);
+  const scopeOrganizationId = state.scope.organizationId;
+  // The traffic light mixes OT/inspections/notices: never loaded for a
+  // delegated Facility Manager in 9C.1 (a null id makes the hook a no-op).
+  const trafficLight = useAssetTrafficLight(state.scope.includesCrossModuleData ? scopeOrganizationId : null);
   const { toast } = useToast();
 
   // Resolves focusAssetId exactly once per (organization, asset) pair, only
@@ -36,7 +41,7 @@ export function AssetsView({ focusAssetId }: AssetsViewProps) {
   const processedFocusRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const organizationId = currentOrganization?.id;
+    const organizationId = scopeOrganizationId;
     if (!focusAssetId || !organizationId || state.loading) return;
     const key = `${organizationId}:${focusAssetId}`;
     if (processedFocusRef.current === key) return;
@@ -64,7 +69,7 @@ export function AssetsView({ focusAssetId }: AssetsViewProps) {
     // elsewhere (e.g. ProviderRequestList's focusRequestId effect): the
     // processedFocusRef guard above makes every re-run after the first a
     // cheap no-op, so depending on the whole object is safe here.
-  }, [focusAssetId, currentOrganization?.id, state, toast]);
+  }, [focusAssetId, scopeOrganizationId, state, toast]);
 
   if (!state.canViewAssets) {
     return (

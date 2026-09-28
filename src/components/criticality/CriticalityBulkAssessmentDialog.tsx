@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAssets } from '@/hooks/useAssets';
+import type { AssetScope } from '@/hooks/useAssetScope';
 import { buildAssetPathMap } from '@/lib/assetTree';
 import { ASSET_CRITICALITY_LABELS } from '@/lib/assetLabels';
 import {
@@ -27,6 +28,8 @@ interface CriticalityBulkAssessmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   organizationName: string;
+  /** Delegated FM mode: the client's asset scope. Omitted = direct mode. */
+  assetScope?: AssetScope;
   activeParameters: CriticalityParameter[];
   saving: boolean;
   onPreview: (rows: BulkCriticalityRow[]) => Promise<BulkCriticalityPreviewRow[]>;
@@ -38,13 +41,14 @@ export function CriticalityBulkAssessmentDialog({
   open,
   onOpenChange,
   organizationName,
+  assetScope,
   activeParameters,
   saving,
   onPreview,
   onApply,
   onApplied,
 }: CriticalityBulkAssessmentDialogProps) {
-  const { assets, assetTree } = useAssets();
+  const { assets, assetTree } = useAssets(assetScope);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [busy, setBusy] = useState(false);

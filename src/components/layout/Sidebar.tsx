@@ -9,6 +9,8 @@ import { useOrganizationNotifications } from '@/hooks/useOrganizationNotificatio
 import { ORGANIZATION_ROLE_LABELS } from '@/lib/organizationRoles';
 import { FACILITY_MANAGEMENT_NAV_LABELS, getFacilityManagementMode } from '@/lib/facilityManagement';
 import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
+import { useFacilityManagementOperationalClients } from '@/hooks/useFacilityManagementOperationalClients';
+import { canFacilityManagerViewAssets, canFacilityManagerViewCriticality } from '@/lib/facilityManagement';
 import { 
   LayoutDashboard,
   Package,
@@ -120,6 +122,13 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   // subcontractor_company. userRole === 'proveedor' alone is not enough —
   // AuthContext still maps facility_manager to it for legacy compatibility.
   const isProviderMarketplaceOrg = isProviderFacingOrganizationType(currentOrganization?.organizationType);
+  // Fase 1 · Punto 9C.1: delegated operation for a facility_manager org —
+  // only when at least one OPERATIONAL client (assigned + active) grants the
+  // permission AND the user's FM role allows it. Never just because a
+  // relationship exists. UX only: Dashboard/RLS re-check.
+  const { clients: operationalClients } = useFacilityManagementOperationalClients();
+  const canViewDelegatedAssets = operationalClients.some(canFacilityManagerViewAssets);
+  const canViewDelegatedCriticality = operationalClients.some(canFacilityManagerViewCriticality);
 
   return (
     <aside className={cn(
@@ -185,6 +194,10 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
         {canViewUsers && <Button variant={currentView === 'users' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('users')}><Users className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Usuarios'}</Button>}
 
         {facilityManagementMode && <Button variant={currentView === 'facility-management' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('facility-management')}><Briefcase className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && FACILITY_MANAGEMENT_NAV_LABELS[facilityManagementMode]}</Button>}
+
+        {canViewDelegatedAssets && <Button variant={currentView === 'assets' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('assets')}><Package className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Activos de clientes'}</Button>}
+
+        {canViewDelegatedCriticality && <Button variant={currentView === 'criticality' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('criticality')}><Gauge className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Criticidad de clientes'}</Button>}
 
         {canViewWorkOrders && (
           <Button

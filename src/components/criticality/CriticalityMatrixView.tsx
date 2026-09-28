@@ -28,9 +28,25 @@ import { CriticalityThresholdsCard } from './CriticalityThresholdsCard';
 import { CriticalityThresholdsDialog } from './CriticalityThresholdsDialog';
 import { buildMatrixWorkbook, downloadBlob, matrixFileName } from '@/lib/criticalityExcel';
 import type { CriticalityOption, CriticalityOptionInput, CriticalityParameter, CriticalityParameterInput } from '@/types/criticalityMatrix';
+import type { AssetScope } from '@/hooks/useAssetScope';
 
-export function CriticalityMatrixView() {
-  const { currentOrganization, currentMembership } = useAuth();
+/** Target + UI capabilities of the matrix view. Omitted = the active
+ * organization (direct mode, historic rules). A Facility Manager passes the
+ * delegated client it operates (9C.1). UX only: every RPC re-checks. */
+export interface CriticalityScope {
+  organizationId: string;
+  organizationName: string;
+  canManageMatrix: boolean;
+  canEvaluateAssets: boolean;
+  /** Asset scope used by the bulk assessment dialog (delegated mode). */
+  assetScope?: AssetScope;
+}
+
+export function CriticalityMatrixView({ scope }: { scope?: CriticalityScope } = {}) {
+  const { currentOrganization: activeOrganization, currentMembership } = useAuth();
+  const currentOrganization = scope
+    ? { id: scope.organizationId, name: scope.organizationName }
+    : activeOrganization;
   const {
     matrix,
     activeParameters,
@@ -82,11 +98,14 @@ export function CriticalityMatrixView() {
   }
 
   const hasActiveMatrix = activeParameters.length > 0;
-  // Same authorization set clear_active_criticality_matrix enforces
-  // server-side (owner/admin/manager or platform_admin) — this only gates
-  // the button's visibility, the RPC is still the real authority.
-  const canManageMatrix = currentOrganization.organizationType === 'platform_admin'
-    || (!!currentMembership?.isActive && ['owner', 'admin', 'manager'].includes(currentMembership.role));
+  // Same authorization set the matrix RPCs enforce server-side
+  // (can_manage_criticality_matrix) — this only gates visibility, the RPC is
+  // still the real authority. Every mutation control below uses it.
+  const canManageMatrix = scope
+    ? scope.canManageMatrix
+    : activeOrganization?.organizationType === 'platform_admin'
+      || (!!currentMembership?.isActive && ['owner', 'admin', 'manager'].includes(currentMembership.role));
+  const canEvaluateAssets = scope ? scope.canEvaluateAssets : canManageMatrix;
 
   const handleClearActiveMatrix = async () => {
     const ok = await clearActiveMatrix();
@@ -163,15 +182,21 @@ export function CriticalityMatrixView() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setTemplatesOpen(true)} disabled={loading}>
-            <LayoutTemplate className="mr-2 h-4 w-4" /> Plantillas
-          </Button>
-          <Button variant="outline" onClick={() => setBulkOpen(true)} disabled={loading || !hasActiveMatrix}>
-            <FileSpreadsheet className="mr-2 h-4 w-4" /> Evaluar por Excel
-          </Button>
-          <Button variant="outline" onClick={() => setImportOpen(true)} disabled={loading}>
-            <Upload className="mr-2 h-4 w-4" /> Importar matriz
-          </Button>
+          {canManageMatrix && (
+            <Button variant="outline" onClick={() => setTemplatesOpen(true)} disabled={loading}>
+              <LayoutTemplate className="mr-2 h-4 w-4" /> Plantillas
+            </Button>
+          )}
+          {canEvaluateAssets && (
+            <Button variant="outline" onClick={() => setBulkOpen(true)} disabled={loading || !hasActiveMatrix}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" /> Evaluar por Excel
+            </Button>
+          )}
+          {canManageMatrix && (
+            <Button variant="outline" onClick={() => setImportOpen(true)} disabled={loading}>
+              <Upload className="mr-2 h-4 w-4" /> Importar matriz
+            </Button>
+          )}
           <Button variant="outline" onClick={() => void handleExportMatrix()} disabled={loading || exporting || !hasActiveMatrix || !thresholds}>
             <Download className="mr-2 h-4 w-4" /> {exporting ? 'Exportando…' : 'Exportar matriz'}
           </Button>
@@ -180,12 +205,16 @@ export function CriticalityMatrixView() {
               <FilePlus2 className="mr-2 h-4 w-4" /> Nueva matriz en blanco
             </Button>
           )}
-          <Button variant="outline" onClick={() => setSaveTemplateOpen(true)} disabled={loading || !hasActiveMatrix}>
-            <Save className="mr-2 h-4 w-4" /> Guardar como plantilla
-          </Button>
-          <Button onClick={openCreateParameter} disabled={loading}>
-            <Plus className="mr-2 h-4 w-4" /> Crear parámetro
-          </Button>
+          {canManageMatrix && (
+            <Button variant="outline" onClick={() => setSaveTemplateOpen(true)} disabled={loading || !hasActiveMatrix}>
+              <Save className="mr-2 h-4 w-4" /> Guardar como plantilla
+            </Button>
+          )}
+          {canManageMatrix && (
+            <Button onClick={openCreateParameter} disabled={loading}>
+              <Plus className="mr-2 h-4 w-4" /> Crear parámetro
+            </Button>
+          )}
         </div>
       </div>
 
@@ -246,17 +275,19 @@ export function CriticalityMatrixView() {
                   </CardTitle>
                   {parameter.description && <p className="mt-1 text-sm text-muted-foreground">{parameter.description}</p>}
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => openCreateOption(parameter)}>
-                    <Plus className="mr-1 h-3.5 w-3.5" /> Opción
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => openEditParameter(parameter)} title="Editar parámetro">
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => void handleToggleParameter(parameter)} title={parameter.isActive ? 'Desactivar' : 'Activar'}>
-                    {parameter.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
+                {canManageMatrix && (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openCreateOption(parameter)}>
+                      <Plus className="mr-1 h-3.5 w-3.5" /> Opción
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => openEditParameter(parameter)} title="Editar parámetro">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => void handleToggleParameter(parameter)} title={parameter.isActive ? 'Desactivar' : 'Activar'}>
+                      {parameter.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
                 {parameter.options.length === 0 ? (
@@ -269,12 +300,16 @@ export function CriticalityMatrixView() {
                         <div className="flex shrink-0 items-center gap-2">
                           <Badge variant="secondary">Puntuación: {option.score}</Badge>
                           {!option.isActive && <Badge variant="outline">Inactiva</Badge>}
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditOption(parameter, option)} title="Editar opción">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void handleToggleOption(option)} title={option.isActive ? 'Desactivar' : 'Activar'}>
-                            {option.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                          </Button>
+                          {canManageMatrix && (
+                            <>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditOption(parameter, option)} title="Editar opción">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void handleToggleOption(option)} title={option.isActive ? 'Desactivar' : 'Activar'}>
+                                {option.isActive ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -352,6 +387,7 @@ export function CriticalityMatrixView() {
         open={bulkOpen}
         onOpenChange={setBulkOpen}
         organizationName={currentOrganization.name}
+        assetScope={scope?.assetScope}
         activeParameters={activeParameters}
         saving={saving}
         onPreview={previewBulk}

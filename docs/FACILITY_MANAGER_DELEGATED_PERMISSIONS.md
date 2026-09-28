@@ -10,10 +10,11 @@
   (75 aserciones). Incluye el cierre de la semántica provider-facing de
   Facility Manager (§13).
 
-**Todavía NO hay acceso operativo delegado a ningún módulo** (activos,
-criticidad, inspecciones, preventivo, avisos, solicitudes, cotizaciones,
-OT, reportes): sus RLS no cambiaron. Hoy nadie del FM ve datos del cliente;
-eso corresponde a **9C**, módulo por módulo.
+**Acceso operativo delegado por módulo (9C):** desde **9C.1** son efectivos
+`assets.*` y `criticality.*` (ver `docs/FACILITY_MANAGER_ASSETS_CRITICALITY.md`).
+El resto de módulos (inspecciones, preventivo, avisos, solicitudes,
+cotizaciones, OT, reportes) todavía no abre nada: sus RLS no cambiaron.
+**9C.2 = Inspecciones + Preventivo.**
 
 ## 1. Las tres capas
 
@@ -268,14 +269,20 @@ auditoría. **Desde 9B ya no administra Facility Managers**:
 directorio, así que tampoco lista Facility Managers — es la semántica
 buscada, no un efecto colateral: ver §13.
 
-## 10. Próximo paso: 9C, integración por módulo
+## 10. 9C: integración por módulo
 
-Cada módulo ampliará sus policies/RPCs con
-`has_facility_management_permission(<client_org>, '<modulo>.<accion>')`,
-combinado con el rol interno del FM que corresponda, y con su propia suite
-pgTAP. Hasta entonces, conceder permisos y asignar personas no abre ningún
-dato. También pendiente para 9C: el selector de "cliente operativo" del
-miembro asignado (`get_my_facility_management_clients`).
+Cada módulo amplía sus policies/RPCs con el helper operativo de 9C.1,
+`has_facility_management_operational_access(_all)(<client_org>, <permiso(s)>,
+<roles FM permitidos>)`, que combina en la MISMA relación: asignación,
+permiso(s), membresía activa y rol interno. Cada módulo tiene su propia
+suite pgTAP.
+
+- **9C.1 (hecho):** Activos + Criticidad, con el contexto reutilizable de
+  "cliente operado" (`ManagedClientGate`, `?managedClient=` validado contra
+  `get_my_facility_management_clients`). Ver
+  `docs/FACILITY_MANAGER_ASSETS_CRITICALITY.md`.
+- **9C.2:** Inspecciones + Preventivo.
+- Siguientes: avisos, solicitudes, cotizaciones, OT, reportes.
 
 ## 11. Verificación
 

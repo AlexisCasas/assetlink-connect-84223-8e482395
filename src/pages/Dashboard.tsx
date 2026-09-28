@@ -25,6 +25,7 @@ import { BacklogView } from '@/components/backlog/BacklogView';
 import { PreventiveMaintenanceView } from '@/components/preventive-maintenance/PreventiveMaintenanceView';
 import { PreventiveMaintenanceSummaryCard } from '@/components/dashboard/PreventiveMaintenanceSummaryCard';
 import { FacilityManagementAccessDenied, FacilityManagementView } from '@/components/facility-management/FacilityManagementView';
+import { DelegatedAssetsModule, DelegatedCriticalityModule } from '@/components/facility-management/DelegatedModules';
 import { getFacilityManagementMode } from '@/lib/facilityManagement';
 import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { useToast } from '@/hooks/use-toast';
@@ -111,6 +112,12 @@ const Dashboard = () => {
   const renderContent = () => {
     switch (currentView) {
       case 'assets':
+        // Facility Manager (9C.1): delegated mode. currentOrganization stays
+        // the FM; the operated client comes from ?managedClient= validated
+        // against get_my_facility_management_clients(), and RLS re-checks.
+        if (currentOrganization?.organizationType === 'facility_manager') {
+          return <DelegatedAssetsModule managedClientId={focus.managedClientId} focusAssetId={focus.assetId} />;
+        }
         // Activos es un módulo de organizaciones cliente; platform_admin y
         // proveedores no operan activos en esta fase. Not normally
         // reachable via the sidebar (its "Activos" item only renders for
@@ -176,6 +183,9 @@ const Dashboard = () => {
       case 'efficiency':
         return <EfficiencyDashboard />;
       case 'criticality':
+        if (currentOrganization?.organizationType === 'facility_manager') {
+          return <DelegatedCriticalityModule managedClientId={focus.managedClientId} />;
+        }
         return <CriticalityMatrixView />;
       case 'inspections':
         return <InspectionsView focusPlanId={focus.inspectionPlanId} focusRunId={focus.inspectionRunId} />;
