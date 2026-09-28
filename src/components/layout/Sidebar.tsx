@@ -7,6 +7,8 @@ import { OrganizationSwitcher } from '@/components/organization/OrganizationSwit
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { useOrganizationNotifications } from '@/hooks/useOrganizationNotifications';
 import { ORGANIZATION_ROLE_LABELS } from '@/lib/organizationRoles';
+import { FACILITY_MANAGEMENT_NAV_LABELS, getFacilityManagementMode } from '@/lib/facilityManagement';
+import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { 
   LayoutDashboard,
   Package,
@@ -30,11 +32,12 @@ import {
   ,CalendarClock
   ,Shield
   ,AlertTriangle
+  ,Briefcase
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin' | 'users') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin' | 'users' | 'facility-management') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -108,6 +111,15 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   // update_organization_member en el servidor, replicado aquí solo para no
   // mostrar un botón que el backend rechazaría.
   const canViewUsers = !isPlatformAdminOrg && !!currentMembership?.isActive && ['owner', 'admin'].includes(currentMembership.role);
+  // Fase 1 · Punto 9B: owner/admin de un cliente ("Facility Managers") o de
+  // un Facility Manager ("Clientes administrados"). Mismo destino, distinta
+  // variante; Dashboard aplica el mismo gate para #facility-management
+  // directo y las RPCs vuelven a autorizar en el servidor.
+  const facilityManagementMode = getFacilityManagementMode(currentOrganization, currentMembership);
+  // Provider request list + public marketplace: only provider_company /
+  // subcontractor_company. userRole === 'proveedor' alone is not enough —
+  // AuthContext still maps facility_manager to it for legacy compatibility.
+  const isProviderMarketplaceOrg = isProviderFacingOrganizationType(currentOrganization?.organizationType);
 
   return (
     <aside className={cn(
@@ -171,6 +183,8 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
         {canManage && <Button variant={currentView === 'admin' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('admin')}><Shield className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Administración'}</Button>}
 
         {canViewUsers && <Button variant={currentView === 'users' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('users')}><Users className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Usuarios'}</Button>}
+
+        {facilityManagementMode && <Button variant={currentView === 'facility-management' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('facility-management')}><Briefcase className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && FACILITY_MANAGEMENT_NAV_LABELS[facilityManagementMode]}</Button>}
 
         {canViewWorkOrders && (
           <Button
@@ -409,6 +423,8 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
 
         {userRole === 'proveedor' && (
           <>
+            {isProviderMarketplaceOrg && (
+            <>
             <Button
               variant={currentView === 'requests' ? "default" : "ghost"}
               className={cn(
@@ -438,6 +454,8 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               )} />
               {!collapsed && 'Solicitudes Públicas'}
             </Button>
+            </>
+            )}
             
             <Button
               variant={currentView === 'profile' ? "default" : "ghost"}

@@ -24,6 +24,9 @@ import { InspectionsView } from '@/components/inspections/InspectionsView';
 import { BacklogView } from '@/components/backlog/BacklogView';
 import { PreventiveMaintenanceView } from '@/components/preventive-maintenance/PreventiveMaintenanceView';
 import { PreventiveMaintenanceSummaryCard } from '@/components/dashboard/PreventiveMaintenanceSummaryCard';
+import { FacilityManagementAccessDenied, FacilityManagementView } from '@/components/facility-management/FacilityManagementView';
+import { getFacilityManagementMode } from '@/lib/facilityManagement';
+import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { useToast } from '@/hooks/use-toast';
 import { parseEntityHash, type DashboardView, type ParsedEntityHash } from '@/lib/entityNavigation';
 
@@ -127,10 +130,15 @@ const Dashboard = () => {
         if (user?.role === 'team_member') {
           return <LegacyAssignmentsPlaceholder />;
         }
+        // Provider side: only provider_company / subcontractor_company. A
+        // facility_manager is mapped to the legacy 'proveedor' role but is
+        // not provider-facing (Fase 1 · Punto 9B), even via a direct hash.
+        if (!isProviderFacingOrganizationType(currentOrganization?.organizationType)) return <ProviderFacingAccessDenied />;
         return <ProviderRequestList focusRequestId={focus.requestId} focusQuoteId={focus.quoteId} />;
       case 'drafts':
         return <DraftList />;
       case 'public-requests':
+        if (!isProviderFacingOrganizationType(currentOrganization?.organizationType)) return <ProviderFacingAccessDenied />;
         return <PublicRequestList />;
       case 'profile':
         return <OrganizationProfile />;
@@ -184,6 +192,11 @@ const Dashboard = () => {
         // organización no platform_admin; el gate real vive en el
         // servidor (list_organization_access/update_organization_member).
         return <div className="p-6"><OrganizationUsersView /></div>;
+      case 'facility-management':
+        // Gate real para #facility-management directo (no solo ocultar el
+        // ítem del Sidebar); las RPCs 9A/9B vuelven a autorizar en el servidor.
+        if (!getFacilityManagementMode(currentOrganization, currentMembership)) return <FacilityManagementAccessDenied />;
+        return <FacilityManagementView />;
       default:
         // Real dashboard — see docs/REAL_DASHBOARD_METRICS.md.
         // DashboardMetricsCards gates itself to owner/admin/manager (same
@@ -211,6 +224,14 @@ const Dashboard = () => {
     </div>
   );
 };
+
+const ProviderFacingAccessDenied = () => (
+  <div className="flex h-full items-center justify-center p-6">
+    <p className="text-sm text-muted-foreground">
+      Esta vista solo está disponible para organizaciones proveedoras o subcontratistas.
+    </p>
+  </div>
+);
 
 const LegacyAssignmentsPlaceholder = () => (
   <div className="p-6">

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Building2, MapPin, Calendar, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { QuoteForm } from './QuoteForm';
 
 interface Request {
@@ -33,8 +34,7 @@ export const PublicRequestList = () => {
   const [loading, setLoading] = useState(true);
   const [selectedRequestForQuote, setSelectedRequestForQuote] = useState<Request | null>(null);
 
-  const canViewMarketplace = currentOrganization?.organizationType === 'provider_company'
-    || currentOrganization?.organizationType === 'facility_manager';
+  const canViewMarketplace = isProviderFacingOrganizationType(currentOrganization?.organizationType);
 
   useEffect(() => {
     if (!canViewMarketplace) {

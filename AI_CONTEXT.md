@@ -2460,3 +2460,59 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
 - Verificado: suite dedicada 328/328; controles negativos (sin condición de
   asignación → 6 fallos; regla pending incondicional → 11; versión
   anterior: ACL reabierto → 43, sin triggers → 13, helper sin filtros → 5).
+
+## Fase 1 · Punto 9B — UI de administración de Facility Managers
+
+- Rama `feature/phase1-facility-manager-ui`. Migración
+  `20260927205942_facility_manager_ui_integration.sql` (9A ya desplegada, no
+  se tocó). Detalle en `docs/FACILITY_MANAGER_DELEGATED_PERMISSIONS.md` §9 y §12.
+- **Todavía NO hay acceso operativo delegado a módulos** (activos,
+  criticidad, inspecciones, preventivo, avisos, solicitudes, cotizaciones,
+  OT, reportes): eso es 9C.
+- Vista `#facility-management` (`src/components/facility-management/`),
+  variante por tipo de organización + rol vía `getFacilityManagementMode`
+  (`src/lib/facilityManagement.ts`), aplicada en Sidebar y en Dashboard
+  (hash directo → acceso denegado):
+  - Cliente owner/admin → "Facility Managers": directorio
+    (`get_facility_manager_directory`, RPC nueva), vincular, estado según la
+    máquina 9A, permisos agrupados por módulo, equipo en solo lectura.
+  - FM owner/admin → "Clientes administrados": cartera, permisos en solo
+    lectura, asignación de su propio equipo (roster vía
+    `useOrganizationAccess`/`list_organization_access`; se envía
+    `organization_members.id`).
+  - Cualquier otro rol/tipo (incl. platform_admin): sin menú.
+- `useFacilityManagement` centraliza las 9 RPCs 9A + la nueva; el frontend
+  nunca escribe directo en las tablas de delegación. Tipos en
+  `src/types/facilityManagement.ts` (el enum sale de los tipos generados;
+  `types.ts` regenerado tras `db reset`).
+- **Deuda legacy cerrada**: `get_provider_relationship_directory` ya no
+  devuelve `facility_manager` y `set_provider_relationship_status` lo
+  rechaza con `22023`; provider/subcontractor sin cambios. Toda relación
+  `facility_management` pasa solo por las RPCs 9A. `ApprovedProvidersList`
+  ya no muestra FM; `RequestProviderSelector` tampoco.
+- **Facility Manager NO es provider-facing en el MVP** (decisión funcional):
+  solo `provider_company` y `subcontractor_company` reciben invitaciones,
+  ven el marketplace y cotizan. `quotes.view/manage/approve` son gestión
+  delegada de las cotizaciones DEL CLIENTE, nunca cotizar como FM. Una
+  futura organización FM+proveedor se modelará como capacidad dual
+  explícita, no por `organization_type`. Backend (misma migración 9B):
+  `is_provider_facing_organization` = proveedor + subcontratista activos
+  (antes proveedor + FM, sin subcontratista); `can_user_read_request`
+  delega en él; `can_provider_quote_request` y las policies de
+  `request_provider_access` quedan cubiertas por el helper;
+  `set_request_audience` rechaza FM con `22023` y exige relación activa del
+  tipo correspondiente. Frontend: gate único
+  `isProviderFacingOrganizationType` (`src/types/providerRelationship.ts`)
+  en Sidebar, Dashboard (`#requests` rama proveedor y `#public-requests`,
+  también por hash directo), `ProviderRequestList`, `PublicRequestList`,
+  `QuoteForm`, `RequestProviderSelector` y `OrganizationProfile`
+  (especialidades). Nunca usar solo `user.role === 'proveedor'`
+  (`AuthContext` sigue mapeando FM a ese rol legacy).
+- Suite 9A adaptada sin cambiar su conteo (328): las pruebas que usaban la
+  RPC legacy sobre filas FM verifican ahora las mismas garantías de trigger
+  con un escritor de nivel servicio.
+- Verificado: `facility_manager_ui_integration.test.sql` 75/75 (controles
+  negativos: RPCs legacy de homologación anteriores → 6 fallos; helper,
+  `can_user_read_request` y `set_request_audience` anteriores → fallan las
+  pruebas provider-facing); regresión completa 1108/1108; smoke visual
+  local con Chromium headless contra Supabase local, 46/46 checks.

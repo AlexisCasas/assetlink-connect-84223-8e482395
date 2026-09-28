@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -124,8 +125,7 @@ export const ProviderRequestList = ({ focusRequestId, focusQuoteId }: ProviderRe
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [selectedRequestForForm, setSelectedRequestForForm] = useState<RequestData | null>(null);
   const [existingQuoteForForm, setExistingQuoteForForm] = useState<any>(null);
-  const canViewProviderRequests = currentOrganization?.organizationType === 'provider_company'
-    || currentOrganization?.organizationType === 'facility_manager';
+  const canViewProviderRequests = isProviderFacingOrganizationType(currentOrganization?.organizationType);
 
   useEffect(() => {
     const savedColumns = localStorage.getItem('providerRequestColumns');

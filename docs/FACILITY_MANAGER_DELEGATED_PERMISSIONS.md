@@ -1,15 +1,19 @@
-# Permisos delegados Cliente → Facility Manager (Fase 1 · Punto 9A)
+# Permisos delegados Cliente → Facility Manager (Fase 1 · Puntos 9A y 9B)
 
-Fundación **solo backend**. Migración:
-`supabase/migrations/20260927194923_facility_manager_delegated_permissions.sql`.
-Pruebas: `supabase/tests/facility_manager_delegated_permissions.test.sql`
-(328 aserciones).
+- **9A — fundación backend.** Migración
+  `supabase/migrations/20260927194923_facility_manager_delegated_permissions.sql`.
+  Pruebas: `supabase/tests/facility_manager_delegated_permissions.test.sql`
+  (328 aserciones).
+- **9B — UI de administración** (§12). Migración
+  `supabase/migrations/20260927205942_facility_manager_ui_integration.sql`.
+  Pruebas: `supabase/tests/facility_manager_ui_integration.test.sql`
+  (75 aserciones). Incluye el cierre de la semántica provider-facing de
+  Facility Manager (§13).
 
-Esta fase **no** amplía todavía las RLS de ningún módulo funcional
-(activos, criticidad, inspecciones, preventivo, avisos, solicitudes,
-cotizaciones, OT, reportes) y **no** toca frontend (Sidebar, Dashboard,
-`usePermissions`, `types.ts`). Hoy nadie del FM ve datos nuevos del
-cliente: la integración módulo por módulo es el paso siguiente.
+**Todavía NO hay acceso operativo delegado a ningún módulo** (activos,
+criticidad, inspecciones, preventivo, avisos, solicitudes, cotizaciones,
+OT, reportes): sus RLS no cambiaron. Hoy nadie del FM ve datos del cliente;
+eso corresponde a **9C**, módulo por módulo.
 
 ## 1. Las tres capas
 
@@ -244,32 +248,34 @@ inmediato.
 
 Sin secretos, tokens ni metadata de usuario.
 
-## 9. Convivencia con la homologación de proveedores (Fase 18) — deuda para 9B
+## 9. Homologación de proveedores (Fase 18) — deuda legacy CERRADA en 9B
 
-`set_provider_relationship_status` (usada por `ApprovedProvidersList`)
-también puede escribir filas `facility_management`. Se conserva porque el
-frontend depende de ella, pero queda gobernada por los triggers:
+En 9A, `set_provider_relationship_status` (la RPC de "Proveedores
+Homologados") todavía podía escribir filas `facility_management` sin
+auditoría. **Desde 9B ya no administra Facility Managers**:
 
-- respeta la máquina de estados (las transiciones de la UI actual caben en
-  ella);
-- no puede conceder permisos ni asignar personas (no tiene cómo);
-- si termina una relación, se borran permisos y asignaciones; reabrirla no
-  restaura nada.
+- `get_provider_relationship_directory` devuelve solo `provider_company` y
+  `subcontractor_company` (mismo contrato de retorno).
+- `set_provider_relationship_status` rechaza un target `facility_manager`
+  con `22023` antes de escribir nada; no crea ni modifica relaciones
+  `facility_management`. Proveedores y subcontratistas conservan
+  exactamente su comportamiento histórico (incluidas sus transiciones
+  libres, que no tienen la máquina de estados FM).
+- Toda relación `facility_management` se gestiona **exclusivamente** con las
+  RPCs de 9A.
 
-Lo que **no** hace es auditar. **Deuda para 9B**: cuando exista la UI
-específica de Facility Managers, mover la gestión FM a las RPCs de esta
-migración y limitar `set_provider_relationship_status` a
-`provider`/`subcontracting`.
+`RequestProviderSelector` (invitación privada a cotizar) usa este mismo
+directorio, así que tampoco lista Facility Managers — es la semántica
+buscada, no un efecto colateral: ver §13.
 
-## 10. Próximo paso: integración por módulo
+## 10. Próximo paso: 9C, integración por módulo
 
 Cada módulo ampliará sus policies/RPCs con
 `has_facility_management_permission(<client_org>, '<modulo>.<accion>')`,
 combinado con el rol interno del FM que corresponda, y con su propia suite
 pgTAP. Hasta entonces, conceder permisos y asignar personas no abre ningún
-dato. También queda pendiente regenerar `src/integrations/supabase/types.ts`
-y la UI (delegaciones y equipo en el cliente; cartera, asignaciones y
-selector de clientes operativos en el FM).
+dato. También pendiente para 9C: el selector de "cliente operativo" del
+miembro asignado (`get_my_facility_management_clients`).
 
 ## 11. Verificación
 
@@ -288,3 +294,132 @@ selector de clientes operativos en el FM).
   `Homologar`/`Suspender`/`Reactivar` sobre filas FM existentes. Ahora solo
   aplica cuando la fila es realmente nueva; hay pruebas de regresión del
   flujo de la UI.
+
+## 12. Punto 9B — UI de administración
+
+Vista única `#facility-management`
+(`src/components/facility-management/FacilityManagementView.tsx`) cuya
+variante depende del tipo de la organización activa y del rol:
+
+| Contexto | Ítem del Sidebar | Puede |
+|---|---|---|
+| Cliente, owner/admin | **Facility Managers** | ver el directorio de empresas FM activas (`get_facility_manager_directory`), vincular (nace `pending`), cambiar estado (solo las transiciones que acepta la máquina 9A), editar permisos agrupados por módulo, ver el equipo asignado **en solo lectura** |
+| Facility Manager, owner/admin | **Clientes administrados** | ver su cartera (`get_my_facility_management_portfolio`), ver permisos recibidos **en solo lectura**, asignar/desasignar personas **de su propia organización** |
+| Cualquier otro (manager, technician, viewer…, provider, subcontractor, platform_admin) | nada | — (un `#facility-management` directo muestra "acceso denegado") |
+
+- El gate vive en `getFacilityManagementMode` (`src/lib/facilityManagement.ts`)
+  y lo aplican tanto el Sidebar como Dashboard (hash directo). Es solo UI:
+  cada RPC vuelve a autorizar con `auth.uid()`.
+- `useFacilityManagement` centraliza todas las llamadas; el frontend nunca
+  escribe directo en las tablas de delegación. `currentOrganization` solo
+  define el contexto visual.
+- El roster del FM reutiliza `useOrganizationAccess` /
+  `list_organization_access` (el mismo mecanismo de la pantalla Usuarios,
+  que reemplazó a `admin-list-organization-members`); solo los miembros
+  activos son seleccionables y se envía `organization_members.id`, nunca
+  `user_id`.
+- Labels de permisos y módulos en español; los códigos internos no cambian.
+  El tipo del permiso sale de los tipos generados de Supabase y el listado,
+  de `Constants.public.Enums.facility_management_permission`.
+- `ApprovedProvidersList` ya no muestra ni filtra Facility Managers.
+
+### RPC nueva: `get_facility_manager_directory(_client_organization_id)`
+
+`SECURITY DEFINER`, `search_path = ''`, `EXECUTE` solo `authenticated`.
+Owner/admin activos del cliente o platform_admin (`42501` si no); el id debe
+ser un `client_company` (`22023`). Devuelve solo
+`facility_manager_organization_id`, `facility_manager_organization_name`,
+`relationship_id`, `relationship_status` de empresas `facility_manager`
+activas (relación `NULL` si todavía no hay vínculo), ordenadas por nombre.
+Nunca miembros, emails ni metadata.
+
+### Verificación 9B
+
+- `facility_manager_ui_integration.test.sql`: 75/75. Controles negativos:
+  restaurando las versiones anteriores de las dos RPCs legacy de
+  homologación fallan exactamente las 6 pruebas del cierre de esa ruta;
+  restaurando las versiones anteriores de `is_provider_facing_organization`,
+  `can_user_read_request` y `set_request_audience` fallan las pruebas de
+  §13 (subcontratista provider-facing, FM no provider-facing, rechazo 22023
+  y audiencia intacta) antes de que la transacción aborte.
+- La suite 9A se adaptó sin cambiar su número de aserciones (328): sus
+  pruebas que usaban la RPC legacy sobre filas FM ahora verifican las mismas
+  garantías de trigger con un escritor de nivel servicio (`UPDATE` directo e
+  `INSERT ... ON CONFLICT DO UPDATE`), y la que esperaba `55000` de la RPC
+  legacy ahora espera su rechazo con `22023`.
+- Smoke visual local (Chromium headless contra Supabase local, fixtures
+  temporales, 46/46 checks; ver también §13): cliente vincula/configura/activa y ve el
+  equipo en solo lectura; FM ve cartera y permisos en solo lectura y
+  asigna/desasigna; client manager, FM manager y FM technician no ven el
+  menú y el hash directo muestra acceso denegado; Proveedores Homologados
+  sigue funcionando para proveedor y subcontratista sin mostrar FM.
+- No existe infraestructura de pruebas unitarias frontend en el repo; no se
+  introdujo una. La lógica pura (agrupación de permisos, gate por
+  organización/rol, transiciones y labels de estado) está aislada en
+  `src/lib/facilityManagement.ts` para cubrirla cuando exista.
+
+## 13. Facility Manager NO es provider-facing (decisión funcional MVP)
+
+- `provider_company` y `subcontractor_company` son las únicas
+  organizaciones provider-facing: reciben invitaciones, ven el marketplace
+  y cotizan.
+- `facility_manager` **no** actúa como proveedor ni ofertante. Administra
+  procesos del cliente mediante permisos delegados (9A/9C).
+- `quotes.view`, `quotes.manage` y `quotes.approve` son permisos de
+  **gestión delegada sobre el proceso de cotización del CLIENTE** (ver,
+  gestionar, aprobar las cotizaciones que recibe el cliente), nunca
+  "presentar una cotización como FM".
+- Si en el futuro una organización debe actuar a la vez como FM y como
+  proveedor, se modelará como **capacidad dual explícita**; no se inferirá
+  de `organization_type = 'facility_manager'`.
+
+### Backend (migración 9B, sección C)
+
+| Función | Cambio |
+|---|---|
+| `is_provider_facing_organization(uuid)` | Solo `provider_company` y `subcontractor_company` activos. Antes: `provider_company` + `facility_manager` (y **faltaba** `subcontractor_company`). Es la única fuente de verdad. |
+| `can_user_read_request(uuid)` | La rama provider-facing delega en el helper en vez de repetir tipos. Un FM no lee solicitudes públicas ni invitadas como proveedor. |
+| `can_provider_quote_request(uuid, uuid)` | Sin cambios de código: ya dependía solo del helper. FM ⇒ `false` aunque la solicitud sea pública o exista un `request_provider_access` activo. `quotes.*` no interviene. |
+| `set_request_audience(uuid, boolean, uuid[])` | Mismo contrato, reglas, atomicidad, auditoría y protección de cotizaciones. Destinatarios: solo provider-facing con relación **activa del tipo correspondiente** (`provider`/`subcontracting`); `facility_manager` ⇒ `22023`, aunque tenga una relación `facility_management` activa. |
+| policies de `request_provider_access` | Sin cambios: ya usaban el helper, así que un FM no ve ni obtiene acceso por una fila creada por servicio. |
+
+Efecto a tener en cuenta: `subcontractor_company` **gana** acceso
+provider-facing real (antes el helper lo excluía aunque la UI y
+`set_request_audience` ya lo trataban como proveedor).
+
+El acceso **delegado** de un FM a las solicitudes/cotizaciones de su
+cliente es 9C, por otra vía (`has_facility_management_permission`), no por
+identidad de proveedor.
+
+### Frontend
+
+- Gate único `isProviderFacingOrganizationType` en
+  `src/types/providerRelationship.ts` (mismo alcance que el helper SQL).
+  Nunca se usa solo `user.role === 'proveedor'`: `AuthContext` sigue
+  mapeando `facility_manager` a ese rol legacy por compatibilidad.
+- Sidebar: "Solicitudes" (lado proveedor) y "Solicitudes Públicas" solo para
+  proveedor/subcontratista. Un FM owner/admin conserva "Clientes
+  administrados", "Perfil organización" y "Notificaciones".
+- Dashboard: `#requests` (rama proveedor) y `#public-requests` muestran
+  acceso denegado si la organización no es provider-facing, también por hash
+  directo. El flujo de solicitudes del cliente no cambia.
+- `ProviderRequestList`, `PublicRequestList` y `QuoteForm` usan el mismo
+  gate.
+- `RequestProviderSelector` solo lista proveedor/subcontratista con
+  relación activa del tipo correspondiente; sin labels de Facility Manager.
+- `OrganizationProfile` ya no muestra especialidades a un FM (las
+  especialidades son un atributo del directorio de proveedores); los datos
+  existentes se conservan.
+
+### Verificación
+
+- pgTAP (§12): `is_provider_facing_organization` por tipo/estado;
+  `set_request_audience` acepta proveedor y subcontratista, rechaza FM con
+  `22023` (con o sin relación `facility_management` activa) sin crear
+  `request_provider_access`; `can_user_read_request` y
+  `can_provider_quote_request` en `true` para proveedor/subcontratista y
+  `false` para FM, incluso con una fila `request_provider_access` sintética.
+- Smoke: FM owner sin "Solicitudes"/"Solicitudes Públicas" y con hash
+  directo bloqueado; proveedor y subcontratista ven y abren ambas vistas;
+  el cliente conserva "Mis Solicitudes"; el selector de invitación privada
+  muestra proveedor y subcontratista y ningún FM.
