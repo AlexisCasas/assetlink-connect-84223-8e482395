@@ -7,19 +7,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, CheckCheck, X, Briefcase } from 'lucide-react';
 import type { OrganizationType } from '@/types/organization';
-import type { ProviderDirectoryEntry } from '@/types/providerRelationship';
+import { isProviderFacingOrganizationType, type ProviderDirectoryEntry } from '@/types/providerRelationship';
 
 interface RequestProviderSelectorProps {
   selectedOrganizationIds: string[];
   onChange: (organizationIds: string[]) => void;
 }
 
-const ORGANIZATION_TYPE_LABELS: Record<OrganizationType, string> = {
+const ORGANIZATION_TYPE_LABELS: Partial<Record<OrganizationType, string>> = {
   provider_company: 'Proveedor',
-  facility_manager: 'Facility Manager',
   subcontractor_company: 'Subcontratista',
-  client_company: 'Cliente',
-  platform_admin: 'Administración',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -32,13 +29,20 @@ const STATUS_LABEL: Record<string, string> = {
 
 const isSelectable = (entry: ProviderDirectoryEntry) => entry.relationshipStatus === 'active';
 
+// Defensa en profundidad: el directorio ya solo trae proveedores y
+// subcontratistas, y set_request_audience rechaza cualquier otro tipo.
+const isInvitable = (entry: ProviderDirectoryEntry) => isProviderFacingOrganizationType(entry.organizationType);
+
 /**
  * Provider audience picker for private invitations (Bloque D/K). Its
  * EXCLUSIVE source is get_provider_relationship_directory (Fase 18) via
  * useProviderRelationships() — the same directory that backs "Proveedores
- * Homologados" (ApprovedProvidersList.tsx). Only organizations with an
- * 'active' relationship to the current client organization are selectable;
- * others render disabled with an explanation, never silently hidden.
+ * Homologados" (ApprovedProvidersList.tsx). Only provider_company /
+ * subcontractor_company with an 'active' provider/subcontracting
+ * relationship to the current client organization are selectable; others
+ * render disabled with an explanation, never silently hidden. Facility
+ * Managers are never invitation targets (Fase 1 · Punto 9B): they manage the
+ * client's processes through delegated permissions, not as bidders.
  */
 export function RequestProviderSelector({ selectedOrganizationIds, onChange }: RequestProviderSelectorProps) {
   const { directory, loading, error } = useProviderRelationships();
@@ -55,6 +59,7 @@ export function RequestProviderSelector({ selectedOrganizationIds, onChange }: R
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return directory.filter((entry) => {
+      if (!isInvitable(entry)) return false;
       if (term && !entry.organizationName.toLowerCase().includes(term)) return false;
       if (specialtyFilter !== 'all' && !entry.specialties.includes(specialtyFilter)) return false;
       if (statusFilter === 'active' && !isSelectable(entry)) return false;

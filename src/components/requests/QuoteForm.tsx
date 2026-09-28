@@ -10,6 +10,7 @@ import { Request, QuoteSection, QuoteSectionItem, QuoteSalesConditions } from '@
 import { X, Plus, Trash2, Edit2, Save, Mail, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { supabase } from '@/integrations/supabase/client';
 import { QuoteSummary } from './QuoteSummary';
 import {
@@ -33,8 +34,7 @@ interface QuoteFormProps {
 export const QuoteForm = ({ request, onClose, onSave, existingQuote }: QuoteFormProps) => {
   const { toast } = useToast();
   const { user, currentOrganization } = useAuth();
-  const isProviderOrganization = currentOrganization?.organizationType === 'provider_company'
-    || currentOrganization?.organizationType === 'facility_manager';
+  const isProviderOrganization = isProviderFacingOrganizationType(currentOrganization?.organizationType);
 
   const initial = useMemo(() => {
     if (existingQuote?.quote_sections && Array.isArray(existingQuote.quote_sections) && existingQuote.quote_sections.length > 0) {

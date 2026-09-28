@@ -25,12 +25,14 @@ export type DashboardView =
   | 'backlog'
   | 'contact'
   | 'admin'
-  | 'users';
+  | 'users'
+  | 'facility-management';
 
 export const ALL_DASHBOARD_VIEWS: DashboardView[] = [
   'dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'profile', 'notifications',
   'approved-providers', 'branches', 'work-orders', 'my-work-orders', 'inventory', 'efficiency',
   'criticality', 'inspections', 'preventive-maintenance', 'backlog', 'contact', 'admin', 'users',
+  'facility-management',
 ];
 
 export interface EntityNavigationTarget {

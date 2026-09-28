@@ -5,7 +5,9 @@ import type { OrganizationRelationshipStatus } from '@/types/organization';
 import type { ProviderDirectoryEntry } from '@/types/providerRelationship';
 
 /** Backs the "Proveedores Homologados" screen entirely through
- * get_provider_relationship_directory / set_provider_relationship_status —
+ * get_provider_relationship_directory / set_provider_relationship_status
+ * (provider_company / subcontractor_company only since Fase 1 · Punto 9B;
+ * facility managers use useFacilityManagement) —
  * scoped by currentOrganization.id, never by user.email or client_email
  * (the legacy client_approved_providers/client_specialties key). */
 export function useProviderRelationships() {

@@ -25,14 +25,15 @@ import type { OrganizationRelationshipStatus, OrganizationType } from '@/types/o
 import type { ProviderDirectoryEntry } from '@/types/providerRelationship';
 
 type StatusFilter = 'all' | 'none' | OrganizationRelationshipStatus;
-type TypeFilter = 'all' | OrganizationType;
+// Desde Fase 1 · Punto 9B los Facility Managers se administran en su propia
+// pantalla (#facility-management); este directorio solo trae proveedores y
+// subcontratistas.
+type HomologationOrganizationType = Extract<OrganizationType, 'provider_company' | 'subcontractor_company'>;
+type TypeFilter = 'all' | HomologationOrganizationType;
 
-const ORGANIZATION_TYPE_LABELS: Record<OrganizationType, string> = {
+const ORGANIZATION_TYPE_LABELS: Record<HomologationOrganizationType, string> = {
   provider_company: 'Proveedor',
-  facility_manager: 'Facility Manager',
   subcontractor_company: 'Subcontratista',
-  client_company: 'Cliente',
-  platform_admin: 'Administración',
 };
 
 const STATUS_META: Record<'none' | OrganizationRelationshipStatus, { label: string; badgeClass: string }> = {
@@ -114,7 +115,7 @@ export const ApprovedProvidersList = () => {
           Proveedores Homologados
         </h1>
         <p className="text-muted-foreground mt-1">
-          Organizaciones proveedoras disponibles y tu relación de homologación con cada una.
+          Proveedores y subcontratistas disponibles, y tu relación de homologación con cada uno. Los Facility Managers se gestionan en su propia sección.
         </p>
       </div>
 
@@ -133,7 +134,7 @@ export const ApprovedProvidersList = () => {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"
-              placeholder="Buscar organización..."
+              placeholder="Buscar proveedor o subcontratista..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -154,7 +155,6 @@ export const ApprovedProvidersList = () => {
             <SelectContent className="bg-popover">
               <SelectItem value="all">Todos los tipos</SelectItem>
               <SelectItem value="provider_company">Proveedor</SelectItem>
-              <SelectItem value="facility_manager">Facility Manager</SelectItem>
               <SelectItem value="subcontractor_company">Subcontratista</SelectItem>
             </SelectContent>
           </Select>
@@ -201,7 +201,7 @@ export const ApprovedProvidersList = () => {
                   return (
                     <TableRow key={entry.organizationId}>
                       <TableCell className="font-medium">{entry.organizationName}</TableCell>
-                      <TableCell>{ORGANIZATION_TYPE_LABELS[entry.organizationType]}</TableCell>
+                      <TableCell>{ORGANIZATION_TYPE_LABELS[entry.organizationType as HomologationOrganizationType] ?? '-'}</TableCell>
                       <TableCell>
                         {entry.specialties.length > 0 ? (
                           <div className="flex flex-wrap gap-1">

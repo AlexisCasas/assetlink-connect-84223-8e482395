@@ -495,9 +495,9 @@ SELECT pg_temp.as_user('c1000000-0000-0000-0000-000000000005');
 SELECT throws_ok(format($$ SELECT public.set_facility_management_members(%L, ARRAY['c3000000-0000-0000-0000-000000000006']::uuid[]) $$, :'rel_a'),
   '55000', NULL, 'members cannot be assigned to an ended relationship');
 SELECT pg_temp.as_user('c1000000-0000-0000-0000-000000000001');
--- La RPC legacy de homologación queda gobernada por la misma máquina.
+-- Desde 9B la RPC legacy de homologación ya no administra facility_management.
 SELECT throws_ok($$ SELECT public.set_provider_relationship_status('c2000000-0000-0000-0000-0000000000a1', 'c2000000-0000-0000-0000-0000000000f1', 'active') $$,
-  '55000', NULL, 'the legacy homologation RPC cannot jump ended -> active either');
+  '22023', NULL, 'the legacy homologation RPC no longer manages facility_management relationships');
 SELECT lives_ok(format($$ SELECT public.set_facility_management_relationship_status(%L, 'pending') $$, :'rel_a'), 'ended -> pending');
 RESET ROLE;
 SELECT is((SELECT count(*) FROM public.facility_management_permissions WHERE relationship_id = :'rel_a'), 0::bigint, 'ended -> pending does not restore permissions');
@@ -982,41 +982,43 @@ SELECT is((SELECT count(*) FROM public.get_my_facility_management_portfolio()), 
 SELECT pg_temp.as_user('c1000000-0000-0000-0000-00000000000e');
 SELECT lives_ok(format($$ SELECT public.set_facility_management_relationship_status(%L, 'active') $$, :'rel_ca'), 'Client C reactivates FM Alpha');
 
--- 11.10 RPC legacy de homologación sobre la relación FM de Client C
-SELECT lives_ok($$ SELECT public.set_provider_relationship_status('c2000000-0000-0000-0000-0000000000c1', 'c2000000-0000-0000-0000-0000000000f1', 'suspended') $$,
-  'legacy RPC still works inside valid transitions (active -> suspended)');
+-- 11.10 Escritor de nivel servicio (fuera de las RPCs 9A) sobre la relación
+-- FM de Client C. Desde 9B la RPC legacy set_provider_relationship_status ya
+-- no administra facility_management (ver facility_manager_ui_integration.test.sql);
+-- los triggers siguen aplicando las mismas garantías a cualquier escritor.
 RESET ROLE;
-SELECT is((SELECT count(*) FROM public.facility_management_permissions WHERE relationship_id = :'rel_ca'), 2::bigint, 'legacy RPC neither grants nor removes permissions');
-SELECT is((SELECT count(*) FROM public.facility_management_relationship_members WHERE relationship_id = :'rel_ca'), 1::bigint, 'legacy RPC neither assigns nor removes members');
-SET LOCAL ROLE authenticated;
-SELECT pg_temp.as_user('c1000000-0000-0000-0000-00000000000e');
-SELECT lives_ok($$ SELECT public.set_provider_relationship_status('c2000000-0000-0000-0000-0000000000c1', 'c2000000-0000-0000-0000-0000000000f1', 'ended') $$,
-  'legacy RPC can end the relationship');
-RESET ROLE;
-SELECT is((SELECT count(*) FROM public.facility_management_permissions WHERE relationship_id = :'rel_ca'), 0::bigint, 'ended via legacy RPC clears permissions');
-SELECT is((SELECT count(*) FROM public.facility_management_relationship_members WHERE relationship_id = :'rel_ca'), 0::bigint, 'ended via legacy RPC clears assignments');
-SET LOCAL ROLE authenticated;
-SELECT pg_temp.as_user('c1000000-0000-0000-0000-00000000000e');
-SELECT lives_ok($$ SELECT public.set_provider_relationship_status('c2000000-0000-0000-0000-0000000000c1', 'c2000000-0000-0000-0000-0000000000f1', 'pending') $$,
-  'legacy RPC reopens ended -> pending');
-SELECT lives_ok($$ SELECT public.set_provider_relationship_status('c2000000-0000-0000-0000-0000000000c1', 'c2000000-0000-0000-0000-0000000000f1', 'active') $$,
-  'legacy RPC activates the reopened relationship');
-RESET ROLE;
-SELECT is((SELECT count(*) FROM public.facility_management_permissions WHERE relationship_id = :'rel_ca'), 0::bigint, 'legacy reopening restores no permissions');
-SELECT is((SELECT count(*) FROM public.facility_management_relationship_members WHERE relationship_id = :'rel_ca'), 0::bigint, 'legacy reopening restores no assignments');
+SELECT lives_ok(format($$ UPDATE public.organization_relationships SET status = 'suspended' WHERE id = %L $$, :'rel_ca'),
+  'a service-level writer still moves within valid transitions (active -> suspended)');
+SELECT is((SELECT count(*) FROM public.facility_management_permissions WHERE relationship_id = :'rel_ca'), 2::bigint, 'a status change neither grants nor removes permissions');
+SELECT is((SELECT count(*) FROM public.facility_management_relationship_members WHERE relationship_id = :'rel_ca'), 1::bigint, 'a status change neither assigns nor removes members');
+SELECT lives_ok(format($$ UPDATE public.organization_relationships SET status = 'ended' WHERE id = %L $$, :'rel_ca'),
+  'a service-level writer can end the relationship');
+SELECT is((SELECT count(*) FROM public.facility_management_permissions WHERE relationship_id = :'rel_ca'), 0::bigint, 'ended by any writer clears permissions');
+SELECT is((SELECT count(*) FROM public.facility_management_relationship_members WHERE relationship_id = :'rel_ca'), 0::bigint, 'ended by any writer clears assignments');
+SELECT lives_ok(format($$ UPDATE public.organization_relationships SET status = 'pending' WHERE id = %L $$, :'rel_ca'),
+  'a service-level writer reopens ended -> pending');
+SELECT lives_ok(format($$ UPDATE public.organization_relationships SET status = 'active' WHERE id = %L $$, :'rel_ca'),
+  'a service-level writer activates the reopened relationship');
+SELECT is((SELECT count(*) FROM public.facility_management_permissions WHERE relationship_id = :'rel_ca'), 0::bigint, 'reopening restores no permissions');
+SELECT is((SELECT count(*) FROM public.facility_management_relationship_members WHERE relationship_id = :'rel_ca'), 0::bigint, 'reopening restores no assignments');
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('c1000000-0000-0000-0000-000000000006');
 SELECT is(public.has_facility_management_permission('c2000000-0000-0000-0000-0000000000c1', 'work_orders.view'), false,
-  'a relationship reopened and activated via the legacy RPC grants nothing until reconfigured');
+  'a relationship reopened and activated outside the RPCs grants nothing until reconfigured');
 SELECT is((SELECT array_agg(client_organization_name) FROM public.get_my_facility_management_clients()),
   ARRAY['Client A'], 'and it is not an operational client of the former assignee');
--- Regresión: el flujo de la UI de homologación (ApprovedProvidersList) sobre
--- una fila FM — INSERT ... ON CONFLICT DO UPDATE con status no-pending.
-SELECT pg_temp.as_user('c1000000-0000-0000-0000-00000000000e');
-SELECT lives_ok($$ SELECT public.set_provider_relationship_status('c2000000-0000-0000-0000-0000000000c1', 'c2000000-0000-0000-0000-0000000000f2', 'pending') $$,
-  'legacy UI "Agregar como pendiente" creates a pending FM relationship');
-SELECT lives_ok($$ SELECT public.set_provider_relationship_status('c2000000-0000-0000-0000-0000000000c1', 'c2000000-0000-0000-0000-0000000000f2', 'active') $$,
-  'legacy UI "Homologar" (pending -> active through ON CONFLICT DO UPDATE) still works on an FM relationship');
+-- Regresión del trigger con INSERT ... ON CONFLICT DO UPDATE (status
+-- no-pending sobre una fila FM existente): debe aplicar la máquina de
+-- estados, no la regla "nace en pending".
+RESET ROLE;
+SELECT lives_ok($$ INSERT INTO public.organization_relationships (source_organization_id, target_organization_id, relationship_type, status)
+  VALUES ('c2000000-0000-0000-0000-0000000000c1', 'c2000000-0000-0000-0000-0000000000f2', 'facility_management', 'pending') $$,
+  'an upsert-style writer creates a pending FM relationship');
+SELECT lives_ok($$ INSERT INTO public.organization_relationships (source_organization_id, target_organization_id, relationship_type, status)
+  VALUES ('c2000000-0000-0000-0000-0000000000c1', 'c2000000-0000-0000-0000-0000000000f2', 'facility_management', 'active')
+  ON CONFLICT (source_organization_id, target_organization_id, relationship_type) DO UPDATE SET status = EXCLUDED.status $$,
+  'pending -> active through INSERT ... ON CONFLICT DO UPDATE is governed by the state machine, not the born-pending rule');
+SET LOCAL ROLE authenticated;
 
 -- 11.11 Escritura/lectura directa
 SELECT pg_temp.as_user('c1000000-0000-0000-0000-000000000005');

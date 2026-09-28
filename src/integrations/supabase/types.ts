@@ -1324,6 +1324,71 @@ export type Database = {
           },
         ]
       }
+      facility_management_permissions: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          permission: Database["public"]["Enums"]["facility_management_permission"]
+          relationship_id: string
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          permission: Database["public"]["Enums"]["facility_management_permission"]
+          relationship_id: string
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          permission?: Database["public"]["Enums"]["facility_management_permission"]
+          relationship_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facility_management_permissions_relationship_id_fkey"
+            columns: ["relationship_id"]
+            isOneToOne: false
+            referencedRelation: "organization_relationships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      facility_management_relationship_members: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          organization_member_id: string
+          relationship_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          organization_member_id: string
+          relationship_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          organization_member_id?: string
+          relationship_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facility_management_relationship_me_organization_member_id_fkey"
+            columns: ["organization_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facility_management_relationship_members_relationship_id_fkey"
+            columns: ["relationship_id"]
+            isOneToOne: false
+            referencedRelation: "organization_relationships"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inspection_plan_alert_rules: {
         Row: {
           alert_type: string
@@ -4437,6 +4502,13 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_facility_management_relationship: {
+        Args: {
+          _client_organization_id: string
+          _facility_manager_organization_id: string
+        }
+        Returns: string
+      }
       create_inspection_run_from_plan: {
         Args: { p_plan_id: string }
         Returns: {
@@ -4750,6 +4822,40 @@ export type Database = {
         }
         Returns: string[]
       }
+      dblink: { Args: { "": string }; Returns: Record<string, unknown>[] }
+      dblink_cancel_query: { Args: { "": string }; Returns: string }
+      dblink_close: { Args: { "": string }; Returns: string }
+      dblink_connect: { Args: { "": string }; Returns: string }
+      dblink_connect_u: { Args: { "": string }; Returns: string }
+      dblink_current_query: { Args: never; Returns: string }
+      dblink_disconnect:
+        | { Args: never; Returns: string }
+        | { Args: { "": string }; Returns: string }
+      dblink_error_message: { Args: { "": string }; Returns: string }
+      dblink_exec: { Args: { "": string }; Returns: string }
+      dblink_fdw_validator: {
+        Args: { catalog: unknown; options: string[] }
+        Returns: undefined
+      }
+      dblink_get_connections: { Args: never; Returns: string[] }
+      dblink_get_notify:
+        | { Args: { conname: string }; Returns: Record<string, unknown>[] }
+        | { Args: never; Returns: Record<string, unknown>[] }
+      dblink_get_pkey: {
+        Args: { "": string }
+        Returns: Database["public"]["CompositeTypes"]["dblink_pkey_results"][]
+        SetofOptions: {
+          from: "*"
+          to: "dblink_pkey_results"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      dblink_get_result: {
+        Args: { "": string }
+        Returns: Record<string, unknown>[]
+      }
+      dblink_is_busy: { Args: { "": string }; Returns: number }
       delete_work_order_activity: {
         Args: { p_activity_id: string }
         Returns: undefined
@@ -5065,6 +5171,42 @@ export type Database = {
           reported_activities_count: number
         }[]
       }
+      get_facility_management_members: {
+        Args: { _relationship_id: string }
+        Returns: {
+          assigned_at: string
+          member_email: string
+          member_name: string
+          membership_is_active: boolean
+          membership_role: Database["public"]["Enums"]["organization_member_role"]
+          organization_member_id: string
+          relationship_id: string
+          user_id: string
+        }[]
+      }
+      get_facility_management_relationships: {
+        Args: { _client_organization_id: string }
+        Returns: {
+          client_organization_id: string
+          client_organization_name: string
+          created_at: string
+          facility_manager_organization_id: string
+          facility_manager_organization_name: string
+          permissions: Database["public"]["Enums"]["facility_management_permission"][]
+          relationship_id: string
+          relationship_status: Database["public"]["Enums"]["organization_relationship_status"]
+          updated_at: string
+        }[]
+      }
+      get_facility_manager_directory: {
+        Args: { _client_organization_id: string }
+        Returns: {
+          facility_manager_organization_id: string
+          facility_manager_organization_name: string
+          relationship_id: string
+          relationship_status: Database["public"]["Enums"]["organization_relationship_status"]
+        }[]
+      }
       get_inspection_plan_alert_rules: {
         Args: { p_plan_id: string }
         Returns: {
@@ -5167,6 +5309,34 @@ export type Database = {
           triage_notes: string
           triaged_at: string
           triaged_by_name: string
+        }[]
+      }
+      get_my_facility_management_clients: {
+        Args: never
+        Returns: {
+          client_organization_id: string
+          client_organization_name: string
+          facility_manager_organization_id: string
+          facility_manager_organization_name: string
+          membership_role: Database["public"]["Enums"]["organization_member_role"]
+          permissions: Database["public"]["Enums"]["facility_management_permission"][]
+          relationship_id: string
+        }[]
+      }
+      get_my_facility_management_portfolio: {
+        Args: never
+        Returns: {
+          assigned_member_count: number
+          client_organization_id: string
+          client_organization_name: string
+          client_organization_status: string
+          created_at: string
+          facility_manager_organization_id: string
+          facility_manager_organization_name: string
+          permissions: Database["public"]["Enums"]["facility_management_permission"][]
+          relationship_id: string
+          relationship_status: Database["public"]["Enums"]["organization_relationship_status"]
+          updated_at: string
         }[]
       }
       get_my_organization_invitation: {
@@ -5304,6 +5474,13 @@ export type Database = {
           status_from: string
           status_to: string
         }[]
+      }
+      has_facility_management_permission: {
+        Args: {
+          _client_organization_id: string
+          _permission: Database["public"]["Enums"]["facility_management_permission"]
+        }
+        Returns: boolean
       }
       has_organization_role: {
         Args: {
@@ -5868,6 +6045,24 @@ export type Database = {
           p_organization_id: string
         }
         Returns: Json
+      }
+      set_facility_management_members: {
+        Args: { _organization_member_ids: string[]; _relationship_id: string }
+        Returns: undefined
+      }
+      set_facility_management_permissions: {
+        Args: {
+          _permissions: Database["public"]["Enums"]["facility_management_permission"][]
+          _relationship_id: string
+        }
+        Returns: undefined
+      }
+      set_facility_management_relationship_status: {
+        Args: {
+          _relationship_id: string
+          _status: Database["public"]["Enums"]["organization_relationship_status"]
+        }
+        Returns: undefined
       }
       set_inspection_plan_alert_rule_active: {
         Args: { p_is_active: boolean; p_rule_id: string }
@@ -6585,6 +6780,28 @@ export type Database = {
         | "in_review"
         | "certified"
         | "rejected"
+      facility_management_permission:
+        | "assets.view"
+        | "assets.manage"
+        | "criticality.view"
+        | "criticality.manage"
+        | "inspections.view"
+        | "inspections.manage"
+        | "preventive_maintenance.view"
+        | "preventive_maintenance.manage"
+        | "maintenance_notices.view"
+        | "maintenance_notices.report"
+        | "maintenance_notices.manage"
+        | "requests.view"
+        | "requests.create"
+        | "requests.manage"
+        | "providers.manage"
+        | "quotes.view"
+        | "quotes.manage"
+        | "quotes.approve"
+        | "work_orders.view"
+        | "work_orders.manage"
+        | "reports.view"
       notification_type:
         | "technical_visit"
         | "quote_received"
@@ -6623,7 +6840,10 @@ export type Database = {
       service_type: "emergencia" | "correctivo" | "preventivo" | "proyecto"
     }
     CompositeTypes: {
-      [_ in never]: never
+      dblink_pkey_results: {
+        position: number | null
+        colname: string | null
+      }
     }
   }
 }
@@ -6758,6 +6978,29 @@ export const Constants = {
         "in_review",
         "certified",
         "rejected",
+      ],
+      facility_management_permission: [
+        "assets.view",
+        "assets.manage",
+        "criticality.view",
+        "criticality.manage",
+        "inspections.view",
+        "inspections.manage",
+        "preventive_maintenance.view",
+        "preventive_maintenance.manage",
+        "maintenance_notices.view",
+        "maintenance_notices.report",
+        "maintenance_notices.manage",
+        "requests.view",
+        "requests.create",
+        "requests.manage",
+        "providers.manage",
+        "quotes.view",
+        "quotes.manage",
+        "quotes.approve",
+        "work_orders.view",
+        "work_orders.manage",
+        "reports.view",
       ],
       notification_type: [
         "technical_visit",
