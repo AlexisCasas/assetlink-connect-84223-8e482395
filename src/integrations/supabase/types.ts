@@ -4350,6 +4350,10 @@ export type Database = {
         Args: { _organization_id: string }
         Returns: boolean
       }
+      can_execute_inspections_as_facility_manager: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
       can_manage_criticality_matrix: {
         Args: { _organization_id: string }
         Returns: boolean
@@ -4373,6 +4377,14 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: boolean
       }
+      can_plan_inspections: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
+      can_plan_preventive_maintenance: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
       can_provider_quote_request: {
         Args: {
           target_provider_organization_id: string
@@ -4382,6 +4394,10 @@ export type Database = {
       }
       can_record_asset_meter_reading: {
         Args: { p_organization_id: string }
+        Returns: boolean
+      }
+      can_record_preventive_meter_reading: {
+        Args: { _organization_id: string }
         Returns: boolean
       }
       can_report_maintenance_notice: {
@@ -4402,6 +4418,14 @@ export type Database = {
         Returns: boolean
       }
       can_view_criticality_matrix: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
+      can_view_inspections: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
+      can_view_preventive_maintenance: {
         Args: { _organization_id: string }
         Returns: boolean
       }
@@ -5198,6 +5222,10 @@ export type Database = {
           site: string
         }[]
       }
+      get_facility_management_inspection_targets: {
+        Args: { _client_organization_id: string }
+        Returns: Json
+      }
       get_facility_management_members: {
         Args: { _relationship_id: string }
         Returns: {
@@ -5209,6 +5237,15 @@ export type Database = {
           organization_member_id: string
           relationship_id: string
           user_id: string
+        }[]
+      }
+      get_facility_management_preventive_assets: {
+        Args: { _client_organization_id: string }
+        Returns: {
+          code: string
+          id: string
+          name: string
+          status: string
         }[]
       }
       get_facility_management_relationships: {
@@ -5911,6 +5948,10 @@ export type Database = {
         }
       }
       run_automatic_alert_generation: { Args: never; Returns: Json }
+      sanitize_preventive_scope_snapshot: {
+        Args: { _snapshot: Json }
+        Returns: Json
+      }
       save_maintenance_card: {
         Args: {
           p_card_id?: string

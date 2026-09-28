@@ -27,13 +27,26 @@ import type {
   InspectionPlanInput,
 } from '@/types/inspection';
 
+type PlanBranchOption = Pick<ClientBranch, 'id' | 'name'>;
+type PlanAssetOption = Pick<Asset, 'id' | 'name' | 'defaultResponsibleMemberId'>;
+
 interface InspectionPlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Organization whose roster (technicians/planners) feeds the responsible
+   * selector. Null when the responsible is not choosable (delegated FM). */
   organizationId: string | null | undefined;
+  /** Namespace of the sessionStorage draft (UX only). */
+  draftScopeKey: string | null | undefined;
+  /** responsible_member_id is client-owned: a delegated FM only sees it. */
+  canChooseResponsible?: boolean;
+  /** Delegated FM: a target the plan already has but the minimal directory
+   * no longer offers (inactive branch / archived asset) is shown as a
+   * disabled historic option, so editing other fields keeps it. */
+  showHistoricTargets?: boolean;
   templates: ChecklistTemplate[];
-  branches: ClientBranch[];
-  assets: Asset[];
+  branches: PlanBranchOption[];
+  assets: PlanAssetOption[];
   plan: InspectionPlan | null;
   saving: boolean;
   onSave: (input: InspectionPlanInput, planId: string | undefined, alertRules: InspectionAlertRuleDraft[]) => Promise<boolean>;
@@ -119,8 +132,11 @@ const draftFromPlan = (plan: InspectionPlan | null): PlanDraft => plan ? {
 // No sensitive data here — just plan configuration already visible on
 // screen to this organization's own users. Per-tab (sessionStorage), not
 // shared across tabs/devices.
-const draftStorageKey = (organizationId: string | null | undefined, plan: InspectionPlan | null) =>
-  organizationId ? `inspection-plan-draft:${organizationId}:${plan ? plan.id : 'new'}` : null;
+// Direct mode: the scope key is the organization id (historic key). A
+// delegated FM uses fm:<FM id>:<client id>, so two FMs operating the same
+// client in one browser never share a draft.
+const draftStorageKey = (scopeKey: string | null | undefined, plan: InspectionPlan | null) =>
+  scopeKey ? `inspection-plan-draft:${scopeKey}:${plan ? plan.id : 'new'}` : null;
 
 const readDraft = (key: string): PlanDraft | null => {
   try {
@@ -166,9 +182,9 @@ const clearDraftStorage = (key: string | null) => {
  * en sessionStorage restaurado al reabrir y limpiado solo al guardar con
  * éxito o cancelar explícitamente.
  */
-export function InspectionPlanDialog({ open, onOpenChange, organizationId, templates, branches, assets, plan, saving, onSave }: InspectionPlanDialogProps) {
-  const { technicians } = useOrganizationTechnicians(organizationId);
-  const { planners } = useOrganizationPlanners(organizationId);
+export function InspectionPlanDialog({ open, onOpenChange, organizationId, draftScopeKey, canChooseResponsible = true, showHistoricTargets = false, templates, branches, assets, plan, saving, onSave }: InspectionPlanDialogProps) {
+  const { technicians } = useOrganizationTechnicians(canChooseResponsible ? organizationId : null);
+  const { planners } = useOrganizationPlanners(canChooseResponsible ? organizationId : null);
 
   const [templateId, setTemplateId] = useState('');
   const [title, setTitle] = useState('');
@@ -195,7 +211,7 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
   const responsibleTouchedRef = useRef(false);
   const autoPrefilledResponsibleRef = useRef<string | null>(null);
 
-  const draftKey = draftStorageKey(organizationId, plan);
+  const draftKey = draftStorageKey(draftScopeKey, plan);
 
   // Initialize ONLY on a closed→open transition, or when the id of the
   // plan being edited actually changes while open — deliberately keyed off
@@ -213,7 +229,7 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
     const shouldInitialize = !wasOpenRef.current || initializedForRef.current !== planKey;
 
     if (shouldInitialize) {
-      const key = draftStorageKey(organizationId, plan);
+      const key = draftStorageKey(draftScopeKey, plan);
       const restored = key ? readDraft(key) : null;
       const next = restored ?? draftFromPlan(plan);
 
@@ -255,7 +271,7 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
   const handleAssetChange = (value: string) => {
     const nextAssetId = value === 'none' ? '' : value;
     setAssetId(nextAssetId);
-    if (plan || responsibleTouchedRef.current) return;
+    if (!canChooseResponsible || plan || responsibleTouchedRef.current) return;
     if (responsibleMemberId !== '' && responsibleMemberId !== autoPrefilledResponsibleRef.current) return;
     const defaultResponsible = nextAssetId
       ? assets.find((asset) => asset.id === nextAssetId)?.defaultResponsibleMemberId ?? null
@@ -272,6 +288,11 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
     ...planners.map((p) => ({ id: p.memberId, label: `${p.name} (planner)` })),
     ...technicians.map((t) => ({ id: t.memberId, label: `${t.name} (técnico)` })),
   ];
+
+  const historicOption = (id: string | null | undefined, name: string | null | undefined, options: { id: string }[]) =>
+    showHistoricTargets && id && !options.some((option) => option.id === id)
+      ? <SelectItem value={id} disabled>{`${name ?? 'Destino'} (histórico)`}</SelectItem>
+      : null;
 
   const beforeDueRules = alertRules.filter((r) => r.alertType === 'before_due');
   const hasOverdueRule = alertRules.some((r) => r.alertType === 'overdue');
@@ -345,7 +366,9 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
       branchId: branchId || null,
       areaAssetId: areaAssetId || null,
       assetId: assetId || null,
-      responsibleMemberId: responsibleMemberId || null,
+      // A delegated FM always sends back exactly what the client assigned
+      // (the backend rejects anything else).
+      responsibleMemberId: canChooseResponsible ? responsibleMemberId || null : plan?.responsibleMemberId ?? null,
       frequency,
       customInterval: customIntervalValue,
       customUnit: frequency === 'custom' ? customUnit : null,
@@ -400,6 +423,7 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
                 <SelectTrigger><SelectValue placeholder="Sin sede" /></SelectTrigger>
                 <SelectContent className="bg-popover">
                   <SelectItem value="none">Sin sede</SelectItem>
+                  {historicOption(plan?.branchId, plan?.branchName, branches)}
                   {branches.map((branch) => (
                     <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                   ))}
@@ -412,6 +436,7 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
                 <SelectTrigger><SelectValue placeholder="Sin área" /></SelectTrigger>
                 <SelectContent className="bg-popover">
                   <SelectItem value="none">Sin área</SelectItem>
+                  {historicOption(plan?.areaAssetId, plan?.areaAssetName, assets)}
                   {assets.map((asset) => (
                     <SelectItem key={asset.id} value={asset.id}>{asset.name}</SelectItem>
                   ))}
@@ -424,6 +449,7 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
                 <SelectTrigger><SelectValue placeholder="Sin activo" /></SelectTrigger>
                 <SelectContent className="bg-popover">
                   <SelectItem value="none">Sin activo</SelectItem>
+                  {historicOption(plan?.assetId, plan?.assetName, assets)}
                   {assets.map((asset) => (
                     <SelectItem key={asset.id} value={asset.id}>{asset.name}</SelectItem>
                   ))}
@@ -434,6 +460,13 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
 
           <div className="space-y-1">
             <Label>Responsable</Label>
+            {!canChooseResponsible ? (
+              <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground" data-testid="inspection-responsible-readonly">
+                {plan?.responsibleMemberId
+                  ? `Asignado por el cliente${plan.responsibleName ? `: ${plan.responsibleName}` : ''}`
+                  : 'Sin responsable. Solo el cliente puede asignarlo.'}
+              </p>
+            ) : (
             <Select value={responsibleMemberId || 'none'} onValueChange={(v) => { responsibleTouchedRef.current = true; setResponsibleMemberId(v === 'none' ? '' : v); }} disabled={saving}>
               <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
               <SelectContent className="bg-popover">
@@ -443,6 +476,7 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, templ
                 ))}
               </SelectContent>
             </Select>
+            )}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">

@@ -15,6 +15,8 @@ import type {
 const MODULE_LABELS: Record<FacilityManagementOperationalModule, string> = {
   assets: 'Activos',
   criticality: 'Criticidad',
+  inspections: 'Inspecciones',
+  'preventive-maintenance': 'Mantenimiento preventivo',
 };
 
 interface Props {

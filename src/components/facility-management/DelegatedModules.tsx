@@ -1,7 +1,11 @@
 import { useMemo } from 'react';
 import { AssetsView } from '@/components/assets/AssetsView';
 import { CriticalityMatrixView, type CriticalityScope } from '@/components/criticality/CriticalityMatrixView';
+import { InspectionsView } from '@/components/inspections/InspectionsView';
+import { PreventiveMaintenanceView } from '@/components/preventive-maintenance/PreventiveMaintenanceView';
 import { buildDelegatedAssetScope } from '@/hooks/useAssetScope';
+import { buildDelegatedInspectionScope } from '@/hooks/useInspectionScope';
+import { buildDelegatedPreventiveScope } from '@/hooks/usePreventiveScope';
 import {
   canFacilityManagerEvaluateAssetCriticality,
   canFacilityManagerManageCriticality,
@@ -25,6 +29,18 @@ function DelegatedCriticality({ client }: { client: FacilityManagementOperationa
   return <CriticalityMatrixView scope={scope} />;
 }
 
+function DelegatedInspections({ client, focusPlanId, focusRunId }: { client: FacilityManagementOperationalClient; focusPlanId?: string; focusRunId?: string }) {
+  const scope = useMemo(() => buildDelegatedInspectionScope(client), [client]);
+  return <InspectionsView scope={scope} focusPlanId={focusPlanId} focusRunId={focusRunId} />;
+}
+
+function DelegatedPreventive({ client, focusPlanId, focusOccurrenceId, focusAssetId }: {
+  client: FacilityManagementOperationalClient; focusPlanId?: string; focusOccurrenceId?: string; focusAssetId?: string;
+}) {
+  const scope = useMemo(() => buildDelegatedPreventiveScope(client), [client]);
+  return <PreventiveMaintenanceView scope={scope} focusPlanId={focusPlanId} focusOccurrenceId={focusOccurrenceId} focusAssetId={focusAssetId} />;
+}
+
 /** #assets for an active facility_manager organization (9C.1). */
 export function DelegatedAssetsModule({ managedClientId, focusAssetId }: { managedClientId?: string; focusAssetId?: string }) {
   return (
@@ -39,6 +55,26 @@ export function DelegatedCriticalityModule({ managedClientId }: { managedClientI
   return (
     <ManagedClientGate module="criticality" requestedClientId={managedClientId}>
       {(client) => <DelegatedCriticality key={client.clientOrganizationId} client={client} />}
+    </ManagedClientGate>
+  );
+}
+
+/** #inspections for an active facility_manager organization (9C.2). */
+export function DelegatedInspectionsModule({ managedClientId, focusPlanId, focusRunId }: { managedClientId?: string; focusPlanId?: string; focusRunId?: string }) {
+  return (
+    <ManagedClientGate module="inspections" requestedClientId={managedClientId}>
+      {(client) => <DelegatedInspections key={client.clientOrganizationId} client={client} focusPlanId={focusPlanId} focusRunId={focusRunId} />}
+    </ManagedClientGate>
+  );
+}
+
+/** #preventive-maintenance for an active facility_manager organization (9C.2). */
+export function DelegatedPreventiveMaintenanceModule({ managedClientId, focusPlanId, focusOccurrenceId, focusAssetId }: {
+  managedClientId?: string; focusPlanId?: string; focusOccurrenceId?: string; focusAssetId?: string;
+}) {
+  return (
+    <ManagedClientGate module="preventive-maintenance" requestedClientId={managedClientId}>
+      {(client) => <DelegatedPreventive key={client.clientOrganizationId} client={client} focusPlanId={focusPlanId} focusOccurrenceId={focusOccurrenceId} focusAssetId={focusAssetId} />}
     </ManagedClientGate>
   );
 }

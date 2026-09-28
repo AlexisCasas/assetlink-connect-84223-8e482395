@@ -11,7 +11,8 @@ import type { Request } from '@/types/request';
 
 interface Props {
   plan: PreventivePlan;
-  occurrence: PreventiveOccurrence;
+  /** Direct mode only: the occurrence always carries its request_creation_id. */
+  occurrence: PreventiveOccurrence & { request_creation_id: string };
   onClose: () => void;
   onLink: (occurrenceId: string, requestId: string) => Promise<boolean>;
 }

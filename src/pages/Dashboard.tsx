@@ -25,7 +25,7 @@ import { BacklogView } from '@/components/backlog/BacklogView';
 import { PreventiveMaintenanceView } from '@/components/preventive-maintenance/PreventiveMaintenanceView';
 import { PreventiveMaintenanceSummaryCard } from '@/components/dashboard/PreventiveMaintenanceSummaryCard';
 import { FacilityManagementAccessDenied, FacilityManagementView } from '@/components/facility-management/FacilityManagementView';
-import { DelegatedAssetsModule, DelegatedCriticalityModule } from '@/components/facility-management/DelegatedModules';
+import { DelegatedAssetsModule, DelegatedCriticalityModule, DelegatedInspectionsModule, DelegatedPreventiveMaintenanceModule } from '@/components/facility-management/DelegatedModules';
 import { getFacilityManagementMode } from '@/lib/facilityManagement';
 import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { useToast } from '@/hooks/use-toast';
@@ -188,8 +188,17 @@ const Dashboard = () => {
         }
         return <CriticalityMatrixView />;
       case 'inspections':
+        // Facility Manager (9C.2): same delegated gate as #assets — the
+        // client comes from ?managedClient= validated against
+        // get_my_facility_management_clients(); the RPCs re-check.
+        if (currentOrganization?.organizationType === 'facility_manager') {
+          return <DelegatedInspectionsModule managedClientId={focus.managedClientId} focusPlanId={focus.inspectionPlanId} focusRunId={focus.inspectionRunId} />;
+        }
         return <InspectionsView focusPlanId={focus.inspectionPlanId} focusRunId={focus.inspectionRunId} />;
       case 'preventive-maintenance':
+        if (currentOrganization?.organizationType === 'facility_manager') {
+          return <DelegatedPreventiveMaintenanceModule managedClientId={focus.managedClientId} focusPlanId={focus.preventivePlanId} focusOccurrenceId={focus.preventiveOccurrenceId} focusAssetId={focus.preventiveAssetId} />;
+        }
         return <PreventiveMaintenanceView focusPlanId={focus.preventivePlanId} focusOccurrenceId={focus.preventiveOccurrenceId} focusAssetId={focus.preventiveAssetId} />;
       case 'backlog':
         // BacklogView se defiende sola de un #backlog directo desde una

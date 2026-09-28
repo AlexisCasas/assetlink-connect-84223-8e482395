@@ -164,7 +164,7 @@ consultar:
 | Sección | Delegado | Motivo |
 |---|---|---|
 | Semáforo operativo (árbol y ficha) | oculto | mezcla OT/inspecciones/avisos |
-| Pestaña Preventivo | oculta | 9C.2 |
+| Pestaña Preventivo | visible solo con `preventive_maintenance.view` (desde 9C.2) | ver `docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md` |
 | "Crear aviso" | oculto | 9C.3 (avisos) |
 | Historial integrado del activo | oculto | mezcla módulos no delegados |
 | "Generar Reporte" | oculto | `reports.view` pendiente; el PDF carga preventivo/inspecciones/avisos |
@@ -238,4 +238,5 @@ nada sin un cliente validado. Modo directo y platform_admin sin cambios.
   incluye.
 - Semáforo e historial integrado para FM: cuando se deleguen OT,
   inspecciones, preventivo y avisos.
-- 9C.2: Inspecciones + Preventivo.
+- 9C.2 (hecho): Inspecciones + Preventivo, ver
+  `docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md`.

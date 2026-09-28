@@ -2597,3 +2597,84 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   6; paso supabase_admin omitido (suite como supabase_admin) → 2; solo
   TRUNCATE → 2; solo MAINTAIN → 1; `REVOKE ALL` → 8. Ver
   docs/PUBLIC_TABLE_META_PRIVILEGE_HARDENING.md.
+
+## Fase 1 · Punto 9C.2 — FM: Inspecciones + Preventivo
+
+- Solo son efectivos `inspections.view/manage` y
+  `preventive_maintenance.view/manage`. Migración
+  `20260928170418_facility_manager_inspections_preventive_access.sql`. Usa
+  el helper de 9C.1 `has_facility_management_operational_access_all`; no
+  hay un segundo sistema de delegación.
+- Matriz del FM:
+  - Ver inspecciones: `view`, o/a/m/t.
+  - Planificar inspecciones (plantillas, ítems, opciones, planes, alertas):
+    `view` + `manage`, o/a/m.
+  - Ejecutar inspecciones: `view` + `manage`, o/a/m/t.
+  - Ver preventivo: `view`, o/a/m/t.
+  - Fichas, planes, omitir ciclo y administrar medidores: `view` + `manage`,
+    o/a/m.
+  - Registrar lectura: `view` + `manage`, o/a/m/t.
+- Capacidades internas `can_view/plan_inspections`,
+  `can_execute_inspections_as_facility_manager`,
+  `can_view/plan_preventive_maintenance` y
+  `can_record_preventive_meter_reading`. Cada una es el acceso directo
+  histórico (idéntico) `OR` la rama delegada.
+- 30 RPCs reemplazadas. Se generaron desde la definición viva y solo cambian
+  la autorización.
+- `can_manage_preventive_maintenance` no se toca: también protege
+  `plan_preventive_maintenance_occurrence` (solicitud preventiva, 9C.4).
+- `responsible_member_id` es del cliente. El FM lo deja en `NULL` al crear y
+  lo conserva al editar; si no, `42501`. El FM no recibe
+  `get_assignable_technicians/planners`.
+- El technician FM ejecuta por estar asignado a la relación. Nunca se compara
+  su membresía del FM con el responsable del cliente, y no se crea una
+  membresía ficticia.
+- Inventario:
+  - Las lecturas delegadas de fichas y `scope_snapshot` salen sin
+    `material_id` ni stock/catálogo (`client_linked_material`).
+  - El FM no puede enviar `material_id`, pero las líneas vinculadas por el
+    cliente se conservan.
+- Evidencias: solo metadata o enlace, como antes. Sin R2. "Crear aviso" en
+  una ejecución sigue oculto (avisos = 9C.3).
+- Directorios mínimos nuevos:
+  - `get_facility_management_inspection_targets`: planificar, o/a/m.
+  - `get_facility_management_preventive_assets`: ver preventivo.
+  - Inspecciones y preventivo no implican `assets.view`.
+- Frontend:
+  - `FacilityManagementOperationalModule` agrega `inspections` y
+    `preventive-maintenance`.
+  - `InspectionScope` y `PreventiveScope` siguen el patrón de `AssetScope`.
+  - `DelegatedInspectionsModule` y `DelegatedPreventiveMaintenanceModule`.
+  - Sidebar: "Inspecciones de clientes" y "Preventivo de clientes".
+  - `AssetDetail` vuelve a mostrar Preventivo solo con
+    `preventive_maintenance.view` y conserva `managedClient` al navegar.
+  - El borrador de plan de inspección usa la clave `fm:<FM>:<cliente>`.
+  - Semáforo, historial integrado, métricas del dashboard, avisos, reporte y
+    QR siguen fuera.
+- Hardening final (misma migración): para el FM delegado,
+  - los ids de Solicitud y OT (`request_creation_id`, `request_id`,
+    `work_order_id`) llegan en `NULL`;
+  - `responsible_name` nunca se deriva del email (solo el nombre guardado, o
+    `NULL`), y el snapshot preventivo delegado quita el nombre;
+  - un destino histórico (sede inactiva o activo archivado) se conserva al
+    editar, pero no se puede asignar de nuevo (`22023`), y el directorio
+    solo ofrece sedes activas.
+  El cliente directo no cambia.
+- Verificado: pgTAP dedicado 242/242, regresión 1571/1571, smoke 47/47
+  (+ 9C.1 35/35, 9B 46/46).
+- Controles negativos:
+  - A (asignación): 3 fallos.
+  - B (technician planifica inspecciones): 13.
+  - C (`manage` sin `view` en inspecciones): 2.
+  - D (technician gestiona preventivo): 12.
+  - E (`manage` sin `view` en preventivo): 2.
+  - F (responsable): 12.
+  - G (solicitud preventiva): 3.
+  - H (inventario): 8.
+  - I (frontera de cliente en inspecciones): 5.
+  - J (frontera de cliente en medidores): 4.
+  - K (ids de Solicitud/OT visibles): 4.
+  - L (nombre derivado del email): 4.
+  - M (sin guarda de destino histórico): 2.
+- Ver `docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md`. Siguiente: 9C.3
+  Avisos de avería / Backlog.

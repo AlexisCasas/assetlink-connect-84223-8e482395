@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardCheck, ListChecks, Plus, Pencil, EyeOff, Eye, CalendarClock, PlayCircle, History } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { usePermissions } from '@/hooks/usePermissions';
 import { useAssets } from '@/hooks/useAssets';
+import { useDirectInspectionScope, type InspectionScope } from '@/hooks/useInspectionScope';
+import { useFacilityManagementInspectionTargets } from '@/hooks/useFacilityManagementReferenceDirectories';
 import { useChecklistTemplates } from '@/hooks/useChecklistTemplates';
 import { useInspectionPlans } from '@/hooks/useInspectionPlans';
 import { useInspectionRuns } from '@/hooks/useInspectionRuns';
@@ -51,6 +51,11 @@ const alertRulesDisplay = (plan: InspectionPlan): string => {
   return [...beforeDue, ...(hasOverdue ? ['Vencido'] : [])].join(', ');
 };
 
+// A delegated FM never receives a name derived from an email: when the
+// client assigned someone without a display name, only that fact is shown.
+const responsibleLabel = (item: { responsibleMemberId: string | null; responsibleName: string | null }) =>
+  item.responsibleName ?? (item.responsibleMemberId ? 'asignado por el cliente' : null);
+
 const STATUS_LABELS: Record<string, string> = {
   scheduled: 'Programada',
   in_progress: 'En progreso',
@@ -88,20 +93,31 @@ interface InspectionsViewProps {
    * these down; this component never reads window.location.hash itself. */
   focusPlanId?: string;
   focusRunId?: string;
+  /** Omitted: direct mode (the active client organization, historic rules).
+   * Delegated Facility Manager mode passes the operated client's scope. */
+  scope?: InspectionScope;
 }
 
-export function InspectionsView({ focusPlanId, focusRunId }: InspectionsViewProps = {}) {
-  const { currentOrganization, currentMembership } = useAuth();
-  const { canPlanWork, isTechnician } = usePermissions();
+export function InspectionsView({ focusPlanId, focusRunId, scope: explicitScope }: InspectionsViewProps = {}) {
+  const directScope = useDirectInspectionScope();
+  const scope = explicitScope ?? directScope;
+  const isDelegated = scope.mode === 'facility_manager';
+  const canPlanWork = scope.canPlan;
   const { toast } = useToast();
 
-  const organizationId = currentOrganization?.id;
+  const organizationId = scope.canView ? scope.organizationId ?? undefined : undefined;
   const { templates, saving: templateSaving, error: templateError, saveTemplate, saveItem, toggleItemActive, saveOption, toggleOptionActive } = useChecklistTemplates(organizationId);
-  const { assets, branches } = useAssets();
+  // Direct: the active client's own assets/branches (unchanged). Delegated:
+  // useAssets() stays disabled (the active org is the FM) and planning uses
+  // the minimal target directory instead — inspections never imply assets.view.
+  const directAssets = useAssets();
+  const delegatedTargets = useFacilityManagementInspectionTargets(isDelegated && canPlanWork ? scope.organizationId : null);
+  const assets = isDelegated ? delegatedTargets.assets : directAssets.assets;
+  const branches = isDelegated ? delegatedTargets.branches : directAssets.branches;
   const { plans, loading: plansLoading, saving: planSaving, error: planError, savePlanWithAlertRules, createRunFromPlan } = useInspectionPlans(organizationId);
   const { runs, saving: runSaving, error: runError, loadRunDetail, submitRun, refresh: refreshRuns } = useInspectionRuns(organizationId);
 
-  const [activeTab, setActiveTab] = useState<string>(isTechnician ? 'runs' : 'templates');
+  const [activeTab, setActiveTab] = useState<string>(scope.preferRunsTab ? 'runs' : 'templates');
 
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ChecklistTemplate | null>(null);
@@ -166,8 +182,11 @@ export function InspectionsView({ focusPlanId, focusRunId }: InspectionsViewProp
     }
   }, [focusPlanId, focusRunId, plansLoading, plans, toast]);
 
-  if (!currentOrganization) {
+  if (!scope.organizationId) {
     return <EmptyState message="Sin organización asignada" />;
+  }
+  if (!scope.canView) {
+    return <EmptyState message="No tienes acceso a las inspecciones de esta organización." />;
   }
 
   const openCreateTemplate = () => { setEditingTemplate(null); setTemplateDialogOpen(true); };
@@ -195,8 +214,10 @@ export function InspectionsView({ focusPlanId, focusRunId }: InspectionsViewProp
   const nextItemSequence = (template: ChecklistTemplate | null) => (!template || template.items.length === 0 ? 1 : Math.max(...template.items.map((i) => i.sequence)) + 1);
   const nextOptionSequence = (template: ChecklistTemplate | null) => (!template || template.responseOptions.length === 0 ? 1 : Math.max(...template.responseOptions.map((o) => o.sequence)) + 1);
 
-  const visibleRuns = isTechnician && currentMembership
-    ? runs.filter((run) => run.responsibleMemberId === currentMembership.id)
+  // Direct technician: only runs assigned to their client membership. A
+  // delegated FM technician is scoped by the relationship assignment instead.
+  const visibleRuns = scope.runsResponsibleMemberId
+    ? runs.filter((run) => run.responsibleMemberId === scope.runsResponsibleMemberId)
     : runs;
 
   return (
@@ -361,7 +382,7 @@ export function InspectionsView({ focusPlanId, focusRunId }: InspectionsViewProp
                       <p className="font-medium">{plan.title}</p>
                       <p className="text-xs text-muted-foreground">
                         {plan.templateName} · {[plan.branchName, plan.areaAssetName, plan.assetName].filter(Boolean).join(' / ') || 'Sin destino'}
-                        {plan.responsibleName && ` · Responsable: ${plan.responsibleName}`}
+                        {responsibleLabel(plan) && ` · Responsable: ${responsibleLabel(plan)}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {frequencyDisplay(plan)} · Próxima: {formatDate(plan.nextDueAt)}
@@ -375,9 +396,11 @@ export function InspectionsView({ focusPlanId, focusRunId }: InspectionsViewProp
                       {canPlanWork && (
                         <Button variant="ghost" size="icon" onClick={() => openEditPlan(plan)} title="Editar plan"><Pencil className="h-4 w-4" /></Button>
                       )}
-                      <Button variant="outline" size="sm" onClick={() => void handleCreateRun(plan.id)} disabled={runSaving}>
-                        <PlayCircle className="mr-1 h-3.5 w-3.5" /> Crear ejecución
-                      </Button>
+                      {scope.canExecute && (
+                        <Button variant="outline" size="sm" onClick={() => void handleCreateRun(plan.id)} disabled={runSaving}>
+                          <PlayCircle className="mr-1 h-3.5 w-3.5" /> Crear ejecución
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -394,7 +417,7 @@ export function InspectionsView({ focusPlanId, focusRunId }: InspectionsViewProp
             <Card>
               <CardContent className="flex min-h-40 flex-col items-center justify-center gap-2 text-center">
                 <History className="h-8 w-8 text-muted-foreground" />
-                <p className="font-medium">{isTechnician ? 'No tienes inspecciones asignadas.' : 'Aún no hay ejecuciones registradas.'}</p>
+                <p className="font-medium">{scope.runsResponsibleMemberId ? 'No tienes inspecciones asignadas.' : 'Aún no hay ejecuciones registradas.'}</p>
               </CardContent>
             </Card>
           ) : (
@@ -406,7 +429,7 @@ export function InspectionsView({ focusPlanId, focusRunId }: InspectionsViewProp
                       <p className="font-medium">{run.templateName}</p>
                       <p className="text-xs text-muted-foreground">
                         {[run.branchName, run.areaAssetName, run.assetName].filter(Boolean).join(' / ') || 'Sin destino'}
-                        {run.responsibleName && ` · Responsable: ${run.responsibleName}`}
+                        {responsibleLabel(run) && ` · Responsable: ${responsibleLabel(run)}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Programada: {formatDate(run.scheduledFor)}{run.completedAt && ` · Completada: ${formatDate(run.completedAt)}`}
@@ -415,9 +438,11 @@ export function InspectionsView({ focusPlanId, focusRunId }: InspectionsViewProp
                     <div className="flex shrink-0 items-center gap-2">
                       <Badge variant="outline">{STATUS_LABELS[run.status] ?? run.status}</Badge>
                       {run.result && <Badge variant={resultBadgeVariant(run.result)}>{RESULT_LABELS[run.result] ?? run.result}</Badge>}
-                      <Button variant="outline" size="sm" onClick={() => openRun(run.id)}>
-                        {run.status === 'completed' ? 'Ver detalle' : 'Ejecutar'}
-                      </Button>
+                      {run.status === 'completed' || !scope.canExecute ? (
+                        <Button variant="outline" size="sm" onClick={() => openRun(run.id)}>Ver detalle</Button>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => openRun(run.id)}>Ejecutar</Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -459,7 +484,10 @@ export function InspectionsView({ focusPlanId, focusRunId }: InspectionsViewProp
           <InspectionPlanDialog
             open={planDialogOpen}
             onOpenChange={setPlanDialogOpen}
-            organizationId={organizationId}
+            organizationId={scope.canChooseResponsible ? organizationId : null}
+            draftScopeKey={scope.draftScopeKey}
+            canChooseResponsible={scope.canChooseResponsible}
+            showHistoricTargets={isDelegated}
             templates={activeTemplates}
             branches={branches}
             assets={assets}
@@ -474,6 +502,8 @@ export function InspectionsView({ focusPlanId, focusRunId }: InspectionsViewProp
         open={runDialogOpen}
         onOpenChange={setRunDialogOpen}
         runId={activeRunId}
+        readOnly={!scope.canExecute}
+        allowMaintenanceNotices={!isDelegated}
         loadRunDetail={loadRunDetail}
         saving={runSaving}
         onSave={submitRun}
