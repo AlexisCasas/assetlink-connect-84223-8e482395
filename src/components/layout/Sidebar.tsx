@@ -10,7 +10,7 @@ import { ORGANIZATION_ROLE_LABELS } from '@/lib/organizationRoles';
 import { FACILITY_MANAGEMENT_NAV_LABELS, getFacilityManagementMode } from '@/lib/facilityManagement';
 import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { useFacilityManagementOperationalClients } from '@/hooks/useFacilityManagementOperationalClients';
-import { canFacilityManagerViewAssets, canFacilityManagerViewCriticality, canFacilityManagerViewInspections, canFacilityManagerViewPreventive } from '@/lib/facilityManagement';
+import { canFacilityManagerViewAssets, canFacilityManagerViewCriticality, canFacilityManagerViewInspections, canFacilityManagerViewMaintenanceNotices, canFacilityManagerViewPreventive } from '@/lib/facilityManagement';
 import { 
   LayoutDashboard,
   Package,
@@ -131,6 +131,7 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   const canViewDelegatedCriticality = operationalClients.some(canFacilityManagerViewCriticality);
   const canViewDelegatedInspections = operationalClients.some(canFacilityManagerViewInspections);
   const canViewDelegatedPreventive = operationalClients.some(canFacilityManagerViewPreventive);
+  const canViewDelegatedBacklog = operationalClients.some(canFacilityManagerViewMaintenanceNotices);
 
   return (
     <aside className={cn(
@@ -204,6 +205,8 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
         {canViewDelegatedInspections && <Button variant={currentView === 'inspections' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('inspections')}><ClipboardCheck className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Inspecciones de clientes'}</Button>}
 
         {canViewDelegatedPreventive && <Button variant={currentView === 'preventive-maintenance' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('preventive-maintenance')}><CalendarClock className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Preventivo de clientes'}</Button>}
+
+        {canViewDelegatedBacklog && <Button variant={currentView === 'backlog' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('backlog')}><AlertTriangle className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Backlog de clientes'}</Button>}
 
         {canViewWorkOrders && (
           <Button

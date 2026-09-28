@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AlertTriangle, Loader2, Plus } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { useMaintenanceNotices } from '@/hooks/useMaintenanceNotices';
+import { useDirectMaintenanceNoticeScope, type MaintenanceNoticeScope } from '@/hooks/useMaintenanceNoticeScope';
 import { cn } from '@/lib/utils';
 import type { BacklogFilterState, MaintenanceNotice } from '@/types/maintenanceNotice';
 import {
@@ -29,6 +29,9 @@ interface BacklogViewProps {
    * abrir: si el aviso no pertenece a la organización activa, la RLS no lo
    * devuelve y aquí simplemente no aparece. */
   focusNoticeId?: string;
+  /** Omitted: direct mode (the active client organization, historic rules).
+   * Delegated Facility Manager mode passes the operated client's scope. */
+  scope?: MaintenanceNoticeScope;
 }
 
 const DEFAULT_FILTERS: BacklogFilterState = {
@@ -42,12 +45,13 @@ const DEFAULT_FILTERS: BacklogFilterState = {
 const normalize = (value: string) =>
   value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-export function BacklogView({ focusNoticeId }: BacklogViewProps) {
-  const { currentOrganization, currentMembership } = useAuth();
+export function BacklogView({ focusNoticeId, scope: explicitScope }: BacklogViewProps) {
+  const directScope = useDirectMaintenanceNoticeScope();
+  const scope = explicitScope ?? directScope;
   const { toast } = useToast();
   const {
     notices, loading, error, createNotice, triageNotice, dismissNotice, convertNotice,
-  } = useMaintenanceNotices(currentOrganization?.id);
+  } = useMaintenanceNotices(scope.canView ? scope.organizationId : null);
 
   const [filters, setFilters] = useState<BacklogFilterState>(DEFAULT_FILTERS);
   const [showCreate, setShowCreate] = useState(false);
@@ -56,11 +60,9 @@ export function BacklogView({ focusNoticeId }: BacklogViewProps) {
   const [planningNotice, setPlanningNotice] = useState<MaintenanceNotice | null>(null);
   const handledFocusRef = useRef<string | null>(null);
 
-  const role = currentMembership?.isActive ? currentMembership.role : null;
   // Mismo criterio que las RPC: reportar es amplio, gestionar no. El backend
   // vuelve a validarlo — esto solo evita ofrecer un botón que fallaría.
-  const canReport = !!role && ['owner', 'admin', 'manager', 'technician', 'requester'].includes(role);
-  const canManage = !!role && ['owner', 'admin', 'manager'].includes(role);
+  const { canReport, canManage } = scope;
 
   // Deep link: abre el detalle del aviso una sola vez, cuando ya cargó.
   useEffect(() => {
@@ -123,15 +125,13 @@ export function BacklogView({ focusNoticeId }: BacklogViewProps) {
     [notices],
   );
 
-  if (currentOrganization?.organizationType !== 'client_company') {
+  if (!scope.canView) {
     // Defensa ante un #backlog directo: el backlog es de quien opera los
-    // activos. El backend rechaza igual (can_report/can_manage exigen
-    // client_company), esto solo evita una pantalla vacía sin explicación.
+    // activos. El backend rechaza igual, esto solo evita una pantalla vacía
+    // sin explicación.
     return (
       <div className="flex h-full items-center justify-center p-6">
-        <p className="text-sm text-muted-foreground">
-          El backlog de mantenimiento solo está disponible para organizaciones cliente.
-        </p>
+        <p className="text-sm text-muted-foreground">{scope.unavailableReason}</p>
       </div>
     );
   }
@@ -247,6 +247,7 @@ export function BacklogView({ focusNoticeId }: BacklogViewProps) {
         open={showCreate}
         onOpenChange={setShowCreate}
         onCreate={createNotice}
+        assetDirectoryClientId={scope.mode === 'facility_manager' ? scope.assetDirectoryClientId : null}
       />
 
       <MaintenanceNoticeDetailDialog
@@ -254,6 +255,8 @@ export function BacklogView({ focusNoticeId }: BacklogViewProps) {
         onOpenChange={(next) => { if (!next) setDetailNotice(null); }}
         notice={detailNotice}
         canManage={canManage}
+        canConvertToRequest={scope.canConvertToRequest}
+        showCriticality={scope.canViewCriticality}
         onTriage={() => { setTriageNoticeTarget(detailNotice); setDetailNotice(null); }}
         onPlan={() => { setPlanningNotice(detailNotice); setDetailNotice(null); }}
         onDismiss={dismissNotice}
@@ -263,11 +266,12 @@ export function BacklogView({ focusNoticeId }: BacklogViewProps) {
         open={!!triageNoticeTarget}
         onOpenChange={(next) => { if (!next) setTriageNoticeTarget(null); }}
         notice={triageNoticeTarget}
-        organizationId={currentOrganization?.id}
+        organizationId={scope.canChooseResponsible ? scope.organizationId : null}
+        canChooseResponsible={scope.canChooseResponsible}
         onTriage={triageNotice}
       />
 
-      {planningNotice && (
+      {scope.canConvertToRequest && planningNotice && (
         <MaintenanceNoticePlanningDialog
           notice={planningNotice}
           onClose={() => setPlanningNotice(null)}

@@ -2676,5 +2676,54 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   - K (ids de Solicitud/OT visibles): 4.
   - L (nombre derivado del email): 4.
   - M (sin guarda de destino histórico): 2.
-- Ver `docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md`. Siguiente: 9C.3
-  Avisos de avería / Backlog.
+- Ver `docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md`. 9C.3 (hecho):
+  Avisos de avería / Backlog; el aviso desde una ejecución aparece con
+  `maintenance_notices.report`.
+
+## Fase 1 · Punto 9C.3 — FM: Avisos de avería / Backlog
+
+- Solo son efectivos `maintenance_notices.view/report/manage`. Migración
+  `20260928224632_facility_manager_maintenance_notices_access.sql`. Usa el
+  helper de 9C.1 `has_facility_management_operational_access_all`.
+- Matriz del FM:
+  - ver: `view`, o/a/m/t/requester/viewer;
+  - reportar: `view` + `report`, o/a/m/t/requester;
+  - gestionar (revisar, prioridad, notas, descartar): `view` + `manage`,
+    o/a/m.
+  `manage` no exige `report`.
+- Capacidades internas `can_view_maintenance_notices`,
+  `can_create_maintenance_notice` y `can_triage_maintenance_notice`: cada una
+  es el acceso directo (idéntico) `OR` la rama delegada.
+- Se reemplazaron `get_maintenance_notices`, `create_maintenance_notice`,
+  `triage_maintenance_notice` y `dismiss_maintenance_notice`.
+- `convert_maintenance_notice` NO se toca: sigue con
+  `can_manage_maintenance_notice` (directa). Convertir en solicitud = 9C.4.
+- Responsable del aviso: es del cliente. En `triage`, el FM recibe `42501`
+  si envía cualquier `p_responsible_member_id` o `p_clear_responsible`. El FM
+  no recibe `get_assignable_planners`.
+- Respuesta minimizada para el FM:
+  - `source_id`, `item_id`, `converted_request_id`/`number`,
+    `reported_by_user_id` y `responsible_member_id` van en `NULL`;
+  - los nombres son el nombre guardado o `NULL`, nunca derivados del email
+    ("Asignado por el cliente" para un responsable sin nombre);
+  - `asset_current_criticality` solo con `criticality.view` efectivo;
+  - `create`, `triage` y `dismiss` devuelven la fila minimizada
+    (`sanitize_maintenance_notice_for_delegate`).
+- Crear aviso:
+  - desde una inspección exige además `inspections.view`;
+  - el FM no reporta manualmente sobre un activo archivado (`22023`);
+  - directorio mínimo `get_facility_management_maintenance_notice_assets`
+    (`view` + `report`); `report` no implica `assets.view`.
+- Frontend:
+  - `FacilityManagementOperationalModule` agrega `backlog`;
+  - `MaintenanceNoticeScope` sigue el patrón de `AssetScope`;
+  - `DelegatedBacklogModule` y "Backlog de clientes" en el Sidebar;
+  - revisión sin roster (responsable en solo lectura);
+  - sin "Convertir en solicitud";
+  - "Crear aviso" en la ficha del activo (`assets.view` + `report`) y en
+    ejecuciones de inspección (`report`).
+- Verificado: pgTAP dedicado 112/112, regresión 1683/1683, smoke 39/39
+  (+ 9C.2 47/47, 9C.1 35/35, 9B 46/46).
+- Controles negativos (fallos por control): A=4, B=2, C=1, D=2, E=4, F=3,
+  G=1, H=2, I=2, J=1, K=2, L=2.
+- Ver `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`. Siguiente: 9C.4 Requests.

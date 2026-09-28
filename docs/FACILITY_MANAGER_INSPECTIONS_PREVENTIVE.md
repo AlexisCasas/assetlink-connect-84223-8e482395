@@ -173,8 +173,10 @@ El FM puede enviar esa misma metadata. No se amplía
 `authorize_asset_file_access` ni se conceden permisos de storage: tener
 `inspections.manage` no da acceso a R2.
 
-"Crear aviso de avería" dentro de una ejecución sigue oculto en modo delegado,
-porque los avisos son 9C.3.
+"Crear aviso de avería" dentro de una ejecución aparece en modo delegado desde
+9C.3, solo si el FM además puede reportar avisos
+(`maintenance_notices.view` + `report`). Ver
+`docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`.
 
 ### Solicitudes preventivas (fuera de 9C.2)
 
@@ -352,4 +354,6 @@ y 46/46 de 9B.
 
 ## Siguiente
 
-9C.3: Avisos de avería y backlog.
+- 9C.3 (hecho): Avisos de avería y backlog, ver
+  `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`.
+- 9C.4: Requests.

@@ -33,6 +33,10 @@ interface MaintenanceNoticeDetailDialogProps {
   /** owner/admin/manager. Un técnico o solicitante ve el detalle completo
    * pero sin acciones de gestión — el backend lo rechaza igual. */
   canManage: boolean;
+  /** Convert into a Request. Not delegated to Facility Managers (9C.4). */
+  canConvertToRequest?: boolean;
+  /** Live asset criticality is shown only with criticality.view. */
+  showCriticality?: boolean;
   onTriage: () => void;
   onPlan: () => void;
   onDismiss: (noticeId: string, reason: string) => Promise<void>;
@@ -53,6 +57,8 @@ export function MaintenanceNoticeDetailDialog({
   onOpenChange,
   notice,
   canManage,
+  canConvertToRequest = true,
+  showCriticality = true,
   onTriage,
   onPlan,
   onDismiss,
@@ -120,9 +126,11 @@ export function MaintenanceNoticeDetailDialog({
               )}
             </Field>
             <Field label="Sede (al momento del aviso)">{notice.branchNameSnapshot ?? '—'}</Field>
+            {showCriticality && (
             <Field label="Criticidad actual del activo">
               {notice.assetCurrentCriticality ? ASSET_CRITICALITY_LABELS[notice.assetCurrentCriticality] : 'Sin evaluar'}
             </Field>
+            )}
             <Field label="Origen">
               {MAINTENANCE_NOTICE_SOURCE_LABELS[notice.sourceType]}
               {notice.sourceType === 'inspection_run' && notice.sourceMetadata.itemQuestion && (
@@ -201,7 +209,7 @@ export function MaintenanceNoticeDetailDialog({
             <>
               <Button variant="outline" onClick={() => setShowDismissForm(true)}>Descartar</Button>
               <Button variant="outline" onClick={onTriage}>Revisar</Button>
-              <Button onClick={onPlan}>Convertir en solicitud</Button>
+              {canConvertToRequest && <Button onClick={onPlan}>Convertir en solicitud</Button>}
             </>
           )}
           {showDismissForm && (

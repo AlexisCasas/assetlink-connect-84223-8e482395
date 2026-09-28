@@ -24,6 +24,9 @@ interface MaintenanceNoticeTriageDialogProps {
   notice: MaintenanceNotice | null;
   organizationId: string | null | undefined;
   onTriage: (input: TriageMaintenanceNoticeInput) => Promise<void>;
+  /** responsible_member_id is client-owned: a delegated Facility Manager sees
+   * it read-only and never loads the client roster. */
+  canChooseResponsible?: boolean;
 }
 
 const PRIORITIES: MaintenanceNoticePriority[] = ['low', 'medium', 'high', 'urgent'];
@@ -38,9 +41,10 @@ export function MaintenanceNoticeTriageDialog({
   notice,
   organizationId,
   onTriage,
+  canChooseResponsible = true,
 }: MaintenanceNoticeTriageDialogProps) {
   const { toast } = useToast();
-  const { planners, loading: loadingPlanners } = useOrganizationPlanners(open ? organizationId : null);
+  const { planners, loading: loadingPlanners } = useOrganizationPlanners(open && canChooseResponsible ? organizationId : null);
   const [priority, setPriority] = useState<MaintenanceNoticePriority>('medium');
   const [triageNotes, setTriageNotes] = useState('');
   const [responsibleMemberId, setResponsibleMemberId] = useState<string>(NO_RESPONSIBLE);
@@ -70,7 +74,9 @@ export function MaintenanceNoticeTriageDialog({
         priority,
         triageNotes: triageNotes.trim() || undefined,
         // undefined = conservar (sin revalidar), null = desasignar, UUID = asignar.
-        responsibleMemberId: responsibleMemberId === originalResponsible
+        // A delegated FM never sends a responsible change (the backend
+        // rejects it): "keep" is expressed by omitting it.
+        responsibleMemberId: !canChooseResponsible || responsibleMemberId === originalResponsible
           ? undefined
           : responsibleMemberId === NO_RESPONSIBLE ? null : responsibleMemberId,
       });
@@ -110,6 +116,11 @@ export function MaintenanceNoticeTriageDialog({
 
           <div className="space-y-2">
             <Label>Responsable de seguimiento</Label>
+            {!canChooseResponsible ? (
+              <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground" data-testid="notice-responsible-readonly">
+                {notice.responsibleName ?? 'Sin responsable asignado'} — lo asigna el cliente.
+              </p>
+            ) : (
             <Select value={responsibleMemberId} onValueChange={setResponsibleMemberId} disabled={loadingPlanners}>
               <SelectTrigger><SelectValue placeholder="Sin responsable" /></SelectTrigger>
               <SelectContent>
@@ -126,6 +137,7 @@ export function MaintenanceNoticeTriageDialog({
                 ))}
               </SelectContent>
             </Select>
+            )}
           </div>
 
           <div className="space-y-2">

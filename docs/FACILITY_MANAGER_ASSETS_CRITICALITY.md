@@ -165,7 +165,7 @@ consultar:
 |---|---|---|
 | Semáforo operativo (árbol y ficha) | oculto | mezcla OT/inspecciones/avisos |
 | Pestaña Preventivo | visible solo con `preventive_maintenance.view` (desde 9C.2) | ver `docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md` |
-| "Crear aviso" | oculto | 9C.3 (avisos) |
+| "Crear aviso" | visible solo con `maintenance_notices.view` + `report` (desde 9C.3) | activo fijo; ver `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md` |
 | Historial integrado del activo | oculto | mezcla módulos no delegados |
 | "Generar Reporte" | oculto | `reports.view` pendiente; el PDF carga preventivo/inspecciones/avisos |
 | Código QR | oculto | el enlace exige membresía directa del cliente (deep link delegado fuera de 9C.1) |

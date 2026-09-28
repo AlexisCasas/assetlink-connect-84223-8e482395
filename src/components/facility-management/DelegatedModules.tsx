@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import { AssetsView } from '@/components/assets/AssetsView';
+import { BacklogView } from '@/components/backlog/BacklogView';
 import { CriticalityMatrixView, type CriticalityScope } from '@/components/criticality/CriticalityMatrixView';
 import { InspectionsView } from '@/components/inspections/InspectionsView';
 import { PreventiveMaintenanceView } from '@/components/preventive-maintenance/PreventiveMaintenanceView';
 import { buildDelegatedAssetScope } from '@/hooks/useAssetScope';
 import { buildDelegatedInspectionScope } from '@/hooks/useInspectionScope';
+import { buildDelegatedMaintenanceNoticeScope } from '@/hooks/useMaintenanceNoticeScope';
 import { buildDelegatedPreventiveScope } from '@/hooks/usePreventiveScope';
 import {
   canFacilityManagerEvaluateAssetCriticality,
@@ -41,6 +43,11 @@ function DelegatedPreventive({ client, focusPlanId, focusOccurrenceId, focusAsse
   return <PreventiveMaintenanceView scope={scope} focusPlanId={focusPlanId} focusOccurrenceId={focusOccurrenceId} focusAssetId={focusAssetId} />;
 }
 
+function DelegatedBacklog({ client, focusNoticeId }: { client: FacilityManagementOperationalClient; focusNoticeId?: string }) {
+  const scope = useMemo(() => buildDelegatedMaintenanceNoticeScope(client), [client]);
+  return <BacklogView scope={scope} focusNoticeId={focusNoticeId} />;
+}
+
 /** #assets for an active facility_manager organization (9C.1). */
 export function DelegatedAssetsModule({ managedClientId, focusAssetId }: { managedClientId?: string; focusAssetId?: string }) {
   return (
@@ -75,6 +82,15 @@ export function DelegatedPreventiveMaintenanceModule({ managedClientId, focusPla
   return (
     <ManagedClientGate module="preventive-maintenance" requestedClientId={managedClientId}>
       {(client) => <DelegatedPreventive key={client.clientOrganizationId} client={client} focusPlanId={focusPlanId} focusOccurrenceId={focusOccurrenceId} focusAssetId={focusAssetId} />}
+    </ManagedClientGate>
+  );
+}
+
+/** #backlog for an active facility_manager organization (9C.3). */
+export function DelegatedBacklogModule({ managedClientId, focusNoticeId }: { managedClientId?: string; focusNoticeId?: string }) {
+  return (
+    <ManagedClientGate module="backlog" requestedClientId={managedClientId}>
+      {(client) => <DelegatedBacklog key={client.clientOrganizationId} client={client} focusNoticeId={focusNoticeId} />}
     </ManagedClientGate>
   );
 }

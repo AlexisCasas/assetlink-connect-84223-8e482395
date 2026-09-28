@@ -187,11 +187,32 @@ export const canFacilityManagerRecordMeterReading = (client: OperationalClientAc
 export const canFacilityManagerManageMeters = (client: OperationalClientAccess) =>
   canFacilityManagerManagePreventive(client);
 
+// ---------------------------------------------------------------------------
+// 9C.3: Avisos de avería / Backlog. Espejo de can_view_maintenance_notices /
+// can_create_maintenance_notice / can_triage_maintenance_notice. Convertir en
+// Solicitud no se delega (9C.4).
+// ---------------------------------------------------------------------------
+const FM_NOTICE_VIEW_ROLES: readonly OrganizationMemberRole[] = ['owner', 'admin', 'manager', 'technician', 'requester', 'viewer'];
+const FM_NOTICE_REPORT_ROLES: readonly OrganizationMemberRole[] = ['owner', 'admin', 'manager', 'technician', 'requester'];
+
+export const canFacilityManagerViewMaintenanceNotices = (client: OperationalClientAccess) =>
+  FM_NOTICE_VIEW_ROLES.includes(client.membershipRole) && grants(client, 'maintenance_notices.view');
+
+/** Crear un aviso (manual, desde la ficha del activo o desde una no
+ * conformidad). No implica assets.view ni inspections.view. */
+export const canFacilityManagerReportMaintenanceNotice = (client: OperationalClientAccess) =>
+  FM_NOTICE_REPORT_ROLES.includes(client.membershipRole) && grants(client, 'maintenance_notices.view', 'maintenance_notices.report');
+
+/** Revisar (prioridad, notas) y descartar. No exige report. */
+export const canFacilityManagerManageMaintenanceNotices = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'maintenance_notices.view', 'maintenance_notices.manage');
+
 const MODULE_VIEW_CHECKS: Record<FacilityManagementOperationalModule, (client: OperationalClientAccess) => boolean> = {
   assets: canFacilityManagerViewAssets,
   criticality: canFacilityManagerViewCriticality,
   inspections: canFacilityManagerViewInspections,
   'preventive-maintenance': canFacilityManagerViewPreventive,
+  backlog: canFacilityManagerViewMaintenanceNotices,
 };
 
 export const canFacilityManagerOpenModule = (

@@ -25,7 +25,7 @@ import { BacklogView } from '@/components/backlog/BacklogView';
 import { PreventiveMaintenanceView } from '@/components/preventive-maintenance/PreventiveMaintenanceView';
 import { PreventiveMaintenanceSummaryCard } from '@/components/dashboard/PreventiveMaintenanceSummaryCard';
 import { FacilityManagementAccessDenied, FacilityManagementView } from '@/components/facility-management/FacilityManagementView';
-import { DelegatedAssetsModule, DelegatedCriticalityModule, DelegatedInspectionsModule, DelegatedPreventiveMaintenanceModule } from '@/components/facility-management/DelegatedModules';
+import { DelegatedAssetsModule, DelegatedBacklogModule, DelegatedCriticalityModule, DelegatedInspectionsModule, DelegatedPreventiveMaintenanceModule } from '@/components/facility-management/DelegatedModules';
 import { getFacilityManagementMode } from '@/lib/facilityManagement';
 import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { useToast } from '@/hooks/use-toast';
@@ -204,6 +204,11 @@ const Dashboard = () => {
         // BacklogView se defiende sola de un #backlog directo desde una
         // organización que no es cliente; el gating del sidebar nunca es la
         // autorización.
+        // Facility Manager (9C.3): mismo gate delegado que #assets; el
+        // cliente sale de ?managedClient= validado (nunca de org=).
+        if (currentOrganization?.organizationType === 'facility_manager') {
+          return <DelegatedBacklogModule managedClientId={focus.managedClientId} focusNoticeId={focus.noticeId} />;
+        }
         return <BacklogView focusNoticeId={focus.noticeId} />;
       case 'admin': return <AdminConsole />;
       case 'users':
