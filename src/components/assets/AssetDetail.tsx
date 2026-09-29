@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import {
   FileText,
   User,
   Camera,
+  Loader2,
   CheckCircle,
   Archive,
   RotateCcw,
@@ -44,6 +45,9 @@ import { useMaintenanceNotices } from '@/hooks/useMaintenanceNotices';
 import { MaintenanceNoticeDialog } from '@/components/backlog/MaintenanceNoticeDialog';
 import { usePreventiveMaintenance } from '@/hooks/usePreventiveMaintenance';
 import { navigateToEntity } from '@/lib/entityNavigation';
+import { useAssetFiles } from '@/hooks/useAssetFiles';
+import { ASSET_FILE_ACCEPT, UPLOAD_STAGE_LABELS, validateAssetFileForUpload } from '@/lib/assetFiles';
+import { AssetFilesPanel, AssetPhotoImage } from './AssetFilesPanel';
 
 interface AssetDetailProps {
   state: UseAssetsResult;
@@ -119,6 +123,12 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
   // activo no necesita cargar todo el backlog para mostrar un botón.
   const { createNotice } = useMaintenanceNotices(canReportNotice && noticeDialogOpen ? asset?.organizationId : null);
   const preventive = usePreventiveMaintenance(scope.canViewPreventive ? asset?.organizationId : null, asset?.id);
+  // Photos and documents (R2, Punto 10): same module as the asset itself,
+  // for direct members and delegated FMs alike (assets.view to read,
+  // assets.view + assets.manage to change). Archived assets are read-only.
+  const assetFiles = useAssetFiles(scope.canViewFiles ? asset?.id : null);
+  const canManageFiles = scope.canManageFiles && asset?.status !== 'archived';
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   // Default responsible display: managers resolve it against the eligible
   // directory (active owner/admin/manager); any other member can only list
   // active members, which is enough to name an available responsible.
@@ -501,6 +511,7 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
           <TabsList className="inline-flex w-max gap-1 rounded-lg border border-onefacility-border bg-onefacility-surface p-1">
             <TabsTrigger value="summary" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Resumen</TabsTrigger>
             {scope.canViewPreventive && <TabsTrigger value="preventive" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Preventivo</TabsTrigger>}
+            {scope.canViewFiles && <TabsTrigger value="files" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Fotos y documentos</TabsTrigger>}
             {(crossModule || scope.canViewCriticality) && <TabsTrigger value="history" className="data-[state=active]:bg-onefacility-blue data-[state=active]:text-white">Historial</TabsTrigger>}
           </TabsList>
 
@@ -508,14 +519,62 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
         {/* Asset Image and QR Code */}
         <div className={cn('grid grid-cols-1 gap-4', crossModule && 'md:grid-cols-2')}>
           <div className="relative">
-            <img
-              src={asset.imageUrl || '/placeholder.svg'}
-              alt={`${asset.name}`}
-              className="w-full h-32 object-cover rounded-lg bg-muted border"
-            />
-            <Button size="sm" variant="secondary" className="absolute top-2 right-2" disabled>
-              <Camera className="h-4 w-4" />
-            </Button>
+            {/* R2 primary photo -> legacy assets.image_url (compatibility
+                fallback, never written anymore) -> placeholder. */}
+            {assetFiles.primaryPhoto ? (
+              <AssetPhotoImage
+                key={assetFiles.primaryPhoto.id}
+                fileId={assetFiles.primaryPhoto.id}
+                alt={asset.name}
+                className="w-full h-32 object-cover rounded-lg bg-muted border"
+              />
+            ) : (
+              <img
+                src={asset.imageUrl || '/placeholder.svg'}
+                alt={`${asset.name}`}
+                className="w-full h-32 object-cover rounded-lg bg-muted border"
+                data-testid="asset-photo-fallback"
+              />
+            )}
+            {canManageFiles && (
+              <>
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept={ASSET_FILE_ACCEPT.photo}
+                  className="hidden"
+                  aria-label="Subir foto del activo"
+                  data-testid="asset-camera-input"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (!file) return;
+                    const invalid = validateAssetFileForUpload('photo', file);
+                    if (invalid) {
+                      toast({ title: 'Archivo no válido', description: invalid, variant: 'destructive' });
+                      return;
+                    }
+                    assetFiles.uploadFile({ kind: 'photo', file })
+                      .then(() => toast({ title: 'Foto subida', description: file.name }))
+                      .catch((uploadError: unknown) => toast({ title: 'No se pudo subir la foto', description: uploadError instanceof Error ? uploadError.message : undefined, variant: 'destructive' }));
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="absolute top-2 right-2"
+                  title="Subir foto"
+                  aria-label="Subir foto"
+                  disabled={assetFiles.uploading}
+                  onClick={() => cameraInputRef.current?.click()}
+                >
+                  {assetFiles.uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                </Button>
+              </>
+            )}
+            {assetFiles.upload && (
+              <p className="mt-1 text-xs text-muted-foreground">{UPLOAD_STAGE_LABELS[assetFiles.upload.stage]}</p>
+            )}
           </div>
           {crossModule && (
             <div className="flex flex-col items-center justify-center gap-2 p-4 border rounded-lg">
@@ -745,6 +804,12 @@ export function AssetDetail({ state, trafficLight }: AssetDetailProps) {
                 <p className="mt-1 text-sm text-muted-foreground">Ciclo #{plan.current_occurrence?.sequence ?? '—'} · {plan.current_occurrence?.due_at ? new Date(plan.current_occurrence.due_at).toLocaleString() : `${plan.current_occurrence?.due_meter_value ?? '—'} ${plan.meter_unit ?? ''}`}</p>
               </div>
             ))}
+          </TabsContent>
+          )}
+
+          {scope.canViewFiles && (
+          <TabsContent value="files">
+            <AssetFilesPanel assetName={asset.name} files={assetFiles} canManage={canManageFiles} archived={asset.status === 'archived'} />
           </TabsContent>
           )}
 

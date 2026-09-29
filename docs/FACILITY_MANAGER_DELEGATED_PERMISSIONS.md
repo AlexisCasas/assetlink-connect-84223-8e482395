@@ -16,9 +16,11 @@ desde **9C.2**, `inspections.*` y `preventive_maintenance.*` (ver
 `docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md`); desde **9C.3**,
 `maintenance_notices.*` (ver `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`).
 Desde **9C.4**, `requests.*`, incluidas la conversión de avisos y la
-solicitud preventiva (ver `docs/FACILITY_MANAGER_REQUESTS.md`). El resto de
-módulos (cotizaciones, OT, reportes), además de inventario y R2, todavía no
-abre nada.
+solicitud preventiva (ver `docs/FACILITY_MANAGER_REQUESTS.md`). Desde
+**Punto 10**, las fotos y documentos R2 de activos siguen `assets.view` /
+`assets.manage` (ver `docs/ASSET_FILES_R2_PRODUCTIZATION.md`). El resto de
+módulos (cotizaciones, OT, reportes), además de inventario y los adjuntos de
+solicitudes, todavía no abre nada.
 
 ## 1. Las tres capas
 
@@ -308,6 +310,15 @@ suite pgTAP.
   - la RLS de `requests` no se abre: todo pasa por RPCs minimizadas;
   - los contactos y el responsable interno siguen siendo del cliente;
   - cotizaciones, OT y el roster del cliente no se delegan.
+- **Punto 10 (hecho):** Fotos y documentos R2 de activos. Ver
+  `docs/ASSET_FILES_R2_PRODUCTIZATION.md`.
+  - leer, listar y descargar: `assets.view`, roles o/a/m/technician;
+  - subir, borrar y marcar principal: `assets.view` + `assets.manage`, roles
+    o/a/m, y nunca sobre un activo archivado;
+  - viewer y requester del FM no acceden; un miembro no asignado recibe el
+    mismo "File not found" que un archivo inexistente;
+  - sin política raw para el FM sobre `asset_documents`: solo RPCs y la Edge
+    Function `asset-files`.
 - Siguientes: cotizaciones, OT, reportes.
 
 ## 11. Verificación

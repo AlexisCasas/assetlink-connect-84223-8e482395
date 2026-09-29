@@ -45,6 +45,12 @@ export interface AssetScope {
   /** default_responsible_member_id stays client-only (also enforced by a
    * backend trigger). */
   canEditDefaultResponsible: boolean;
+  /** Photos and documents of the asset (R2, Punto 10). Part of the Assets
+   * module — no new permission: direct = canViewAssets / canManageAssets;
+   * delegated = assets.view / assets.view + assets.manage (9C.1 matrix).
+   * The backend (authorize_asset_file_access) re-checks everything. */
+  canViewFiles: boolean;
+  canManageFiles: boolean;
 }
 
 /** A scope that queries nothing: for delegated modules whose permission does
@@ -64,6 +70,8 @@ export const NO_ASSET_ACCESS_SCOPE: AssetScope = {
   canManagePreventive: false,
   canReportMaintenanceNotice: false,
   canEditDefaultResponsible: false,
+  canViewFiles: false,
+  canManageFiles: false,
 };
 
 /** Exactly the rules useAssets() applied before 9C.1. */
@@ -104,6 +112,8 @@ export function useDirectAssetScope(): AssetScope {
       canReportMaintenanceNotice: hasActiveMembership
         && ['owner', 'admin', 'manager', 'technician', 'requester'].includes(currentMembership!.role),
       canEditDefaultResponsible: canManageAssets,
+      canViewFiles: canViewAssets,
+      canManageFiles: canManageAssets,
     };
   }, [currentOrganization, currentMembership]);
 }
@@ -125,5 +135,7 @@ export function buildDelegatedAssetScope(client: FacilityManagementOperationalCl
     canManagePreventive: canFacilityManagerManagePreventive(client),
     canReportMaintenanceNotice: canFacilityManagerReportMaintenanceNotice(client),
     canEditDefaultResponsible: false,
+    canViewFiles: canViewAssets,
+    canManageFiles: canFacilityManagerManageAssets(client),
   };
 }

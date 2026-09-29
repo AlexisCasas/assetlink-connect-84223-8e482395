@@ -458,8 +458,8 @@ SELECT results_eq(
   $$ SELECT file_name, file_url, file_path FROM public.inspection_run_evidences WHERE run_id = 'b9850000-0000-0000-0000-0000000000a2' $$,
   $$ VALUES ('foto.jpg'::text, 'https://evidence.example/foto.jpg'::text, 'inspections/foto.jpg'::text) $$,
   'evidence: the metadata submitted by the FM technician is stored as-is');
-SELECT ok((SELECT prosrc !~ 'facility_management' FROM pg_proc WHERE oid = 'public.authorize_asset_file_access(uuid,text)'::regprocedure),
-  'evidence: authorize_asset_file_access (R2) is not extended by 9C.2');
+SELECT ok((SELECT prosrc !~ 'inspections\.' AND prosrc !~ 'preventive_maintenance\.' FROM pg_proc WHERE oid = 'public.authorize_asset_file_access(uuid,text)'::regprocedure),
+  'evidence: authorize_asset_file_access (R2) is never extended by inspections/preventive permissions (only assets.*, Punto 10)');
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('b9100000-0000-0000-0000-000000000006');
 SELECT throws_ok($$ SELECT public.authorize_asset_file_access('b9400000-0000-0000-0000-0000000000a1', 'read') $$, 'P0001', NULL, 'evidence: inspections.manage grants no R2 asset-file access');
