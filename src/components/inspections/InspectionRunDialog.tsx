@@ -183,7 +183,7 @@ export function InspectionRunDialog({ open, onOpenChange, runId, loadRunDetail, 
               {detail.assetName && <p>Activo: {detail.assetName}</p>}
               {detail.areaAssetName && <p>Área: {detail.areaAssetName}</p>}
               {detail.branchName && <p>Sede: {detail.branchName}</p>}
-              {(detail.responsibleName || detail.responsibleMemberId) && <p>Responsable: {detail.responsibleName ?? 'asignado por el cliente'}</p>}
+              {(detail.responsibleName || detail.hasResponsible) && <p>Responsable: {detail.responsibleName ?? 'asignado por el cliente'}</p>}
               {detail.status === 'completed' && <p>Completada: {formatDate(detail.completedAt)} — Resultado: {detail.result}</p>}
             </div>
 

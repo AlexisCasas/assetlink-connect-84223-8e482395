@@ -190,7 +190,7 @@ export const canFacilityManagerManageMeters = (client: OperationalClientAccess) 
 // ---------------------------------------------------------------------------
 // 9C.3: Avisos de avería / Backlog. Espejo de can_view_maintenance_notices /
 // can_create_maintenance_notice / can_triage_maintenance_notice. Convertir en
-// Solicitud no se delega (9C.4).
+// Solicitud exige además requests.* (9C.4, más abajo).
 // ---------------------------------------------------------------------------
 const FM_NOTICE_VIEW_ROLES: readonly OrganizationMemberRole[] = ['owner', 'admin', 'manager', 'technician', 'requester', 'viewer'];
 const FM_NOTICE_REPORT_ROLES: readonly OrganizationMemberRole[] = ['owner', 'admin', 'manager', 'technician', 'requester'];
@@ -207,12 +207,46 @@ export const canFacilityManagerReportMaintenanceNotice = (client: OperationalCli
 export const canFacilityManagerManageMaintenanceNotices = (client: OperationalClientAccess) =>
   FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'maintenance_notices.view', 'maintenance_notices.manage');
 
+// ---------------------------------------------------------------------------
+// 9C.4: Solicitudes. Espejo de can_view/create/manage_requests_as_facility_
+// manager, can_convert_maintenance_notice_as_facility_manager y
+// can_plan_preventive_request_as_facility_manager. Cotizaciones, OT y
+// proveedores no se delegan.
+// ---------------------------------------------------------------------------
+const FM_REQUEST_ROLES: readonly OrganizationMemberRole[] = ['owner', 'admin', 'manager', 'requester'];
+
+export const canFacilityManagerViewRequests = (client: OperationalClientAccess) =>
+  FM_REQUEST_ROLES.includes(client.membershipRole) && grants(client, 'requests.view');
+
+/** Crear solicitudes y operar los borradores propios (editar, enviar,
+ * eliminar, audiencia). */
+export const canFacilityManagerCreateRequests = (client: OperationalClientAccess) =>
+  FM_REQUEST_ROLES.includes(client.membershipRole) && grants(client, 'requests.view', 'requests.create');
+
+/** Editar y anular solicitudes enviadas, audiencia. No exige create. */
+export const canFacilityManagerManageRequests = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'requests.view', 'requests.manage');
+
+/** Aviso -> Solicitud: gestionar avisos Y crear solicitudes. */
+export const canFacilityManagerConvertNoticeToRequest = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole)
+  && grants(client, 'maintenance_notices.view', 'maintenance_notices.manage', 'requests.view', 'requests.create');
+
+/** Ocurrencia preventiva -> Solicitud: gestionar el preventivo Y crear
+ * solicitudes. */
+export const canFacilityManagerPlanPreventiveRequest = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole)
+  && grants(client, 'preventive_maintenance.view', 'preventive_maintenance.manage', 'requests.view', 'requests.create');
+
 const MODULE_VIEW_CHECKS: Record<FacilityManagementOperationalModule, (client: OperationalClientAccess) => boolean> = {
   assets: canFacilityManagerViewAssets,
   criticality: canFacilityManagerViewCriticality,
   inspections: canFacilityManagerViewInspections,
   'preventive-maintenance': canFacilityManagerViewPreventive,
   backlog: canFacilityManagerViewMaintenanceNotices,
+  requests: canFacilityManagerViewRequests,
+  // Borradores: solo quien puede crear solicitudes.
+  drafts: canFacilityManagerCreateRequests,
 };
 
 export const canFacilityManagerOpenModule = (

@@ -7,7 +7,7 @@
 -- 42501 / 22023 = reglas nuevas del modo delegado.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(112);
+SELECT plan(118);
 
 -- -------------------------------------------------------------------------
 -- Fixture (sintético, se descarta con el ROLLBACK final)
@@ -174,6 +174,17 @@ INSERT INTO public.maintenance_notices (
 CREATE FUNCTION pg_temp.as_user(p_user uuid) RETURNS void LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claim.sub', COALESCE(p_user::text, ''), true);
 $$;
+-- Filas afectadas por un DML directo; 0 si el entorno ni siquiera otorga el
+-- privilegio SQL. Los GRANT de tabla varían por entorno (producción otorga
+-- CRUD a authenticated); la autorización real es RLS/RPC/triggers.
+CREATE FUNCTION pg_temp.dml_rows(p_sql text) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE v integer; BEGIN EXECUTE p_sql; GET DIAGNOSTICS v = ROW_COUNT; RETURN v;
+EXCEPTION WHEN insufficient_privilege THEN RETURN 0; END $$;
+-- INSERT directo: bloqueado si falla por cualquier motivo (sin GRANT, RLS o
+-- un trigger que no ve el activo) o no escribe filas.
+CREATE FUNCTION pg_temp.insert_blocked(p_sql text) RETURNS boolean LANGUAGE plpgsql AS $$
+DECLARE v integer; BEGIN EXECUTE p_sql; GET DIAGNOSTICS v = ROW_COUNT; RETURN v = 0;
+EXCEPTION WHEN OTHERS THEN RETURN true; END $$;
 CREATE FUNCTION pg_temp.notice(p_org uuid, p_id uuid) RETURNS jsonb LANGUAGE sql AS $$
   SELECT to_jsonb(n) FROM public.get_maintenance_notices(p_org) n WHERE n.id = p_id;
 $$;
@@ -209,10 +220,6 @@ SELECT ok((SELECT bool_and(prosrc !~ 'facility_management') FROM pg_proc
   'direct helpers and the client planner roster are not extended');
 SELECT is((SELECT array_agg(cmd::text) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'maintenance_notices'), ARRAY['SELECT'],
   'maintenance_notices keeps a single SELECT policy (writes only through RPCs)');
-SELECT ok(NOT has_table_privilege('authenticated', 'public.maintenance_notices', 'INSERT')
-      AND NOT has_table_privilege('authenticated', 'public.maintenance_notices', 'UPDATE')
-      AND NOT has_table_privilege('authenticated', 'public.maintenance_notices', 'DELETE'),
-  'authenticated has no direct write privilege on maintenance_notices');
 SELECT is(
   (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname = 'public' AND c.relkind IN ('r','p')
@@ -220,6 +227,30 @@ SELECT is(
        OR has_table_privilege('authenticated', c.oid, 'TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'))),
   0::bigint, '9C.1H preserved: no meta privileges for anon/authenticated');
 
+SET LOCAL ROLE authenticated;
+
+-- -------------------------------------------------------------------------
+-- 0b. DML directo bloqueado por RLS (independiente de los GRANT del
+--     entorno): las escrituras solo pasan por RPC. FM gestor y owner directo.
+-- -------------------------------------------------------------------------
+SELECT pg_temp.as_user('c9100000-0000-0000-0000-000000000013');
+SELECT ok(pg_temp.insert_blocked($q$ INSERT INTO public.maintenance_notices (organization_id, notice_number, asset_id, title, description, priority, status, source_type, source_metadata, reported_by_user_id)
+                    VALUES ('c9200000-0000-0000-0000-0000000000a1', 'AV-RAW-FM', 'c9400000-0000-0000-0000-0000000000a1', 'raw', 'raw', 'medium', 'open', 'manual', '{}', 'c9100000-0000-0000-0000-000000000013') $q$), 'direct DML: FM manager cannot INSERT a notice');
+SELECT is(pg_temp.dml_rows($q$ UPDATE public.maintenance_notices SET title = 'hack' WHERE id = 'c9900000-0000-0000-0000-0000000000a7' $q$), 0,
+  'direct DML: FM manager cannot UPDATE a notice');
+SELECT is(pg_temp.dml_rows($q$ DELETE FROM public.maintenance_notices WHERE id = 'c9900000-0000-0000-0000-0000000000a7' $q$), 0,
+  'direct DML: FM manager cannot DELETE a notice');
+SELECT pg_temp.as_user('c9100000-0000-0000-0000-000000000001');
+SELECT ok(pg_temp.insert_blocked($q$ INSERT INTO public.maintenance_notices (organization_id, notice_number, asset_id, title, description, priority, status, source_type, source_metadata, reported_by_user_id)
+                    VALUES ('c9200000-0000-0000-0000-0000000000a1', 'AV-RAW-CL', 'c9400000-0000-0000-0000-0000000000a1', 'raw', 'raw', 'medium', 'open', 'manual', '{}', 'c9100000-0000-0000-0000-000000000001') $q$), 'direct DML: even the client owner cannot INSERT a notice (RPC only)');
+SELECT is(pg_temp.dml_rows($q$ UPDATE public.maintenance_notices SET title = 'hack' WHERE id = 'c9900000-0000-0000-0000-0000000000a7' $q$), 0,
+  'direct DML: even the client owner cannot UPDATE a notice (RPC only)');
+SELECT is(pg_temp.dml_rows($q$ DELETE FROM public.maintenance_notices WHERE id = 'c9900000-0000-0000-0000-0000000000a7' $q$), 0,
+  'direct DML: even the client owner cannot DELETE a notice (RPC only)');
+RESET ROLE;
+SELECT ok((SELECT count(*) = 1 AND bool_and(title = 'Aviso para convertir') FROM public.maintenance_notices WHERE id = 'c9900000-0000-0000-0000-0000000000a7')
+      AND NOT EXISTS (SELECT 1 FROM public.maintenance_notices WHERE notice_number LIKE 'AV-RAW-%'),
+  'direct DML: the notice is untouched and nothing was inserted');
 SET LOCAL ROLE authenticated;
 
 -- -------------------------------------------------------------------------

@@ -1,12 +1,15 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  canFacilityManagerConvertNoticeToRequest,
   canFacilityManagerManageMaintenanceNotices,
   canFacilityManagerReportMaintenanceNotice,
   canFacilityManagerViewCriticality,
   canFacilityManagerViewMaintenanceNotices,
+  canFacilityManagerViewRequests,
 } from '@/lib/facilityManagement';
 import type { FacilityManagementOperationalClient } from '@/types/facilityManagement';
+import { buildDelegatedRequestScope, type RequestScope } from '@/hooks/useRequestScope';
 
 /** Which organization the Backlog (maintenance notices) operates on and what
  * the UI may offer there. UX only: every RPC re-checks. */
@@ -19,9 +22,13 @@ export interface MaintenanceNoticeScope {
   canReport: boolean;
   /** Review (priority, notes) and dismiss. */
   canManage: boolean;
-  /** Turn a notice into a Request. Requests are not delegated yet (9C.4):
-   * always false in delegated mode. */
+  /** Turn a notice into a Request. Delegated (9C.4): notices view+manage AND
+   * requests view+create, owner/admin/manager. */
   canConvertToRequest: boolean;
+  /** How the conversion saves the request. null = direct (historic). */
+  requestScope: RequestScope | null;
+  /** "Ver solicitud" on a converted notice (delegated: requests.view). */
+  canViewRequests: boolean;
   /** responsible_member_id is client-owned (needs the client roster). */
   canChooseResponsible: boolean;
   /** Live asset criticality is shown only with criticality.view. */
@@ -47,6 +54,8 @@ export function useDirectMaintenanceNoticeScope(): MaintenanceNoticeScope {
       canReport: !!role && ['owner', 'admin', 'manager', 'technician', 'requester'].includes(role),
       canManage,
       canConvertToRequest: canManage,
+      requestScope: null,
+      canViewRequests: false,
       canChooseResponsible: true,
       canViewCriticality: true,
       assetDirectoryClientId: null,
@@ -64,7 +73,9 @@ export function buildDelegatedMaintenanceNoticeScope(client: FacilityManagementO
     unavailableReason: canView ? undefined : 'No tienes acceso delegado al backlog de este cliente.',
     canReport: canFacilityManagerReportMaintenanceNotice(client),
     canManage: canFacilityManagerManageMaintenanceNotices(client),
-    canConvertToRequest: false,
+    canConvertToRequest: canFacilityManagerConvertNoticeToRequest(client),
+    requestScope: buildDelegatedRequestScope(client),
+    canViewRequests: canFacilityManagerViewRequests(client),
     canChooseResponsible: false,
     canViewCriticality: canFacilityManagerViewCriticality(client),
     assetDirectoryClientId: client.clientOrganizationId,

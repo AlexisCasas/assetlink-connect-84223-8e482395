@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { OrderForm } from '@/components/requests/OrderForm';
 import { useToast } from '@/hooks/use-toast';
 import { persistRequest } from '@/lib/requestPersistence';
+import { useDirectRequestScope, type RequestScope } from '@/hooks/useRequestScope';
 import { generateUuid } from '@/lib/uuid';
 import type { Request } from '@/types/request';
 import type { MaintenanceNotice } from '@/types/maintenanceNotice';
@@ -11,6 +12,8 @@ interface MaintenanceNoticePlanningDialogProps {
   notice: MaintenanceNotice;
   onClose: () => void;
   onConvert: (noticeId: string, requestId: string) => Promise<void>;
+  /** Direct (default, historic) or delegated (Facility Manager, 9C.4). */
+  requestScope?: RequestScope;
 }
 
 /**
@@ -27,9 +30,13 @@ interface MaintenanceNoticePlanningDialogProps {
  * esa misma solicitud es un no-op exitoso en el backend — nunca hace falta
  * crear una segunda solicitud duplicada.
  */
-export function MaintenanceNoticePlanningDialog({ notice, onClose, onConvert }: MaintenanceNoticePlanningDialogProps) {
-  const { user, currentOrganization, currentMembership } = useAuth();
+export function MaintenanceNoticePlanningDialog({ notice, onClose, onConvert, requestScope }: MaintenanceNoticePlanningDialogProps) {
+  const { user, currentMembership } = useAuth();
   const { toast } = useToast();
+  const directScope = useDirectRequestScope();
+  const scope = requestScope ?? directScope;
+  const isDelegated = scope.mode === 'facility_manager';
+  const organizationId = scope.organizationId;
 
   // Prefill: lo que el aviso ya sabe (activo, sede, qué falla) no se le
   // vuelve a pedir a quien planifica. status 'draft' es intencional — el
@@ -37,7 +44,7 @@ export function MaintenanceNoticePlanningDialog({ notice, onClose, onConvert }: 
   // salieron de borrador, y esta todavía no existe.
   const prefill = useMemo<Request>(() => ({
     id: generateUuid(),
-    organizationId: currentOrganization?.id,
+    organizationId: organizationId ?? undefined,
     requestNumber: '',
     title: notice.title,
     description: [
@@ -56,13 +63,15 @@ export function MaintenanceNoticePlanningDialog({ notice, onClose, onConvert }: 
     createdBy: user?.email || '',
     priority: 2,
     branchId: notice.branchIdSnapshot || undefined,
-    coordinationContactMemberId: currentMembership?.id,
-    coordinationContactName: user?.name || undefined,
-    coordinationContactEmail: user?.email || undefined,
-  }), [notice, currentOrganization?.id, currentMembership?.id, user?.email, user?.name]);
+    // Delegated: the FM is never a client member (the backend stores the
+    // FM's own contact snapshot).
+    coordinationContactMemberId: isDelegated ? undefined : currentMembership?.id,
+    coordinationContactName: isDelegated ? undefined : (user?.name || undefined),
+    coordinationContactEmail: isDelegated ? undefined : (user?.email || undefined),
+  }), [notice, organizationId, isDelegated, currentMembership?.id, user?.email, user?.name]);
 
   const handleSave = async (request: Request, isDraft: boolean) => {
-    if (!currentOrganization) {
+    if (!organizationId) {
       toast({ title: 'Organización requerida', description: 'Selecciona una organización activa.', variant: 'destructive' });
       return;
     }
@@ -71,8 +80,9 @@ export function MaintenanceNoticePlanningDialog({ notice, onClose, onConvert }: 
       await persistRequest({
         request,
         isDraft,
-        organizationId: currentOrganization.id,
+        organizationId,
         actor: { id: user?.id, email: user?.email, name: user?.name },
+        mode: isDelegated ? 'delegated' : 'direct',
       });
     } catch (error) {
       toast({
@@ -104,5 +114,5 @@ export function MaintenanceNoticePlanningDialog({ notice, onClose, onConvert }: 
     onClose();
   };
 
-  return <OrderForm onClose={onClose} onSave={handleSave} editingRequest={prefill} />;
+  return <OrderForm onClose={onClose} onSave={handleSave} editingRequest={prefill} scope={scope} />;
 }

@@ -53,8 +53,8 @@ const alertRulesDisplay = (plan: InspectionPlan): string => {
 
 // A delegated FM never receives a name derived from an email: when the
 // client assigned someone without a display name, only that fact is shown.
-const responsibleLabel = (item: { responsibleMemberId: string | null; responsibleName: string | null }) =>
-  item.responsibleName ?? (item.responsibleMemberId ? 'asignado por el cliente' : null);
+const responsibleLabel = (item: { hasResponsible: boolean; responsibleName: string | null }) =>
+  item.responsibleName ?? (item.hasResponsible ? 'asignado por el cliente' : null);
 
 const STATUS_LABELS: Record<string, string> = {
   scheduled: 'Programada',

@@ -4,10 +4,13 @@ import { BacklogView } from '@/components/backlog/BacklogView';
 import { CriticalityMatrixView, type CriticalityScope } from '@/components/criticality/CriticalityMatrixView';
 import { InspectionsView } from '@/components/inspections/InspectionsView';
 import { PreventiveMaintenanceView } from '@/components/preventive-maintenance/PreventiveMaintenanceView';
+import { DraftList } from '@/components/requests/DraftList';
+import { RequestList } from '@/components/requests/RequestList';
 import { buildDelegatedAssetScope } from '@/hooks/useAssetScope';
 import { buildDelegatedInspectionScope } from '@/hooks/useInspectionScope';
 import { buildDelegatedMaintenanceNoticeScope } from '@/hooks/useMaintenanceNoticeScope';
 import { buildDelegatedPreventiveScope } from '@/hooks/usePreventiveScope';
+import { buildDelegatedRequestScope } from '@/hooks/useRequestScope';
 import {
   canFacilityManagerEvaluateAssetCriticality,
   canFacilityManagerManageCriticality,
@@ -46,6 +49,17 @@ function DelegatedPreventive({ client, focusPlanId, focusOccurrenceId, focusAsse
 function DelegatedBacklog({ client, focusNoticeId }: { client: FacilityManagementOperationalClient; focusNoticeId?: string }) {
   const scope = useMemo(() => buildDelegatedMaintenanceNoticeScope(client), [client]);
   return <BacklogView scope={scope} focusNoticeId={focusNoticeId} />;
+}
+
+function DelegatedRequests({ client, focusRequestId }: { client: FacilityManagementOperationalClient; focusRequestId?: string }) {
+  const scope = useMemo(() => buildDelegatedRequestScope(client), [client]);
+  // focusQuoteId is never passed: quotes are not delegated.
+  return <RequestList scope={scope} focusRequestId={focusRequestId} />;
+}
+
+function DelegatedDrafts({ client }: { client: FacilityManagementOperationalClient }) {
+  const scope = useMemo(() => buildDelegatedRequestScope(client), [client]);
+  return <DraftList scope={scope} />;
 }
 
 /** #assets for an active facility_manager organization (9C.1). */
@@ -91,6 +105,26 @@ export function DelegatedBacklogModule({ managedClientId, focusNoticeId }: { man
   return (
     <ManagedClientGate module="backlog" requestedClientId={managedClientId}>
       {(client) => <DelegatedBacklog key={client.clientOrganizationId} client={client} focusNoticeId={focusNoticeId} />}
+    </ManagedClientGate>
+  );
+}
+
+/** #requests for an active facility_manager organization (9C.4). `quote=`
+ * from the hash is ignored on purpose. */
+export function DelegatedRequestsModule({ managedClientId, focusRequestId }: { managedClientId?: string; focusRequestId?: string }) {
+  return (
+    <ManagedClientGate module="requests" requestedClientId={managedClientId}>
+      {(client) => <DelegatedRequests key={client.clientOrganizationId} client={client} focusRequestId={focusRequestId} />}
+    </ManagedClientGate>
+  );
+}
+
+/** #drafts for an active facility_manager organization (9C.4): only the
+ * caller's own drafts, only with requests.create. */
+export function DelegatedDraftsModule({ managedClientId }: { managedClientId?: string }) {
+  return (
+    <ManagedClientGate module="drafts" requestedClientId={managedClientId}>
+      {(client) => <DelegatedDrafts key={client.clientOrganizationId} client={client} />}
     </ManagedClientGate>
   );
 }

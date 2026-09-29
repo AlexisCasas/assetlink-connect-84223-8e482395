@@ -25,7 +25,7 @@ import { BacklogView } from '@/components/backlog/BacklogView';
 import { PreventiveMaintenanceView } from '@/components/preventive-maintenance/PreventiveMaintenanceView';
 import { PreventiveMaintenanceSummaryCard } from '@/components/dashboard/PreventiveMaintenanceSummaryCard';
 import { FacilityManagementAccessDenied, FacilityManagementView } from '@/components/facility-management/FacilityManagementView';
-import { DelegatedAssetsModule, DelegatedBacklogModule, DelegatedCriticalityModule, DelegatedInspectionsModule, DelegatedPreventiveMaintenanceModule } from '@/components/facility-management/DelegatedModules';
+import { DelegatedAssetsModule, DelegatedBacklogModule, DelegatedCriticalityModule, DelegatedDraftsModule, DelegatedInspectionsModule, DelegatedPreventiveMaintenanceModule, DelegatedRequestsModule } from '@/components/facility-management/DelegatedModules';
 import { getFacilityManagementMode } from '@/lib/facilityManagement';
 import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { useToast } from '@/hooks/use-toast';
@@ -131,6 +131,14 @@ const Dashboard = () => {
         }
         return <AssetsView focusAssetId={focus.assetId} />;
       case 'requests':
+        // Facility Manager (9C.4): delegated client requests. Checked before
+        // the legacy role mapping (a facility_manager maps to 'proveedor'
+        // but is never provider-facing). The client comes from
+        // ?managedClient= validated against get_my_facility_management_
+        // clients(); the RPCs re-check. ?quote= is ignored.
+        if (currentOrganization?.organizationType === 'facility_manager') {
+          return <DelegatedRequestsModule managedClientId={focus.managedClientId} focusRequestId={focus.requestId} />;
+        }
         if (user?.role === 'cliente') {
           return <RequestList focusRequestId={focus.requestId} focusQuoteId={focus.quoteId} />;
         }
@@ -143,6 +151,10 @@ const Dashboard = () => {
         if (!isProviderFacingOrganizationType(currentOrganization?.organizationType)) return <ProviderFacingAccessDenied />;
         return <ProviderRequestList focusRequestId={focus.requestId} focusQuoteId={focus.quoteId} />;
       case 'drafts':
+        // Facility Manager (9C.4): only its own drafts, with requests.create.
+        if (currentOrganization?.organizationType === 'facility_manager') {
+          return <DelegatedDraftsModule managedClientId={focus.managedClientId} />;
+        }
         return <DraftList />;
       case 'public-requests':
         if (!isProviderFacingOrganizationType(currentOrganization?.organizationType)) return <ProviderFacingAccessDenied />;

@@ -33,8 +33,10 @@ interface MaintenanceNoticeDetailDialogProps {
   /** owner/admin/manager. Un técnico o solicitante ve el detalle completo
    * pero sin acciones de gestión — el backend lo rechaza igual. */
   canManage: boolean;
-  /** Convert into a Request. Not delegated to Facility Managers (9C.4). */
+  /** Convert into a Request (delegated since 9C.4 with requests.create). */
   canConvertToRequest?: boolean;
+  /** Opens the generated request (delegated mode, requests.view). */
+  onViewRequest?: (requestId: string) => void;
   /** Live asset criticality is shown only with criticality.view. */
   showCriticality?: boolean;
   onTriage: () => void;
@@ -58,6 +60,7 @@ export function MaintenanceNoticeDetailDialog({
   notice,
   canManage,
   canConvertToRequest = true,
+  onViewRequest,
   showCriticality = true,
   onTriage,
   onPlan,
@@ -168,6 +171,11 @@ export function MaintenanceNoticeDetailDialog({
                 <p className="text-xs text-muted-foreground">
                   {notice.convertedByName ?? '—'} · {formatMoment(notice.convertedAt)}
                 </p>
+                {onViewRequest && notice.convertedRequestId && (
+                  <Button variant="link" className="h-auto p-0" onClick={() => onViewRequest(notice.convertedRequestId!)}>
+                    Ver solicitud
+                  </Button>
+                )}
               </Field>
             </>
           )}

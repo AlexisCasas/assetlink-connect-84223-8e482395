@@ -16,15 +16,16 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { RequestAssetPicker } from './RequestAssetPicker';
-import { RequestAssetSummary } from './RequestAssetSummary';
-import { RequestProviderSelector } from './RequestProviderSelector';
+import { DelegatedRequestAssetPicker, RequestAssetPicker, type RequestAssetSelection } from './RequestAssetPicker';
+import { RequestAssetSummary, StaticRequestAssetSummary } from './RequestAssetSummary';
+import { DelegatedRequestProviderSelector, RequestProviderSelector } from './RequestProviderSelector';
 import { TechnicianSelect } from '@/components/members/TechnicianSelect';
 import { CoordinationContactSelect } from '@/components/members/CoordinationContactSelect';
 import { useCoordinationContacts } from '@/hooks/useCoordinationContacts';
+import { useDirectRequestScope, type RequestScope } from '@/hooks/useRequestScope';
+import { useFacilityManagementRequestBranches } from '@/hooks/useFacilityManagementReferenceDirectories';
 import { ASSET_NODE_TYPE_LABELS } from '@/lib/assetLabels';
 import { generateUuid } from '@/lib/uuid';
-import type { Asset } from '@/types/asset';
 
 interface RequestFormProps {
   onClose: () => void;
@@ -32,6 +33,13 @@ interface RequestFormProps {
   editingRequest?: Request;
   lockAsset?: boolean;
   lockServiceType?: boolean;
+  /** Direct (default: historic behavior) or delegated (Facility Manager,
+   * 9C.4): the client roster, the technician directory and useAssets() are
+   * never used in delegated mode. */
+  scope?: RequestScope;
+  /** Delegated edit: providers already invited (names from the request's own
+   * audience), shown even if their relationship is no longer active. */
+  knownProviders?: { organizationId: string; organizationName: string }[];
 }
 
 interface RequestDetail {
@@ -66,11 +74,17 @@ const createEmptyDetail = (): RequestDetail => ({
   attachments: [],
 });
 
-export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false, lockServiceType = false }: RequestFormProps) => {
+export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false, lockServiceType = false, scope, knownProviders }: RequestFormProps) => {
   const { user, currentOrganization, currentMembership } = useAuth();
   const { toast } = useToast();
+  const directScope = useDirectRequestScope();
+  const requestScope = scope ?? directScope;
+  const isDelegated = requestScope.mode === 'facility_manager';
   const currentOrganizationId = currentOrganization?.id;
-  const { contacts: coordinationContacts } = useCoordinationContacts(currentOrganizationId);
+  // The client roster (coordination contacts, "Encargado") stays private to
+  // the client's own members: never requested in delegated mode.
+  const { contacts: coordinationContacts } = useCoordinationContacts(requestScope.canUseClientMemberDirectory ? currentOrganizationId : null);
+  const { branches: delegatedBranches } = useFacilityManagementRequestBranches(isDelegated ? requestScope.organizationId : null);
   
   // Formatear fecha para input date
   const formatDateForInput = (dateString: string | undefined) => {
@@ -99,7 +113,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
   const isRequestTypeLocked = !!editingRequest && editingRequest.status !== 'draft';
   const [internalResponsibleMemberId, setInternalResponsibleMemberId] = useState<string>(editingRequest?.internalResponsibleMemberId || '');
   const [assetId, setAssetId] = useState<string>(editingRequest?.assetId || '');
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<RequestAssetSelection | null>(null);
   const [assetPath, setAssetPath] = useState<string>('');
   const [assetTouched, setAssetTouched] = useState(false);
   const [requiresVisit, setRequiresVisit] = useState(editingRequest?.requiresVisit || false);
@@ -113,8 +127,10 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
   // Contacto de coordinación: por defecto, el miembro correspondiente al
   // usuario creador cuando existe (solicitud nueva); una solicitud existente
   // conserva lo que ya tenía guardado.
+  // Delegated: the FM is never a client member, so no member id is ever
+  // proposed; the backend stores the FM's own name/email snapshot instead.
   const [coordinationContactMemberId, setCoordinationContactMemberId] = useState<string>(
-    editingRequest?.coordinationContactMemberId || currentMembership?.id || ''
+    editingRequest?.coordinationContactMemberId || (isDelegated ? '' : currentMembership?.id) || ''
   );
   const [coordinationContactName, setCoordinationContactName] = useState<string>(editingRequest?.coordinationContactName || '');
   const [coordinationContactEmail, setCoordinationContactEmail] = useState<string>(editingRequest?.coordinationContactEmail || '');
@@ -159,12 +175,19 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
   const [currentDetail, setCurrentDetail] = useState<RequestDetail | null>(null);
   
   useEffect(() => {
+    if (isDelegated) return;
     if (currentOrganizationId) {
       fetchBranches(currentOrganizationId);
     } else {
       setBranches([]);
     }
-  }, [currentOrganizationId]);
+  }, [currentOrganizationId, isDelegated]);
+
+  // Delegated: only active branches are offered, but an existing request
+  // keeps showing its own (possibly inactive) branch.
+  const branchOptions = isDelegated
+    ? delegatedBranches.filter((branch) => branch.isActive || branch.id === editingRequest?.branchId)
+    : branches;
 
   // Default the coordination contact's name/email snapshot to the caller's
   // own membership once the real directory loads, only for a brand-new
@@ -195,7 +218,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
 
   const handleBranchChange = (id: string) => {
     setBranchId(id);
-    const b = branches.find(x => x.id === id);
+    const b = branchOptions.find(x => x.id === id);
     if (b) {
       setCity(b.city || '');
       setSite(b.site || '');
@@ -313,7 +336,9 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
       return;
     }
 
-    if (requestType === 'external' && !isDraft && convocationMode === 'private' && selectedProviderOrganizationIds.length === 0) {
+    // Also for drafts: persistRequest (RequestList, DraftList, delegated) syncs
+    // the audience on every save, and a private audience needs a provider.
+    if (requestType === 'external' && convocationMode === 'private' && selectedProviderOrganizationIds.length === 0) {
       toast({
         title: 'Selecciona al menos un proveedor',
         description: 'Selecciona al menos un proveedor para enviar una invitación privada.',
@@ -347,16 +372,19 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
     const detailEquipmentFallback = selectedAsset ? selectedAsset.name : assetDisplayText;
     const detailAreaFallback = selectedAsset && assetPath ? assetPath : '';
 
+    const targetOrganizationId = isDelegated ? requestScope.organizationId : currentOrganization.id;
+    if (!targetOrganizationId) return;
+
     const request: Request = {
       id: editingRequest?.id || generateUuid(),
-      organizationId: editingRequest?.organizationId || currentOrganization.id,
+      organizationId: editingRequest?.organizationId || targetOrganizationId,
       requestNumber,
       title: title.trim(),
       description,
       asset: assetDisplayText,
       assetId: assetId || undefined,
       requestType,
-      internalResponsibleMemberId: requestType === 'internal' ? (internalResponsibleMemberId || undefined) : undefined,
+      internalResponsibleMemberId: !isDelegated && requestType === 'internal' ? (internalResponsibleMemberId || undefined) : undefined,
       location: `${city} - ${site}`,
       serviceType,
       observations: '',
@@ -378,7 +406,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
       assignments: editingRequest?.assignments || {},
       technicalVisitRequested: editingRequest?.technicalVisitRequested || {},
       quotes: editingRequest?.quotes || [],
-      clientName: branches.find(b => b.id === branchId)?.name || '',
+      clientName: branchOptions.find(b => b.id === branchId)?.name || '',
       clientBranch: site,
       isPublic: requestType === 'external' ? convocationMode === 'public' : false,
       // Nuevos campos
@@ -389,11 +417,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
       requiresVisit,
       visitDate: requiresVisit && visitScheduleMode === 'scheduled' ? visitDate : undefined,
       visitScheduleMode: requiresVisit ? visitScheduleMode : undefined,
-      visitContactMemberId: requiresVisit ? (visitContactMemberId || coordinationContactMemberId || undefined) : undefined,
+      // Delegated: contacts are client-owned (never sent; preserved server-side).
+      visitContactMemberId: !isDelegated && requiresVisit ? (visitContactMemberId || coordinationContactMemberId || undefined) : undefined,
       minQuotes,
-      coordinationContactMemberId: coordinationContactMemberId || undefined,
-      coordinationContactName: coordinationContactName || undefined,
-      coordinationContactEmail: coordinationContactEmail || undefined,
+      coordinationContactMemberId: isDelegated ? undefined : (coordinationContactMemberId || undefined),
+      coordinationContactName: isDelegated ? undefined : (coordinationContactName || undefined),
+      coordinationContactEmail: isDelegated ? undefined : (coordinationContactEmail || undefined),
       serviceAddress: serviceAddress || undefined,
       convocationMode: requestType === 'external' ? convocationMode : undefined,
       selectedProviderOrganizationIds: requestType === 'external' && convocationMode === 'private' ? selectedProviderOrganizationIds : [],
@@ -428,7 +457,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
         <CardHeader className="flex flex-row items-center justify-between sticky top-0 bg-card z-10">
-          <CardTitle>Nueva Solicitud</CardTitle>
+          <div>
+            <CardTitle>Nueva Solicitud</CardTitle>
+            {isDelegated && requestScope.organizationName && (
+              <p className="mt-1 text-sm text-muted-foreground">Para {requestScope.organizationName} (acceso delegado)</p>
+            )}
+          </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
@@ -514,10 +548,10 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
                 <Label htmlFor="branchId">Sucursal *</Label>
                 <Select value={branchId} onValueChange={handleBranchChange}>
                   <SelectTrigger>
-                    <SelectValue placeholder={branches.length === 0 ? 'No hay sucursales' : 'Selecciona sucursal'} />
+                    <SelectValue placeholder={branchOptions.length === 0 ? 'No hay sucursales' : 'Selecciona sucursal'} />
                   </SelectTrigger>
                   <SelectContent className="bg-popover">
-                    {branches.map((b) => (
+                    {branchOptions.map((b) => (
                       <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -548,7 +582,9 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
               <div className="space-y-2">
                 <Label>Creador</Label>
                 <Input
-                  value={user?.name ? `${user.name} (${user.email})` : (user?.email || '')}
+                  value={isDelegated && editingRequest?.delegatedAccess
+                    ? (editingRequest.createdByName || 'Usuario del cliente')
+                    : (user?.name ? `${user.name} (${user.email})` : (user?.email || ''))}
                   disabled
                   className="bg-muted"
                 />
@@ -573,7 +609,12 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
             {requestType === 'internal' && (
               <div className="space-y-2">
                 <Label>Responsable interno / técnico (opcional)</Label>
-                {currentOrganization ? (
+                {isDelegated ? (
+                  // The client technician directory is never delegated.
+                  <p className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground" data-testid="request-internal-responsible-readonly">
+                    {editingRequest?.delegatedAccess?.internalResponsibleLabel || 'Lo asigna el cliente al generar la OT.'}
+                  </p>
+                ) : currentOrganization ? (
                   <TechnicianSelect
                     organizationId={currentOrganization.id}
                     value={internalResponsibleMemberId || null}
@@ -588,7 +629,15 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
 
             {/* Activo asociado */}
             {lockAsset ? (
-              <RequestAssetSummary assetId={assetId} assetText={editingRequest?.asset} title="Activo del plan preventivo" />
+              isDelegated
+                ? <StaticRequestAssetSummary assetId={assetId} assetText={editingRequest?.asset} title="Activo del plan preventivo" />
+                : <RequestAssetSummary assetId={assetId} assetText={editingRequest?.asset} title="Activo del plan preventivo" />
+            ) : isDelegated && requestScope.organizationId ? (
+              <DelegatedRequestAssetPicker
+                clientOrganizationId={requestScope.organizationId}
+                assetId={assetId}
+                onChange={(id, asset, path) => { setAssetId(id); setSelectedAsset(asset); setAssetPath(path); setAssetTouched(true); }}
+              />
             ) : (
               <RequestAssetPicker
                 assetId={assetId}
@@ -616,6 +665,20 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-primary">Coordinación</h3>
 
+            {isDelegated ? (
+              // Client roster is private: a new delegated request uses the FM
+              // itself as contact; an existing one keeps the client's contact.
+              <div className="space-y-1" data-testid="request-coordination-readonly">
+                <Label>Contacto de coordinación</Label>
+                <p className="rounded-md border bg-muted/40 p-3 text-sm">
+                  {/* delegatedAccess = a request already saved (a notice /
+                      preventive prefill is still new). */}
+                  {editingRequest?.delegatedAccess
+                    ? (editingRequest.coordinationContactName || (editingRequest.delegatedAccess.hasClientCoordinationContact ? 'Asignado por el cliente' : '—'))
+                    : `${user?.name || user?.email || 'Tú'} (tú)`}
+                </p>
+              </div>
+            ) : (
             <CoordinationContactSelect
               organizationId={currentOrganizationId}
               value={coordinationContactMemberId || null}
@@ -626,6 +689,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
                 setCoordinationContactTouched(true);
               }}
             />
+            )}
 
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
@@ -678,12 +742,20 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
                     </p>
                   )}
 
+                  {isDelegated ? (
+                    <p className="text-sm text-muted-foreground" data-testid="request-visit-contact-readonly">
+                      {editingRequest?.delegatedAccess?.hasClientVisitContact
+                        ? 'Contacto de visita asignado por el cliente.'
+                        : 'La visita se coordinará con el contacto de la solicitud.'}
+                    </p>
+                  ) : (
                   <CoordinationContactSelect
                     organizationId={currentOrganizationId}
                     value={visitContactMemberId || coordinationContactMemberId || null}
                     onChange={(memberId) => setVisitContactMemberId(memberId || '')}
                     label="Contacto de visita"
                   />
+                  )}
                 </div>
               )}
             </div>
@@ -723,12 +795,19 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
               </div>
             </RadioGroup>
 
-            {convocationMode === 'private' && (
+            {convocationMode === 'private' && (isDelegated && requestScope.organizationId ? (
+              <DelegatedRequestProviderSelector
+                clientOrganizationId={requestScope.organizationId}
+                knownProviders={knownProviders}
+                selectedOrganizationIds={selectedProviderOrganizationIds}
+                onChange={setSelectedProviderOrganizationIds}
+              />
+            ) : (
               <RequestProviderSelector
                 selectedOrganizationIds={selectedProviderOrganizationIds}
                 onChange={setSelectedProviderOrganizationIds}
               />
-            )}
+            ))}
           </div>
           )}
 
@@ -835,8 +914,9 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
                 </DialogDescription>
               </DialogHeader>
 
-              {assetId && (
-                <RequestAssetSummary assetId={assetId} assetText={editingRequest?.asset} title="Detalle asociado a" />
+              {assetId && (isDelegated
+                ? <StaticRequestAssetSummary assetId={assetId} assetText={selectedAsset?.name || editingRequest?.asset} title="Detalle asociado a" />
+                : <RequestAssetSummary assetId={assetId} assetText={editingRequest?.asset} title="Detalle asociado a" />
               )}
 
               {currentDetail && (
@@ -889,7 +969,17 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Encargado</Label>
+                    <Label htmlFor="detail-responsible">Encargado</Label>
+                    {isDelegated ? (
+                      // No client roster in delegated mode: free text.
+                      <Input
+                        id="detail-responsible"
+                        value={currentDetail.responsibleUser}
+                        onChange={(e) => updateCurrentDetail('responsibleUser', e.target.value)}
+                        placeholder="Nombre del encargado"
+                        maxLength={120}
+                      />
+                    ) : (
                     <Select
                       value={currentDetail.responsibleUser}
                       onValueChange={(value) => updateCurrentDetail('responsibleUser', value)}
@@ -903,6 +993,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
                         ))}
                       </SelectContent>
                     </Select>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -921,6 +1012,8 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
                     </Select>
                   </div>
 
+                  {/* Attachments are not delegated (R2 stays client-only). */}
+                  {!isDelegated && (
                   <div className="space-y-2 md:col-span-2">
                     <Label>Anexos (máx. 5)</Label>
                     <Input
@@ -962,6 +1055,7 @@ export const RequestForm = ({ onClose, onSave, editingRequest, lockAsset = false
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
               )}
 

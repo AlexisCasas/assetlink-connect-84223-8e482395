@@ -111,7 +111,10 @@ export interface PreventivePlan {
   trigger_type: PreventiveTriggerType;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   default_request_type: 'internal' | 'external';
+  /** Client-owned. Always null for a delegated Facility Manager (9C.4). */
   responsible_member_id: string | null;
+  /** Whether the plan has a responsible, without identifying it. */
+  has_responsible: boolean;
   planning_lead_days: number;
   frequency: PreventiveFrequency | null;
   custom_interval: number | null;

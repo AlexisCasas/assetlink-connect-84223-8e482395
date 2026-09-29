@@ -3,10 +3,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   canFacilityManagerManageMeters,
   canFacilityManagerManagePreventive,
+  canFacilityManagerPlanPreventiveRequest,
   canFacilityManagerRecordMeterReading,
   canFacilityManagerViewPreventive,
 } from '@/lib/facilityManagement';
 import type { FacilityManagementOperationalClient } from '@/types/facilityManagement';
+import { buildDelegatedRequestScope, type RequestScope } from '@/hooks/useRequestScope';
 
 /** Which organization the Preventive maintenance module operates on and what
  * the UI may offer there. UX only: every RPC re-checks. */
@@ -21,9 +23,11 @@ export interface PreventiveScope {
   canRecordMeterReading: boolean;
   /** Create, correct, retire and replace meters. */
   canManageMeters: boolean;
-  /** Turn an occurrence into a Request. Requests are not delegated yet
-   * (9C.4): always false in delegated mode. */
+  /** Turn an occurrence into a Request. Delegated (9C.4): preventive
+   * view+manage AND requests view+create, owner/admin/manager. */
   canPlanRequest: boolean;
+  /** How the planned request is saved. null = direct (historic). */
+  requestScope: RequestScope | null;
   /** responsible_member_id is client-owned (needs the client roster). */
   canChooseResponsible: boolean;
   /** Inventory catalog/stock for card materials. Not delegated. */
@@ -46,6 +50,7 @@ export function useDirectPreventiveScope(): PreventiveScope {
       canRecordMeterReading: true,
       canManageMeters: canManage,
       canPlanRequest: canManage,
+      requestScope: null,
       canChooseResponsible: canManage,
       canUseInventory: true,
     };
@@ -63,7 +68,8 @@ export function buildDelegatedPreventiveScope(client: FacilityManagementOperatio
     canManage: canFacilityManagerManagePreventive(client),
     canRecordMeterReading: canFacilityManagerRecordMeterReading(client),
     canManageMeters: canFacilityManagerManageMeters(client),
-    canPlanRequest: false,
+    canPlanRequest: canFacilityManagerPlanPreventiveRequest(client),
+    requestScope: buildDelegatedRequestScope(client),
     canChooseResponsible: false,
     canUseInventory: false,
   };

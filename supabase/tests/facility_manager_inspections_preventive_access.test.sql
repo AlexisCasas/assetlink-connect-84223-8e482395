@@ -375,12 +375,14 @@ SELECT throws_ok($$ SELECT public.upsert_inspection_plan(p_organization_id => 'b
   '42501', 'The inspection plan responsible is assigned by the client', 'insp responsible: FM cannot point the responsible to its own FM membership');
 SELECT throws_ok($$ SELECT public.upsert_inspection_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_template_id => 'b9800000-0000-0000-0000-0000000000a1', p_title => 'Plan A', p_asset_id => 'b9400000-0000-0000-0000-0000000000a1', p_responsible_member_id => 'b9300000-0000-0000-0000-000000000002', p_plan_id => 'b9830000-0000-0000-0000-0000000000a1') $$,
   '42501', 'The inspection plan responsible is assigned by the client', 'insp responsible: FM cannot change the existing responsible');
-SELECT throws_ok($$ SELECT public.upsert_inspection_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_template_id => 'b9800000-0000-0000-0000-0000000000a1', p_title => 'Plan A', p_asset_id => 'b9400000-0000-0000-0000-0000000000a1', p_responsible_member_id => NULL, p_plan_id => 'b9830000-0000-0000-0000-0000000000a1') $$,
-  '42501', 'The inspection plan responsible is assigned by the client', 'insp responsible: FM cannot clear the existing responsible');
+-- 9C.4: el FM nunca conoce el id. NULL = conservar el responsable real (no
+-- puede limpiarlo); cualquier UUID, incluido el actual, => 42501.
+SELECT lives_ok($$ SELECT public.upsert_inspection_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_template_id => 'b9800000-0000-0000-0000-0000000000a1', p_title => 'Plan A (editado por FM)', p_asset_id => 'b9400000-0000-0000-0000-0000000000a1', p_responsible_member_id => NULL, p_frequency => 'monthly', p_plan_id => 'b9830000-0000-0000-0000-0000000000a1') $$,
+  'insp responsible: FM edits other fields sending NULL; the server keeps the client responsible (cannot clear it)');
 SELECT throws_ok($$ SELECT public.upsert_inspection_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_template_id => 'b9800000-0000-0000-0000-0000000000a1', p_title => 'Plan A0', p_asset_id => 'b9400000-0000-0000-0000-0000000000a2', p_responsible_member_id => 'b9300000-0000-0000-0000-000000000003', p_plan_id => 'b9830000-0000-0000-0000-0000000000a0') $$,
   '42501', 'The inspection plan responsible is assigned by the client', 'insp responsible: FM cannot assign a responsible to an unassigned plan');
-SELECT lives_ok($$ SELECT public.upsert_inspection_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_template_id => 'b9800000-0000-0000-0000-0000000000a1', p_title => 'Plan A (editado por FM)', p_asset_id => 'b9400000-0000-0000-0000-0000000000a1', p_responsible_member_id => 'b9300000-0000-0000-0000-000000000003', p_frequency => 'monthly', p_plan_id => 'b9830000-0000-0000-0000-0000000000a1') $$,
-  'insp responsible: FM edits other fields while preserving the client responsible');
+SELECT throws_ok($$ SELECT public.upsert_inspection_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_template_id => 'b9800000-0000-0000-0000-0000000000a1', p_title => 'Plan A (reenvío)', p_asset_id => 'b9400000-0000-0000-0000-0000000000a1', p_responsible_member_id => 'b9300000-0000-0000-0000-000000000003', p_frequency => 'monthly', p_plan_id => 'b9830000-0000-0000-0000-0000000000a1') $$,
+  '42501', 'The inspection plan responsible is assigned by the client', 'insp responsible: FM cannot resend even the current client responsible id');
 SELECT throws_ok($$ SELECT * FROM public.get_assignable_technicians('b9200000-0000-0000-0000-0000000000a1') $$, 'P0001', NULL, 'insp responsible: FM does not get the client technician roster');
 SELECT throws_ok($$ SELECT * FROM public.get_assignable_planners('b9200000-0000-0000-0000-0000000000a1') $$, 'P0001', NULL, 'insp responsible: FM does not get the client planner roster');
 
@@ -609,10 +611,13 @@ SELECT throws_ok($$ SELECT public.save_preventive_maintenance_plan(p_organizatio
   '42501', 'The preventive plan responsible is assigned by the client', 'pm responsible: FM cannot set a client member on a new plan');
 SELECT throws_ok($$ SELECT public.save_preventive_maintenance_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_asset_id => 'b9400000-0000-0000-0000-0000000000a1', p_card_id => 'b9880000-0000-0000-0000-0000000000a1', p_trigger_type => 'calendar', p_responsible_member_id => 'b9300000-0000-0000-0000-000000000001', p_frequency => 'monthly', p_first_due_at => now() + interval '20 days', p_plan_id => 'b98c0000-0000-0000-0000-0000000000a1') $$,
   '42501', 'The preventive plan responsible is assigned by the client', 'pm responsible: FM cannot change the existing responsible');
-SELECT throws_ok($$ SELECT public.save_preventive_maintenance_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_asset_id => 'b9400000-0000-0000-0000-0000000000a1', p_card_id => 'b9880000-0000-0000-0000-0000000000a1', p_trigger_type => 'calendar', p_responsible_member_id => NULL, p_frequency => 'monthly', p_first_due_at => now() + interval '20 days', p_plan_id => 'b98c0000-0000-0000-0000-0000000000a1') $$,
-  '42501', 'The preventive plan responsible is assigned by the client', 'pm responsible: FM cannot clear the existing responsible');
-SELECT lives_ok($$ SELECT public.save_preventive_maintenance_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_asset_id => 'b9400000-0000-0000-0000-0000000000a1', p_card_id => 'b9880000-0000-0000-0000-0000000000a1', p_trigger_type => 'calendar', p_priority => 'high', p_responsible_member_id => 'b9300000-0000-0000-0000-000000000002', p_frequency => 'monthly', p_first_due_at => now() + interval '20 days', p_plan_id => 'b98c0000-0000-0000-0000-0000000000a1') $$,
-  'pm responsible: FM edits the plan while preserving the client responsible');
+-- 9C.4: el delegado nunca conoce el id del responsable. Reenviarlo (aunque
+-- sea el actual) es inyectar un UUID del cliente: 42501. NULL = conservar el
+-- responsable real (no es posible limpiarlo).
+SELECT throws_ok($$ SELECT public.save_preventive_maintenance_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_asset_id => 'b9400000-0000-0000-0000-0000000000a1', p_card_id => 'b9880000-0000-0000-0000-0000000000a1', p_trigger_type => 'calendar', p_priority => 'high', p_responsible_member_id => 'b9300000-0000-0000-0000-000000000002', p_frequency => 'monthly', p_first_due_at => now() + interval '20 days', p_plan_id => 'b98c0000-0000-0000-0000-0000000000a1') $$,
+  '42501', 'The preventive plan responsible is assigned by the client', 'pm responsible: FM cannot resend even the current client responsible id');
+SELECT lives_ok($$ SELECT public.save_preventive_maintenance_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_asset_id => 'b9400000-0000-0000-0000-0000000000a1', p_card_id => 'b9880000-0000-0000-0000-0000000000a1', p_trigger_type => 'calendar', p_priority => 'high', p_responsible_member_id => NULL, p_frequency => 'monthly', p_first_due_at => now() + interval '20 days', p_plan_id => 'b98c0000-0000-0000-0000-0000000000a1') $$,
+  'pm responsible: FM edits the plan without the id; the server preserves the client responsible (cannot clear it)');
 SELECT pg_temp.as_user('b9100000-0000-0000-0000-000000000001');
 SELECT lives_ok($$ SELECT public.save_preventive_maintenance_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_asset_id => 'b9400000-0000-0000-0000-0000000000a1', p_card_id => 'b9880000-0000-0000-0000-0000000000a1', p_trigger_type => 'calendar', p_priority => 'high', p_responsible_member_id => 'b9300000-0000-0000-0000-000000000001', p_frequency => 'monthly', p_first_due_at => now() + interval '20 days', p_plan_id => 'b98c0000-0000-0000-0000-0000000000a1') $$,
   'pm responsible (direct): client owner still changes the responsible');
@@ -731,7 +736,7 @@ SELECT is(pg_temp.pm_plan('b9200000-0000-0000-0000-0000000000a1', 'b98c0000-0000
 SELECT pg_temp.as_user('b9100000-0000-0000-0000-000000000006');
 SELECT is((SELECT responsible_name FROM public.get_inspection_plans('b9200000-0000-0000-0000-0000000000a1', true) WHERE id = 'b9830000-0000-0000-0000-0000000000a1'),
   'Tomas Cliente', 'name: a stored display name is still shown to the FM');
-SELECT ok((SELECT responsible_member_id IS NOT NULL AND responsible_name IS NULL FROM public.get_inspection_plans('b9200000-0000-0000-0000-0000000000a1', true) WHERE id = 'b9830000-0000-0000-0000-0000000000a3'),
+SELECT ok((SELECT responsible_member_id IS NULL AND has_responsible AND responsible_name IS NULL FROM public.get_inspection_plans('b9200000-0000-0000-0000-0000000000a1', true) WHERE id = 'b9830000-0000-0000-0000-0000000000a3'),
   'name: no display name => the FM gets NULL, not the email prefix (plans)');
 SELECT is((SELECT responsible_name FROM public.get_inspection_runs('b9200000-0000-0000-0000-0000000000a1', NULL) WHERE id = 'b9850000-0000-0000-0000-0000000000a3'), NULL,
   'name: no email prefix in the delegated runs list');
@@ -765,7 +770,7 @@ SELECT throws_ok($$ SELECT public.upsert_inspection_plan(p_organization_id => 'b
 SELECT throws_ok($$ SELECT public.upsert_inspection_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_template_id => 'b9800000-0000-0000-0000-0000000000a1', p_title => 'x', p_branch_id => 'b9600000-0000-0000-0000-0000000000a2') $$,
   '22023', 'An inactive branch cannot be newly assigned to an inspection plan', 'historic target: FM cannot use an inactive branch on a new plan');
 SELECT throws_ok($$ SELECT public.upsert_inspection_plan(p_organization_id => 'b9200000-0000-0000-0000-0000000000a1', p_template_id => 'b9800000-0000-0000-0000-0000000000a1', p_title => 'Plan A3', p_asset_id => 'b9400000-0000-0000-0000-0000000000a9',
-  p_responsible_member_id => 'b9300000-0000-0000-0000-00000000000f', p_plan_id => 'b9830000-0000-0000-0000-0000000000a3') $$,
+  p_plan_id => 'b9830000-0000-0000-0000-0000000000a3') $$,
   '22023', 'An archived asset cannot be newly assigned to an inspection plan', 'historic target: FM cannot switch an existing plan to an archived asset');
 SELECT ok(public.get_facility_management_inspection_targets('b9200000-0000-0000-0000-0000000000a1')::text !~ '(b9600000-0000-0000-0000-0000000000a2|b9400000-0000-0000-0000-0000000000a9)',
   'historic target: the minimal directory never offers the inactive branch or the archived asset');

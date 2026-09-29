@@ -207,6 +207,23 @@ export interface Request {
   selectedProviderOrganizationIds?: string[];
   // Detalle (1 a muchos)
   details?: RequestDetailData[];
+  /** Solo en modo delegado (Facility Manager, 9C.4): lo que el backend
+   * permite hacer con esta solicitud. Ausente en el modo directo. */
+  delegatedAccess?: DelegatedRequestAccess;
+}
+
+/** Calculado por el backend para el Facility Manager. UX: las RPCs vuelven a
+ * validar. Los contactos y el responsable interno son del cliente: el FM solo
+ * sabe si existen. */
+export interface DelegatedRequestAccess {
+  isOwn: boolean;
+  canEdit: boolean;
+  canDeleteDraft: boolean;
+  canAnnul: boolean;
+  hasClientAttachments: boolean;
+  hasClientCoordinationContact: boolean;
+  hasClientVisitContact: boolean;
+  internalResponsibleLabel: string | null;
 }
 
 export interface ClientBranch {
