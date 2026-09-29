@@ -15,8 +15,10 @@
 desde **9C.2**, `inspections.*` y `preventive_maintenance.*` (ver
 `docs/FACILITY_MANAGER_INSPECTIONS_PREVENTIVE.md`); desde **9C.3**,
 `maintenance_notices.*` (ver `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`).
-El resto de módulos (solicitudes, cotizaciones, OT, reportes), además de
-inventario y R2, todavía no abre nada. **9C.4 = Requests.**
+Desde **9C.4**, `requests.*`, incluidas la conversión de avisos y la
+solicitud preventiva (ver `docs/FACILITY_MANAGER_REQUESTS.md`). El resto de
+módulos (cotizaciones, OT, reportes), además de inventario y R2, todavía no
+abre nada.
 
 ## 1. Las tres capas
 
@@ -292,12 +294,21 @@ suite pgTAP.
   `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`.
   - viewer solo lee; technician y requester reportan; owner, admin y manager
     gestionan;
-  - convertir un aviso en solicitud no se delega;
+  - convertir un aviso en solicitud se delegó después, en 9C.4;
   - el responsable sigue siendo del cliente;
   - la respuesta delegada va minimizada: sin ids de solicitud ni de
     ejecución, nombres sin email y criticidad solo con `criticality.view`.
-- Siguientes: solicitudes (9C.4, que incluye convertir un aviso y la
-  solicitud preventiva), cotizaciones, OT, reportes.
+- **9C.4 (hecho):** Solicitudes. Ver `docs/FACILITY_MANAGER_REQUESTS.md`.
+  - ver: `requests.view`, roles o/a/m/requester;
+  - crear y operar los borradores propios: `view` + `create`, roles
+    o/a/m/requester;
+  - editar y anular solicitudes enviadas: `view` + `manage`, roles o/a/m;
+  - aviso → solicitud y preventivo → solicitud exigen los permisos de ambos
+    módulos, roles o/a/m;
+  - la RLS de `requests` no se abre: todo pasa por RPCs minimizadas;
+  - los contactos y el responsable interno siguen siendo del cliente;
+  - cotizaciones, OT y el roster del cliente no se delegan.
+- Siguientes: cotizaciones, OT, reportes.
 
 ## 11. Verificación
 

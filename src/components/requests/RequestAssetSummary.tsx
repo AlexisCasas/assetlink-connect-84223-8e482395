@@ -5,6 +5,7 @@ import { Package } from 'lucide-react';
 import { useAssets } from '@/hooks/useAssets';
 import { buildAssetPathMap } from '@/lib/assetTree';
 import { ASSET_NODE_TYPE_LABELS } from '@/lib/assetLabels';
+import type { Asset } from '@/types/asset';
 
 interface RequestAssetSummaryProps {
   assetId?: string | null;
@@ -36,6 +37,19 @@ export function RequestAssetSummary({ assetId, assetText, title = 'Activo asocia
     return buildAssetPathMap(assetTree).get(assetId);
   }, [assetTree, assetId, resolvedAsset]);
 
+  return <RequestAssetSummaryView assetId={assetId} assetText={assetText} title={title} resolvedAsset={resolvedAsset} path={path} />;
+}
+
+/** Facility Manager (9C.4): same card from the request's own snapshot only.
+ * requests.* does not imply assets.view, so nothing is queried. */
+export function StaticRequestAssetSummary({ assetId, assetText, title = 'Activo asociado' }: RequestAssetSummaryProps) {
+  return <RequestAssetSummaryView assetId={assetId} assetText={assetText} title={title} resolvedAsset={undefined} path={undefined} />;
+}
+
+function RequestAssetSummaryView({ assetId, assetText, title, resolvedAsset, path }: Required<Pick<RequestAssetSummaryProps, 'title'>> & RequestAssetSummaryProps & {
+  resolvedAsset: Pick<Asset, 'name' | 'nodeType'> | undefined;
+  path: string | undefined;
+}) {
   const trimmedText = assetText?.trim();
   if (!assetId && !trimmedText) return null;
 

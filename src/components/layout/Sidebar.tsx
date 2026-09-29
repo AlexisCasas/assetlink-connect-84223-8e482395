@@ -10,7 +10,7 @@ import { ORGANIZATION_ROLE_LABELS } from '@/lib/organizationRoles';
 import { FACILITY_MANAGEMENT_NAV_LABELS, getFacilityManagementMode } from '@/lib/facilityManagement';
 import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { useFacilityManagementOperationalClients } from '@/hooks/useFacilityManagementOperationalClients';
-import { canFacilityManagerViewAssets, canFacilityManagerViewCriticality, canFacilityManagerViewInspections, canFacilityManagerViewMaintenanceNotices, canFacilityManagerViewPreventive } from '@/lib/facilityManagement';
+import { canFacilityManagerCreateRequests, canFacilityManagerViewAssets, canFacilityManagerViewCriticality, canFacilityManagerViewInspections, canFacilityManagerViewMaintenanceNotices, canFacilityManagerViewPreventive, canFacilityManagerViewRequests } from '@/lib/facilityManagement';
 import { 
   LayoutDashboard,
   Package,
@@ -132,6 +132,8 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   const canViewDelegatedInspections = operationalClients.some(canFacilityManagerViewInspections);
   const canViewDelegatedPreventive = operationalClients.some(canFacilityManagerViewPreventive);
   const canViewDelegatedBacklog = operationalClients.some(canFacilityManagerViewMaintenanceNotices);
+  const canViewDelegatedRequests = operationalClients.some(canFacilityManagerViewRequests);
+  const canViewDelegatedDrafts = operationalClients.some(canFacilityManagerCreateRequests);
 
   return (
     <aside className={cn(
@@ -207,6 +209,10 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
         {canViewDelegatedPreventive && <Button variant={currentView === 'preventive-maintenance' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('preventive-maintenance')}><CalendarClock className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Preventivo de clientes'}</Button>}
 
         {canViewDelegatedBacklog && <Button variant={currentView === 'backlog' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('backlog')}><AlertTriangle className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Backlog de clientes'}</Button>}
+
+        {canViewDelegatedRequests && <Button variant={currentView === 'requests' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('requests')}><FileText className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Solicitudes de clientes'}</Button>}
+
+        {canViewDelegatedDrafts && <Button variant={currentView === 'drafts' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('drafts')}><AlertCircle className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Borradores de clientes'}</Button>}
 
         {canViewWorkOrders && (
           <Button

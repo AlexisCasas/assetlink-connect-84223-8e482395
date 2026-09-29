@@ -38,6 +38,7 @@ interface RawPlan {
   asset_name: string | null;
   responsible_member_id: string | null;
   responsible_name: string | null;
+  has_responsible: boolean;
   title: string;
   description: string | null;
   frequency: string;
@@ -62,6 +63,7 @@ const toPlan = (row: RawPlan): InspectionPlan => ({
   assetName: row.asset_name,
   responsibleMemberId: row.responsible_member_id,
   responsibleName: row.responsible_name,
+  hasResponsible: !!row.has_responsible,
   title: row.title,
   description: row.description,
   frequency: row.frequency as InspectionFrequency,

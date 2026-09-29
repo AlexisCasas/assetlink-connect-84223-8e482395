@@ -47,6 +47,25 @@ export interface AssetScope {
   canEditDefaultResponsible: boolean;
 }
 
+/** A scope that queries nothing: for delegated modules whose permission does
+ * not imply assets.view (e.g. Requests, 9C.4), so useAssets() never touches
+ * the assets RLS. */
+export const NO_ASSET_ACCESS_SCOPE: AssetScope = {
+  mode: 'facility_manager',
+  organizationId: null,
+  organizationName: null,
+  canViewAssets: false,
+  canManageAssets: false,
+  canViewCriticality: false,
+  canEvaluateCriticality: false,
+  canEditCriticalityValue: false,
+  includesCrossModuleData: false,
+  canViewPreventive: false,
+  canManagePreventive: false,
+  canReportMaintenanceNotice: false,
+  canEditDefaultResponsible: false,
+};
+
 /** Exactly the rules useAssets() applied before 9C.1. */
 export function useDirectAssetScope(): AssetScope {
   const { currentOrganization, currentMembership } = useAuth();

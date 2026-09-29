@@ -11,9 +11,9 @@ Esta fase vuelve efectivos solo tres permisos delegados:
 - `maintenance_notices.report`
 - `maintenance_notices.manage`
 
-Siguen cerrados: `requests.*` (incluida la conversión de un aviso en
-solicitud), `providers.*`, `quotes.*`, `work_orders.*`, `reports.*`,
-inventario y R2.
+Siguen cerrados: `providers.*`, `quotes.*`, `work_orders.*`, `reports.*`,
+inventario y R2. Desde 9C.4, convertir un aviso en solicitud sí se delega (ver
+`docs/FACILITY_MANAGER_REQUESTS.md`).
 
 El Facility Manager no pasa a ser proveedor y no se crean membresías ficticias
 suyas dentro del cliente. `currentOrganization` sigue siendo el FM, y
@@ -37,7 +37,7 @@ deben cumplirse sobre una misma fila de relación:
 | Ver el backlog, el detalle, los filtros, los estados y los snapshots | `maintenance_notices.view` | owner, admin, manager, technician, requester, viewer |
 | Reportar un aviso: manual, desde la ficha del activo o desde una no conformidad | `view` + `report` | owner, admin, manager, technician, requester |
 | Gestionar: revisar, cambiar prioridad, escribir notas, descartar con motivo | `view` + `manage` | owner, admin, manager |
-| Convertir en solicitud | no se delega (9C.4) | — |
+| Convertir en solicitud (desde 9C.4) | `view` + `manage` **y** `requests.view` + `requests.create` | owner, admin, manager |
 
 Reglas de la matriz:
 
@@ -81,10 +81,11 @@ firma, `SECURITY DEFINER`, el `search_path` y los grants.
 | `triage_maintenance_notice` | Autoriza con `can_triage_maintenance_notice` y protege el responsable |
 | `dismiss_maintenance_notice` | Autoriza con `can_triage_maintenance_notice` |
 
-`convert_maintenance_notice` **no se toca**. Sigue protegida por
-`can_manage_maintenance_notice`, que solo cubre el acceso directo. Aunque la UI
-se manipule, el backend rechaza la conversión para un FM. `requests`,
-`requestPersistence` y `OrderForm` no se amplían.
+En 9C.3, `convert_maintenance_notice` **no se tocó**: la protegía solo
+`can_manage_maintenance_notice`, que es directa. **Desde 9C.4** acepta además
+al FM con `can_convert_maintenance_notice_as_facility_manager` (permisos de
+avisos y de solicitudes). Para el FM, un borrador ajeno no existe, y la
+respuesta va minimizada. Ver `docs/FACILITY_MANAGER_REQUESTS.md`.
 
 `maintenance_notices` conserva su única policy `SELECT`, y `authenticated` no
 tiene `INSERT`, `UPDATE` ni `DELETE` sobre la tabla. Todas las escrituras van
@@ -146,7 +147,7 @@ delegado:
 |---|---|
 | `source_id` (id crudo de la ejecución) | `NULL` |
 | `source_metadata` | `template_name`, `item_question` y `response_label`, sin `item_id` |
-| `converted_request_id` y `converted_request_number` | `NULL`. Se conservan `status = 'converted'` y `converted_at`. |
+| `converted_request_id` y `converted_request_number` | `NULL` (9C.3). Se conservan `status = 'converted'` y `converted_at`. Desde 9C.4 son visibles con `requests.view`, salvo que la solicitud sea un borrador ajeno. |
 | `reported_by_user_id` y `responsible_member_id` | `NULL` |
 | Nombres (`reported_by`, `responsible`, `triaged_by`, `converted_by`, `dismissed_by`) | Solo el nombre guardado del usuario; si no hay, `NULL`. Nunca el email ni la parte local del email. |
 | `responsible_name` sin nombre guardado | La etiqueta genérica "Asignado por el cliente" |
@@ -221,8 +222,9 @@ Sin scope explícito, `BacklogView` aplica exactamente las reglas anteriores.
   - "Nuevo aviso" requiere `canReport` y elige el activo del directorio
     mínimo.
   - "Revisar" y "Descartar" requieren `canManage`.
-  - "Convertir en solicitud" no se muestra, y no se montan
-    `MaintenanceNoticePlanningDialog` ni `persistRequest()`.
+  - "Convertir en solicitud" no se mostraba en 9C.3. Desde 9C.4 aparece con
+    la capacidad combinada y guarda con el transporte delegado de
+    `persistRequest()`. Un aviso convertido ofrece "Ver solicitud".
   - La criticidad viva solo aparece con `canViewCriticality`.
 - **Revisión:** en modo delegado no se carga `useOrganizationPlanners`. El
   responsable se muestra en solo lectura ("… — lo asigna el cliente"), y se
@@ -280,5 +282,5 @@ local, con Vite forzado a la URL y la anon key locales y bloqueo de
 
 ## Siguiente
 
-9C.4: Requests, que incluye convertir un aviso en solicitud y la solicitud
-preventiva.
+9C.4 (hecho): Solicitudes, que incluye convertir un aviso en solicitud y la
+solicitud preventiva. Ver `docs/FACILITY_MANAGER_REQUESTS.md`.

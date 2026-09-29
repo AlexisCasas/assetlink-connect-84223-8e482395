@@ -6,51 +6,67 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { persistRequest } from '@/lib/requestPersistence';
+import { fetchDelegatedRequest } from '@/lib/requestData';
+import { useDirectRequestScope, type RequestScope } from '@/hooks/useRequestScope';
 import type { PreventiveOccurrence, PreventivePlan } from '@/types/preventiveMaintenance';
 import type { Request } from '@/types/request';
 
 interface Props {
   plan: PreventivePlan;
-  /** Direct mode only: the occurrence always carries its request_creation_id. */
+  /** request_creation_id: always in direct mode; delegated (9C.4) only with
+   * the planner capability (preventive manage + requests create). */
   occurrence: PreventiveOccurrence & { request_creation_id: string };
   onClose: () => void;
   onLink: (occurrenceId: string, requestId: string) => Promise<boolean>;
+  /** Direct (default, historic) or delegated (Facility Manager, 9C.4). */
+  requestScope?: RequestScope;
 }
 
 const text = (value: unknown) => typeof value === 'string' ? value : '';
 
-export function PreventiveRequestDialog({ plan, occurrence, onClose, onLink }: Props) {
-  const { user, currentOrganization, currentMembership } = useAuth();
+export function PreventiveRequestDialog({ plan, occurrence, onClose, onLink, requestScope }: Props) {
+  const { user, currentMembership } = useAuth();
   const { toast } = useToast();
+  const directScope = useDirectRequestScope();
+  const scope = requestScope ?? directScope;
+  const isDelegated = scope.mode === 'facility_manager';
+  const organizationId = scope.organizationId;
   const [checkingExisting, setCheckingExisting] = useState(true);
   const [existingRequest, setExistingRequest] = useState<{ id: string; request_number: string; status: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    if (!currentOrganization) {
+    if (!organizationId) {
       setCheckingExisting(false);
       return () => { cancelled = true; };
     }
 
     setCheckingExisting(true);
     setExistingRequest(null);
-    void supabase
-      .from('requests')
-      .select('id, request_number, status')
-      .eq('id', occurrence.request_creation_id)
-      .eq('organization_id', currentOrganization.id)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          toast({ title: 'No se pudo verificar la solicitud reservada', description: error.message, variant: 'destructive' });
-        }
-        setExistingRequest(data);
-        setCheckingExisting(false);
-      });
+    // Delegated: the requests RLS is never opened to the FM; the minimized
+    // detail RPC answers null for "does not exist / not visible".
+    const lookup: Promise<{ data: { id: string; request_number: string; status: string } | null; error: { message: string } | null }> = isDelegated
+      ? fetchDelegatedRequest(organizationId, occurrence.request_creation_id).then(
+        (detail) => ({ data: detail ? { id: detail.request.id, request_number: detail.request.requestNumber, status: detail.request.status } : null, error: null }),
+        (cause) => ({ data: null, error: { message: cause instanceof Error ? cause.message : 'Error' } }),
+      )
+      : Promise.resolve(supabase
+        .from('requests')
+        .select('id, request_number, status')
+        .eq('id', occurrence.request_creation_id)
+        .eq('organization_id', organizationId)
+        .maybeSingle());
+    void lookup.then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) {
+        toast({ title: 'No se pudo verificar la solicitud reservada', description: error.message, variant: 'destructive' });
+      }
+      setExistingRequest(data);
+      setCheckingExisting(false);
+    });
 
     return () => { cancelled = true; };
-  }, [currentOrganization, occurrence.request_creation_id, toast]);
+  }, [organizationId, isDelegated, occurrence.request_creation_id, toast]);
 
   const prefill = useMemo<Request>(() => {
     const snapshot = occurrence.scope_snapshot ?? {};
@@ -63,7 +79,7 @@ export function PreventiveRequestDialog({ plan, occurrence, onClose, onLink }: P
     const dueDate = occurrence.due_at ? new Date(occurrence.due_at).toISOString().slice(0, 10) : '';
     return {
       id: occurrence.request_creation_id,
-      organizationId: currentOrganization?.id,
+      organizationId: organizationId ?? undefined,
       requestNumber: `MP-${occurrence.request_creation_id.slice(0, 8).toUpperCase()}`,
       title: `Mantenimiento preventivo — ${plan.card_name}`,
       description: [
@@ -85,9 +101,10 @@ export function PreventiveRequestDialog({ plan, occurrence, onClose, onLink }: P
       branch: branchName,
       store: branchName,
       city: '',
-      coordinationContactMemberId: currentMembership?.id,
-      coordinationContactName: user?.name || undefined,
-      coordinationContactEmail: user?.email || undefined,
+      // Delegated: the FM is never a client member.
+      coordinationContactMemberId: isDelegated ? undefined : currentMembership?.id,
+      coordinationContactName: isDelegated ? undefined : (user?.name || undefined),
+      coordinationContactEmail: isDelegated ? undefined : (user?.email || undefined),
       details: [{
         equipment: plan.asset_name,
         activities: tasks.map((task) => text(task.title)).filter(Boolean).join('\n'),
@@ -101,16 +118,17 @@ export function PreventiveRequestDialog({ plan, occurrence, onClose, onLink }: P
         ].filter(Boolean).join('\n'),
       }],
     };
-  }, [currentMembership?.id, currentOrganization?.id, occurrence, plan, user?.email, user?.name]);
+  }, [currentMembership?.id, organizationId, isDelegated, occurrence, plan, user?.email, user?.name]);
 
   const save = async (request: Request, isDraft: boolean) => {
-    if (!currentOrganization) return;
+    if (!organizationId) return;
     try {
       await persistRequest({
         request: { ...request, id: occurrence.request_creation_id, assetId: plan.asset_id, serviceType: 'preventivo' },
         isDraft,
-        organizationId: currentOrganization.id,
+        organizationId,
         actor: { id: user?.id, email: user?.email, name: user?.name },
+        mode: isDelegated ? 'delegated' : 'direct',
       });
     } catch (cause) {
       toast({
@@ -171,5 +189,5 @@ export function PreventiveRequestDialog({ plan, occurrence, onClose, onLink }: P
     );
   }
 
-  return <OrderForm onClose={onClose} onSave={save} editingRequest={prefill} lockAsset lockServiceType />;
+  return <OrderForm onClose={onClose} onSave={save} editingRequest={prefill} lockAsset lockServiceType scope={scope} />;
 }

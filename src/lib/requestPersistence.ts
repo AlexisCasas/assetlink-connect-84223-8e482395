@@ -8,8 +8,16 @@ import type { Request } from '@/types/request';
  * mismos pasos, mismo orden, mismas garantías — cuando el Backlog de
  * mantenimiento necesitó crear solicitudes al convertir un aviso: dos
  * implementaciones del mismo flujo terminarían divergiendo justo en lo que
- * es delicado (la atomicidad de abajo), así que RequestList y
- * MaintenanceNoticePlanningDialog llaman ambos a esta función.
+ * es delicado (la atomicidad de abajo), así que RequestList, DraftList,
+ * MaintenanceNoticePlanningDialog y PreventiveRequestDialog llaman todos a
+ * esta función.
+ *
+ * Una semántica, dos transportes (9C.4):
+ *   - 'direct': miembro del cliente, tablas con RLS + set_request_audience
+ *     (histórico, sin cambios);
+ *   - 'delegated': Facility Manager, save_facility_management_request hace
+ *     los mismos pasos en UNA transacción del servidor. Los contactos y el
+ *     responsable interno del cliente nunca se envían.
  *
  * Lo que NO hace, a propósito: toasts, cerrar diálogos, recargar listas.
  * Eso es responsabilidad de quien la llama, porque es distinto en cada
@@ -22,25 +30,91 @@ export interface RequestActor {
   name?: string | null;
 }
 
+export type RequestPersistenceMode = 'direct' | 'delegated';
+
 export interface PersistRequestParams {
   request: Request;
   /** true = guardar como borrador; false = enviar. */
   isDraft: boolean;
-  /** Organización activa. La solicitud siempre se escribe acotada a ella. */
+  /** Organización CLIENTE dueña de la solicitud. En modo directo es la
+   * organización activa; en modo delegado, el cliente operado. */
   organizationId: string;
   actor: RequestActor;
+  mode: RequestPersistenceMode;
 }
 
-export async function persistRequest({
+export async function persistRequest(params: PersistRequestParams): Promise<void> {
+  if (params.request.organizationId && params.request.organizationId !== params.organizationId) {
+    throw new Error('La solicitud no pertenece a la organización activa.');
+  }
+  if (params.mode === 'delegated') {
+    await persistDelegatedRequest(params);
+    return;
+  }
+  await persistDirectRequest(params);
+}
+
+/** Solo los campos que el backend delegado acepta (lista blanca). */
+export function toDelegatedRequestPayload(request: Request) {
+  const requestType = request.requestType ?? 'external';
+  return {
+    request_number: request.requestNumber,
+    title: request.title || null,
+    description: request.description,
+    asset: request.asset,
+    asset_id: request.assetId || null,
+    location: request.location,
+    service_type: request.serviceType,
+    deadline: request.deadline,
+    branch_id: request.branchId || null,
+    city: request.city ?? null,
+    store: request.store ?? null,
+    branch: request.branch ?? null,
+    requires_visit: !!request.requiresVisit,
+    visit_date: request.requiresVisit ? (request.visitDate || null) : null,
+    visit_schedule_mode: request.requiresVisit ? (request.visitScheduleMode ?? null) : null,
+    request_type: requestType,
+    min_quotes: request.minQuotes ?? 3,
+    service_address: request.serviceAddress || null,
+    client_name: request.clientName ?? null,
+    client_branch: request.clientBranch ?? null,
+    is_public: request.isPublic ?? true,
+    provider_organization_ids: requestType === 'external' && request.convocationMode === 'private'
+      ? (request.selectedProviderOrganizationIds || [])
+      : [],
+  };
+}
+
+async function persistDelegatedRequest({ request, isDraft, organizationId }: PersistRequestParams): Promise<void> {
+  const details = (request.details ?? []).map((d) => ({
+    equipment: d.equipment || null,
+    sub_equipment: d.subEquipment || null,
+    area: d.area || null,
+    sub_area: d.subArea || null,
+    activities: d.activities || null,
+    relevant_materials: d.relevantMaterials || null,
+    quantity: d.quantity || null,
+    unit_measure: d.unitMeasure || null,
+    observation: d.observation || null,
+    responsible_user: d.responsibleUser || null,
+    delegate_type: d.delegateType || null,
+  }));
+  const { error } = await supabase.rpc('save_facility_management_request', {
+    _client_organization_id: organizationId,
+    _request_id: request.id,
+    _request: toDelegatedRequestPayload(request),
+    _details: details,
+    _submit: !isDraft,
+  });
+  if (error) throw error;
+}
+
+async function persistDirectRequest({
   request,
   isDraft,
   organizationId,
   actor,
 }: PersistRequestParams): Promise<void> {
-  if (request.organizationId && request.organizationId !== organizationId) {
-    throw new Error('La solicitud no pertenece a la organización activa.');
-  }
-
   const { data: existing } = await supabase
     .from('requests')
     .select('id, status')

@@ -20,6 +20,7 @@ interface RawRunSummary {
   asset_name: string | null;
   responsible_member_id: string | null;
   responsible_name: string | null;
+  has_responsible: boolean;
   scheduled_for: string | null;
   started_at: string | null;
   completed_at: string | null;
@@ -38,6 +39,7 @@ const toRunSummary = (row: RawRunSummary): InspectionRunSummary => ({
   assetName: row.asset_name,
   responsibleMemberId: row.responsible_member_id,
   responsibleName: row.responsible_name,
+  hasResponsible: !!row.has_responsible,
   scheduledFor: row.scheduled_for,
   startedAt: row.started_at,
   completedAt: row.completed_at,
@@ -59,6 +61,7 @@ interface RawRunDetail {
   asset_name: string | null;
   responsible_member_id: string | null;
   responsible_name: string | null;
+  has_responsible: boolean;
   scheduled_for: string | null;
   started_at: string | null;
   completed_at: string | null;
@@ -86,6 +89,7 @@ const toRunDetail = (row: RawRunDetail): InspectionRunDetail => ({
   assetName: row.asset_name,
   responsibleMemberId: row.responsible_member_id,
   responsibleName: row.responsible_name,
+  hasResponsible: !!row.has_responsible,
   scheduledFor: row.scheduled_for,
   startedAt: row.started_at,
   completedAt: row.completed_at,

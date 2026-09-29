@@ -44,8 +44,11 @@ export interface InspectionPlan {
   areaAssetName: string | null;
   assetId: string | null;
   assetName: string | null;
+  /** Client-owned. Always null for a delegated Facility Manager (9C.4). */
   responsibleMemberId: string | null;
   responsibleName: string | null;
+  /** Whether there is a responsible, without identifying it. */
+  hasResponsible: boolean;
   title: string;
   description: string | null;
   frequency: InspectionFrequency;
@@ -112,8 +115,11 @@ export interface InspectionRunDetail {
   areaAssetName: string | null;
   assetId: string | null;
   assetName: string | null;
+  /** Client-owned. Always null for a delegated Facility Manager (9C.4). */
   responsibleMemberId: string | null;
   responsibleName: string | null;
+  /** Whether there is a responsible, without identifying it. */
+  hasResponsible: boolean;
   scheduledFor: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -151,8 +157,11 @@ export interface InspectionRunSummary {
   branchName: string | null;
   areaAssetName: string | null;
   assetName: string | null;
+  /** Client-owned. Always null for a delegated Facility Manager (9C.4). */
   responsibleMemberId: string | null;
   responsibleName: string | null;
+  /** Whether there is a responsible, without identifying it. */
+  hasResponsible: boolean;
   scheduledFor: string | null;
   startedAt: string | null;
   completedAt: string | null;

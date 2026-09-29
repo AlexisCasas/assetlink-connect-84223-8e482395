@@ -38,7 +38,9 @@ interface InspectionPlanDialogProps {
   organizationId: string | null | undefined;
   /** Namespace of the sessionStorage draft (UX only). */
   draftScopeKey: string | null | undefined;
-  /** responsible_member_id is client-owned: a delegated FM only sees it. */
+  /** responsible_member_id is client-owned. A delegated FM never receives it
+   * (the backend sends NULL + hasResponsible), never keeps it in state or in
+   * the sessionStorage draft, and never sends it: the server preserves it. */
   canChooseResponsible?: boolean;
   /** Delegated FM: a target the plan already has but the minimal directory
    * no longer offers (inactive branch / archived asset) is shown as a
@@ -113,14 +115,14 @@ const emptyDraft = (): PlanDraft => ({
   alertRules: [],
 });
 
-const draftFromPlan = (plan: InspectionPlan | null): PlanDraft => plan ? {
+const draftFromPlan = (plan: InspectionPlan | null, canChooseResponsible: boolean): PlanDraft => plan ? {
   templateId: plan.templateId,
   title: plan.title,
   description: plan.description ?? '',
   branchId: plan.branchId ?? '',
   areaAssetId: plan.areaAssetId ?? '',
   assetId: plan.assetId ?? '',
-  responsibleMemberId: plan.responsibleMemberId ?? '',
+  responsibleMemberId: canChooseResponsible ? plan.responsibleMemberId ?? '' : '',
   frequency: plan.frequency,
   customInterval: plan.customInterval != null ? String(plan.customInterval) : '1',
   customUnit: plan.customUnit ?? 'days',
@@ -231,7 +233,7 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, draft
     if (shouldInitialize) {
       const key = draftStorageKey(draftScopeKey, plan);
       const restored = key ? readDraft(key) : null;
-      const next = restored ?? draftFromPlan(plan);
+      const next = restored ?? draftFromPlan(plan, canChooseResponsible);
 
       setTemplateId(next.templateId);
       setTitle(next.title);
@@ -239,7 +241,9 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, draft
       setBranchId(next.branchId);
       setAreaAssetId(next.areaAssetId);
       setAssetId(next.assetId);
-      setResponsibleMemberId(next.responsibleMemberId);
+      // Delegated: never restore a client membership id, not even from a
+      // draft saved before 9C.4.
+      setResponsibleMemberId(canChooseResponsible ? next.responsibleMemberId : '');
       setFrequency(next.frequency);
       setCustomInterval(next.customInterval);
       setCustomUnit(next.customUnit);
@@ -262,8 +266,8 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, draft
   // remount (or simply closing without saving) never loses the draft.
   useEffect(() => {
     if (!open || !draftKey) return;
-    writeDraft(draftKey, { templateId, title, description, branchId, areaAssetId, assetId, responsibleMemberId, frequency, customInterval, customUnit, startDate, nextDueAt, alertRules });
-  }, [open, draftKey, templateId, title, description, branchId, areaAssetId, assetId, responsibleMemberId, frequency, customInterval, customUnit, startDate, nextDueAt, alertRules]);
+    writeDraft(draftKey, { templateId, title, description, branchId, areaAssetId, assetId, responsibleMemberId: canChooseResponsible ? responsibleMemberId : '', frequency, customInterval, customUnit, startDate, nextDueAt, alertRules });
+  }, [open, draftKey, canChooseResponsible, templateId, title, description, branchId, areaAssetId, assetId, responsibleMemberId, frequency, customInterval, customUnit, startDate, nextDueAt, alertRules]);
 
   // Only a specific asset (assetId) proposes its default responsible — never
   // an area (areaAssetId) or a branch, and never an ancestor. With several
@@ -366,9 +370,9 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, draft
       branchId: branchId || null,
       areaAssetId: areaAssetId || null,
       assetId: assetId || null,
-      // A delegated FM always sends back exactly what the client assigned
-      // (the backend rejects anything else).
-      responsibleMemberId: canChooseResponsible ? responsibleMemberId || null : plan?.responsibleMemberId ?? null,
+      // Delegated: null keeps the client's responsible server-side; the
+      // backend rejects any UUID from the FM (9C.4).
+      responsibleMemberId: canChooseResponsible ? responsibleMemberId || null : null,
       frequency,
       customInterval: customIntervalValue,
       customUnit: frequency === 'custom' ? customUnit : null,
@@ -462,9 +466,11 @@ export function InspectionPlanDialog({ open, onOpenChange, organizationId, draft
             <Label>Responsable</Label>
             {!canChooseResponsible ? (
               <p className="rounded-md border bg-muted/40 p-2 text-sm text-muted-foreground" data-testid="inspection-responsible-readonly">
-                {plan?.responsibleMemberId
-                  ? `Asignado por el cliente${plan.responsibleName ? `: ${plan.responsibleName}` : ''}`
-                  : 'Sin responsable. Solo el cliente puede asignarlo.'}
+                {plan?.responsibleName
+                  ? `Asignado por el cliente: ${plan.responsibleName}`
+                  : plan?.hasResponsible
+                    ? 'Asignado por el cliente'
+                    : 'Sin responsable'}
               </p>
             ) : (
             <Select value={responsibleMemberId || 'none'} onValueChange={(v) => { responsibleTouchedRef.current = true; setResponsibleMemberId(v === 'none' ? '' : v); }} disabled={saving}>

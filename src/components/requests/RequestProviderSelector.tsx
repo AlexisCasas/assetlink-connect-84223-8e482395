@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useProviderRelationships } from '@/hooks/useProviderRelationships';
+import { useFacilityManagementRequestProviders } from '@/hooks/useFacilityManagementReferenceDirectories';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -44,8 +45,30 @@ const isInvitable = (entry: ProviderDirectoryEntry) => isProviderFacingOrganizat
  * Managers are never invitation targets (Fase 1 · Punto 9B): they manage the
  * client's processes through delegated permissions, not as bidders.
  */
-export function RequestProviderSelector({ selectedOrganizationIds, onChange }: RequestProviderSelectorProps) {
+export function RequestProviderSelector(props: RequestProviderSelectorProps) {
   const { directory, loading, error } = useProviderRelationships();
+  return <RequestProviderSelectorView {...props} directory={directory} loading={loading} error={error} />;
+}
+
+/** Facility Manager (9C.4): same picker over the client's ACTIVE provider /
+ * subcontractor relationships only (get_facility_management_request_providers).
+ * get_provider_relationship_directory stays client-only. Providers already
+ * invited whose relationship is no longer active keep showing as chips via
+ * `knownProviders` (from the request's own audience). */
+export function DelegatedRequestProviderSelector({ clientOrganizationId, knownProviders = [], ...props }: RequestProviderSelectorProps & {
+  clientOrganizationId: string;
+  knownProviders?: { organizationId: string; organizationName: string }[];
+}) {
+  const { directory, loading, error } = useFacilityManagementRequestProviders(clientOrganizationId);
+  return <RequestProviderSelectorView {...props} directory={directory} loading={loading} error={error} knownProviders={knownProviders} />;
+}
+
+function RequestProviderSelectorView({ selectedOrganizationIds, onChange, directory, loading, error, knownProviders = [] }: RequestProviderSelectorProps & {
+  directory: ProviderDirectoryEntry[];
+  loading: boolean;
+  error: string | null;
+  knownProviders?: { organizationId: string; organizationName: string }[];
+}) {
   const [search, setSearch] = useState('');
   const [specialtyFilter, setSpecialtyFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active'>('active');
@@ -83,10 +106,14 @@ export function RequestProviderSelector({ selectedOrganizationIds, onChange }: R
     onChange(Array.from(merged));
   };
 
-  const selectedEntries = useMemo(
-    () => directory.filter((entry) => selectedSet.has(entry.organizationId)),
-    [directory, selectedSet],
-  );
+  const selectedEntries = useMemo(() => {
+    const listed = directory.filter((entry) => selectedSet.has(entry.organizationId));
+    const listedIds = new Set(listed.map((entry) => entry.organizationId));
+    const unlisted = knownProviders
+      .filter((provider) => selectedSet.has(provider.organizationId) && !listedIds.has(provider.organizationId))
+      .map((provider) => ({ organizationId: provider.organizationId, organizationName: provider.organizationName }));
+    return [...listed, ...unlisted];
+  }, [directory, selectedSet, knownProviders]);
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">Cargando proveedores homologados…</p>;

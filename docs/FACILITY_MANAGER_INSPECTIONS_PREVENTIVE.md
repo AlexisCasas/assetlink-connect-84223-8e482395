@@ -86,7 +86,7 @@ atomicidad y el historial.
 | Lectura de preventivo | `get_maintenance_cards`, `get_preventive_maintenance_plans`, `get_preventive_maintenance_occurrences`, `get_asset_meters` |
 | Gestión de preventivo | `save_maintenance_card`, `set_maintenance_card_active`, `save_preventive_maintenance_plan`, `set_preventive_maintenance_plan_active`, `skip_preventive_maintenance_occurrence`, `create_asset_meter`, `correct_asset_meter_reading`, `retire_asset_meter`, `replace_asset_meter` |
 | Registro de lecturas | `record_asset_meter_reading` |
-| Cruza con otro módulo; no se toca | `plan_preventive_maintenance_occurrence`, que vincula una Solicitud (9C.4) |
+| Cruza con otro módulo; delegada en 9C.4 | `plan_preventive_maintenance_occurrence`, que vincula una Solicitud (ver `docs/FACILITY_MANAGER_REQUESTS.md`) |
 | Internas; sin cambios | `build_preventive_scope_snapshot`, `create_preventive_occurrence_locked`, `notify_preventive_occurrence`, triggers, `generate_*_due_notifications` |
 
 No se tocan RLS ni policies. El frontend lee estos módulos solo por RPC, y las
@@ -119,13 +119,36 @@ acceso a la RLS de `assets` ni de `client_branches`, ni al módulo `#assets`.
 
 ### `responsible_member_id` pertenece al cliente
 
-Aplica igual en inspecciones y en preventivo:
+**Regla (desde el cierre de 9C.4, igual en inspecciones y en preventivo):**
+los ids internos de membresía del cliente nunca salen al FM; el backend los
+preserva en el servidor.
 
-- En un plan nuevo, el FM debe enviarlo en `NULL`.
-- En un plan existente, debe enviar exactamente el valor actual. No puede
-  cambiarlo ni limpiarlo.
-- Si no cumple, la RPC responde `42501`.
-- Nunca apunta a una membresía del FM.
+- Las lecturas delegadas devuelven `responsible_member_id = NULL`, más
+  `has_responsible` (booleano, sin identificar a nadie) y el
+  `responsible_name` seguro si existe.
+- El FM nunca envía el id. Con `NULL`, un plan nuevo queda sin responsable y
+  uno existente conserva el real al editar otros campos.
+- Cualquier UUID devuelve `42501`: otro miembro del cliente, una membresía del
+  FM o incluso el mismo valor actual. El FM no puede cambiarlo ni limpiarlo.
+- Los retornos de escritura van minimizados, sin `responsible_member_id` ni
+  `created_by_user_id`: `upsert_inspection_plan`,
+  `create_inspection_run_from_plan`, `submit_inspection_run`,
+  `save_preventive_maintenance_plan` y
+  `set_preventive_maintenance_plan_active`.
+- El cliente directo no cambia: ve, elige, cambia y limpia su responsable.
+
+La regla anterior de 9C.2, "en un plan existente el FM debe enviar
+exactamente el valor actual", queda **eliminada**.
+
+En el diálogo de plan de inspección delegado, el responsable no se guarda en
+el estado, en el borrador de `sessionStorage` ni en el guardado. Un borrador
+antiguo que tuviera un id tampoco se restaura. El texto que se muestra es:
+
+- "Asignado por el cliente: <nombre>", si hay nombre;
+- "Asignado por el cliente", si hay responsable sin nombre;
+- "Sin responsable", si no hay.
+
+No hay selector. Ver `docs/FACILITY_MANAGER_REQUESTS.md`.
 
 Las RPCs `get_assignable_technicians` y `get_assignable_planners` no se
 amplían, así que el FM no recibe el roster del cliente.
@@ -143,10 +166,12 @@ Para un Facility Manager delegado:
 - `get_inspection_plans`, `get_inspection_runs` y `get_inspection_run_detail`
   devuelven solo el nombre ya guardado del usuario. Si no hay, devuelven
   `NULL`. Nunca el email ni una parte de él.
-- En preventivo, el `scope_snapshot` delegado quita
-  `plan.responsible.name`, porque pudo haberse derivado del email al
-  capturarlo. Conserva `membership_id` y `role`, igual que
-  `responsible_member_id`.
+- En preventivo, el `scope_snapshot` delegado quitaba en 9C.2
+  `plan.responsible.name`, porque pudo haberse derivado del email, pero
+  conservaba `membership_id` y `role`. **Eso se corrigió en el cierre de
+  9C.4:** el responsable delegado queda como `{"assigned": true}`, sin
+  `membership_id`, `role`, `user_id` ni email. El plan delegado tampoco
+  trae `responsible_member_id`.
 - La UI muestra "asignado por el cliente" cuando existe un responsable sin
   nombre delegable.
 
@@ -183,8 +208,14 @@ El FM puede enviar esa misma metadata. No se amplía
 `plan_preventive_maintenance_occurrence` sigue protegida por
 `can_manage_preventive_maintenance`, que es directa. En la UI delegada no se
 muestra "Planificar", no se abre `PreventiveRequestDialog` y no se llama a
-`persistRequest()`. El FM con permiso de gestión sí puede omitir un ciclo. La
-integración con solicitudes llega en 9C.4.
+`persistRequest()`. El FM con permiso de gestión sí puede omitir un ciclo.
+
+**Desde 9C.4**, "Planificar" aparece para el FM con `preventive_maintenance.view`
++ `manage` **y** `requests.view` + `create` (roles o/a/m). Esa capacidad es la
+única que recibe `request_creation_id`; `request_id` se ve con
+`requests.view`; `work_order_id`, nunca. `skip_preventive_maintenance_occurrence`
+devuelve al delegado la fila minimizada. Ver
+`docs/FACILITY_MANAGER_REQUESTS.md`.
 
 Tampoco se revelan los ids de otros módulos. Para un FM delegado,
 `request_creation_id`, `request_id` y `work_order_id` llegan en `NULL`, tanto
@@ -356,4 +387,4 @@ y 46/46 de 9B.
 
 - 9C.3 (hecho): Avisos de avería y backlog, ver
   `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`.
-- 9C.4: Requests.
+- 9C.4 (hecho): Solicitudes, ver `docs/FACILITY_MANAGER_REQUESTS.md`.

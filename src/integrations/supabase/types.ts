@@ -4258,9 +4258,24 @@ export type Database = {
           status: string
         }[]
       }
+      annul_facility_management_request: {
+        Args: { _client_organization_id: string; _request_id: string }
+        Returns: Json
+      }
       apply_criticality_template: {
         Args: { p_organization_id: string; p_template_id: string }
         Returns: Json
+      }
+      apply_request_audience_internal: {
+        Args: {
+          p_is_public: boolean
+          p_provider_organization_ids?: string[]
+          p_request_id: string
+        }
+        Returns: {
+          is_public: boolean
+          provider_organization_ids: string[]
+        }[]
       }
       approve_quote: { Args: { target_quote_id: string }; Returns: undefined }
       assert_valid_criticality_thresholds: {
@@ -4346,7 +4361,15 @@ export type Database = {
         Args: { p_template_id: string }
         Returns: boolean
       }
+      can_convert_maintenance_notice_as_facility_manager: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
       can_create_maintenance_notice: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
+      can_create_requests_as_facility_manager: {
         Args: { _organization_id: string }
         Returns: boolean
       }
@@ -4381,11 +4404,19 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: boolean
       }
+      can_manage_requests_as_facility_manager: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
       can_plan_inspections: {
         Args: { _organization_id: string }
         Returns: boolean
       }
       can_plan_preventive_maintenance: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
+      can_plan_preventive_request_as_facility_manager: {
         Args: { _organization_id: string }
         Returns: boolean
       }
@@ -4438,6 +4469,10 @@ export type Database = {
         Returns: boolean
       }
       can_view_preventive_maintenance: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
+      can_view_requests_as_facility_manager: {
         Args: { _organization_id: string }
         Returns: boolean
       }
@@ -4908,6 +4943,10 @@ export type Database = {
         Returns: Record<string, unknown>[]
       }
       dblink_is_busy: { Args: { "": string }; Returns: number }
+      delete_facility_management_request_draft: {
+        Args: { _client_organization_id: string; _request_id: string }
+        Returns: undefined
+      }
       delete_work_order_activity: {
         Args: { p_activity_id: string }
         Returns: undefined
@@ -4956,6 +4995,26 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      facility_management_can_see_request: {
+        Args: {
+          _can_create: boolean
+          _can_view: boolean
+          _request: Database["public"]["Tables"]["requests"]["Row"]
+        }
+        Returns: boolean
+      }
+      facility_management_request_payload: {
+        Args: {
+          _can_create: boolean
+          _can_manage: boolean
+          _request: Database["public"]["Tables"]["requests"]["Row"]
+        }
+        Returns: Json
+      }
+      facility_management_safe_person_name: {
+        Args: { _email: string; _fallback: string; _name: string }
+        Returns: string
       }
       generate_inspection_due_notifications: { Args: never; Returns: undefined }
       generate_inspection_due_notifications_internal: {
@@ -5283,6 +5342,47 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_facility_management_request: {
+        Args: { _client_organization_id: string; _request_id: string }
+        Returns: Json
+      }
+      get_facility_management_request_assets: {
+        Args: { _client_organization_id: string }
+        Returns: {
+          branch_id: string
+          code: string
+          id: string
+          name: string
+          node_type: string
+          parent_asset_id: string
+          path: string
+          status: string
+        }[]
+      }
+      get_facility_management_request_branches: {
+        Args: { _client_organization_id: string }
+        Returns: {
+          address: string
+          city: string
+          id: string
+          is_active: boolean
+          name: string
+          site: string
+        }[]
+      }
+      get_facility_management_request_providers: {
+        Args: { _client_organization_id: string }
+        Returns: {
+          organization_id: string
+          organization_name: string
+          organization_type: Database["public"]["Enums"]["organization_type"]
+          specialties: string[]
+        }[]
+      }
+      get_facility_management_requests: {
+        Args: { _client_organization_id: string; _scope?: string }
+        Returns: Json
+      }
       get_facility_manager_directory: {
         Args: { _client_organization_id: string }
         Returns: {
@@ -5318,6 +5418,7 @@ export type Database = {
           custom_unit: string
           description: string
           frequency: string
+          has_responsible: boolean
           id: string
           is_active: boolean
           next_due_at: string
@@ -5337,6 +5438,7 @@ export type Database = {
           asset_name: string
           branch_name: string
           completed_at: string
+          has_responsible: boolean
           id: string
           organization_id: string
           plan_id: string
@@ -5969,6 +6071,63 @@ export type Database = {
         }
       }
       run_automatic_alert_generation: { Args: never; Returns: Json }
+      sanitize_inspection_plan_for_delegate: {
+        Args: { _plan: Database["public"]["Tables"]["inspection_plans"]["Row"] }
+        Returns: {
+          area_asset_id: string | null
+          asset_id: string | null
+          branch_id: string | null
+          created_at: string
+          created_by_user_id: string | null
+          custom_interval: number | null
+          custom_unit: string | null
+          description: string | null
+          frequency: string
+          id: string
+          is_active: boolean
+          next_due_at: string | null
+          organization_id: string
+          responsible_member_id: string | null
+          start_date: string
+          template_id: string
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "inspection_plans"
+          to: "inspection_plans"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      sanitize_inspection_run_for_delegate: {
+        Args: { _run: Database["public"]["Tables"]["inspection_runs"]["Row"] }
+        Returns: {
+          area_asset_id: string | null
+          asset_id: string | null
+          branch_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          plan_id: string | null
+          responsible_member_id: string | null
+          result: string | null
+          scheduled_for: string | null
+          started_at: string | null
+          status: string
+          template_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "inspection_runs"
+          to: "inspection_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       sanitize_maintenance_notice_for_delegate: {
         Args: {
           _notice: Database["public"]["Tables"]["maintenance_notices"]["Row"]
@@ -6012,8 +6171,88 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      sanitize_preventive_occurrence_for_delegate: {
+        Args: {
+          _occurrence: Database["public"]["Tables"]["preventive_maintenance_occurrences"]["Row"]
+        }
+        Returns: {
+          asset_id: string
+          cancel_reason: string | null
+          cancelled_at: string | null
+          completed_at: string | null
+          completion_meter_reading_id: string | null
+          completion_meter_value: number | null
+          created_at: string
+          due_at: string | null
+          due_meter_value: number | null
+          id: string
+          organization_id: string
+          plan_id: string
+          planned_at: string | null
+          request_creation_id: string
+          request_id: string | null
+          scope_snapshot: Json
+          sequence: number
+          skip_reason: string | null
+          skipped_at: string | null
+          status: string
+          updated_at: string
+          work_order_id: string | null
+        }
+        SetofOptions: {
+          from: "preventive_maintenance_occurrences"
+          to: "preventive_maintenance_occurrences"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      sanitize_preventive_plan_for_delegate: {
+        Args: {
+          _plan: Database["public"]["Tables"]["preventive_maintenance_plans"]["Row"]
+        }
+        Returns: {
+          asset_id: string
+          baseline_reading_id: string | null
+          baseline_value: number | null
+          card_id: string
+          created_at: string
+          created_by_user_id: string | null
+          custom_interval: number | null
+          custom_unit: string | null
+          default_request_type: string
+          first_due_at: string | null
+          frequency: string | null
+          id: string
+          interval_value: number | null
+          is_active: boolean
+          meter_id: string | null
+          meter_lead_value: number | null
+          organization_id: string
+          planning_lead_days: number
+          priority: string
+          responsible_member_id: string | null
+          trigger_type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "preventive_maintenance_plans"
+          to: "preventive_maintenance_plans"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       sanitize_preventive_scope_snapshot: {
         Args: { _snapshot: Json }
+        Returns: Json
+      }
+      save_facility_management_request: {
+        Args: {
+          _client_organization_id: string
+          _details?: Json
+          _request: Json
+          _request_id: string
+          _submit?: boolean
+        }
         Returns: Json
       }
       save_maintenance_card: {

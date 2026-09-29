@@ -8,6 +8,16 @@ import { Request } from '@/types/request';
 import { FileText, Edit, Trash2, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { persistRequest } from '@/lib/requestPersistence';
+import {
+  deleteDelegatedDraft,
+  fetchDelegatedRequest,
+  fetchDelegatedRequests,
+  loadDelegatedRequestForEdit,
+  loadDirectRequestForEdit,
+  mapRequestRow,
+} from '@/lib/requestData';
+import { useDirectRequestScope, type RequestScope } from '@/hooks/useRequestScope';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,9 +38,20 @@ import { Separator } from '@/components/ui/separator';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-export const DraftList = () => {
-  const { user, currentOrganization } = useAuth();
+interface DraftListProps {
+  /** Direct (default, historic) or delegated (Facility Manager, 9C.4): the FM
+   * only ever sees and operates its OWN drafts for the operated client. */
+  scope?: RequestScope;
+}
+
+export const DraftList = ({ scope }: DraftListProps = {}) => {
+  const { user } = useAuth();
   const { toast } = useToast();
+  const directScope = useDirectRequestScope();
+  const requestScope = scope ?? directScope;
+  const isDelegated = requestScope.mode === 'facility_manager';
+  const organizationId = requestScope.organizationId;
+  const [knownProviders, setKnownProviders] = useState<{ organizationId: string; organizationName: string }[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingDraft, setEditingDraft] = useState<Request | undefined>();
   const [drafts, setDrafts] = useState<Request[]>([]);
@@ -42,7 +63,7 @@ export const DraftList = () => {
   const [draftDetails, setDraftDetails] = useState<any[]>([]);
 
   const loadDrafts = async () => {
-    if (!currentOrganization) {
+    if (!organizationId) {
       setDrafts([]);
       setLoading(false);
       return;
@@ -50,48 +71,22 @@ export const DraftList = () => {
 
     try {
       setLoading(true);
+      if (isDelegated) {
+        setDrafts(await fetchDelegatedRequests(organizationId, 'drafts'));
+        return;
+      }
       const { data, error } = await supabase
         .from('requests')
         .select('*')
         .eq('status', 'draft')
-        .eq('organization_id', currentOrganization.id)
+        .eq('organization_id', organizationId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const transformedDrafts: Request[] = (data || []).map((req: any) => ({
-        id: req.id,
-        organizationId: req.organization_id,
-        requestNumber: req.request_number,
-        title: req.title,
-        description: req.description,
-        asset: req.asset,
-        location: req.location,
-        serviceType: req.service_type,
-        observations: req.observations,
-        images: req.image_urls || [],
-        documents: req.document_urls || [],
-        deadline: req.deadline,
-        startTime: req.start_time,
-        selectedProviders: [],
-        status: req.status,
-        createdAt: req.created_at,
-        createdBy: req.created_by,
-        createdByUserId: req.created_by_user_id,
-        createdByName: req.created_by_name,
-        createdByEmail: req.created_by_email,
-        priority: req.priority,
-        clientName: req.client_name,
-        clientBranch: req.client_branch,
-        isPublic: req.is_public,
-        city: req.city,
-        store: req.store,
-        branch: req.branch,
-        branchId: req.branch_id,
-        requiresVisit: req.requires_visit,
-        visitDate: req.visit_date,
-        minQuotes: req.min_quotes ?? 3,
-      }));
+      // Mapeo completo compartido con RequestList (antes faltaban el activo,
+      // el tipo, los contactos, la visita y la convocatoria).
+      const transformedDrafts: Request[] = (data || []).map(mapRequestRow);
 
       setDrafts(transformedDrafts);
     } catch (error) {
@@ -102,9 +97,13 @@ export const DraftList = () => {
     }
   };
 
-  useEffect(() => { loadDrafts(); }, [user, currentOrganization?.id]);
+  useEffect(() => { loadDrafts(); }, [user, organizationId, isDelegated]);
 
   const loadDraftDetails = async (requestId: string) => {
+    if (isDelegated) {
+      setDraftDetails(organizationId ? (await fetchDelegatedRequest(organizationId, requestId))?.detailRows ?? [] : []);
+      return;
+    }
     const { data } = await supabase
       .from('request_details')
       .select('*')
@@ -119,116 +118,28 @@ export const DraftList = () => {
   };
 
   const handleSaveRequest = async (request: Request, isDraft: boolean) => {
-    if (!currentOrganization) {
+    if (!organizationId) {
       toast({ title: 'Organización requerida', description: 'Selecciona una organización activa antes de guardar.', variant: 'destructive' });
       return;
     }
 
-    if (request.organizationId && request.organizationId !== currentOrganization.id) {
-      throw new Error('La solicitud no pertenece a la organización activa.');
-    }
-
     try {
-      // Verificar si existe
-      const { data: existing } = await supabase
-        .from('requests')
-        .select('id')
-        .eq('id', request.id)
-        .eq('organization_id', currentOrganization.id)
-        .maybeSingle();
-
-      if (existing) {
-        // Actualizar
-        const { error: requestError } = await supabase
-          .from('requests')
-          .update({
-            title: request.title || null,
-            description: request.description,
-            service_type: request.serviceType,
-            deadline: request.deadline,
-            branch_id: request.branchId || null,
-            city: request.city,
-            store: request.store,
-            branch: request.branch,
-            location: request.location,
-            requires_visit: request.requiresVisit,
-            visit_date: request.visitDate || null,
-            asset: request.asset,
-            status: isDraft ? 'draft' : 'sent',
-            is_public: request.isPublic,
-            min_quotes: request.minQuotes ?? 3,
-          })
-          .eq('id', request.id)
-          .eq('organization_id', currentOrganization.id);
-
-        if (requestError) throw requestError;
-
-        // Eliminar detalles antiguos
-        await supabase
-          .from('request_details')
-          .delete()
-          .eq('request_id', request.id);
-      } else {
-        // Crear nuevo
-        const { error: insertError } = await supabase
-          .from('requests')
-          .insert({
-            id: request.id,
-            organization_id: currentOrganization.id,
-            request_number: request.requestNumber,
-            title: request.title || null,
-            description: request.description,
-            service_type: request.serviceType,
-            deadline: request.deadline,
-            branch_id: request.branchId || null,
-            city: request.city,
-            store: request.store,
-            branch: request.branch,
-            location: request.location,
-            requires_visit: request.requiresVisit,
-            visit_date: request.visitDate || null,
-            asset: request.asset,
-            status: isDraft ? 'draft' : 'sent',
-            created_by: user?.email || '',
-            created_by_user_id: user?.id || null,
-            created_by_name: user?.name || null,
-            created_by_email: user?.email || null,
-            is_public: request.isPublic,
-            client_name: request.clientName,
-            client_branch: request.clientBranch,
-            priority: request.priority,
-            min_quotes: request.minQuotes ?? 3,
-          });
-
-        if (insertError) throw insertError;
-      }
-
-      // Insertar detalles
-      if (request.details && request.details.length > 0) {
-        const detailsToInsert = request.details.map(d => ({
-          request_id: request.id,
-          equipment: d.equipment || null,
-          sub_equipment: d.subEquipment || null,
-          area: d.area || null,
-          sub_area: d.subArea || null,
-          activities: d.activities || null,
-          relevant_materials: d.relevantMaterials || null,
-          quantity: d.quantity || null,
-          unit_measure: d.unitMeasure || null,
-          observation: d.observation || null,
-          responsible_user: d.responsibleUser || null,
-          delegate_type: d.delegateType || null,
-        }));
-
-        await supabase
-          .from('request_details')
-          .insert(detailsToInsert);
-      }
+      // Misma persistencia que RequestList (src/lib/requestPersistence.ts):
+      // borrador -> audiencia -> 'sent', nunca a medio camino. Antes este
+      // listado escribía is_public y el estado directamente, sin sincronizar
+      // las invitaciones.
+      await persistRequest({
+        request,
+        isDraft,
+        organizationId,
+        actor: { id: user?.id, email: user?.email, name: user?.name },
+        mode: isDelegated ? 'delegated' : 'direct',
+      });
 
       toast({
         title: isDraft ? "Borrador guardado" : "Solicitud enviada",
-        description: isDraft 
-          ? "Tu solicitud ha sido guardada como borrador" 
+        description: isDraft
+          ? "Tu solicitud ha sido guardada como borrador"
           : "La solicitud ha sido enviada correctamente",
       });
 
@@ -239,7 +150,7 @@ export const DraftList = () => {
       console.error('Error saving draft:', error);
       toast({
         title: "Error",
-        description: "No se pudo guardar la solicitud",
+        description: error instanceof Error && error.message ? error.message : "No se pudo guardar la solicitud",
         variant: "destructive",
       });
     }
@@ -249,20 +160,24 @@ export const DraftList = () => {
     if (!draftToDelete) return;
 
     try {
-      // Eliminar detalles primero
-      await supabase
-        .from('request_details')
-        .delete()
-        .eq('request_id', draftToDelete);
+      if (isDelegated) {
+        await deleteDelegatedDraft(organizationId!, draftToDelete);
+      } else {
+        // Eliminar detalles primero
+        await supabase
+          .from('request_details')
+          .delete()
+          .eq('request_id', draftToDelete);
 
-      // Eliminar la solicitud
-      const { error } = await supabase
-        .from('requests')
-        .delete()
-        .eq('id', draftToDelete)
-        .eq('organization_id', currentOrganization.id);
+        // Eliminar la solicitud
+        const { error } = await supabase
+          .from('requests')
+          .delete()
+          .eq('id', draftToDelete)
+          .eq('organization_id', organizationId!);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
 
       toast({
         title: "Borrador eliminado",
@@ -284,31 +199,20 @@ export const DraftList = () => {
   };
 
   const handleEdit = async (draft: Request) => {
-    // Cargar detalles
-    const { data: detailsData } = await supabase
-      .from('request_details')
-      .select('*')
-      .eq('request_id', draft.id);
-
-    const details = (detailsData || []).map((d: any) => ({
-      equipment: d.equipment || '',
-      subEquipment: d.sub_equipment || '',
-      area: d.area || '',
-      subArea: d.sub_area || '',
-      activities: d.activities || '',
-      relevantMaterials: d.relevant_materials || '',
-      quantity: d.quantity,
-      unitMeasure: d.unit_measure || '',
-      observation: d.observation || '',
-      responsibleUser: d.responsible_user || '',
-      delegateType: d.delegate_type || '',
-    }));
-
-    setEditingDraft({
-      ...draft,
-      details,
-    });
-    setShowForm(true);
+    try {
+      // Detalle + invitaciones actuales (una convocatoria privada no se
+      // pierde al reabrir el borrador).
+      if (isDelegated) {
+        const loaded = await loadDelegatedRequestForEdit(organizationId!, draft.id);
+        setKnownProviders(loaded.knownProviders);
+        setEditingDraft(loaded.request);
+      } else {
+        setEditingDraft(await loadDirectRequestForEdit(draft));
+      }
+      setShowForm(true);
+    } catch (error) {
+      toast({ title: 'No se pudo abrir el borrador', description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
+    }
   };
 
   const confirmDelete = (id: string) => {
@@ -339,7 +243,7 @@ export const DraftList = () => {
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Borradores</h2>
+        <h2 className="text-2xl font-bold">{isDelegated ? `Mis borradores para ${requestScope.organizationName ?? 'el cliente'}` : 'Borradores'}</h2>
       </div>
 
       {loading ? (
@@ -353,7 +257,7 @@ export const DraftList = () => {
           <CardContent className="py-12 text-center">
             <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
             <p className="text-muted-foreground">
-              {currentOrganization
+              {organizationId
                 ? 'No tienes borradores guardados'
                 : 'Selecciona una organización activa para ver tus borradores'}
             </p>
@@ -518,9 +422,12 @@ export const DraftList = () => {
           onClose={() => {
             setShowForm(false);
             setEditingDraft(undefined);
+            setKnownProviders([]);
           }}
           onSave={handleSaveRequest}
           editingRequest={editingDraft}
+          scope={requestScope}
+          knownProviders={knownProviders}
         />
       )}
     </div>

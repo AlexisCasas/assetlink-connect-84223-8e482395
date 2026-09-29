@@ -11,9 +11,19 @@ import { useToast } from '@/hooks/use-toast';
 import { seedDatabase } from '@/lib/seedData';
 import { supabase } from '@/integrations/supabase/client';
 import { persistRequest } from '@/lib/requestPersistence';
+import {
+  annulDelegatedRequest,
+  fetchDelegatedRequest,
+  fetchDelegatedRequests,
+  loadDelegatedRequestForEdit,
+  loadDirectRequestForEdit,
+  mapRequestRow,
+} from '@/lib/requestData';
 import { useAssets } from '@/hooks/useAssets';
+import { NO_ASSET_ACCESS_SCOPE } from '@/hooks/useAssetScope';
+import { useDirectRequestScope, type RequestScope } from '@/hooks/useRequestScope';
 import { buildAssetPathMap } from '@/lib/assetTree';
-import { RequestAssetSummary } from './RequestAssetSummary';
+import { RequestAssetSummary, StaticRequestAssetSummary } from './RequestAssetSummary';
 import {
   Table,
   TableBody,
@@ -67,12 +77,23 @@ interface RequestListProps {
    * pudo abrir" message as a deleted/inaccessible one. */
   focusRequestId?: string;
   focusQuoteId?: string;
+  /** Direct (default, historic) or delegated (Facility Manager, 9C.4). In
+   * delegated mode quotes, work orders and the forum are never queried, and
+   * `focusQuoteId` is ignored. */
+  scope?: RequestScope;
 }
 
-export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps = {}) => {
+export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestListProps = {}) => {
   const { user, currentOrganization } = useAuth();
   const { toast } = useToast();
-  const { assets: linkedAssets, assetTree } = useAssets();
+  const directScope = useDirectRequestScope();
+  const requestScope = scope ?? directScope;
+  const isDelegated = requestScope.mode === 'facility_manager';
+  // Target organization: the active one (direct) or the operated client.
+  const organizationId = requestScope.organizationId;
+  // requests.* does not imply assets.view: in delegated mode useAssets()
+  // queries nothing and the table falls back to the request's asset text.
+  const { assets: linkedAssets, assetTree } = useAssets(isDelegated ? NO_ASSET_ACCESS_SCOPE : undefined);
   const assetsById = useMemo(() => new Map(linkedAssets.map((asset) => [asset.id, asset])), [linkedAssets]);
   const assetPaths = useMemo(() => buildAssetPathMap(assetTree), [assetTree]);
   const [showForm, setShowForm] = useState(false);
@@ -83,6 +104,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [editingRequest, setEditingRequest] = useState<Request | null>(null);
   const [requestDetails, setRequestDetails] = useState<any[]>([]);
+  const [editingKnownProviders, setEditingKnownProviders] = useState<{ organizationId: string; organizationName: string }[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [requestToDelete, setRequestToDelete] = useState<string | null>(null);
 
@@ -181,11 +203,26 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
   };
 
   const loadRequests = async () => {
-    if (!currentOrganization) {
+    if (!organizationId) {
       setRequests([]);
       setQuoteCounts({});
       setInternalWorkOrders({});
       setLoading(false);
+      return;
+    }
+
+    if (isDelegated) {
+      // Minimized payload from the delegated RPC. No quotes, no work
+      // orders, no seed: those modules are not delegated.
+      try {
+        setLoading(true);
+        setRequests(await fetchDelegatedRequests(organizationId, 'sent'));
+      } catch (error) {
+        console.error('Error loading delegated requests:', error);
+        setRequests([]);
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
@@ -195,56 +232,12 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
       const { data: requestsData, error: requestsError } = await supabase
         .from('requests')
         .select('*')
-        .eq('organization_id', currentOrganization.id)
+        .eq('organization_id', organizationId)
         .eq('status', 'sent')
         .order('created_at', { ascending: false });
       if (requestsError) throw requestsError;
 
-      const transformedRequests: Request[] = (requestsData || []).map((req: any) => ({
-        id: req.id,
-        organizationId: req.organization_id,
-        requestNumber: req.request_number,
-        title: req.title,
-        description: req.description,
-        asset: req.asset,
-        assetId: req.asset_id ?? undefined,
-        // Legacy rows predate request_type and always behave as external.
-        requestType: (req.request_type === 'internal' ? 'internal' : 'external'),
-        internalResponsibleMemberId: req.internal_responsible_member_id ?? undefined,
-        location: req.location,
-        serviceType: req.service_type,
-        observations: req.observations,
-        images: req.image_urls || [],
-        documents: req.document_urls || [],
-        deadline: req.deadline,
-        startTime: req.start_time,
-        selectedProviders: [],
-        status: req.status,
-        createdAt: req.created_at,
-        createdBy: req.created_by,
-        createdByUserId: req.created_by_user_id,
-        createdByName: req.created_by_name,
-        createdByEmail: req.created_by_email,
-        priority: req.priority,
-        clientName: req.client_name,
-        clientBranch: req.client_branch,
-        isPublic: req.is_public,
-        notifiedAt: req.notified_at,
-        city: req.city,
-        store: req.store,
-        branch: req.branch,
-        branchId: req.branch_id,
-        requiresVisit: req.requires_visit,
-        visitDate: req.visit_date,
-        visitScheduleMode: req.visit_schedule_mode ?? undefined,
-        visitContactMemberId: req.visit_contact_member_id ?? undefined,
-        minQuotes: req.min_quotes ?? 3,
-        coordinationContactMemberId: req.coordination_contact_member_id ?? undefined,
-        coordinationContactName: req.coordination_contact_name ?? undefined,
-        coordinationContactEmail: req.coordination_contact_email ?? undefined,
-        serviceAddress: req.service_address ?? undefined,
-        convocationMode: req.is_public ? 'public' : 'private',
-      }));
+      const transformedRequests: Request[] = (requestsData || []).map(mapRequestRow);
 
       setRequests(transformedRequests);
 
@@ -311,14 +304,23 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
     }
   };
 
-  useEffect(() => { loadRequests(); }, [user, currentOrganization?.id]);
+  useEffect(() => { loadRequests(); }, [user, organizationId, isDelegated]);
 
-  const loadRequestDetails = async (requestId: string) => {
+  // Detail rows (without attachments in delegated mode).
+  const fetchDetailRows = async (requestId: string) => {
+    if (isDelegated) {
+      if (!organizationId) return [];
+      return (await fetchDelegatedRequest(organizationId, requestId))?.detailRows ?? [];
+    }
     const { data } = await supabase
       .from('request_details')
       .select('*')
       .eq('request_id', requestId);
-    setRequestDetails(data || []);
+    return data || [];
+  };
+
+  const loadRequestDetails = async (requestId: string) => {
+    setRequestDetails(await fetchDetailRows(requestId));
   };
 
   const togglePreview = async (requestId: string) => {
@@ -326,11 +328,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
       setExpandedRequestId(null);
       setExpandedDetails([]);
     } else {
-      const { data } = await supabase
-        .from('request_details')
-        .select('*')
-        .eq('request_id', requestId);
-      setExpandedDetails(data || []);
+      setExpandedDetails(await fetchDetailRows(requestId));
       setExpandedRequestId(requestId);
     }
   };
@@ -359,7 +357,8 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
       return;
     }
 
-    if (focusQuoteId) {
+    // Quotes are never opened in delegated mode (quote= is ignored).
+    if (focusQuoteId && requestScope.canViewQuotes) {
       setSelectedRequest(found);
       setShowQuotesDialog(true);
     } else {
@@ -368,42 +367,24 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
   }, [focusRequestId, focusQuoteId, loading, requests]);
 
   const handleEditRequest = async (request: Request) => {
-    const { data: detailsData } = await supabase
-      .from('request_details')
-      .select('*')
-      .eq('request_id', request.id);
-
-    const details = (detailsData || []).map((d: any) => ({
-      equipment: d.equipment || '',
-      subEquipment: d.sub_equipment || '',
-      area: d.area || '',
-      subArea: d.sub_area || '',
-      activities: d.activities || '',
-      relevantMaterials: d.relevant_materials || '',
-      quantity: d.quantity,
-      unitMeasure: d.unit_measure || '',
-      observation: d.observation || '',
-      responsibleUser: d.responsible_user || '',
-      delegateType: d.delegate_type || '',
-    }));
-
-    let selectedProviderOrganizationIds: string[] = [];
-    if (request.requestType !== 'internal') {
-      const { data: accessData } = await supabase
-        .from('request_provider_access')
-        .select('provider_organization_id')
-        .eq('request_id', request.id)
-        .eq('access_type', 'invited')
-        .eq('status', 'active');
-      selectedProviderOrganizationIds = (accessData || []).map((a: any) => a.provider_organization_id);
+    if (isDelegated) {
+      if (!organizationId) return;
+      try {
+        const { request: editable, knownProviders } = await loadDelegatedRequestForEdit(organizationId, request.id);
+        setEditingKnownProviders(knownProviders);
+        setEditingRequest(editable);
+        setShowForm(true);
+      } catch (error) {
+        toast({ title: 'No se pudo abrir la solicitud', description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
+      }
+      return;
     }
-
-    setEditingRequest({ ...request, details, selectedProviderOrganizationIds });
+    setEditingRequest(await loadDirectRequestForEdit(request));
     setShowForm(true);
   };
 
   const handleSaveRequest = async (request: Request, isDraft: boolean) => {
-    if (!currentOrganization) {
+    if (!organizationId) {
       toast({ title: 'Organización requerida', description: 'Selecciona una organización activa antes de guardar.', variant: 'destructive' });
       return;
     }
@@ -416,8 +397,9 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
       await persistRequest({
         request,
         isDraft,
-        organizationId: currentOrganization.id,
+        organizationId,
         actor: { id: user?.id, email: user?.email, name: user?.name },
+        mode: isDelegated ? 'delegated' : 'direct',
       });
 
       toast({
@@ -448,12 +430,16 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
   const handleDeleteRequest = async () => {
     if (!requestToDelete) return;
     try {
-      const { error } = await supabase
-        .from('requests')
-        .update({ status: 'anulado' })
-        .eq('id', requestToDelete)
-        .eq('organization_id', currentOrganization.id);
-      if (error) throw error;
+      if (isDelegated) {
+        await annulDelegatedRequest(organizationId!, requestToDelete);
+      } else {
+        const { error } = await supabase
+          .from('requests')
+          .update({ status: 'anulado' })
+          .eq('id', requestToDelete)
+          .eq('organization_id', organizationId!);
+        if (error) throw error;
+      }
       toast({ title: 'Solicitud anulada', description: 'La solicitud ha sido anulada correctamente' });
       loadRequests();
     } catch (error) {
@@ -531,11 +517,13 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Mis Solicitudes</h2>
-        <Button disabled={!currentOrganization} onClick={() => { setEditingRequest(null); setShowForm(true); }}>
-          <Plus className="w-4 h-4 mr-2" />
-          Nueva solicitud
-        </Button>
+        <h2 className="text-2xl font-bold">{isDelegated ? `Solicitudes de ${requestScope.organizationName ?? 'cliente'}` : 'Mis Solicitudes'}</h2>
+        {requestScope.canCreate && (
+          <Button disabled={!organizationId} onClick={() => { setEditingRequest(null); setEditingKnownProviders([]); setShowForm(true); }}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nueva solicitud
+          </Button>
+        )}
       </div>
 
       <OrderFilters
@@ -567,13 +555,13 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
           <CardContent className="py-12 text-center">
             <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
             <p className="text-muted-foreground">
-              {!currentOrganization
+              {!organizationId
                 ? 'Selecciona una organización activa para ver y crear solicitudes'
                 : requests.length === 0
-                ? 'No tienes solicitudes enviadas'
+                ? (isDelegated ? 'El cliente no tiene solicitudes enviadas' : 'No tienes solicitudes enviadas')
                 : 'No hay solicitudes que coincidan con los filtros'}
             </p>
-            {currentOrganization && requests.length === 0 && (
+            {organizationId && requests.length === 0 && requestScope.canCreate && (
               <Button onClick={() => { setEditingRequest(null); setShowForm(true); }} className="mt-4">
                 Crear primera solicitud
               </Button>
@@ -588,7 +576,9 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
           assetPaths={assetPaths}
           internalWorkOrders={internalWorkOrders}
           generatingRequestId={generatingRequestId}
-          onGenerateWorkOrder={(r) => void handleGenerateWorkOrder(r)}
+          onGenerateWorkOrder={requestScope.canGenerateWorkOrder ? (r) => void handleGenerateWorkOrder(r) : undefined}
+          canEdit={isDelegated ? (r) => !!r.delegatedAccess?.canEdit : undefined}
+          canDelete={isDelegated ? (r) => !!r.delegatedAccess?.canAnnul : undefined}
           expandedRequestId={expandedRequestId}
           expandedDetails={expandedDetails}
           columnOrder={columnOrder}
@@ -601,11 +591,11 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
           onTogglePreview={togglePreview}
           onView={handleViewRequest}
           onEdit={handleEditRequest}
-          onOpenChat={() => toast({
+          onOpenChat={isDelegated ? undefined : () => toast({
             title: 'Chat pendiente de migracion tenant-aware',
             description: 'El foro de mensajes no esta disponible todavia.',
           })}
-          onOpenQuotes={(r) => { setSelectedRequest(r); setShowQuotesDialog(true); }}
+          onOpenQuotes={requestScope.canViewQuotes ? (r) => { setSelectedRequest(r); setShowQuotesDialog(true); } : undefined}
           onDelete={confirmDeleteRequest}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
@@ -619,10 +609,12 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
           onClose={() => { setShowForm(false); setEditingRequest(null); }}
           onSave={handleSaveRequest}
           editingRequest={editingRequest || undefined}
+          scope={requestScope}
+          knownProviders={editingKnownProviders}
         />
       )}
 
-      {showQuotesDialog && selectedRequest && (
+      {requestScope.canViewQuotes && showQuotesDialog && selectedRequest && (
         <QuoteListDialog
           open={showQuotesDialog}
           onClose={() => { setShowQuotesDialog(false); setSelectedRequest(null); }}
@@ -666,7 +658,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
                     <p className="font-medium">
                       {selectedRequest.createdByName || selectedRequest.createdBy}
                     </p>
-                    {selectedRequest.createdByEmail && selectedRequest.createdByName && (
+                    {!isDelegated && selectedRequest.createdByEmail && selectedRequest.createdByName && (
                       <p className="text-xs text-muted-foreground">{selectedRequest.createdByEmail}</p>
                     )}
                   </div>
@@ -713,7 +705,15 @@ export const RequestList = ({ focusRequestId, focusQuoteId }: RequestListProps =
                 </div>
               </div>
 
-              <RequestAssetSummary assetId={selectedRequest.assetId} assetText={selectedRequest.asset} />
+              {isDelegated && selectedRequest.delegatedAccess?.hasClientAttachments && (
+                <p className="rounded-md border border-dashed bg-muted/40 p-3 text-sm text-muted-foreground" data-testid="request-protected-attachments">
+                  Esta solicitud contiene adjuntos protegidos y no puede editarse desde la gestión delegada todavía.
+                </p>
+              )}
+
+              {isDelegated
+                ? <StaticRequestAssetSummary assetId={selectedRequest.assetId} assetText={selectedRequest.asset} />
+                : <RequestAssetSummary assetId={selectedRequest.assetId} assetText={selectedRequest.asset} />}
 
               <div className="space-y-4">
                 <div>

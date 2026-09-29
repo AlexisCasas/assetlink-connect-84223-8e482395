@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useMaintenanceNotices } from '@/hooks/useMaintenanceNotices';
 import { useDirectMaintenanceNoticeScope, type MaintenanceNoticeScope } from '@/hooks/useMaintenanceNoticeScope';
+import { navigateToEntity } from '@/lib/entityNavigation';
 import { cn } from '@/lib/utils';
 import type { BacklogFilterState, MaintenanceNotice } from '@/types/maintenanceNotice';
 import {
@@ -256,6 +257,9 @@ export function BacklogView({ focusNoticeId, scope: explicitScope }: BacklogView
         notice={detailNotice}
         canManage={canManage}
         canConvertToRequest={scope.canConvertToRequest}
+        onViewRequest={scope.mode === 'facility_manager' && scope.canViewRequests && scope.organizationId
+          ? (requestId) => navigateToEntity({ view: 'requests', requestId, managedClientId: scope.organizationId! })
+          : undefined}
         showCriticality={scope.canViewCriticality}
         onTriage={() => { setTriageNoticeTarget(detailNotice); setDetailNotice(null); }}
         onPlan={() => { setPlanningNotice(detailNotice); setDetailNotice(null); }}
@@ -274,6 +278,7 @@ export function BacklogView({ focusNoticeId, scope: explicitScope }: BacklogView
       {scope.canConvertToRequest && planningNotice && (
         <MaintenanceNoticePlanningDialog
           notice={planningNotice}
+          requestScope={scope.requestScope ?? undefined}
           onClose={() => setPlanningNotice(null)}
           onConvert={convertNotice}
         />

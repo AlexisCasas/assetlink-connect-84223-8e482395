@@ -2622,9 +2622,13 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
 - 30 RPCs reemplazadas. Se generaron desde la definición viva y solo cambian
   la autorización.
 - `can_manage_preventive_maintenance` no se toca: también protege
-  `plan_preventive_maintenance_occurrence` (solicitud preventiva, 9C.4).
-- `responsible_member_id` es del cliente. El FM lo deja en `NULL` al crear y
-  lo conserva al editar; si no, `42501`. El FM no recibe
+  `plan_preventive_maintenance_occurrence` (solicitud preventiva; delegada
+  en 9C.4 con la capacidad combinada).
+- `responsible_member_id` es del cliente. Desde el cierre de 9C.4, el FM
+  nunca lo recibe ni lo envía, ni en inspecciones ni en preventivo: recibe
+  `NULL` + `has_responsible`, y con `NULL` el servidor conserva el
+  responsable real. Cualquier UUID devuelve `42501`. La regla vieja de
+  "reenviar exactamente el id actual" queda eliminada. El FM no recibe
   `get_assignable_technicians/planners`.
 - El technician FM ejecuta por estar asignado a la relación. Nunca se compara
   su membresía del FM con el responsable del cliente, y no se crea una
@@ -2697,7 +2701,8 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
 - Se reemplazaron `get_maintenance_notices`, `create_maintenance_notice`,
   `triage_maintenance_notice` y `dismiss_maintenance_notice`.
 - `convert_maintenance_notice` NO se toca: sigue con
-  `can_manage_maintenance_notice` (directa). Convertir en solicitud = 9C.4.
+  `can_manage_maintenance_notice` (directa). Convertir en solicitud se
+  delegó en 9C.4.
 - Responsable del aviso: es del cliente. En `triage`, el FM recibe `42501`
   si envía cualquier `p_responsible_member_id` o `p_clear_responsible`. El FM
   no recibe `get_assignable_planners`.
@@ -2726,4 +2731,103 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
   (+ 9C.2 47/47, 9C.1 35/35, 9B 46/46).
 - Controles negativos (fallos por control): A=4, B=2, C=1, D=2, E=4, F=3,
   G=1, H=2, I=2, J=1, K=2, L=2.
-- Ver `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`. Siguiente: 9C.4 Requests.
+- Ver `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`. 9C.4 (hecho): Solicitudes.
+
+## Fase 1 · Punto 9C.4 — FM: Solicitudes
+
+- Solo son efectivos `requests.view/create/manage`. Migración
+  `20260929000641_facility_manager_requests_access.sql`. Usa el helper de
+  9C.1 `has_facility_management_operational_access_all`.
+- Matriz del FM:
+  - ver: `view`, roles o/a/m/requester;
+  - crear y operar los borradores propios: `view` + `create`, roles
+    o/a/m/requester;
+  - editar y anular solicitudes enviadas, incluida la audiencia: `view` +
+    `manage`, roles o/a/m.
+  `manage` no exige `create`.
+- NO se amplían:
+  - `can_user_read_request` ni la RLS de `requests`, `request_details` y
+    `request_provider_access`;
+  - `get_coordination_contacts`, `get_assignable_technicians` ni
+    `get_assignable_planners`;
+  - `create_internal_work_order_from_request` ni
+    `get_provider_relationship_directory`.
+- El FM opera solo con RPCs `SECURITY DEFINER` minimizadas:
+  - `get_facility_management_requests` (`sent` o `drafts` propios);
+  - `get_facility_management_request`;
+  - `save_facility_management_request`, transaccional, con lista blanca de
+    campos (`22023`) y contactos del cliente intocables (`42501`);
+  - `delete_facility_management_request_draft` y
+    `annul_facility_management_request`;
+  - los directorios `get_facility_management_request_branches/assets/providers`.
+- Audiencia: el cuerpo de `set_request_audience` se movió sin cambios a
+  `apply_request_audience_internal`, que es interna. `set_request_audience`
+  conserva su autorización de cliente.
+- Integraciones:
+  - `convert_maintenance_notice` exige avisos view+manage y solicitudes
+    view+create, roles o/a/m;
+  - `plan_preventive_maintenance_occurrence` exige preventivo view+manage y
+    solicitudes view+create, roles o/a/m;
+  - un borrador ajeno no existe para el delegado;
+  - la fila devuelta va minimizada; `skip_preventive_maintenance_occurrence`
+    también.
+- Lecturas:
+  - `converted_request_id` es visible con `requests.view`;
+  - `request_creation_id`, solo con la capacidad de planificar;
+  - `request_id`, con `requests.view`;
+  - `work_order_id`, nunca.
+- Frontend:
+  - `RequestScope` y `persistRequest({ mode })`: una semántica, dos
+    transportes;
+  - `DraftList` ahora usa `persistRequest` y el mapeo completo
+    (`src/lib/requestData.ts`);
+  - selectores delegados de activo y proveedor, sin roster ni adjuntos;
+  - `DelegatedRequestsModule` y `DelegatedDraftsModule`;
+  - "Solicitudes de clientes" y "Borradores de clientes" en el Sidebar;
+  - "Ver solicitud" en el backlog;
+  - "Planificar" en el preventivo.
+- Verificado:
+  - pgTAP dedicado 193/193 (tras el cierre);
+  - regresión 1882/1882, con y sin GRANT CRUD;
+  - smoke 40/40;
+  - regresión de smokes: 9C.3 39/39, 9C.2 47/47, 9C.1 35/35 y 9B 46/46.
+- Controles negativos (fallos por control): A=4, B=2, C=3, D=3, E=3, F=2,
+  G=6, H=5, I=4, J=2, K=1, L=1, M=2, N=1, O=2, P=3, Q=3, R=3, S=5, T=1
+  (smoke).
+- Ver `docs/FACILITY_MANAGER_REQUESTS.md`. Siguiente: cotizaciones, OT,
+  reportes.
+
+### Cierre 9C.4
+
+- **ACL:** GRANT SQL ≠ autorización.
+  - Los GRANT CRUD de tabla varían por entorno; producción otorga CRUD a
+    `authenticated`.
+  - Las 3 aserciones antiguas de 9C.1 y 9C.3 que exigían ausencia de CRUD
+    ahora prueban invariantes reales: DML directo sin efecto, sin GRANT DML
+    en la migración 9C.1 y sin policies de escritura delegadas.
+  - Los meta-privilegios de 9C.1H siguen prohibidos.
+  - Suite verde con y sin CRUD.
+- **Responsable del plan preventivo:** los ids internos del cliente nunca
+  llegan al FM.
+  - `responsible_member_id` va en `NULL` y se agrega `has_responsible`.
+  - El snapshot deja `plan.responsible = {"assigned": true}`.
+  - El FM envía `NULL` y el servidor conserva el responsable real; cualquier
+    UUID devuelve `42501`.
+  - `save_preventive_maintenance_plan` y `set_preventive_maintenance_plan_active`
+    devuelven el plan minimizado.
+  - En inspecciones sigue la regla de 9C.2.
+- **Adjuntos protegidos:** la edición delegada devuelve `55000`, de forma
+  atómica y comprobada antes de toda mutación. Limitación temporal hasta
+  Assets/Files/R2.
+- **Borrador privado:** exige al menos un proveedor válido en `RequestList`,
+  `DraftList` y en modo delegado.
+- **Smoke 9B:** `#requests` de un FM ahora espera la puerta delegada. 46/46.
+- **Inspecciones (último hardening):**
+  - ningún `organization_members.id` del cliente sale al FM: `NULL` +
+    `has_responsible` en planes, ejecuciones y detalle;
+  - las escrituras (plan, crear y enviar ejecución) devuelven la fila
+    minimizada;
+  - el FM envía `NULL` y el servidor preserva; cualquier UUID devuelve
+    `42501`;
+  - `InspectionPlanDialog` delegado no guarda el id en estado ni en el
+    borrador de `sessionStorage`.

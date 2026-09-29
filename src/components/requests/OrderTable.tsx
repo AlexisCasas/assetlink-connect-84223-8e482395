@@ -89,10 +89,16 @@ interface OrderTableProps {
   onTogglePreview: (id: string) => void;
   onView: (r: Request) => void;
   onEdit: (r: Request) => void;
-  onOpenChat: (r: Request) => void;
-  onOpenQuotes: (r: Request) => void;
+  /** Optional (9C.4): omitted in delegated mode, where the forum, quotes and
+   * "Generar OT" are not delegated — their buttons and the quotes column are
+   * then not rendered at all. */
+  onOpenChat?: (r: Request) => void;
+  onOpenQuotes?: (r: Request) => void;
   onDelete: (id: string) => void;
-  onGenerateWorkOrder: (r: Request) => void;
+  onGenerateWorkOrder?: (r: Request) => void;
+  /** Per-row permissions (delegated mode). Default: allowed. */
+  canEdit?: (r: Request) => boolean;
+  canDelete?: (r: Request) => boolean;
   onDragStart: (col: ColumnKey) => void;
   onDragOver: (e: React.DragEvent, col: ColumnKey) => void;
   onDrop: (col: ColumnKey) => void;
@@ -121,12 +127,14 @@ export const OrderTable = ({
   onOpenQuotes,
   onDelete,
   onGenerateWorkOrder,
+  canEdit = () => true,
+  canDelete = () => true,
   onDragStart,
   onDragOver,
   onDrop,
   onDragEnd,
 }: OrderTableProps) => {
-  const visibleOrdered = columnOrder.filter((c) => visibleColumns[c]);
+  const visibleOrdered = columnOrder.filter((c) => visibleColumns[c] && (c !== 'quotesProgress' || !!onOpenQuotes));
 
   const renderSortIcon = (key: SortKey) => {
     if (sortKey !== key) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />;
@@ -209,13 +217,17 @@ export const OrderTable = ({
               <Button variant="ghost" size="icon" onClick={() => onView(request)} title="Ver solicitud">
                 <Eye className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => onEdit(request)} title="Editar solicitud">
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => onOpenChat(request)} title="Foro de Preguntas">
-                <MessageSquare className="h-4 w-4" />
-              </Button>
-              {isInternal ? (
+              {canEdit(request) && (
+                <Button variant="ghost" size="icon" onClick={() => onEdit(request)} title="Editar solicitud">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {onOpenChat && (
+                <Button variant="ghost" size="icon" onClick={() => onOpenChat(request)} title="Foro de Preguntas">
+                  <MessageSquare className="h-4 w-4" />
+                </Button>
+              )}
+              {isInternal ? (onGenerateWorkOrder && (
                 internalWorkOrder ? (
                   <Button variant="ghost" size="icon" disabled title="OT generada" className="text-emerald-600">
                     <CheckCircle2 className="h-4 w-4" />
@@ -231,20 +243,22 @@ export const OrderTable = ({
                     {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
                   </Button>
                 )
-              ) : (
+              )) : onOpenQuotes && (
                 <Button variant="ghost" size="icon" onClick={() => onOpenQuotes(request)} title="Ver cotizaciones">
                   <DollarSign className="h-4 w-4" />
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onDelete(request.id)}
-                title="Eliminar solicitud"
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {canDelete(request) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onDelete(request.id)}
+                  title="Eliminar solicitud"
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </TableCell>
         );

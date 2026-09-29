@@ -134,6 +134,12 @@ DECLARE v integer; BEGIN UPDATE public.assets SET status = p_status WHERE id = p
 CREATE FUNCTION pg_temp.set_criticality(p_id uuid, p_value text) RETURNS integer LANGUAGE plpgsql AS $$
 DECLARE v integer; BEGIN UPDATE public.assets SET criticality = p_value WHERE id = p_id; GET DIAGNOSTICS v = ROW_COUNT; RETURN v;
 EXCEPTION WHEN insufficient_privilege THEN RETURN -1; END $$;
+-- Filas afectadas por un DML directo; 0 si el entorno ni siquiera otorga el
+-- privilegio SQL. Los GRANT de tabla varían por entorno (producción otorga
+-- CRUD a authenticated); la autorización real es RLS/RPC/triggers.
+CREATE FUNCTION pg_temp.dml_rows(p_sql text) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE v integer; BEGIN EXECUTE p_sql; GET DIAGNOSTICS v = ROW_COUNT; RETURN v;
+EXCEPTION WHEN insufficient_privilege THEN RETURN 0; END $$;
 CREATE FUNCTION pg_temp.visible_assets(p_org uuid) RETURNS bigint LANGUAGE sql AS $$
   SELECT count(*) FROM public.assets WHERE organization_id = p_org;
 $$;
@@ -298,7 +304,9 @@ SELECT is(pg_temp.rename_asset('a9400000-0000-0000-0000-0000000000d1', 'x'), 0, 
 SELECT throws_ok($$ UPDATE public.assets SET organization_id = 'a9200000-0000-0000-0000-0000000000b1' WHERE id = 'a9400000-0000-0000-0000-0000000000a1' $$, '42501', NULL, 'manage: cannot move a Client A asset into Client B');
 SELECT throws_ok($$ UPDATE public.assets SET organization_id = 'a9200000-0000-0000-0000-0000000000f1' WHERE id = 'a9400000-0000-0000-0000-0000000000a2' $$,
   '42501', 'A delegated writer cannot move an asset to another organization', 'manage: cannot move an asset between two clients it manages (trigger)');
-SELECT throws_ok($$ DELETE FROM public.assets WHERE id = 'a9400000-0000-0000-0000-0000000000a2' $$, '42501', NULL, 'manage: no DELETE (archiving is an UPDATE)');
+SELECT ok(pg_temp.dml_rows($q$ DELETE FROM public.assets WHERE id = 'a9400000-0000-0000-0000-0000000000a2' $q$) = 0
+      AND EXISTS (SELECT 1 FROM public.assets WHERE id = 'a9400000-0000-0000-0000-0000000000a2'),
+  'manage: no DELETE (archiving is an UPDATE): no row removed, with or without a SQL DELETE grant');
 
 -- Responsable predeterminado: CLIENT-ONLY
 RESET ROLE;
@@ -571,10 +579,24 @@ SELECT policies_are('public', 'assets', ARRAY[
   'organization members can view assets', 'organization managers can create assets', 'organization managers can update assets',
   'facility managers can view delegated assets', 'facility managers can create delegated assets', 'facility managers can update delegated assets'],
   'assets: direct policies kept, delegated ones added');
-SELECT ok(NOT has_table_privilege('authenticated', 'public.assets', 'DELETE')
-  AND NOT has_table_privilege('authenticated', 'public.client_branches', 'INSERT,UPDATE,DELETE')
-  AND NOT has_table_privilege('authenticated', 'public.asset_criticality_assessments', 'INSERT,UPDATE,DELETE'),
-  'grants: no new table write privileges');
+-- Independiente del entorno: 9C.1 no amplía autorización. No emite GRANT
+-- DML de tabla y no agrega policies delegadas de escritura más allá de
+-- crear/actualizar activos (los GRANT CRUD de base pueden existir: la
+-- autorización es RLS/RPC/triggers).
+SELECT ok(
+  NOT EXISTS (
+    SELECT 1 FROM supabase_migrations.schema_migrations m, unnest(m.statements) st
+    WHERE m.version = '20260928042257'
+      AND st ~* '\mGRANT\s[^;]*\m(INSERT|UPDATE|DELETE|TRUNCATE|ALL)\M[^;]*\mON\s+(TABLE\s+|ALL\s+TABLES\s+)?(public\.\w+\s+TO|IN\s+SCHEMA)')
+  AND EXISTS (SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '20260928042257')
+  AND NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename IN ('assets', 'client_branches', 'asset_criticality_assessments')
+      AND (COALESCE(qual, '') || COALESCE(with_check, '')) ~ 'facility_management'
+      AND NOT (tablename = 'assets' AND cmd IN ('SELECT', 'INSERT', 'UPDATE'))
+      AND cmd <> 'SELECT'),
+  'grants: 9C.1 adds no table DML grant and no delegated write policy beyond assets create/update');
 SELECT has_trigger('public', 'assets', 'trg_assets_enforce_delegated_write_limits', 'the delegated write-limits trigger exists');
 SELECT ok((SELECT p.prosecdef AND p.proconfig = ARRAY['search_path=""'] FROM pg_proc p WHERE p.oid = 'public.check_asset_consistency()'::regprocedure),
   'check_asset_consistency: SECURITY DEFINER with an empty search_path');
