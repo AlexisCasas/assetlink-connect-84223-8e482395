@@ -1,9 +1,10 @@
 // Object key convention for asset files on R2 (Fase 1 · Punto 7 — R2
 // Foundation). Keys are ALWAYS generated server-side (buildAssetFileKey) —
-// the browser only ever sends asset_id/kind/content_type, never a key, on
-// create-upload. Every other action (confirm-upload, create-download,
-// delete) receives a key back from the client and MUST run it through
-// parseAssetFileKey before touching R2 or the authorization RPC: the
+// the browser only ever sends asset_id/kind/name/content_type/size, never a
+// key. Since Punto 10 every other action (confirm-upload, create-download,
+// delete) is keyed by the metadata row id: the key is read server-side from
+// asset_documents.storage_path and STILL runs through parseAssetFileKey
+// (cross-checked against the row) before touching R2: the
 // regexes below are fully anchored (^...$), built from a strict UUID
 // pattern and a closed kind/extension set, so no path-traversal segment,
 // percent-encoding, extra path segment, or mismatched kind/extension
@@ -137,4 +138,21 @@ export const bytesMatchContentType = (contentType: string, bytes: Uint8Array): b
     default:
       return false;
   }
+};
+
+/** Maximum length of a file's visible name (metadata only). */
+export const MAX_DISPLAY_NAME_LENGTH = 255;
+
+/** Validates the human-visible file name sent at create-upload (Punto 10).
+ * It is ONLY metadata shown in the UI — never part of the object key, which
+ * stays a server-generated UUID. Returns the trimmed name, or null when it
+ * is not a string, is empty after trimming, is longer than 255 characters,
+ * or contains control characters (C0/C1, including newlines and tabs). */
+export const validateAssetFileDisplayName = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const name = value.trim();
+  if (name.length === 0 || name.length > MAX_DISPLAY_NAME_LENGTH) return null;
+  // deno-lint-ignore no-control-regex
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(name)) return null; // eslint-disable-line no-control-regex
+  return name;
 };

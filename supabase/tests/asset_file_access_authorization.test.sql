@@ -2,7 +2,7 @@
 -- Se ejecuta con: supabase test db --local
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(30);
+SELECT plan(36);
 
 -- -------------------------------------------------------------------------
 -- Fixture
@@ -39,6 +39,26 @@ INSERT INTO public.assets (id, organization_id, name, node_type, status) VALUES
   ('e3000000-0000-0000-0000-000000000002', 'e2000000-0000-0000-0000-00000000000a', 'Activo A archivado', 'equipment', 'archived'),
   ('e3000000-0000-0000-0000-000000000003', 'e2000000-0000-0000-0000-00000000000b', 'Activo B', 'equipment', 'active'),
   ('e3000000-0000-0000-0000-000000000004', 'e2000000-0000-0000-0000-00000000000c', 'Activo suspendido', 'equipment', 'active');
+
+-- Punto 10: rama delegada de Facility Manager (matriz 9C.1 de assets.*).
+INSERT INTO auth.users (id, email) VALUES
+  ('e1000000-0000-0000-0000-000000000011', 'fm-manager@r2.test'),
+  ('e1000000-0000-0000-0000-000000000012', 'fm-technician@r2.test'),
+  ('e1000000-0000-0000-0000-000000000013', 'fm-manager-unassigned@r2.test');
+INSERT INTO public.organizations (id, name, organization_type, status) VALUES
+  ('e2000000-0000-0000-0000-0000000000fa', 'FM R2', 'facility_manager', 'active');
+INSERT INTO public.organization_members (id, organization_id, user_id, role, is_active) VALUES
+  ('e4000000-0000-0000-0000-000000000011', 'e2000000-0000-0000-0000-0000000000fa', 'e1000000-0000-0000-0000-000000000011', 'manager', true),
+  ('e4000000-0000-0000-0000-000000000012', 'e2000000-0000-0000-0000-0000000000fa', 'e1000000-0000-0000-0000-000000000012', 'technician', true),
+  ('e4000000-0000-0000-0000-000000000013', 'e2000000-0000-0000-0000-0000000000fa', 'e1000000-0000-0000-0000-000000000013', 'manager', true);
+INSERT INTO public.organization_relationships (id, source_organization_id, target_organization_id, relationship_type, status) VALUES
+  ('e5000000-0000-0000-0000-0000000000aa', 'e2000000-0000-0000-0000-00000000000a', 'e2000000-0000-0000-0000-0000000000fa', 'facility_management', 'pending');
+INSERT INTO public.facility_management_permissions (relationship_id, permission) VALUES
+  ('e5000000-0000-0000-0000-0000000000aa', 'assets.view'), ('e5000000-0000-0000-0000-0000000000aa', 'assets.manage');
+INSERT INTO public.facility_management_relationship_members (relationship_id, organization_member_id) VALUES
+  ('e5000000-0000-0000-0000-0000000000aa', 'e4000000-0000-0000-0000-000000000011'),
+  ('e5000000-0000-0000-0000-0000000000aa', 'e4000000-0000-0000-0000-000000000012');
+UPDATE public.organization_relationships SET status = 'active' WHERE id = 'e5000000-0000-0000-0000-0000000000aa';
 
 CREATE FUNCTION pg_temp.as_user(p_user uuid) RETURNS void LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claim.sub', p_user::text, true);
@@ -156,6 +176,30 @@ SELECT throws_matching(
   $$ SELECT public.authorize_asset_file_access('e3000000-0000-0000-0000-000000000002', 'write') $$,
   'archived asset', 'platform admin still cannot write to an archived asset');
 
+-- -------------------------------------------------------------------------
+-- 7b. Facility Manager delegado (Punto 10): se agrega, no reemplaza lo anterior
+-- -------------------------------------------------------------------------
+SELECT pg_temp.as_user('e1000000-0000-0000-0000-000000000011');
+SELECT is(public.authorize_asset_file_access('e3000000-0000-0000-0000-000000000001', 'write'), 'e2000000-0000-0000-0000-00000000000a'::uuid,
+  'FM manager (assets.view + assets.manage, assigned) can write');
+SELECT throws_matching(
+  $$ SELECT public.authorize_asset_file_access('e3000000-0000-0000-0000-000000000003', 'read') $$,
+  'Not authorized', 'FM manager cannot read another client''s asset files');
+SELECT pg_temp.as_user('e1000000-0000-0000-0000-000000000012');
+SELECT is(public.authorize_asset_file_access('e3000000-0000-0000-0000-000000000001', 'read'), 'e2000000-0000-0000-0000-00000000000a'::uuid,
+  'FM technician (assets.view, assigned) can read');
+SELECT throws_matching(
+  $$ SELECT public.authorize_asset_file_access('e3000000-0000-0000-0000-000000000001', 'write') $$,
+  'Not authorized', 'FM technician cannot write');
+SELECT pg_temp.as_user('e1000000-0000-0000-0000-000000000013');
+SELECT throws_matching(
+  $$ SELECT public.authorize_asset_file_access('e3000000-0000-0000-0000-000000000001', 'read') $$,
+  'Not authorized', 'FM manager NOT assigned to the relationship cannot even read');
+SELECT pg_temp.as_user('e1000000-0000-0000-0000-000000000011');
+SELECT throws_matching(
+  $$ SELECT public.authorize_asset_file_access('e3000000-0000-0000-0000-000000000002', 'write') $$,
+  'archived asset', 'FM manager cannot write to an archived asset');
+
 RESET ROLE;
 
 -- -------------------------------------------------------------------------
@@ -174,7 +218,7 @@ SELECT ok(has_function_privilege('authenticated', 'public.authorize_asset_file_a
 SELECT is((SELECT p.prosecdef FROM pg_proc p WHERE p.oid = 'public.authorize_asset_file_access(uuid, text)'::regprocedure),
   true, 'authorize_asset_file_access is SECURITY DEFINER');
 SELECT is((SELECT array_to_string(p.proconfig, ',') FROM pg_proc p WHERE p.oid = 'public.authorize_asset_file_access(uuid, text)'::regprocedure),
-  'search_path=public', 'authorize_asset_file_access pins search_path=public');
+  'search_path=""', 'authorize_asset_file_access pins an empty search_path (Punto 10: schema-qualified references)');
 
 SELECT * FROM finish();
 ROLLBACK;

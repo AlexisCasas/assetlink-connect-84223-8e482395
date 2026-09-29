@@ -169,7 +169,7 @@ consultar:
 | Historial integrado del activo | oculto | mezcla módulos no delegados |
 | "Generar Reporte" | oculto | `reports.view` pendiente; el PDF carga preventivo/inspecciones/avisos |
 | Código QR | oculto | el enlace exige membresía directa del cliente (deep link delegado fuera de 9C.1) |
-| Fotos/documentos R2 | sin cambios (no ampliado) | Punto 10 |
+| Fotos/documentos R2 (Punto 10) | pestaña "Fotos y documentos" y foto principal con `assets.view` (o/a/m/technician); subir, borrar y marcar principal con `assets.view` + `assets.manage` (o/a/m), nunca en activo archivado | ver `docs/ASSET_FILES_R2_PRODUCTIZATION.md` |
 | Directorio de miembros del cliente (planners/contactos) | no se consulta | el responsable muestra "Asignado por el cliente" / "Sin responsable" |
 | Historial de evaluaciones de criticidad | solo con `assets.view`+`criticality.view` (o/a/m) | |
 | "Evaluar criticidad" | solo con la capacidad de evaluar | |
@@ -233,7 +233,10 @@ nada sin un cliente validado. Modo directo y platform_admin sin cambios.
 ## 6. Fuera de alcance / pendientes
 
 - Deep link QR delegado (hoy exige membresía directa del cliente).
-- R2 (`authorize_asset_file_access`, `asset-files`): Punto 10.
+- R2 (`authorize_asset_file_access`, `asset-files`): **hecho en Punto 10**
+  con la misma matriz de activos de 9C.1 (ver
+  `docs/ASSET_FILES_R2_PRODUCTIZATION.md`). El PDF del activo sigue usando
+  solo `assets.image_url` legado.
 - Reporte PDF del activo para FM: requiere `reports.view` y los módulos que
   incluye.
 - Semáforo e historial integrado para FM: cuando se deleguen OT,

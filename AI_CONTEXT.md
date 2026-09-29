@@ -2831,3 +2831,54 @@ Ver `docs/PREVENTIVE_MAINTENANCE_PLANS.md`.
     `42501`;
   - `InspectionPlanDialog` delegado no guarda el id en estado ni en el
     borrador de `sessionStorage`.
+
+## Fase 1 · Punto 10 — Fotos y documentos de activos (R2)
+
+- Producto sobre la base del Punto 7: foto principal, galería y PDFs en
+  AssetDetail, para el cliente directo y el FM delegado. Ver
+  `docs/ASSET_FILES_R2_PRODUCTIZATION.md`.
+- Migración `20260929132425_asset_files_productization.sql` (única SQL del
+  punto).
+- **`asset_documents`, ampliada de forma compatible:**
+  - columnas nuevas: `kind`, `content_type`, `size_bytes`, `etag`, `status`
+    (`pending`/`available`/`failed`/`deleting`), `is_primary`,
+    `confirmed_at`, `updated_at`;
+  - una sola foto principal por activo; `storage_path` único e interno;
+  - `file_url` siempre NULL en filas R2; `kind` NULL = fila legada, no
+    listada.
+- **Escritura solo server-side:**
+  - sin policies raw de INSERT/UPDATE y sin DML para `anon`/`authenticated`;
+  - `service_role` con GRANT explícitos mínimos: `SELECT, INSERT` en
+    `asset_documents` y `SELECT` en `assets` (este último lo exige el trigger
+    SECURITY INVOKER `check_asset_child_organization`). El ACL por defecto
+    varía por entorno: el CLI 2.106 no da DML y el 2.118 sí;
+  - las transiciones de estado solo las ejecuta `service_role`, siempre
+    después de autorizar el JWT del caller;
+  - sin policy raw para el FM.
+- **Autorización:**
+  - `authorize_asset_file_access` = directo (sin cambios) OR FM (read:
+    `assets.view` o/a/m/technician; write/delete: `+ assets.manage`, o/a/m);
+  - activo archivado: se lee, pero nunca se escribe;
+  - `authorize_asset_file_operation(file_id)`: "File not found" idéntico para
+    un archivo inexistente y para uno ajeno (sin enumeración).
+- **RPCs:** `get_asset_files` minimizada (sin `storage_path`, `file_url` ni
+  `uploaded_by_user_id`) y `set_asset_primary_photo`.
+- **Edge `asset-files` por `file_id`** (`create-upload` devuelve `file_id`,
+  nunca la key; `confirm-upload`, `create-download`, `delete`):
+  - la primera foto es principal automáticamente;
+  - al borrar la principal se promueve la más antigua;
+  - el nombre del adjunto PDF se pasa a ASCII quitando acentos.
+- **Frontend:**
+  - `AssetScope.canViewFiles/canManageFiles`;
+  - pestaña "Fotos y documentos";
+  - cámara en la cabecera; etapas reales de subida;
+  - URLs firmadas solo en memoria; nueva firma única tras un fallo (desmonta
+    el `<img>`: `X-Amz-Date` tiene resolución de 1 s);
+  - cabecera: principal R2 → `image_url` legado → placeholder.
+- **Fuera de alcance:** adjuntos de solicitudes, inspecciones, OT y
+  proveedores; chat; hardening de Storage legacy. 9C.5/6/7 siguen
+  congelados. El bloqueo 55000 de adjuntos (9C.4) se mantiene.
+- **Deuda:**
+  - el PDF del activo sigue usando solo `image_url`;
+  - no hay barrido automático de filas `pending`/`deleting` antiguas;
+  - las filas legadas (`kind` NULL) no aparecen en la UI.

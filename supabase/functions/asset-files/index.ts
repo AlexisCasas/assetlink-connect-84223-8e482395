@@ -1,96 +1,127 @@
-import { createCallerClient, errorResponse, handleCors, isUuid, jsonResponse, requirePost } from '../_shared/adminAuth.ts';
+import {
+  createCallerClient,
+  createServiceClient,
+  errorResponse,
+  getAuthenticatedUser,
+  handleCors,
+  isUuid,
+  jsonResponse,
+  requirePost,
+} from '../_shared/adminAuth.ts';
 import { deleteObject, getObjectRange, getR2Config, headObject, signGetUrl, signPutUrl, type R2Config } from '../_shared/r2.ts';
 import {
   bytesMatchContentType,
   buildAssetFileKey,
-  DOCUMENT_MIME_TO_EXTENSION,
   extensionForContentType,
   isValidAssetFileKind,
   MAGIC_BYTES_TO_READ,
   MAX_SIZE_BYTES,
   parseAssetFileKey,
-  PHOTO_MIME_TO_EXTENSION,
+  validateAssetFileDisplayName,
   type AssetFileKind,
 } from '../_shared/assetFileKeys.ts';
 
-// Fase 1 · Punto 7 — Cloudflare R2 Foundation. Single Edge Function for
-// every asset-file operation (create-upload / confirm-upload /
-// create-download / delete): one place to audit for the authorization +
-// key-parsing + R2 config concerns every action shares, instead of four
-// functions that could each get that wrong independently. No UI consumes
-// this yet — that is Fase 1 · Punto 10. See docs/R2_FOUNDATION.md.
+// Fase 1 · Punto 10 — photos and documents of an asset on Cloudflare R2.
+// Single Edge Function for every asset-file operation, now keyed by the
+// metadata row id (`file_id`) instead of a raw object key:
 //
-// Every action's very first authorization step runs
-// authorize_asset_file_access with the CALLER's own JWT (never
-// service_role) — same pattern as Fase 1 · Punto 6B — so tenant/role
-// authorization lives exactly once, in SQL, and is exercised by pgTAP
-// independent of this file.
+//   create-upload   {asset_id, kind, name, content_type, size_bytes}
+//                   -> pending metadata row + presigned PUT (300 s)
+//   confirm-upload  {file_id}  -> real HEAD/size/type/magic bytes -> available
+//   create-download {file_id}  -> presigned GET (300 s), never persisted
+//   delete          {file_id}  -> deleting -> server-side R2 DELETE -> removed
+//
+// Authorization ALWAYS runs first, with the CALLER's own JWT
+// (authorize_asset_file_access / authorize_asset_file_operation — direct
+// client members and, since Punto 10, delegated Facility Managers with the
+// 9C.1 assets.* matrix). The service-role client is used ONLY afterwards,
+// to persist metadata the caller was just authorized to change — it never
+// decides authorization. The browser never sends organization_id,
+// storage_path/key or uploaded_by: all of them are derived server-side.
+// See docs/ASSET_FILES_R2_PRODUCTIZATION.md.
 
 const PUT_EXPIRES_SECONDS = 300;
 const GET_EXPIRES_SECONDS = 300;
 
-const EXTENSION_TO_CONTENT_TYPE: Record<string, string> = {
-  ...Object.fromEntries(Object.entries(PHOTO_MIME_TO_EXTENSION).map(([mime, ext]) => [ext, mime])),
-  ...Object.fromEntries(Object.entries(DOCUMENT_MIME_TO_EXTENSION).map(([mime, ext]) => [ext, mime])),
-};
+type Operation = 'read' | 'write' | 'delete';
+interface HttpError { status: number; message: string }
 
-/** Maps authorize_asset_file_access's exact RAISE EXCEPTION messages
- * (supabase/migrations/20260927012526_asset_file_access_authorization.sql)
- * to an HTTP status. Never echoes internal detail beyond that message —
- * it is already written to be safe to show the caller. */
+interface FileRow {
+  id: string;
+  organization_id: string;
+  asset_id: string;
+  kind: AssetFileKind;
+  name: string;
+  storage_path: string;
+  content_type: string;
+  status: 'pending' | 'available' | 'deleting' | 'failed';
+}
+
+/** Maps the authorization RPCs' exact RAISE EXCEPTION messages to an HTTP
+ * status. Never echoes anything beyond that already-safe message. */
 function authorizeErrorStatus(message: string): number {
   if (message === 'Authentication is required') return 401;
-  if (message === 'Asset not found') return 404;
+  if (message === 'Asset not found' || message === 'File not found') return 404;
   if (message.includes('Not authorized')) return 403;
   if (message.includes('archived asset')) return 403;
   if (message.includes('not available')) return 403;
   return 400;
 }
 
-/** Runs authorize_asset_file_access with the caller's own JWT. Throws an
- * object with {status, message} — never the raw Postgres error — so the
- * caller can jsonResponse it directly without leaking anything beyond the
- * RPC's own already-safe message.
- *
- * `anon` has no EXECUTE grant on this function at all (verified: calling
- * it as anon fails with Postgres code 42501, "permission denied for
- * function...", not one of the RAISE EXCEPTION messages above) — that is
- * mapped straight to 403 rather than falling through to the generic 400,
- * since it is a real authorization rejection, not a malformed request. */
-async function authorize(req: Request, assetId: string, operation: 'read' | 'write' | 'delete'): Promise<string> {
+function toHttpError(error: { code?: string; message: string }): HttpError {
+  // anon has no EXECUTE on these functions at all (Postgres 42501).
+  if (error.code === '42501') return { status: 403, message: 'Not authorized' };
+  return { status: authorizeErrorStatus(error.message), message: error.message };
+}
+
+/** Asset-level authorization with the caller's JWT (create-upload). */
+async function authorizeAsset(req: Request, assetId: string, operation: Operation): Promise<string> {
   const caller = createCallerClient(req);
   const { data, error } = await caller.rpc('authorize_asset_file_access', { p_asset_id: assetId, p_operation: operation });
-  if (error) {
-    const status = error.code === '42501' ? 403 : authorizeErrorStatus(error.message);
-    throw { status, message: status === 403 && error.code === '42501' ? 'Not authorized' : error.message };
-  }
+  if (error) throw toHttpError(error);
   return data as string;
 }
 
-/** Every non-create-upload action receives a key from the client. This
- * parses it (rejecting anything not exactly the shape this module
- * generates) AND cross-checks its embedded organization_id against what
- * authorize_asset_file_access actually resolved for the asset_id embedded
- * in that SAME key — the defense against a key whose org segment was
- * edited to point at a different tenant while keeping a real asset uuid
- * from elsewhere. Returns the parsed key. */
-async function parseAndAuthorize(req: Request, key: unknown, operation: 'read' | 'write' | 'delete') {
-  if (typeof key !== 'string') throw { status: 400, message: 'key is required' };
+/** File-level authorization with the caller's JWT, THEN (only then) the
+ * service-role read of the row's internal fields. A missing file and a
+ * file of an asset the caller cannot read both answer 404 "File not found"
+ * — no cross-tenant enumeration. Cross-checks the row's organization
+ * against the one the authorization resolved, and the stored object key's
+ * embedded organization/asset/kind against the row itself. */
+async function authorizeFile(req: Request, fileId: unknown, operation: Operation): Promise<FileRow> {
+  if (!isUuid(fileId)) throw { status: 400, message: 'file_id must be a UUID' } as HttpError;
+  const caller = createCallerClient(req);
+  const { data: organizationId, error } = await caller.rpc('authorize_asset_file_operation', { p_file_id: fileId, p_operation: operation });
+  if (error) throw toHttpError(error);
+
+  const service = createServiceClient();
+  const { data: row, error: rowError } = await service
+    .from('asset_documents')
+    .select('id, organization_id, asset_id, kind, name, storage_path, content_type, status')
+    .eq('id', fileId)
+    .maybeSingle();
+  if (rowError) throw { status: 500, message: 'Could not load the file' } as HttpError;
+  if (!row || !row.kind) throw { status: 404, message: 'File not found' } as HttpError;
+  if (row.organization_id !== organizationId) throw { status: 403, message: 'File does not match the asset\'s organization' } as HttpError;
+
   let parsed;
   try {
-    parsed = parseAssetFileKey(key);
+    parsed = parseAssetFileKey(row.storage_path);
   } catch {
-    throw { status: 400, message: 'Invalid object key' };
+    throw { status: 500, message: 'Stored object key is invalid' } as HttpError;
   }
-  const organizationId = await authorize(req, parsed.assetId, operation);
-  if (organizationId !== parsed.organizationId) {
-    // The asset is real and the caller may be authorized for it, but the
-    // key's own organization segment does not match — never trust the
-    // path over the database.
-    throw { status: 403, message: 'Object key does not match the asset\'s organization' };
+  if (parsed.organizationId !== row.organization_id || parsed.assetId !== row.asset_id || parsed.kind !== row.kind
+    || extensionForContentType(row.kind, row.content_type) !== parsed.extension) {
+    throw { status: 500, message: 'Stored object key does not match its metadata' } as HttpError;
   }
-  return parsed;
+  return row as FileRow;
 }
+
+const fail = (error: unknown): Response => {
+  const { status, message } = error as HttpError;
+  if (typeof status === 'number' && typeof message === 'string') return errorResponse(message, status);
+  throw error;
+};
 
 async function handleCreateUpload(req: Request, input: Record<string, unknown>, config: R2Config): Promise<Response> {
   const assetId = input.asset_id;
@@ -100,41 +131,66 @@ async function handleCreateUpload(req: Request, input: Record<string, unknown>, 
 
   if (!isUuid(assetId)) return errorResponse('asset_id must be a UUID');
   if (!isValidAssetFileKind(kind)) return errorResponse('kind must be "photo" or "document"');
+  const name = validateAssetFileDisplayName(input.name);
+  if (!name) return errorResponse('name must be a non-empty string of at most 255 characters without control characters');
   if (typeof contentType !== 'string') return errorResponse('content_type is required');
   if (typeof sizeBytes !== 'number' || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
     return errorResponse('size_bytes must be a positive number');
   }
-
   try {
-    // Only validated here for its side effect (throws on any Content-Type
-    // outside the kind's allowlist) — buildAssetFileKey below re-derives
-    // the extension itself once we actually have an authorized
-    // organization_id to build the key against.
     extensionForContentType(kind, contentType);
   } catch (error) {
     return errorResponse(error instanceof Error ? error.message : 'Invalid content_type', 400);
   }
-
-  const limit = MAX_SIZE_BYTES[kind as AssetFileKind];
+  const limit = MAX_SIZE_BYTES[kind];
   if (sizeBytes > limit) {
-    // Only an early, client-declared rejection — not the real control.
-    // confirm-upload re-checks against R2's own reported Content-Length.
+    // Early, client-declared rejection only; confirm-upload re-checks the
+    // REAL Content-Length that R2 reports.
     return errorResponse(`size_bytes exceeds the ${limit} byte limit for kind "${kind}"`, 400);
   }
 
   let organizationId: string;
   try {
-    organizationId = await authorize(req, assetId, 'write');
+    organizationId = await authorizeAsset(req, assetId, 'write');
   } catch (error) {
-    const { status, message } = error as { status: number; message: string };
-    return errorResponse(message, status);
+    return fail(error);
+  }
+  // Authorized: now (and only now) persist, as the real caller.
+  const user = await getAuthenticatedUser(req);
+  const key = buildAssetFileKey(organizationId, assetId, kind, contentType);
+  const service = createServiceClient();
+  const { data: row, error: insertError } = await service
+    .from('asset_documents')
+    .insert({
+      organization_id: organizationId,
+      asset_id: assetId,
+      kind,
+      name,
+      storage_path: key,
+      content_type: contentType,
+      status: 'pending',
+      uploaded_by_user_id: user.id,
+    })
+    .select('id')
+    .single();
+  if (insertError || !row) {
+    console.error('asset-files: could not create the pending file row', insertError?.code ?? 'unknown');
+    return errorResponse('Could not prepare the upload', 500);
   }
 
-  const key = buildAssetFileKey(organizationId, assetId, kind as AssetFileKind, contentType);
-  const uploadUrl = await signPutUrl(config, key, contentType, PUT_EXPIRES_SECONDS);
+  let uploadUrl: string;
+  try {
+    uploadUrl = await signPutUrl(config, key, contentType, PUT_EXPIRES_SECONDS);
+  } catch (error) {
+    // Failure mode A: authorized + pending row, but signing failed in this
+    // same request => the row is closed as failed (nothing was uploaded).
+    await service.rpc('asset_file_mark_failed', { p_file_id: row.id });
+    console.error('asset-files: signing failed', error instanceof Error ? error.message : 'unknown');
+    return errorResponse('Could not prepare the upload', 500);
+  }
 
   return jsonResponse({
-    key,
+    file_id: row.id,
     upload_url: uploadUrl,
     expires_at: new Date(Date.now() + PUT_EXPIRES_SECONDS * 1000).toISOString(),
     required_headers: { 'Content-Type': contentType },
@@ -142,69 +198,88 @@ async function handleCreateUpload(req: Request, input: Record<string, unknown>, 
 }
 
 async function handleConfirmUpload(req: Request, input: Record<string, unknown>, config: R2Config): Promise<Response> {
-  let parsed;
+  let file: FileRow;
   try {
-    parsed = await parseAndAuthorize(req, input.key, 'write');
+    file = await authorizeFile(req, input.file_id, 'write');
   } catch (error) {
-    const { status, message } = error as { status: number; message: string };
-    return errorResponse(message, status);
+    return fail(error);
+  }
+  const service = createServiceClient();
+  if (file.status === 'available') {
+    return jsonResponse({ file_id: file.id, status: 'available' });
+  }
+  if (file.status !== 'pending') {
+    return errorResponse(`Only a pending file can be confirmed (status: ${file.status})`, 409);
   }
 
-  const key = input.key as string;
-  const expectedContentType = EXTENSION_TO_CONTENT_TYPE[parsed.extension];
-  const limit = MAX_SIZE_BYTES[parsed.kind];
-
-  const head = await headObject(config, key);
+  const head = await headObject(config, file.storage_path);
   if (!head.exists) {
-    // A PUT URL was issued but nothing was ever uploaded to it (or it
-    // expired first) — not an inconsistency, just nothing to confirm yet.
-    return errorResponse('Object not found: nothing was uploaded to this key yet', 404);
+    // Failure modes B/C: the PUT URL was never used (or not yet). The row
+    // stays pending — never available without a real object.
+    return errorResponse('Nothing was uploaded for this file yet', 404);
   }
 
   const reject = async (message: string): Promise<Response> => {
-    // Never leave a half-valid object under a key that looks legitimate —
-    // confirm-upload is the only gate before a key would ever be trusted
-    // (e.g. persisted) by a future caller.
-    await deleteObject(config, key);
+    // Failure mode D: never leave an invalid object under a legitimate key.
+    await deleteObject(config, file.storage_path);
+    await service.rpc('asset_file_mark_failed', { p_file_id: file.id });
     return errorResponse(message, 422);
   };
 
+  const limit = MAX_SIZE_BYTES[file.kind];
   if (head.contentLength <= 0 || head.contentLength > limit) {
-    return await reject(`Uploaded object size (${head.contentLength} bytes) is invalid for kind "${parsed.kind}" (limit ${limit} bytes)`);
+    return await reject(`Uploaded file size (${head.contentLength} bytes) is invalid for kind "${file.kind}" (limit ${limit} bytes)`);
   }
-  if (head.contentType !== expectedContentType) {
-    return await reject(`Uploaded object Content-Type ("${head.contentType}") does not match the key's extension`);
+  if (head.contentType !== file.content_type) {
+    return await reject('Uploaded file Content-Type does not match the upload intent');
+  }
+  const bytes = await getObjectRange(config, file.storage_path, MAGIC_BYTES_TO_READ);
+  if (!bytesMatchContentType(file.content_type, bytes)) {
+    return await reject('Uploaded file content does not match its declared type (magic bytes mismatch)');
   }
 
-  const bytes = await getObjectRange(config, key, MAGIC_BYTES_TO_READ);
-  if (!bytesMatchContentType(expectedContentType, bytes)) {
-    return await reject('Uploaded object content does not match its declared Content-Type (magic bytes mismatch)');
+  const { data: saved, error } = await service.rpc('asset_file_mark_available', {
+    p_file_id: file.id,
+    p_size_bytes: head.contentLength,
+    p_content_type: file.content_type,
+    p_etag: head.etag,
+  });
+  if (error || !saved) {
+    // Failure mode E: validated in R2 but the DB update failed. The row is
+    // still pending (never a false "available"); confirm-upload is
+    // idempotent and can simply be retried against the same object.
+    console.error('asset-files: could not mark the file available', error?.code ?? 'unknown');
+    return errorResponse('Could not confirm the upload, please retry', 500);
   }
-
   return jsonResponse({
-    key,
+    file_id: file.id,
+    status: 'available',
     size_bytes: head.contentLength,
-    content_type: expectedContentType,
-    etag: head.etag,
+    content_type: file.content_type,
+    is_primary: (saved as { is_primary: boolean }).is_primary,
   });
 }
 
+/** Safe `filename` for Content-Disposition: the display name reduced to a
+ * conservative ASCII set, with the real extension. Never trusted as a key. */
+const attachmentFilename = (name: string, extension: string): string => {
+  const base = name.replace(/\.[A-Za-z0-9]{1,5}$/, '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._ -]+/g, '_').trim().slice(0, 120) || 'documento';
+  return `${base}.${extension}`;
+};
+
 async function handleCreateDownload(req: Request, input: Record<string, unknown>, config: R2Config): Promise<Response> {
-  let parsed;
+  let file: FileRow;
   try {
-    parsed = await parseAndAuthorize(req, input.key, 'read');
+    file = await authorizeFile(req, input.file_id, 'read');
   } catch (error) {
-    const { status, message } = error as { status: number; message: string };
-    return errorResponse(message, status);
+    return fail(error);
   }
+  if (file.status !== 'available') return errorResponse('File is not available', 409);
 
-  const key = input.key as string;
-  const contentType = EXTENSION_TO_CONTENT_TYPE[parsed.extension];
-  // Photos render inline (asset galleries in Punto 10); documents always
-  // download — never render a PDF inline from an unfamiliar origin.
-  const disposition = parsed.kind === 'photo' ? 'inline' : `attachment; filename="${parsed.id}.${parsed.extension}"`;
-  const downloadUrl = await signGetUrl(config, key, GET_EXPIRES_SECONDS, contentType, disposition);
-
+  const extension = extensionForContentType(file.kind, file.content_type);
+  // Photos render inline (gallery); documents always download.
+  const disposition = file.kind === 'photo' ? 'inline' : `attachment; filename="${attachmentFilename(file.name, extension)}"`;
+  const downloadUrl = await signGetUrl(config, file.storage_path, GET_EXPIRES_SECONDS, file.content_type, disposition);
   return jsonResponse({
     download_url: downloadUrl,
     expires_at: new Date(Date.now() + GET_EXPIRES_SECONDS * 1000).toISOString(),
@@ -212,15 +287,30 @@ async function handleCreateDownload(req: Request, input: Record<string, unknown>
 }
 
 async function handleDelete(req: Request, input: Record<string, unknown>, config: R2Config): Promise<Response> {
+  let file: FileRow;
   try {
-    await parseAndAuthorize(req, input.key, 'delete');
+    file = await authorizeFile(req, input.file_id, 'delete');
   } catch (error) {
-    const { status, message } = error as { status: number; message: string };
-    return errorResponse(message, status);
+    return fail(error);
+  }
+  const service = createServiceClient();
+  // deleting: out of the gallery, primary moved to the oldest remaining
+  // photo, and retryable if R2 fails below.
+  const { error: beginError } = await service.rpc('asset_file_begin_delete', { p_file_id: file.id });
+  if (beginError) return errorResponse('Could not delete the file', 500);
+
+  try {
+    // Server-side, never presigned; idempotent (a missing object is fine).
+    await deleteObject(config, file.storage_path);
+  } catch (error) {
+    // Failure mode F: the row stays `deleting` — reconcilable/retryable.
+    console.error('asset-files: R2 delete failed', error instanceof Error ? error.message : 'unknown');
+    return errorResponse('Storage delete failed; the file is marked for deletion and can be retried', 502);
   }
 
-  await deleteObject(config, input.key as string);
-  return jsonResponse({ key: input.key, deleted: true });
+  const { error: finishError } = await service.rpc('asset_file_finish_delete', { p_file_id: file.id });
+  if (finishError) return errorResponse('The file was removed from storage but its record could not be closed; retry the delete', 500);
+  return jsonResponse({ file_id: file.id, deleted: true });
 }
 
 Deno.serve(async (req) => {
@@ -230,14 +320,13 @@ Deno.serve(async (req) => {
   try {
     requirePost(req);
     const input = await req.json();
-    const action = input.action;
+    const action = input?.action;
 
     let config: R2Config;
     try {
       config = getR2Config();
     } catch (error) {
-      // Fail closed: never a fallback origin/bucket, never logs the
-      // secrets themselves — only which one is missing/invalid.
+      // Fail closed; never logs the secret values, only which one failed.
       console.error('asset-files: R2 configuration error:', error instanceof Error ? error.message : error);
       return errorResponse('Storage is not configured', 500);
     }
@@ -252,7 +341,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') return errorResponse('Unauthorized', 401);
     if (error instanceof Error && error.message === 'Method not allowed') return errorResponse(error.message, 405);
-    console.error('asset-files failed', error instanceof Error ? error.message : error);
+    console.error('asset-files failed', error instanceof Error ? error.message : 'unknown');
     return errorResponse('Internal server error', 500);
   }
 });

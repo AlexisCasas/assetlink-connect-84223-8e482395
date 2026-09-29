@@ -540,7 +540,11 @@ SELECT throws_ok($$ SELECT * FROM public.get_asset_integrated_history('a9400000-
 SELECT throws_ok($$ SELECT public.get_preventive_maintenance_plans('a9200000-0000-0000-0000-0000000000a1') $$, 'P0001', NULL, 'no leak: preventive maintenance stays closed');
 SELECT throws_ok($$ SELECT * FROM public.get_maintenance_notices('a9200000-0000-0000-0000-0000000000a1') $$, 'P0001', NULL, 'no leak: maintenance notices stay closed');
 SELECT throws_ok($$ SELECT * FROM public.get_inspection_plans('a9200000-0000-0000-0000-0000000000a1') $$, 'P0001', NULL, 'no leak: inspections stay closed');
-SELECT throws_ok($$ SELECT public.authorize_asset_file_access('a9400000-0000-0000-0000-0000000000a1', 'read') $$, 'P0001', NULL, 'no leak: R2 asset files stay closed');
+-- Punto 10: los archivos del activo pertenecen al módulo Assets. Con
+-- assets.view el FM los lee (la matriz completa se prueba en
+-- asset_files_productization.test.sql).
+SELECT is(public.authorize_asset_file_access('a9400000-0000-0000-0000-0000000000a1', 'read'), 'a9200000-0000-0000-0000-0000000000a1'::uuid,
+  'R2 asset files follow assets.view (Punto 10), not another module');
 SELECT is((SELECT count(*) FROM public.asset_events WHERE organization_id = 'a9200000-0000-0000-0000-0000000000a1'), 0::bigint, 'no leak: asset_events are not readable by the FM');
 RESET ROLE;
 

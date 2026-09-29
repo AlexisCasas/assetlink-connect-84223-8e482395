@@ -5,6 +5,25 @@ Infraestructura privada, tenant-aware y reutilizable para archivos del SaaS.
 Migración: `supabase/migrations/20260927012526_asset_file_access_authorization.sql`.
 Pruebas: `supabase/tests/asset_file_access_authorization.test.sql`.
 
+> **Punto 10 (hecho) reemplaza partes de este documento.** El producto
+> (metadata en `asset_documents`, contrato por `file_id`, acceso delegado
+> del FM, UI en AssetDetail) está en `docs/ASSET_FILES_R2_PRODUCTIZATION.md`.
+> Cambios respecto de lo descrito aquí:
+>
+> - la Edge Function ya no recibe ni devuelve la `key`: todo después de
+>   `create-upload` va por `file_id`, y la key vive solo en
+>   `asset_documents.storage_path`, que es interno;
+> - `authorize_asset_file_access` suma la rama delegada del FM (9C.1:
+>   `assets.view` para leer; `assets.view` + `assets.manage` para escribir)
+>   y pasa a `SET search_path = ''`;
+> - el Punto 10 sí escribe metadata (`pending` → `available` / `failed`,
+>   `deleting`), siempre server-side;
+> - la prueba de CORS en un navegador real, pendiente abajo, se ejecutó en
+>   el Punto 10 con Chromium sobre `http://localhost:8080`.
+>
+> El resto (secrets, bucket, key, MIME, magic bytes, firma del PUT) sigue
+> vigente.
+
 ## Qué es y qué no es
 
 Este punto entrega la capacidad de: pedir una URL firmada de subida, subir
@@ -227,7 +246,7 @@ archivo ni en ningún otro de `src/` (verificado por grep).
 | Enumeración | Sin LIST desde el frontend; UUIDs no adivinables |
 | Secretos | Solo en `_shared/r2.ts`, sin `VITE_`, falla cerrado, nunca logueados |
 | Bucket público | Bucket privado únicamente; sin `R2_PUBLIC_BASE_URL` |
-| URLs persistidas | Nunca se guarda una URL firmada — solo la `key` en el contrato de Punto 10 |
+| URLs persistidas | Nunca se guarda una URL firmada — solo la `key`, en `asset_documents.storage_path` (Punto 10, interno) |
 
 Verificado con grep, con el bucket real conectado (cero resultados en todos
 los casos):
@@ -387,8 +406,12 @@ devuelve `Access-Control-Allow-Origin` y `Access-Control-Expose-Headers:
 ETag`, con un `ETag` real presente; un PUT real con ese mismo `Origin`
 también se completa. Esto verifica exactamente las cabeceras HTTP que un
 navegador real recibiría y sobre las que aplicaría su propia política de
-CORS — pero **no sustituye una prueba manual real en un navegador**, que
-queda pendiente y se documenta aquí como limitación explícita: abrir
+CORS — pero **no sustituye una prueba real en un navegador**. **Hecho en
+el Punto 10:** la app en `http://localhost:8080` con Chromium real sube
+(preflight + PUT 200) y muestra fotos (GET) directamente contra
+`one-facility-dev-private`, sin errores de CORS; ver
+`docs/ASSET_FILES_R2_PRODUCTIZATION.md`. El procedimiento manual original
+era: abrir
 `http://localhost:8080` (o cualquier página servida desde ese origen),
 ejecutar `fetch(uploadUrl, {method:'PUT', headers: requiredHeaders, body})`
 y `fetch(downloadUrl)` desde la consola del navegador, y confirmar que no

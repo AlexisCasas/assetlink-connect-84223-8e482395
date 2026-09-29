@@ -247,35 +247,59 @@ export type Database = {
       asset_documents: {
         Row: {
           asset_id: string
+          confirmed_at: string | null
+          content_type: string | null
           created_at: string
           document_type: string | null
+          etag: string | null
           file_url: string | null
           id: string
+          is_primary: boolean
+          kind: string | null
           name: string
           organization_id: string
+          size_bytes: number | null
+          status: string
           storage_path: string | null
+          updated_at: string
           uploaded_by_user_id: string | null
         }
         Insert: {
           asset_id: string
+          confirmed_at?: string | null
+          content_type?: string | null
           created_at?: string
           document_type?: string | null
+          etag?: string | null
           file_url?: string | null
           id?: string
+          is_primary?: boolean
+          kind?: string | null
           name: string
           organization_id: string
+          size_bytes?: number | null
+          status?: string
           storage_path?: string | null
+          updated_at?: string
           uploaded_by_user_id?: string | null
         }
         Update: {
           asset_id?: string
+          confirmed_at?: string | null
+          content_type?: string | null
           created_at?: string
           document_type?: string | null
+          etag?: string | null
           file_url?: string | null
           id?: string
+          is_primary?: boolean
+          kind?: string | null
           name?: string
           organization_id?: string
+          size_bytes?: number | null
+          status?: string
           storage_path?: string | null
+          updated_at?: string
           uploaded_by_user_id?: string | null
         }
         Relationships: [
@@ -4286,6 +4310,75 @@ export type Database = {
         }
         Returns: undefined
       }
+      asset_file_begin_delete: {
+        Args: { p_file_id: string }
+        Returns: {
+          asset_id: string
+          confirmed_at: string | null
+          content_type: string | null
+          created_at: string
+          document_type: string | null
+          etag: string | null
+          file_url: string | null
+          id: string
+          is_primary: boolean
+          kind: string | null
+          name: string
+          organization_id: string
+          size_bytes: number | null
+          status: string
+          storage_path: string | null
+          updated_at: string
+          uploaded_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_documents"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      asset_file_finish_delete: {
+        Args: { p_file_id: string }
+        Returns: undefined
+      }
+      asset_file_mark_available: {
+        Args: {
+          p_content_type: string
+          p_etag: string
+          p_file_id: string
+          p_size_bytes: number
+        }
+        Returns: {
+          asset_id: string
+          confirmed_at: string | null
+          content_type: string | null
+          created_at: string
+          document_type: string | null
+          etag: string | null
+          file_url: string | null
+          id: string
+          is_primary: boolean
+          kind: string | null
+          name: string
+          organization_id: string
+          size_bytes: number | null
+          status: string
+          storage_path: string | null
+          updated_at: string
+          uploaded_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_documents"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      asset_file_mark_failed: {
+        Args: { p_file_id: string }
+        Returns: undefined
+      }
       assign_work_order_technician: {
         Args: { target_member_id: string; target_work_order_id: string }
         Returns: {
@@ -4325,6 +4418,10 @@ export type Database = {
         Args: { p_asset_id: string; p_operation: string }
         Returns: string
       }
+      authorize_asset_file_operation: {
+        Args: { p_file_id: string; p_operation: string }
+        Returns: string
+      }
       build_preventive_scope_snapshot: {
         Args: { p_plan_id: string }
         Returns: Json
@@ -4356,6 +4453,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      can_access_asset_files: {
+        Args: { p_asset_id: string; p_operation: string }
+        Returns: boolean
       }
       can_access_criticality_template: {
         Args: { p_template_id: string }
@@ -5073,6 +5174,20 @@ export type Database = {
           threshold_critical_min: number
           threshold_high_min: number
           threshold_medium_min: number
+        }[]
+      }
+      get_asset_files: {
+        Args: { p_asset_id: string }
+        Returns: {
+          confirmed_at: string
+          content_type: string
+          created_at: string
+          id: string
+          is_primary: boolean
+          kind: string
+          name: string
+          size_bytes: number
+          status: string
         }[]
       }
       get_asset_integrated_history: {
@@ -6341,6 +6456,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_asset_primary_photo: {
+        Args: { p_file_id: string }
+        Returns: undefined
       }
       set_checklist_response_option_active: {
         Args: { p_is_active: boolean; p_option_id: string }
