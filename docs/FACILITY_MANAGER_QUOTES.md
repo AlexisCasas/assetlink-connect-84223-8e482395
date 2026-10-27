@@ -1,7 +1,8 @@
 # Facility Manager · Cotizaciones delegadas (Fase 1 · Punto 9C.5)
 
-- Migraciones: `supabase/migrations/20260930120000_facility_manager_quotes_access.sql` y
-  `supabase/migrations/20260930180000_serialize_quote_decisions.sql` (§11.2).
+- Migraciones: `supabase/migrations/20260930120000_facility_manager_quotes_access.sql`,
+  `supabase/migrations/20260930180000_serialize_quote_decisions.sql` (§11.2) y
+  `supabase/migrations/20261027230000_quote_payload_hide_free_text.sql` (hotfix 9C.5-HF01, §13).
 - Pruebas: `supabase/tests/facility_manager_quotes_access.test.sql` (177 aserciones).
 - Frontend: `src/lib/quoteData.ts`, `QuoteListDialog` (modo `delegated`),
   `RequestList`, `useRequestScope`, `facilityManagement.ts`.
@@ -66,6 +67,8 @@ permitido; `22023` razón demasiado larga.
 aprobación y rechazo. Mientras estén ocultos:
 
 - `amount` es `null` y no aparece en ninguna otra parte de la respuesta;
+- los textos libres (`description`, `approval_reason`, `rejection_reason`) también
+  son `null` (hotfix HF01, §13): pueden contener importes escritos a mano;
 - `can_approve` es `false` y `approve`/`reject` responden `55000`
   ("decidir a ciegas" anularía el propósito de la regla).
 
@@ -78,9 +81,10 @@ blanca de `save_facility_management_request` ni en ninguna RPC delegada).
 
 ## 5. Qué devuelve y qué no
 
-Cotización: `id, request_id, status, description, created_at, amount (o null),
-approved_at, approval_reason (solo aprobadas), rejected_at, rejection_reason,
-can_approve`. El nombre del proveedor tampoco se entrega (la UI directa ya
+Cotización: `id, request_id, status, description (o null), created_at, amount (o null),
+approved_at, approval_reason (solo aprobadas; o null), rejected_at,
+rejection_reason (o null), can_approve`. Los tres textos libres y el importe son
+`null` mientras los importes estén ocultos. El nombre del proveedor tampoco se entrega (la UI directa ya
 muestra "Proveedor").
 
 Nunca: `provider_id`, `provider_organization_id`, `team_member_id`,
@@ -329,3 +333,43 @@ Revisado el disparador, `create_organization_notification` y la interfaz
   del actor ni el sistema de notificaciones. Observación residual: el uuid sí es
   legible mediante la API; si se quisiera ocultarlo, bastaría una vista o RPC
   de lectura sin esa columna (decisión de producto, no incluida).
+
+## 13. Hotfix 9C.5-HF01: textos libres con importes
+
+**Origen.** Detectado en el QA manual de producción: una cotización recibida con
+`min_quotes` sin alcanzar tenía `amount = null`, pero su `description` contenía
+"S/ 1800.00". `facility_management_quote_payload` solo anulaba `amount` cuando
+`prices_visible = false` y devolvía tal cual `description`, `approval_reason` y
+`rejection_reason`. Un FM con `quotes.view` podía leer la cifra por ese campo.
+
+**Corrección** (`20261027230000_quote_payload_hide_free_text.sql`, migración nueva;
+solo este helper interno): con `prices_visible = false` los tres campos de texto
+libre se devuelven `null`; con `prices_visible = true` el resultado es idéntico al
+de 9C.5. No se intenta detectar cifras en el texto (formatos, monedas, palabras,
+idiomas): una expresión regular nunca sería una protección completa, así que se
+oculta el campo entero.
+
+- Mismas claves de respuesta (el contrato JSON no cambia, solo sus valores).
+- Cubre el listado, el detalle y los conteos (todos pasan por el mismo helper). Las
+  respuestas de aprobar/rechazar solo se generan con los importes ya visibles.
+- Sin cambios: las cinco RPCs (firmas, ACL, autorizaciones), la regla de
+  visibilidad (`recibidas >= min_quotes` o envío cerrado), la RLS de `quotes`, las
+  policies de proveedor, `approve_quote`/`reject_quote` y el flujo directo, que lee
+  las filas por RLS y sigue viendo todo el texto.
+- Frontend: `description` pasa a `string | null`. `QuoteListDialog` en modo
+  delegado muestra "Descripción oculta hasta que los importes sean visibles" y los
+  motivos de aprobación/rechazo simplemente no se muestran (llegan `null`). Al
+  alcanzar el mínimo o cerrar el envío, los textos vuelven a mostrarse.
+
+**Pruebas.** pgTAP dedicado 208/208 (31 nuevas: tres cotizaciones `submitted`,
+`approved` y `rejected` con "S/ 1800.00", una cifra en palabras y un motivo con
+importes, bajo el mínimo; textos nulos en listado, detalle y conteos; sin cifras,
+monedas ni importes en palabras en ninguna respuesta ni mensaje de error; mismas
+claves; aislamiento multicliente; `quotes.approve` sin cambios; vuelta de los
+textos al alcanzar `min_quotes` y al cerrar el envío por debajo del mínimo; el
+cliente directo conserva la lectura completa). Las búsquedas de cifras usan
+límites no numéricos: los timestamps con microsegundos las contienen como
+subcadena y volvían intermitente la prueba (también se endurecieron las de 9C.5).
+Control negativo: con el helper anterior fallan 9 aserciones. Regresión completa
+2215/2215, ACL estricta (208/208 sin DML; 196/196 sin ningún privilegio de tabla,
+omitiendo las 12 aserciones de lectura cruda) y smoke local en navegador.
