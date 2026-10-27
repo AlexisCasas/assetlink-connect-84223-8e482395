@@ -8,7 +8,7 @@
 -- código) del flujo directo del cliente.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(172);
+SELECT plan(177);
 
 -- -------------------------------------------------------------------------
 -- Fixture (sintético, se descarta con el ROLLBACK final)
@@ -233,6 +233,20 @@ SELECT is(
 SELECT is(public.facility_management_quote_prices_visible('e98e0000-0000-0000-0000-0000000000a1'), true, 'helper: 2 of 2 received => visible');
 SELECT is(public.facility_management_quote_prices_visible('e98e0000-0000-0000-0000-0000000000a2'), false, 'helper: 2 of 3 received => hidden');
 SELECT is(public.facility_management_quote_prices_visible(gen_random_uuid()), false, 'helper: unknown request => hidden');
+
+-- Hardening de concurrencia (20260930180000): approve_quote / reject_quote conservan
+-- SECURITY DEFINER, search_path, ACL, y serializan con el mismo bloqueo de la solicitud.
+SELECT ok((SELECT count(*) = 2 AND bool_and(p.prosecdef AND array_to_string(p.proconfig, ',') = 'search_path=public'
+                AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
+                AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
+                AND NOT has_function_privilege('public', p.oid, 'EXECUTE'))
+           FROM pg_proc p WHERE p.oid IN ('public.approve_quote(uuid)'::regprocedure, 'public.reject_quote(uuid,text)'::regprocedure)),
+  'approve_quote / reject_quote keep SECURITY DEFINER, search_path = public and authenticated-only EXECUTE');
+SELECT ok((SELECT count(*) = 2 AND bool_and(p.prosrc ~ 'FOR UPDATE OF request')
+           FROM pg_proc p WHERE p.oid IN ('public.approve_quote(uuid)'::regprocedure, 'public.reject_quote(uuid,text)'::regprocedure))
+        AND (SELECT bool_and(p.prosrc ~ 'FOR UPDATE OF r;')
+           FROM pg_proc p WHERE p.oid IN ('public.approve_facility_management_quote(uuid,uuid)'::regprocedure, 'public.reject_facility_management_quote(uuid,uuid,text)'::regprocedure)),
+  'direct and delegated decisions lock the same request row (serialized)');
 
 SET LOCAL ROLE authenticated;
 
@@ -474,6 +488,17 @@ SELECT ok((SELECT bool_and((old_data::text || new_data::text) !~ '(7001|7002|700
 SELECT is((SELECT count(*) FROM public.organization_notifications WHERE organization_id = 'e9200000-0000-0000-0000-000000000092' AND type = 'quote_approved'), 1::bigint,
   'approve: the provider is notified as in the direct flow');
 SET LOCAL ROLE authenticated;
+
+-- Notificación al proveedor: el actor es solo un uuid que el proveedor no puede resolver.
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000042');
+SELECT is((SELECT count(*) FROM public.organization_notifications WHERE type = 'quote_approved' AND actor_user_id = 'e9100000-0000-0000-0000-000000000013'),
+  1::bigint, 'provider: the approval notification records the FM user as an opaque uuid (same as a client user)');
+SELECT is((SELECT count(*) FROM public.organization_members WHERE user_id = 'e9100000-0000-0000-0000-000000000013')
+        + (SELECT count(*) FROM public.organizations WHERE id = 'e9200000-0000-0000-0000-0000000000fa')
+        + (SELECT count(*) FROM public.organization_relationships WHERE relationship_type = 'facility_management'),
+  0::bigint, 'provider: cannot resolve the FM user, organization or relationship');
+SELECT ok((SELECT bool_and(message !~* '(facility|fm )' AND title !~* '(facility|fm )') FROM public.organization_notifications WHERE type IN ('quote_approved', 'quote_rejected')),
+  'provider: notification text never names the Facility Manager');
 
 -- Conteos y resumen coherentes después de pasar de submitted a approved/rejected.
 SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');

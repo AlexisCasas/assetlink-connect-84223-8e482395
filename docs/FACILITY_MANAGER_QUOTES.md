@@ -1,7 +1,8 @@
 # Facility Manager · Cotizaciones delegadas (Fase 1 · Punto 9C.5)
 
-- Migración: `supabase/migrations/20260930120000_facility_manager_quotes_access.sql`.
-- Pruebas: `supabase/tests/facility_manager_quotes_access.test.sql` (172 aserciones).
+- Migraciones: `supabase/migrations/20260930120000_facility_manager_quotes_access.sql` y
+  `supabase/migrations/20260930180000_serialize_quote_decisions.sql` (§11.2).
+- Pruebas: `supabase/tests/facility_manager_quotes_access.test.sql` (177 aserciones).
 - Frontend: `src/lib/quoteData.ts`, `QuoteListDialog` (modo `delegated`),
   `RequestList`, `useRequestScope`, `facilityManagement.ts`.
 
@@ -138,8 +139,8 @@ serializar decisiones concurrentes y escriben `audit_logs`
 
 ## 9. Verificación
 
-- pgTAP dedicado: **172/172**. Regresión completa local: **2179/2179**
-  (2007 previas + 172), 19 archivos.
+- pgTAP dedicado: **177/177**. Regresión completa local: **2184/2184**
+  (2007 previas + 177), 19 archivos.
 - Controles negativos (mutación temporal en la base local, restaurada):
   importes siempre visibles (12 fallos), payload que siempre incluye `amount` (4),
   rol technician en lectura (2), aprobar sin comprobar ocultación (4),
@@ -169,13 +170,13 @@ Las variantes se ejecutan dentro de una transacción descartable (prefijo
 `BEGIN; REVOKE …` + el archivo de prueba, cuyo `ROLLBACK` final también deshace
 el `REVOKE`), así que no queda ningún cambio en la base.
 
-| Variante (para `authenticated` y `anon`) | Suite 9C.5 (172) |
+| Variante (para `authenticated` y `anon`) | Suite 9C.5 (177) |
 |---|---|
-| ACL actual | 172 ok |
-| Sin `INSERT/UPDATE/DELETE/TRUNCATE` en **todas** las tablas públicas | 172 ok |
-| Sin DML en `quotes, requests, request_details, request_provider_access, audit_logs, organization_notifications, work_orders` | 172 ok |
-| Sin DML en `assets, client_branches, asset_criticality_assessments, maintenance_notices` (variante de 9C.4) | 172 ok |
-| **Sin ningún privilegio de tabla** (ni `SELECT`) | 166 ok, 0 fallos; se omiten las 6 aserciones que leen tablas crudas a propósito |
+| ACL actual | 177 ok |
+| Sin `INSERT/UPDATE/DELETE/TRUNCATE` en **todas** las tablas públicas | 177 ok |
+| Sin DML en `quotes, requests, request_details, request_provider_access, audit_logs, organization_notifications, work_orders` | 177 ok |
+| Sin DML en `assets, client_branches, asset_criticality_assessments, maintenance_notices` (variante de 9C.4) | 177 ok |
+| **Sin ningún privilegio de tabla** (ni `SELECT`) | 168 ok, 0 fallos; se omiten las 9 aserciones que leen tablas crudas a propósito |
 
 Conclusión: las cinco RPCs no necesitan acceso directo a tablas; todo lo hacen
 como `SECURITY DEFINER`. Las aserciones omitidas solo comprueban que el FM
@@ -189,22 +190,52 @@ Suites heredadas bajo esas variantes: fallan algunas que usan DML directo como
 `public_table_meta_privilege_hardening`). **Los resultados son idénticos con y
 sin la migración 9C.5** (se compararon quitando sus 10 funciones dentro de la
 misma transacción): no son regresiones, es la dependencia histórica de esas
-suites. Con la ACL real todas pasan: **2179/2179** (2007 + 172).
+suites. Con la ACL real todas pasan: **2184/2184** (2007 + 177).
 
-### 11.2 Concurrencia real
-Dos sesiones `psql` simultáneas contra la base local, como el mismo FM
-manager, aprobando cotizaciones distintas de una misma solicitud (se retiene la
-transacción 0,3 s para forzar el solape).
+### 11.2 Concurrencia real y corrección en el flujo directo
 
-- Función real: 12 corridas escalonadas (aprobar/aprobar y aprobar/rechazar) y
-  15 simultáneas: **0 inconsistencias**. Siempre una sola cotización aprobada,
-  las demás `rejected`, la sesión perdedora recibe `55000`, y la auditoría tiene
-  exactamente una fila `quote_approved` (sin `quote_rejected` extra).
-- **Control negativo:** quitando los dos `FOR UPDATE` (solicitud y cotización)
-  la misma prueba produce **9 de 15 corridas con dos cotizaciones aprobadas y
-  dos auditorías**. Se restauró la función y se repitió: 10/10 consistentes.
+**Diagnóstico** (Supabase local, dos sesiones `psql` simultáneas, cada una
+retiene su transacción 0,3 s para forzar el solape). `approve_quote` y
+`reject_quote` no bloqueaban ninguna fila: ambas leían la cotización como
+`submitted` antes de que la otra confirmara y el `UPDATE` final
+(`WHERE id = ...`) no vuelve a comprobar el estado. Matriz **antes** de la
+corrección (12 corridas por caso):
 
-El bloqueo de la fila de `requests` es, por tanto, necesario y suficiente.
+| Caso | Inconsistentes |
+|---|---|
+| Directo A vs directo B, aprobar/aprobar (cotizaciones distintas) | 7/12: **dos cotizaciones aprobadas** |
+| Directo vs FM, aprobar/aprobar | 0/12 (el directo corría primero y el FM esperaba la fila) |
+| FM vs directo, aprobar/aprobar | 8/12: **dos aprobadas** |
+| FM vs FM, aprobar/aprobar | 0/12 (ya bloqueaba la solicitud) |
+| Directo vs directo, misma cotización | 12/12: **aprobada por dos usuarios** |
+| Directo aprobar vs directo rechazar (misma) | 11/12: aprobación "exitosa" y cotización rechazada |
+| FM aprobar vs directo rechazar (misma) | 6/12: aprobación "exitosa" + **auditoría `quote_approved` de una cotización rechazada** |
+| Aprobar vs rechazar de otra cotización (directo/FM, ambos sentidos), FM vs FM misma cotización, directo aprobar vs FM rechazar misma | 0/12 |
+
+**Corrección** (`20260930180000_serialize_quote_decisions.sql`, migración nueva;
+las históricas no se tocan): `approve_quote` y `reject_quote` toman
+`FOR UPDATE OF request` en su primera lectura, el mismo bloqueo que ya usan
+`approve_facility_management_quote` y `reject_facility_management_quote`. Todas
+las decisiones sobre una solicitud (directas, delegadas o de `platform_admin`)
+se ejecutan una detrás de otra y las comprobaciones de estado posteriores ven lo
+confirmado por la anterior; la perdedora recibe el error de estado de siempre.
+Cuerpo idéntico salvo esa cláusula; mismos roles, estados, mensajes,
+`SECURITY DEFINER`, `search_path` y grants (reafirmados y verificados por pgTAP).
+El orden de bloqueo es siempre solicitud -> cotización: sin interbloqueos.
+
+**Matriz después** (15 corridas por caso, 165 en total): **0 inconsistencias** en
+los 11 casos. En cada corrida: nunca dos cotizaciones aprobadas, una aprobación
+exitosa deja la cotización aprobada y ninguna en `submitted`, la sesión perdedora
+recibe el error de estado, y `audit_logs` solo contiene filas coherentes con el
+estado final (una `quote_approved` por aprobación delegada exitosa, ninguna
+sobre una cotización que terminó rechazada).
+
+Casos probados: directo A vs directo B; directo vs FM; FM vs directo; FM vs FM
+(manager y admin); aprobación simultánea de dos cotizaciones; aprobar vs
+rechazar la misma y otra cotización, en todas las combinaciones directo/FM.
+
+**Control negativo previo (9C.5):** quitando los `FOR UPDATE` de las RPCs
+delegadas, 9 de 15 corridas dejaban dos aprobadas y dos auditorías.
 
 ### 11.3 Deep link `quote=` (navegador, Supabase local)
 `#requests?managedClient=…&request=…&quote=…`:
@@ -275,12 +306,26 @@ solo `submitted`, así que baja al decidir; `quotes_received` y `prices_visible`
 | `SECURITY DEFINER` / `search_path` / grants | Las 5 RPCs: definer, `search_path=""`, `EXECUTE` solo `authenticated`; los 5 helpers sin `EXECUTE` para clientes. Verificado en `pg_proc` |
 | Mensajes de error | 16 mensajes estáticos; ninguno interpola ids, importes ni nombres |
 
-Hallazgos (no corregidos, fuera de 9C.5):
-1. `approve_quote` / `reject_quote` (flujo directo) **no bloquean** la solicitud
-   ni la cotización; dos aprobaciones directas concurrentes podrían dejar dos
-   cotizaciones aprobadas, y una directa concurrente con una delegada también.
-   Se deduce de la lectura del código; no se probó experimentalmente.
-   Corrección mínima: añadir los mismos `FOR UPDATE`.
-2. `notify_quote_status_change` guarda como `actor_user_id` al usuario del FM en
-   la notificación del proveedor (solo el uuid, igual que con un usuario del
-   cliente). No se revisó la UI del proveedor.
+### 12.1 Concurrencia directo/FM
+Resuelta en §11.2 con una migración nueva. Cubierta por pgTAP (el cuerpo de las
+cuatro funciones bloquea la fila de la solicitud) y por la matriz de §11.2.
+
+### 12.2 Notificación al proveedor (`notify_quote_status_change`)
+Revisado el disparador, `create_organization_notification` y la interfaz
+(`useOrganizationNotifications`, `NotificationList`, `NotificationBell`):
+
+- El texto es estático ("Tu cotizacion fue aprobada por el cliente."); no
+  incluye nombre ni organización del actor.
+- La fila guarda `actor_user_id = approved_by_user_id` (el uuid del usuario del
+  FM) y el proveedor la lee completa por RLS (`select *`). Es el comportamiento
+  histórico: con una aprobación directa se guardaba el uuid del usuario del
+  cliente.
+- La interfaz **no muestra ni usa** `actor_user_id`.
+- Un proveedor autenticado **no puede resolver ese uuid**: `profiles` y
+  `auth.users` le deniegan el acceso, y no ve `organization_members`,
+  `organizations` ni `organization_relationships` del FM, ni `audit_logs`
+  (comprobado con la sesión del proveedor y cubierto por pgTAP).
+- Conclusión: sin fuga ni error demostrado. No se cambió la identidad auditada
+  del actor ni el sistema de notificaciones. Observación residual: el uuid sí es
+  legible mediante la API; si se quisiera ocultarlo, bastaría una vista o RPC
+  de lectura sin esa columna (decisión de producto, no incluida).
