@@ -51,10 +51,10 @@ function DelegatedBacklog({ client, focusNoticeId }: { client: FacilityManagemen
   return <BacklogView scope={scope} focusNoticeId={focusNoticeId} />;
 }
 
-function DelegatedRequests({ client, focusRequestId }: { client: FacilityManagementOperationalClient; focusRequestId?: string }) {
+function DelegatedRequests({ client, focusRequestId, focusQuoteId }: { client: FacilityManagementOperationalClient; focusRequestId?: string; focusQuoteId?: string }) {
   const scope = useMemo(() => buildDelegatedRequestScope(client), [client]);
-  // focusQuoteId is never passed: quotes are not delegated.
-  return <RequestList scope={scope} focusRequestId={focusRequestId} />;
+  // focusQuoteId only opens the quotes dialog with quotes.view (9C.5).
+  return <RequestList scope={scope} focusRequestId={focusRequestId} focusQuoteId={focusQuoteId} />;
 }
 
 function DelegatedDrafts({ client }: { client: FacilityManagementOperationalClient }) {
@@ -110,11 +110,11 @@ export function DelegatedBacklogModule({ managedClientId, focusNoticeId }: { man
 }
 
 /** #requests for an active facility_manager organization (9C.4). `quote=`
- * from the hash is ignored on purpose. */
-export function DelegatedRequestsModule({ managedClientId, focusRequestId }: { managedClientId?: string; focusRequestId?: string }) {
+ * from the hash only applies with quotes.view (9C.5). */
+export function DelegatedRequestsModule({ managedClientId, focusRequestId, focusQuoteId }: { managedClientId?: string; focusRequestId?: string; focusQuoteId?: string }) {
   return (
     <ManagedClientGate module="requests" requestedClientId={managedClientId}>
-      {(client) => <DelegatedRequests key={client.clientOrganizationId} client={client} focusRequestId={focusRequestId} />}
+      {(client) => <DelegatedRequests key={client.clientOrganizationId} client={client} focusRequestId={focusRequestId} focusQuoteId={focusQuoteId} />}
     </ManagedClientGate>
   );
 }

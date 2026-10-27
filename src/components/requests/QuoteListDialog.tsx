@@ -11,6 +11,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import type { Request } from '@/types/request';
 import { QuoteChatDialog } from './QuoteChatDialog';
+import {
+  approveDelegatedQuote,
+  fetchDelegatedRequestQuotes,
+  rejectDelegatedQuote,
+} from '@/lib/quoteData';
 
 interface QuoteListDialogProps {
   open: boolean;
@@ -20,6 +25,11 @@ interface QuoteListDialogProps {
    * (#requests?request=...&quote=...) — e.g. a quote_submitted/approved/
    * rejected notification. */
   focusQuoteId?: string;
+  /** Facility Manager operating on behalf of the client (9C.5). Quotes are
+   * read and decided only through the delegated RPCs: amounts arrive hidden
+   * until the minimum is reached, and there is no chat, observation, quote
+   * closing nor work-order creation. Absent = the historic direct flow. */
+  delegated?: { clientOrganizationId: string };
 }
 
 interface Quote {
@@ -27,7 +37,7 @@ interface Quote {
   provider_id: string | null;
   provider_organization_id: string | null;
   team_member_id: string | null;
-  amount: number;
+  amount: number | null;
   description: string;
   status: string;
   created_at: string;
@@ -39,9 +49,11 @@ interface Quote {
   rejected_at?: string | null;
   rejection_reason?: string | null;
   work_order_id?: string | null;
+  /** Delegated mode: computed by the server. */
+  can_approve?: boolean;
 }
 
-export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteListDialogProps) => {
+export const QuoteListDialog = ({ open, onClose, request, focusQuoteId, delegated }: QuoteListDialogProps) => {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalProviders, setTotalProviders] = useState(0);
@@ -64,6 +76,7 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
     && !!currentMembership
     && ['owner', 'admin'].includes(currentMembership.role);
   const canDecideQuotes = canApproveForClient || canApproveForPlatform;
+  const isDelegated = !!delegated;
 
   useEffect(() => {
     if (open && request.id) {
@@ -79,6 +92,30 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
   const loadQuotes = async () => {
     try {
       setLoading(true);
+
+      if (delegated) {
+        const result = await fetchDelegatedRequestQuotes(delegated.clientOrganizationId, request.id);
+        setQuotesClosed(result?.quotesClosed ?? false);
+        setMinQuotes(result?.minQuotes ?? 3);
+        setShowPrices(result?.pricesVisible ?? false);
+        setQuotes((result?.quotes ?? []).map((q) => ({
+          id: q.id,
+          provider_id: null,
+          provider_organization_id: null,
+          team_member_id: null,
+          amount: q.amount,
+          description: q.description,
+          status: q.status,
+          created_at: q.createdAt,
+          provider_name: 'Proveedor',
+          approval_reason: q.approvalReason ?? undefined,
+          approved_at: q.approvedAt,
+          rejected_at: q.rejectedAt,
+          rejection_reason: q.rejectionReason,
+          can_approve: q.canApprove,
+        })));
+        return;
+      }
 
       // Get request status to check if quotes are closed and min_quotes value
       const { data: requestData } = await supabase
@@ -224,11 +261,23 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
     }
   };
 
+  const delegatedDecisionMessage = (error: unknown, fallback: string) => {
+    if (!delegated) return fallback;
+    const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code: unknown }).code) : null;
+    if (code === '42501') return 'No tienes permisos para decidir sobre esta cotización.';
+    if (code === '55000') return 'La cotización no se puede decidir en su estado actual (por ejemplo, los importes aún no son visibles).';
+    return fallback;
+  };
+
   const handleApproveQuote = async (quoteId: string) => {
     try {
-      const { error } = await supabase.rpc('approve_quote', { target_quote_id: quoteId });
+      if (delegated) {
+        await approveDelegatedQuote(delegated.clientOrganizationId, quoteId);
+      } else {
+        const { error } = await supabase.rpc('approve_quote', { target_quote_id: quoteId });
 
-      if (error) throw error;
+        if (error) throw error;
+      }
       await loadQuotes();
 
       toast({
@@ -239,7 +288,7 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
       console.error('Error approving quote:', error);
       toast({
         title: 'Error',
-        description: 'No se pudo aprobar la cotización.',
+        description: delegatedDecisionMessage(error, 'No se pudo aprobar la cotización.'),
         variant: 'destructive',
       });
     }
@@ -247,16 +296,20 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
 
   const handleRejectQuote = async (quoteId: string) => {
     try {
-      const { error } = await supabase.rpc('reject_quote', {
-        target_quote_id: quoteId,
-        reason: null,
-      });
-      if (error) throw error;
+      if (delegated) {
+        await rejectDelegatedQuote(delegated.clientOrganizationId, quoteId, null);
+      } else {
+        const { error } = await supabase.rpc('reject_quote', {
+          target_quote_id: quoteId,
+          reason: null,
+        });
+        if (error) throw error;
+      }
       await loadQuotes();
       toast({ title: 'Cotizacion rechazada', description: 'La cotizacion fue rechazada.' });
     } catch (error) {
       console.error('Error rejecting quote:', error);
-      toast({ title: 'Error', description: 'No se pudo rechazar la cotizacion.', variant: 'destructive' });
+      toast({ title: 'Error', description: delegatedDecisionMessage(error, 'No se pudo rechazar la cotizacion.'), variant: 'destructive' });
     }
   };
 
@@ -331,7 +384,7 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
               </div>
 
               {/* Close Quotes Button */}
-              {!quotesClosed && quotes.length > 0 && (
+              {!isDelegated && !quotesClosed && quotes.length > 0 && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -402,14 +455,14 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
                       <p className="text-sm">{quote.description}</p>
                     </div>
 
-                    {showPrices ? (
+                    {showPrices && quote.amount !== null ? (
                       <div className="pt-3 border-t">
                         <div className="flex items-baseline justify-between">
                           <p className="text-sm font-medium text-muted-foreground">
                             Monto Total:
                           </p>
                           <p className="text-2xl font-bold text-primary">
-                            S/. {quote.amount.toFixed(2)}
+                            S/. {Number(quote.amount ?? 0).toFixed(2)}
                           </p>
                         </div>
                       </div>
@@ -447,7 +500,7 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
                       <div className="flex items-center justify-between gap-3 border-t pt-3">
                         {quote.work_order_id ? (
                           <Badge variant="secondary">Orden creada</Badge>
-                        ) : canDecideQuotes ? (
+                        ) : canDecideQuotes && !isDelegated ? (
                           <Button
                             size="sm"
                             onClick={() => void handleCreateWorkOrder(quote.id)}
@@ -463,8 +516,16 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
                     )}
 
                     {/* Action Buttons */}
-                    {canDecideQuotes && quote.status === 'submitted' && (
+                    {isDelegated && quote.status === 'submitted' && !quote.can_approve && (
+                      <p className="pt-3 border-t text-sm text-muted-foreground">
+                        {showPrices
+                          ? 'Tu acceso no permite aprobar ni rechazar cotizaciones.'
+                          : 'Podrás aprobar o rechazar cuando los importes sean visibles.'}
+                      </p>
+                    )}
+                    {(isDelegated ? !!quote.can_approve : canDecideQuotes) && quote.status === 'submitted' && (
                     <div className="pt-3 border-t flex gap-2">
+                      {!isDelegated && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -475,6 +536,7 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
                         <MessageCircle className="h-4 w-4 mr-2" />
                         Contactar
                       </Button>
+                      )}
                       <Button
                         size="sm"
                         onClick={() => handleApproveQuote(quote.id)}
@@ -495,7 +557,8 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
                     </div>
                     )}
 
-                    {/* Client Observations Section */}
+                    {/* Client Observations Section (the client's own notes: not delegated) */}
+                    {!isDelegated && (
                     <div className="pt-3 border-t">
                       {editingObservation === quote.id ? (
                         <div className="space-y-3">
@@ -553,6 +616,7 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId }: QuoteL
                         </div>
                       )}
                     </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}

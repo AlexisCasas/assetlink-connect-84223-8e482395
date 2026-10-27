@@ -19,6 +19,7 @@ import {
   loadDirectRequestForEdit,
   mapRequestRow,
 } from '@/lib/requestData';
+import { fetchDelegatedQuoteCounts } from '@/lib/quoteData';
 import { useAssets } from '@/hooks/useAssets';
 import { NO_ASSET_ACCESS_SCOPE } from '@/hooks/useAssetScope';
 import { useDirectRequestScope, type RequestScope } from '@/hooks/useRequestScope';
@@ -78,8 +79,9 @@ interface RequestListProps {
   focusRequestId?: string;
   focusQuoteId?: string;
   /** Direct (default, historic) or delegated (Facility Manager, 9C.4). In
-   * delegated mode quotes, work orders and the forum are never queried, and
-   * `focusQuoteId` is ignored. */
+   * delegated mode work orders and the forum are never queried; quotes go
+   * through the minimized delegated RPCs (9C.5) and `focusQuoteId` only
+   * applies with quotes.view. */
   scope?: RequestScope;
 }
 
@@ -212,11 +214,24 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
     }
 
     if (isDelegated) {
-      // Minimized payload from the delegated RPC. No quotes, no work
-      // orders, no seed: those modules are not delegated.
+      // Minimized payload from the delegated RPC. No raw quotes, no work
+      // orders, no seed.
       try {
         setLoading(true);
         setRequests(await fetchDelegatedRequests(organizationId, 'sent'));
+        // Quotes are delegated since 9C.5 (quotes.view): only the number of
+        // quotes under review per request, never an amount. Work orders and
+        // the forum are still never queried.
+        if (requestScope.canViewQuotes) {
+          try {
+            setQuoteCounts(await fetchDelegatedQuoteCounts(organizationId));
+          } catch (quoteError) {
+            console.error('Error loading delegated quote counts:', quoteError);
+            setQuoteCounts({});
+          }
+        } else {
+          setQuoteCounts({});
+        }
       } catch (error) {
         console.error('Error loading delegated requests:', error);
         setRequests([]);
@@ -357,7 +372,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
       return;
     }
 
-    // Quotes are never opened in delegated mode (quote= is ignored).
+    // Delegated mode opens quotes only with quotes.view (canViewQuotes).
     if (focusQuoteId && requestScope.canViewQuotes) {
       setSelectedRequest(found);
       setShowQuotesDialog(true);
@@ -620,6 +635,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
           onClose={() => { setShowQuotesDialog(false); setSelectedRequest(null); }}
           request={selectedRequest}
           focusQuoteId={selectedRequest.id === focusRequestId ? focusQuoteId : undefined}
+          delegated={isDelegated && organizationId ? { clientOrganizationId: organizationId } : undefined}
         />
       )}
 

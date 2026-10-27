@@ -4301,6 +4301,10 @@ export type Database = {
           provider_organization_ids: string[]
         }[]
       }
+      approve_facility_management_quote: {
+        Args: { _client_organization_id: string; _quote_id: string }
+        Returns: Json
+      }
       approve_quote: { Args: { target_quote_id: string }; Returns: undefined }
       assert_valid_criticality_thresholds: {
         Args: {
@@ -4462,6 +4466,10 @@ export type Database = {
         Args: { p_template_id: string }
         Returns: boolean
       }
+      can_approve_quotes_as_facility_manager: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
       can_convert_maintenance_notice_as_facility_manager: {
         Args: { _organization_id: string }
         Returns: boolean
@@ -4570,6 +4578,10 @@ export type Database = {
         Returns: boolean
       }
       can_view_preventive_maintenance: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
+      can_view_quotes_as_facility_manager: {
         Args: { _organization_id: string }
         Returns: boolean
       }
@@ -5105,10 +5117,30 @@ export type Database = {
         }
         Returns: boolean
       }
+      facility_management_quote_payload: {
+        Args: {
+          _can_decide: boolean
+          _prices_visible: boolean
+          _quote: Database["public"]["Tables"]["quotes"]["Row"]
+        }
+        Returns: Json
+      }
+      facility_management_quote_prices_visible: {
+        Args: { _request_id: string }
+        Returns: boolean
+      }
       facility_management_request_payload: {
         Args: {
           _can_create: boolean
           _can_manage: boolean
+          _request: Database["public"]["Tables"]["requests"]["Row"]
+        }
+        Returns: Json
+      }
+      facility_management_request_quotes_payload: {
+        Args: {
+          _can_approve: boolean
+          _only_quote_id?: string
           _request: Database["public"]["Tables"]["requests"]["Row"]
         }
         Returns: Json
@@ -5443,6 +5475,14 @@ export type Database = {
           status: string
         }[]
       }
+      get_facility_management_quote: {
+        Args: { _client_organization_id: string; _quote_id: string }
+        Returns: Json
+      }
+      get_facility_management_quote_counts: {
+        Args: { _client_organization_id: string }
+        Returns: Json
+      }
       get_facility_management_relationships: {
         Args: { _client_organization_id: string }
         Returns: {
@@ -5493,6 +5533,10 @@ export type Database = {
           organization_type: Database["public"]["Enums"]["organization_type"]
           specialties: string[]
         }[]
+      }
+      get_facility_management_request_quotes: {
+        Args: { _client_organization_id: string; _request_id: string }
+        Returns: Json
       }
       get_facility_management_requests: {
         Args: { _client_organization_id: string; _scope?: string }
@@ -6034,6 +6078,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reject_facility_management_quote: {
+        Args: {
+          _client_organization_id: string
+          _quote_id: string
+          _reason?: string
+        }
+        Returns: Json
       }
       reject_quote: {
         Args: { reason?: string; target_quote_id: string }
@@ -7553,3 +7605,4 @@ export const Constants = {
     },
   },
 } as const
+

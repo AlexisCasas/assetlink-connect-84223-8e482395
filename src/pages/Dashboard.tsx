@@ -135,9 +135,9 @@ const Dashboard = () => {
         // the legacy role mapping (a facility_manager maps to 'proveedor'
         // but is never provider-facing). The client comes from
         // ?managedClient= validated against get_my_facility_management_
-        // clients(); the RPCs re-check. ?quote= is ignored.
+        // clients(); the RPCs re-check. ?quote= only opens quotes with quotes.view.
         if (currentOrganization?.organizationType === 'facility_manager') {
-          return <DelegatedRequestsModule managedClientId={focus.managedClientId} focusRequestId={focus.requestId} />;
+          return <DelegatedRequestsModule managedClientId={focus.managedClientId} focusRequestId={focus.requestId} focusQuoteId={focus.quoteId} />;
         }
         if (user?.role === 'cliente') {
           return <RequestList focusRequestId={focus.requestId} focusQuoteId={focus.quoteId} />;
