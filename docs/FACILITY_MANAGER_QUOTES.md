@@ -1,7 +1,7 @@
 # Facility Manager · Cotizaciones delegadas (Fase 1 · Punto 9C.5)
 
 - Migración: `supabase/migrations/20260930120000_facility_manager_quotes_access.sql`.
-- Pruebas: `supabase/tests/facility_manager_quotes_access.test.sql` (147 aserciones).
+- Pruebas: `supabase/tests/facility_manager_quotes_access.test.sql` (162 aserciones).
 - Frontend: `src/lib/quoteData.ts`, `QuoteListDialog` (modo `delegated`),
   `RequestList`, `useRequestScope`, `facilityManagement.ts`.
 
@@ -134,8 +134,8 @@ serializar decisiones concurrentes y escriben `audit_logs`
 
 ## 9. Verificación
 
-- pgTAP dedicado: **147/147**. Regresión completa local: **2154/2154**
-  (2007 previas + 147), 19 archivos.
+- pgTAP dedicado: **162/162**. Regresión completa local: **2169/2169**
+  (2007 previas + 162), 19 archivos.
 - Controles negativos (mutación temporal en la base local, restaurada):
   importes siempre visibles (12 fallos), payload que siempre incluye `amount` (4),
   rol technician en lectura (2), aprobar sin comprobar ocultación (4),
@@ -157,3 +157,117 @@ serializar decisiones concurrentes y escriben `audit_logs`
 - Chat de cotizaciones (hoy deshabilitado también para el cliente).
 - Corrección del comportamiento directo con importes ocultos (aprobar a ciegas):
   decisión de producto, no se tocó.
+
+## 11. Verificaciones adicionales (revisión de 9C.5)
+
+### 11.1 ACL estricta
+Las variantes se ejecutan dentro de una transacción descartable (prefijo
+`BEGIN; REVOKE …` + el archivo de prueba, cuyo `ROLLBACK` final también deshace
+el `REVOKE`), así que no queda ningún cambio en la base.
+
+| Variante (para `authenticated` y `anon`) | Suite 9C.5 (162) |
+|---|---|
+| ACL actual | 162 ok |
+| Sin `INSERT/UPDATE/DELETE/TRUNCATE` en **todas** las tablas públicas | 162 ok |
+| Sin DML en `quotes, requests, request_details, request_provider_access, audit_logs, organization_notifications, work_orders` | 162 ok |
+| Sin DML en `assets, client_branches, asset_criticality_assessments, maintenance_notices` (variante de 9C.4) | 162 ok |
+| **Sin ningún privilegio de tabla** (ni `SELECT`) | 156 ok, 0 fallos; se omiten las 6 aserciones que leen tablas crudas a propósito |
+
+Conclusión: las cinco RPCs no necesitan acceso directo a tablas; todo lo hacen
+como `SECURITY DEFINER`. Las aserciones omitidas solo comprueban que el FM
+**no** puede leer ni escribir `quotes`, `work_orders` ni notificaciones por la
+vía cruda (con el `SELECT` revocado esa garantía la da el propio privilegio).
+
+Suites heredadas bajo esas variantes: fallan algunas que usan DML directo como
+`authenticated` o que aseveran los grants (`asset_default_responsible`,
+`automatic_alerts`, `facility_manager_assets_criticality_access`,
+`facility_manager_requests_access`, `organization_access_hardening`,
+`public_table_meta_privilege_hardening`). **Los resultados son idénticos con y
+sin la migración 9C.5** (se compararon quitando sus 10 funciones dentro de la
+misma transacción): no son regresiones, es la dependencia histórica de esas
+suites. Con la ACL real todas pasan: **2169/2169** (2007 + 162).
+
+### 11.2 Concurrencia real
+Dos sesiones `psql` simultáneas contra la base local, como el mismo FM
+manager, aprobando cotizaciones distintas de una misma solicitud (se retiene la
+transacción 0,3 s para forzar el solape).
+
+- Función real: 12 corridas escalonadas (aprobar/aprobar y aprobar/rechazar) y
+  15 simultáneas: **0 inconsistencias**. Siempre una sola cotización aprobada,
+  las demás `rejected`, la sesión perdedora recibe `55000`, y la auditoría tiene
+  exactamente una fila `quote_approved` (sin `quote_rejected` extra).
+- **Control negativo:** quitando los dos `FOR UPDATE` (solicitud y cotización)
+  la misma prueba produce **9 de 15 corridas con dos cotizaciones aprobadas y
+  dos auditorías**. Se restauró la función y se repitió: 10/10 consistentes.
+
+El bloqueo de la fila de `requests` es, por tanto, necesario y suficiente.
+
+### 11.3 Deep link `quote=` (navegador, Supabase local)
+`#requests?managedClient=…&request=…&quote=…`:
+
+| Caso | Resultado |
+|---|---|
+| FM manager asignado | Abre el diálogo y resalta la cotización |
+| Cotización/solicitud de **otro cliente** | No abre diálogo; aviso genérico "No se pudo abrir la solicitud"; ningún dato en el DOM |
+| Relación **suspendida** | "Cliente no disponible: no tienes acceso delegado…" |
+| FM manager **no asignado** | El mismo mensaje; ningún dato en el DOM |
+
+### 11.4 Mínimo de cotizaciones y cierre anticipado
+**Comportamiento actual (sin cambios):**
+
+- Los importes se muestran si `recibidas >= min_quotes`
+  (`QuoteListDialog.loadQuotes`; el comentario del código dice "regardless of
+  quotes_closed"). El servidor delegado aplica la misma regla.
+- El botón **"Cerrar envío de cotizaciones y ver precios"** hace
+  `UPDATE requests SET quotes_closed = true` y fuerza `setShowPrices(true)` solo
+  en el estado local. Al **reabrir** el diálogo se recalcula con
+  `recibidas >= min_quotes`: si no se alcanzó, los importes vuelven a ocultarse.
+  El mensaje del botón promete algo que no persiste.
+- Cerrar impide nuevas cotizaciones (`can_provider_quote_request` exige
+  `quotes_closed` falso), así que el recuento ya no puede crecer.
+
+**¿Puede una solicitud quedar bloqueada?** Sí, para el FM: solicitud cerrada con
+`recibidas < min_quotes` (por ejemplo, `min_quotes = 3` y solo respondieron 2).
+- Delegado: importes ocultos, `can_approve = false`, aprobar/rechazar `55000`.
+- Cliente directo: puede decidir a ciegas (el flujo directo no exige importes
+  visibles).
+- **Salida existente, sin cambiar reglas:** bajar `min_quotes` editando la
+  solicitud (cliente directo, o FM con `requests.manage`; el formulario admite
+  1-20 y `save_facility_management_request` valida `>= 1`). Cubierto por prueba.
+
+**Solución mínima propuesta (no aplicada, requiere decisión comercial):** que
+`facility_management_quote_prices_visible` devuelva `true` también cuando
+`requests.quotes_closed` sea verdadero, y que `QuoteListDialog.loadQuotes`
+(`setShowPrices(count >= min || quotesClosed)`) haga lo mismo en el flujo directo.
+Es seguro para 9C.5: solo el cliente (o quien edite la solicitud) cierra el
+envío, el FM delegado no puede cerrarlo (`quotes_closed` no está en la lista
+blanca de `save_facility_management_request`) y, una vez cerrado, ningún
+proveedor puede añadir cotizaciones, así que el recuento queda fijo.
+
+**Conteos tras aprobar/rechazar:** `get_facility_management_quote_counts` cuenta
+solo `submitted`, así que baja al decidir; `quotes_received` y `prices_visible`
+**no** cambian (cuentan `submitted + approved + rejected`). Cubierto por pgTAP
+(5.1, 5.3 y 6b), incluida la paridad entre aprobación directa y delegada.
+
+## 12. Revisión de seguridad de las cinco RPCs
+
+| Control | Resultado |
+|---|---|
+| Identidad | `auth.uid()` nulo ⇒ `42501`; ninguna RPC recibe `user_id`, FM ni membresía |
+| Relación, asignación, rol y permisos | Un único helper (`has_facility_management_operational_access_all`) en las cinco; pruebas por rol, persona no asignada, membresía inactiva, relación suspendida y cada combinación de permisos |
+| Otros clientes | Toda consulta filtra por `organization_id = _client_organization_id`; id de otro cliente, inexistente o de borrador ⇒ `NULL` (lecturas) o `42501` (decisiones), con el mismo mensaje |
+| Importes ocultos | `amount` es `null` en listado, detalle y respuestas de decisión; sin rastro en el resto del JSON (prueba por texto) |
+| Datos sensibles | Lista blanca exacta de claves verificada por prueba; sin proveedor, usuarios, desglose económico, observaciones ni OT |
+| FM como proveedor | `INSERT/UPDATE/DELETE` crudos rechazados o a 0 filas; `can_provider_quote_request` y `is_provider_facing_organization` ⇒ `false`; no puede usar `approve_quote`/`reject_quote` |
+| `SECURITY DEFINER` / `search_path` / grants | Las 5 RPCs: definer, `search_path=""`, `EXECUTE` solo `authenticated`; los 5 helpers sin `EXECUTE` para clientes. Verificado en `pg_proc` |
+| Mensajes de error | 16 mensajes estáticos; ninguno interpola ids, importes ni nombres |
+
+Hallazgos (no corregidos, fuera de 9C.5):
+1. `approve_quote` / `reject_quote` (flujo directo) **no bloquean** la solicitud
+   ni la cotización; dos aprobaciones directas concurrentes podrían dejar dos
+   cotizaciones aprobadas, y una directa concurrente con una delegada también.
+   Se deduce de la lectura del código; no se probó experimentalmente.
+   Corrección mínima: añadir los mismos `FOR UPDATE`.
+2. `notify_quote_status_change` guarda como `actor_user_id` al usuario del FM en
+   la notificación del proveedor (solo el uuid, igual que con un usuario del
+   cliente). No se revisó la UI del proveedor.
