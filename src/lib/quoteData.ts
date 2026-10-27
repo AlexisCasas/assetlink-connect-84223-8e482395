@@ -12,13 +12,16 @@ export interface DelegatedQuote {
   id: string;
   requestId: string;
   status: string;
-  description: string;
+  /** null mientras los importes no sean visibles: el texto libre puede contener cifras. */
+  description: string | null;
   createdAt: string;
   /** null mientras los importes no sean visibles. */
   amount: number | null;
   approvedAt: string | null;
+  /** null mientras los importes no sean visibles. */
   approvalReason: string | null;
   rejectedAt: string | null;
+  /** null mientras los importes no sean visibles. */
   rejectionReason: string | null;
   /** Calculado por el servidor: capacidad + solicitud abierta + importes visibles. */
   canApprove: boolean;
@@ -38,7 +41,7 @@ interface DelegatedQuotePayload {
   id: string;
   request_id: string;
   status: string;
-  description: string;
+  description: string | null;
   created_at: string;
   amount: number | null;
   approved_at: string | null;

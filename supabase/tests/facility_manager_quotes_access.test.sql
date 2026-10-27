@@ -8,7 +8,7 @@
 -- código) del flujo directo del cliente.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(177);
+SELECT plan(208);
 
 -- -------------------------------------------------------------------------
 -- Fixture (sintético, se descarta con el ROLLBACK final)
@@ -166,6 +166,16 @@ INSERT INTO public.quotes (id, request_id, provider_organization_id, created_by_
   ('e9a00000-0000-0000-0000-000000000021', 'e98e0000-0000-0000-0000-0000000000ad', 'e9200000-0000-0000-0000-000000000091', 'e9100000-0000-0000-0000-000000000041', 13001, 'Cot AD/P1', 'submitted'),
   ('e9a00000-0000-0000-0000-000000000022', 'e98e0000-0000-0000-0000-0000000000ad', 'e9200000-0000-0000-0000-000000000092', 'e9100000-0000-0000-0000-000000000042', 13002, 'Cot AD/P2', 'submitted');
 
+-- HF01 (las cifras se buscan con limites no numericos: los timestamps con microsegundos las contienen como subcadena):
+-- solicitud con min_quotes = 4 y 3 cotizaciones cuyos TEXTOS LIBRES contienen importes
+-- (cifra con formato, cifra en palabras, cifra en un motivo). Mientras 3 < 4 los textos deben ocultarse.
+INSERT INTO public.requests (id, organization_id, request_number, title, description, asset, location, service_type, deadline, status, request_type, is_public, created_by, min_quotes) VALUES
+  ('e98e0000-0000-0000-0000-0000000000ae', 'e9200000-0000-0000-0000-0000000000a1', 'REQ-9C5-AE', 'Textos con importes', 'd', 'x', 'x', 'correctivo', now() + interval '10 days', 'sent', 'external', true, 'fixture', 4);
+INSERT INTO public.quotes (id, request_id, provider_organization_id, created_by_user_id, amount, description, status, approval_reason, rejection_reason, approved_at, rejected_at) VALUES
+  ('e9a00000-0000-0000-0000-000000000031', 'e98e0000-0000-0000-0000-0000000000ae', 'e9200000-0000-0000-0000-000000000091', 'e9100000-0000-0000-0000-000000000041', 1800, 'Incluye mano de obra: S/ 1800.00 en total', 'submitted', NULL, NULL, NULL, NULL),
+  ('e9a00000-0000-0000-0000-000000000032', 'e98e0000-0000-0000-0000-0000000000ae', 'e9200000-0000-0000-0000-000000000092', 'e9100000-0000-0000-0000-000000000042', 1900, 'Mil ochocientos soles por todo el trabajo', 'approved', 'Elegida: quinientos dólares menos que la otra', NULL, now(), NULL),
+  ('e9a00000-0000-0000-0000-000000000033', 'e98e0000-0000-0000-0000-0000000000ae', 'e9200000-0000-0000-0000-000000000093', 'e9100000-0000-0000-0000-000000000043', 2500, 'Oferta alta', 'rejected', NULL, 'Costaba 2 mil quinientos soles', NULL, now());
+
 CREATE FUNCTION pg_temp.as_user(p_user uuid) RETURNS void LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claim.sub', COALESCE(p_user::text, ''), true);
 $$;
@@ -248,6 +258,14 @@ SELECT ok((SELECT count(*) = 2 AND bool_and(p.prosrc ~ 'FOR UPDATE OF request')
            FROM pg_proc p WHERE p.oid IN ('public.approve_facility_management_quote(uuid,uuid)'::regprocedure, 'public.reject_facility_management_quote(uuid,uuid,text)'::regprocedure)),
   'direct and delegated decisions lock the same request row (serialized)');
 
+SELECT ok((SELECT NOT p.prosecdef AND array_to_string(p.proconfig, ',') = 'search_path=""'
+                AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE') AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
+                AND p.prosrc ~ 'WHEN COALESCE\(_prices_visible, false\) THEN _quote.description END'
+                AND p.prosrc ~ 'WHEN COALESCE\(_prices_visible, false\) THEN _quote.rejection_reason END'
+                AND p.prosrc ~ 'WHEN COALESCE\(_prices_visible, false\) AND _quote.status = ''approved'' THEN _quote.approval_reason END'
+           FROM pg_proc p WHERE p.oid = 'public.facility_management_quote_payload(public.quotes,boolean,boolean)'::regprocedure),
+  'HF01: the payload helper keeps its signature and ACL and gates the three free-text fields on prices_visible');
+
 SET LOCAL ROLE authenticated;
 
 -- -------------------------------------------------------------------------
@@ -329,7 +347,7 @@ SELECT is((SELECT (p->>'prices_visible')::boolean FROM r_hidden), false, 'hidden
 SELECT is((SELECT (p->>'quotes_received')::int FROM r_hidden), 2, 'hidden: received count is still shown');
 SELECT is((SELECT (p->>'min_quotes')::int FROM r_hidden), 3, 'hidden: min_quotes is shown');
 SELECT is((SELECT count(*) FROM r_hidden, jsonb_array_elements(p->'quotes') e WHERE e->'amount' = 'null'::jsonb), 2::bigint, 'hidden: every amount is null');
-SELECT ok((SELECT p::text !~ '(2001|2002)' FROM r_hidden), 'hidden: the amounts appear nowhere in the response');
+SELECT ok((SELECT p::text !~ '(^|[^0-9])(2001|2002)([^0-9]|$)' FROM r_hidden), 'hidden: the amounts appear nowhere in the response');
 SELECT is((SELECT (p->>'can_approve')::boolean FROM r_hidden), false, 'hidden: cannot approve (FM manager has quotes.approve)');
 SELECT is((SELECT (p->>'can_approve')::boolean FROM r_visible), true, 'visible: FM manager can approve');
 SELECT is((SELECT count(*) FROM r_hidden, jsonb_array_elements(p->'quotes') e WHERE (e->>'can_approve')::boolean), 0::bigint, 'hidden: no quote is approvable');
@@ -354,7 +372,7 @@ SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-000
 SELECT is((public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000001')->'quote'->>'amount')::numeric, 1001::numeric, 'detail: visible amount');
 SELECT is((public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000001')->>'quotes_received')::int, 2, 'detail: summary included');
 SELECT is((public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000004')->'quote'->'amount'), 'null'::jsonb, 'detail: hidden amount is null');
-SELECT ok(public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000004')::text !~ '(2001|2002)', 'detail: hidden amounts appear nowhere');
+SELECT ok(public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000004')::text !~ '(^|[^0-9])(2001|2002)([^0-9]|$)', 'detail: hidden amounts appear nowhere');
 SELECT is((SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000001')->'quote') k),
   ARRAY['amount', 'approval_reason', 'approved_at', 'can_approve', 'created_at', 'description', 'id', 'rejected_at', 'rejection_reason', 'request_id', 'status'],
   'detail: quote has exactly the whitelisted keys');
@@ -483,7 +501,7 @@ SELECT is((SELECT count(*) FROM public.audit_logs WHERE action = 'facility_manag
            AND actor_user_id = 'e9100000-0000-0000-0000-000000000013' AND record_id = 'e9a00000-0000-0000-0000-000000000011'
            AND new_data->'auto_rejected_quote_ids' @> '"e9a00000-0000-0000-0000-000000000010"'::jsonb), 1::bigint,
   'approve: audited against the client organization');
-SELECT ok((SELECT bool_and((old_data::text || new_data::text) !~ '(7001|7002|7003|amount)') FROM public.audit_logs WHERE action LIKE 'facility_management.quote_%'),
+SELECT ok((SELECT bool_and((old_data::text || new_data::text) !~ '((^|[^0-9])(7001|7002|7003)([^0-9]|$)|amount)') FROM public.audit_logs WHERE action LIKE 'facility_management.quote_%'),
   'audit rows contain no amounts');
 SELECT is((SELECT count(*) FROM public.organization_notifications WHERE organization_id = 'e9200000-0000-0000-0000-000000000092' AND type = 'quote_approved'), 1::bigint,
   'approve: the provider is notified as in the direct flow');
@@ -530,7 +548,7 @@ SELECT throws_ok($$ SELECT public.approve_facility_management_quote('e9200000-00
 SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000012');
 SELECT is((public.reject_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000020', '   ')->'rejection_reason'), 'null'::jsonb, 'reject: blank reason is stored as NULL');
 SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
-SELECT is((SELECT COALESCE(sum((e->>'submitted_quotes')::int), 0) FROM jsonb_array_elements(public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')) e), 11::bigint,
+SELECT is((SELECT COALESCE(sum((e->>'submitted_quotes')::int), 0) FROM jsonb_array_elements(public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')) e), 12::bigint,
   'counts: only the quotes still under review remain after approve/reject');
 RESET ROLE;
 SELECT is((SELECT count(*) FROM public.audit_logs WHERE action = 'facility_management.quote_rejected' AND organization_id = 'e9200000-0000-0000-0000-0000000000a1'), 2::bigint, 'reject: both rejections are audited');
@@ -565,12 +583,12 @@ SELECT is((SELECT count(*) FROM public.quotes WHERE request_id = 'e98e0000-0000-
 -- 6b. Solicitud cerrada antes de alcanzar min_quotes, y conteos tras la paridad
 -- -------------------------------------------------------------------------
 SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
-SELECT is((SELECT COALESCE(sum((e->>'submitted_quotes')::int), 0) FROM jsonb_array_elements(public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')) e), 7::bigint,
+SELECT is((SELECT COALESCE(sum((e->>'submitted_quotes')::int), 0) FROM jsonb_array_elements(public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')) e), 8::bigint,
   'counts: the direct and the delegated approvals of section 6 leave the same remainder');
 -- Antes de cerrar: 2 de 3 recibidas => ocultos y sin poder decidir.
 SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->>'prices_visible')::boolean, false,
   'open and below min_quotes: amounts are hidden');
-SELECT ok(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')::text !~ '(13001|13002)',
+SELECT ok(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')::text !~ '(^|[^0-9])(13001|13002)([^0-9]|$)',
   'open and below min_quotes: the amounts appear nowhere');
 SELECT throws_ok($$ SELECT public.approve_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000021') $$, '55000', NULL,
   'open and below min_quotes: approve => 55000');
@@ -618,6 +636,84 @@ SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
 SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000a2')->>'prices_visible')::boolean, true,
   'lowering min_quotes (request edit) still reveals the amounts of an open request');
+
+-- -------------------------------------------------------------------------
+-- 6c. HF01: los textos libres no filtran importes mientras estan ocultos
+-- -------------------------------------------------------------------------
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
+CREATE TEMP TABLE r_hf AS SELECT public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ae') AS p;
+GRANT SELECT ON r_hf TO authenticated;
+SELECT is((SELECT (p->>'prices_visible')::boolean FROM r_hf), false, 'HF01: 3 of 4 received => amounts hidden');
+SELECT is((SELECT jsonb_array_length(p->'quotes') FROM r_hf), 3, 'HF01: the three quotes (submitted, approved, rejected) are listed');
+SELECT is((SELECT count(*) FROM r_hf, jsonb_array_elements(p->'quotes') e WHERE e->'description' <> 'null'::jsonb), 0::bigint,
+  'HF01: description is null for every quote while amounts are hidden');
+SELECT is((SELECT count(*) FROM r_hf, jsonb_array_elements(p->'quotes') e WHERE e->'approval_reason' <> 'null'::jsonb OR e->'rejection_reason' <> 'null'::jsonb), 0::bigint,
+  'HF01: approval_reason and rejection_reason are null while amounts are hidden');
+SELECT is((SELECT count(*) FROM r_hf, jsonb_array_elements(p->'quotes') e WHERE e->'amount' <> 'null'::jsonb), 0::bigint, 'HF01: amount is still null');
+SELECT ok((SELECT p::text !~* '((^|[^0-9])(1800|1900|2500)([^0-9]|$)|ochocientos|quinientos|S/|dólares|soles)' FROM r_hf), 'HF01: no figure, currency or amount in words appears anywhere in the list response');
+SELECT is((SELECT array_agg(e->>'status' ORDER BY e->>'status') FROM r_hf, jsonb_array_elements(p->'quotes') e), ARRAY['approved', 'rejected', 'submitted'],
+  'HF01: status stays visible (non-economic)');
+SELECT is((SELECT array_agg(k ORDER BY k) FROM r_hf, jsonb_array_elements(p->'quotes') e, jsonb_object_keys(e) k WHERE e->>'status' = 'submitted'),
+  ARRAY['amount', 'approval_reason', 'approved_at', 'can_approve', 'created_at', 'description', 'id', 'rejected_at', 'rejection_reason', 'request_id', 'status'],
+  'HF01: the contract keeps exactly the same keys (only their values are null)');
+SELECT is(public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000031')->'quote'->'description', 'null'::jsonb, 'HF01: detail of the submitted quote: description null');
+SELECT is(public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000032')->'quote'->'approval_reason', 'null'::jsonb, 'HF01: detail of the approved quote: approval_reason null');
+SELECT is(public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000033')->'quote'->'rejection_reason', 'null'::jsonb, 'HF01: detail of the rejected quote: rejection_reason null');
+SELECT ok((public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000031')::text
+         || public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000032')::text
+         || public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000033')::text
+         || public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')::text) !~* '((^|[^0-9])(1800|1900|2500)([^0-9]|$)|ochocientos|quinientos|S/|dólares|soles)',
+  'HF01: detail and counts responses carry no figure either');
+SELECT throws_ok($$ SELECT public.approve_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000031') $$,
+  '55000', 'Quote amounts are not visible yet for this request', 'HF01: deciding is still blocked and the error text carries no data');
+SELECT throws_ok($$ SELECT public.reject_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000031', 'x') $$,
+  '55000', 'Quote amounts are not visible yet for this request', 'HF01: rejecting is still blocked and the error text carries no data');
+
+-- Aislamiento multicliente intacto: otro FM no lee nada de este cliente.
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000021');
+SELECT throws_ok($$ SELECT public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ae') $$, '42501', NULL, 'HF01: another FM still cannot read this client');
+SELECT is(public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000b1', 'e9a00000-0000-0000-0000-000000000031'), NULL::jsonb, 'HF01: a quote of another client is not reachable through the FM own client');
+
+-- El cliente directo conserva su lectura completa (RLS sin cambios): ve los textos tal cual.
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000001');
+SELECT is((SELECT description FROM public.quotes WHERE id = 'e9a00000-0000-0000-0000-000000000031'), 'Incluye mano de obra: S/ 1800.00 en total', 'HF01: the direct client still reads the full description');
+SELECT is((SELECT approval_reason FROM public.quotes WHERE id = 'e9a00000-0000-0000-0000-000000000032'), 'Elegida: quinientos dólares menos que la otra', 'HF01: the direct client still reads the approval reason');
+SELECT is((SELECT rejection_reason FROM public.quotes WHERE id = 'e9a00000-0000-0000-0000-000000000033'), 'Costaba 2 mil quinientos soles', 'HF01: the direct client still reads the rejection reason');
+
+-- Al alcanzar min_quotes los textos autorizados vuelven (comportamiento aprobado de 9C.5).
+RESET ROLE;
+UPDATE public.requests SET min_quotes = 3 WHERE id = 'e98e0000-0000-0000-0000-0000000000ae';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
+SELECT is((SELECT (p->>'prices_visible')::boolean FROM (SELECT public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ae') p) x), true, 'HF01: 3 of 3 received => visible');
+SELECT is((SELECT e->>'description' FROM jsonb_array_elements(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ae')->'quotes') e WHERE e->>'id' = 'e9a00000-0000-0000-0000-000000000031'),
+  'Incluye mano de obra: S/ 1800.00 en total', 'HF01: at min_quotes the description is returned exactly as stored');
+SELECT is((SELECT e->>'approval_reason' FROM jsonb_array_elements(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ae')->'quotes') e WHERE e->>'id' = 'e9a00000-0000-0000-0000-000000000032'),
+  'Elegida: quinientos dólares menos que la otra', 'HF01: at min_quotes the approval reason is returned');
+SELECT is((SELECT e->>'rejection_reason' FROM jsonb_array_elements(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ae')->'quotes') e WHERE e->>'id' = 'e9a00000-0000-0000-0000-000000000033'),
+  'Costaba 2 mil quinientos soles', 'HF01: at min_quotes the rejection reason is returned');
+SELECT is((public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000031')->'quote'->>'amount')::numeric, 1800::numeric, 'HF01: at min_quotes the amount is returned');
+SELECT is((SELECT e->>'can_approve' FROM jsonb_array_elements(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ae')->'quotes') e WHERE e->>'id' = 'e9a00000-0000-0000-0000-000000000031'),
+  'true', 'HF01: quotes.approve controls unchanged: the manager can approve the submitted quote once visible');
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000015');
+SELECT throws_ok($$ SELECT public.approve_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000031') $$, '42501', NULL, 'HF01: a requester still cannot approve (role)');
+
+-- Cierre anticipado del envio: se muestra lo autorizado aunque no se alcance el minimo.
+RESET ROLE;
+UPDATE public.requests SET min_quotes = 4, quotes_closed = false WHERE id = 'e98e0000-0000-0000-0000-0000000000ae';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
+SELECT is((SELECT count(*) FROM jsonb_array_elements(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ae')->'quotes') e WHERE e->'description' <> 'null'::jsonb), 0::bigint,
+  'HF01: back under the minimum and open => texts hidden again');
+RESET ROLE;
+UPDATE public.requests SET quotes_closed = true WHERE id = 'e98e0000-0000-0000-0000-0000000000ae';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
+SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ae')->>'prices_visible')::boolean, true, 'HF01: closed below the minimum => visible');
+SELECT is((SELECT e->>'description' FROM jsonb_array_elements(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ae')->'quotes') e WHERE e->>'id' = 'e9a00000-0000-0000-0000-000000000031'),
+  'Incluye mano de obra: S/ 1800.00 en total', 'HF01: closing the submission shows the authorized text');
+SELECT is((SELECT count(*) FROM jsonb_array_elements(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ae')->'quotes') e WHERE e->>'approval_reason' IS NOT NULL OR e->>'rejection_reason' IS NOT NULL),
+  2::bigint, 'HF01: closing the submission shows the approval and rejection reasons');
 
 -- -------------------------------------------------------------------------
 -- 7. El acceso se corta de inmediato

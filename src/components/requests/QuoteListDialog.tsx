@@ -38,7 +38,8 @@ interface Quote {
   provider_organization_id: string | null;
   team_member_id: string | null;
   amount: number | null;
-  description: string;
+  /** Delegated mode: null while the amounts are hidden (the free text may contain figures). */
+  description: string | null;
   status: string;
   created_at: string;
   team_member_name?: string;
@@ -454,7 +455,14 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId, delegate
                       <p className="text-sm font-medium text-muted-foreground mb-1">
                         Descripción:
                       </p>
-                      <p className="text-sm">{quote.description}</p>
+                      {quote.description !== null ? (
+                        <p className="text-sm">{quote.description}</p>
+                      ) : (
+                        <p className="flex items-center gap-2 text-sm italic text-muted-foreground">
+                          <Lock className="h-3.5 w-3.5" />
+                          Descripción oculta hasta que los importes sean visibles
+                        </p>
+                      )}
                     </div>
 
                     {showPrices && quote.amount !== null ? (
