@@ -8,7 +8,7 @@
 -- código) del flujo directo del cliente.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(162);
+SELECT plan(172);
 
 -- -------------------------------------------------------------------------
 -- Fixture (sintético, se descarta con el ROLLBACK final)
@@ -159,9 +159,9 @@ INSERT INTO public.quotes (id, request_id, provider_organization_id, created_by_
   ('e9a00000-0000-0000-0000-00000000001f', 'e98e0000-0000-0000-0000-0000000000f3', 'e9200000-0000-0000-0000-000000000091', 'e9100000-0000-0000-0000-000000000041', 1801, 'Cot S1', 'submitted', 0, 0, 0, 0, 0, NULL),
   ('e9a00000-0000-0000-0000-000000000020', 'e98e0000-0000-0000-0000-0000000000ac', 'e9200000-0000-0000-0000-000000000091', 'e9100000-0000-0000-0000-000000000041', 1901, 'Cot AC', 'submitted', 0, 0, 0, 0, 0, NULL);
 
--- Solicitud cerrada antes de alcanzar min_quotes (2 de 3 recibidas, envío cerrado).
+-- Solicitud que se cerrará antes de alcanzar min_quotes (2 de 3 recibidas).
 INSERT INTO public.requests (id, organization_id, request_number, title, description, asset, location, service_type, deadline, status, request_type, is_public, created_by, min_quotes, quotes_closed) VALUES
-  ('e98e0000-0000-0000-0000-0000000000ad', 'e9200000-0000-0000-0000-0000000000a1', 'REQ-9C5-AD', 'Cerrada antes del mínimo', 'd', 'x', 'x', 'correctivo', now() + interval '10 days', 'sent', 'external', true, 'fixture', 3, true);
+  ('e98e0000-0000-0000-0000-0000000000ad', 'e9200000-0000-0000-0000-0000000000a1', 'REQ-9C5-AD', 'Cerrada antes del mínimo', 'd', 'x', 'x', 'correctivo', now() + interval '10 days', 'sent', 'external', true, 'fixture', 3, false);
 INSERT INTO public.quotes (id, request_id, provider_organization_id, created_by_user_id, amount, description, status) VALUES
   ('e9a00000-0000-0000-0000-000000000021', 'e98e0000-0000-0000-0000-0000000000ad', 'e9200000-0000-0000-0000-000000000091', 'e9100000-0000-0000-0000-000000000041', 13001, 'Cot AD/P1', 'submitted'),
   ('e9a00000-0000-0000-0000-000000000022', 'e98e0000-0000-0000-0000-0000000000ad', 'e9200000-0000-0000-0000-000000000092', 'e9100000-0000-0000-0000-000000000042', 13002, 'Cot AD/P2', 'submitted');
@@ -176,6 +176,11 @@ $$;
 CREATE FUNCTION pg_temp.rows_updated() RETURNS bigint LANGUAGE plpgsql AS $$
 DECLARE n bigint;
 BEGIN UPDATE public.quotes SET amount = 1; GET DIAGNOSTICS n = ROW_COUNT; RETURN n;
+EXCEPTION WHEN insufficient_privilege THEN RETURN 0; END;
+$$;
+CREATE FUNCTION pg_temp.close_rows() RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE n bigint;
+BEGIN UPDATE public.requests SET quotes_closed = true; GET DIAGNOSTICS n = ROW_COUNT; RETURN n;
 EXCEPTION WHEN insufficient_privilege THEN RETURN 0; END;
 $$;
 CREATE FUNCTION pg_temp.rows_deleted() RETURNS bigint LANGUAGE plpgsql AS $$
@@ -537,27 +542,57 @@ SELECT is((SELECT count(*) FROM public.quotes WHERE request_id = 'e98e0000-0000-
 SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
 SELECT is((SELECT COALESCE(sum((e->>'submitted_quotes')::int), 0) FROM jsonb_array_elements(public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')) e), 7::bigint,
   'counts: the direct and the delegated approvals of section 6 leave the same remainder');
-SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->>'quotes_closed')::boolean, true,
-  'closed before min_quotes: the closed flag is reported');
+-- Antes de cerrar: 2 de 3 recibidas => ocultos y sin poder decidir.
 SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->>'prices_visible')::boolean, false,
-  'closed before min_quotes: closing does NOT reveal amounts (current rule: only quotes >= min_quotes)');
+  'open and below min_quotes: amounts are hidden');
 SELECT ok(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')::text !~ '(13001|13002)',
-  'closed before min_quotes: the amounts appear nowhere');
-SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->>'can_approve')::boolean, false,
-  'closed before min_quotes: the delegate cannot decide');
+  'open and below min_quotes: the amounts appear nowhere');
 SELECT throws_ok($$ SELECT public.approve_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000021') $$, '55000', NULL,
-  'closed before min_quotes: approve => 55000 (request blocked for the delegate)');
-SELECT throws_ok($$ SELECT public.reject_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000021', 'x') $$, '55000', NULL,
-  'closed before min_quotes: reject => 55000');
--- Escape existente (sin cambiar reglas): bajar min_quotes editando la solicitud.
+  'open and below min_quotes: approve => 55000');
+-- El cliente cierra el envío antes del mínimo (acción del cliente, no del FM).
 RESET ROLE;
-UPDATE public.requests SET min_quotes = 2 WHERE id = 'e98e0000-0000-0000-0000-0000000000ad';
+UPDATE public.requests SET quotes_closed = true WHERE id = 'e98e0000-0000-0000-0000-0000000000ad';
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
+SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->>'quotes_closed')::boolean, true,
+  'closed before min_quotes: the closed flag is reported');
+SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->>'quotes_received')::int, 2,
+  'closed before min_quotes: still 2 of 3 received');
 SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->>'prices_visible')::boolean, true,
-  'lowering min_quotes (request edit) reveals the amounts');
+  'closed before min_quotes: closing reveals the amounts (matches the button label)');
+SELECT is((pg_temp.quote_of(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad'), 'e9a00000-0000-0000-0000-000000000021')->>'amount')::numeric, 13001::numeric,
+  'closed before min_quotes: amount is returned');
+SELECT is((public.get_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000022')->'quote'->>'amount')::numeric, 13002::numeric,
+  'closed before min_quotes: the detail also returns the amount');
+SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->>'can_approve')::boolean, true,
+  'closed before min_quotes: the delegate can decide again');
+SELECT is((SELECT count(*) FROM jsonb_array_elements(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->'quotes') e WHERE (e->>'can_approve')::boolean),
+  2::bigint, 'closed before min_quotes: both quotes are approvable');
+-- Otros clientes y roles siguen igual de aislados con el envío cerrado.
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000015');
+SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->>'can_approve')::boolean, false,
+  'closed before min_quotes: a requester still cannot approve (role)');
+SELECT throws_ok($$ SELECT public.approve_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000021') $$, '42501', NULL,
+  'closed before min_quotes: a requester still cannot approve (42501)');
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000021');
+SELECT throws_ok($$ SELECT public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad') $$, '42501', NULL,
+  'closed before min_quotes: another FM still cannot read');
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
 SELECT lives_ok($$ SELECT public.approve_facility_management_quote('e9200000-0000-0000-0000-0000000000a1', 'e9a00000-0000-0000-0000-000000000021') $$,
-  'lowering min_quotes unblocks the delegate');
+  'closed before min_quotes: the delegate can approve (no longer blocked)');
+SELECT is((SELECT array_agg(e->>'status' ORDER BY e->>'status') FROM jsonb_array_elements(public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->'quotes') e),
+  ARRAY['approved', 'rejected'], 'closed before min_quotes: one approved, the other rejected');
+SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000ad')->>'prices_visible')::boolean, true,
+  'closed before min_quotes: amounts stay visible after the decision');
+-- El FM no puede cerrar el envío: quotes_closed no se escribe por ninguna RPC delegada ni por la tabla.
+SELECT is(pg_temp.close_rows(), 0::bigint, 'the delegate cannot set quotes_closed (raw write on requests affects no row)');
+-- Otra salida existente, sin cambiar reglas: bajar min_quotes editando la solicitud.
+RESET ROLE;
+UPDATE public.requests SET min_quotes = 2 WHERE id = 'e98e0000-0000-0000-0000-0000000000a2';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
+SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000a2')->>'prices_visible')::boolean, true,
+  'lowering min_quotes (request edit) still reveals the amounts of an open request');
 
 -- -------------------------------------------------------------------------
 -- 7. El acceso se corta de inmediato

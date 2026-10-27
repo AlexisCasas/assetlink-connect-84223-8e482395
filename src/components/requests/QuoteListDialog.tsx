@@ -185,9 +185,11 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId, delegate
 
       setQuotes(transformedQuotes);
 
-      // Show prices ONLY when quotes received >= minQuotes (regardless of quotes_closed status)
+      // Show prices when quotes received >= minQuotes, or when the client closed quote
+      // submission (the "Cerrar envio y ver precios" button): otherwise a request closed
+      // before the minimum hid its prices again as soon as the dialog was reopened.
       const quotesReceived = transformedQuotes.length;
-      const shouldShowPrices = quotesReceived >= reqMinQuotes;
+      const shouldShowPrices = quotesReceived >= reqMinQuotes || !!requestData?.quotes_closed;
       setShowPrices(shouldShowPrices);
     } catch (error) {
       console.error('Error loading quotes:', error);

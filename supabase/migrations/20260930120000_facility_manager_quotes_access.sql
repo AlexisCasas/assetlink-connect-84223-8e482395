@@ -29,10 +29,14 @@
 --     SECURITY DEFINER que devuelven una respuesta minimizada.
 --   - Ocultación de importes en SERVIDOR: el importe (amount) solo se
 --     devuelve cuando las cotizaciones recibidas (submitted/approved/
---     rejected) alcanzan requests.min_quotes, la misma regla que aplica la
---     UI directa al recargar. Mientras estén ocultos, el delegado tampoco
---     puede aprobar ni rechazar (55000): decidir a ciegas anularía el
---     propósito de la regla.
+--     rejected) alcanzan requests.min_quotes O el cliente cerró el envío de
+--     cotizaciones (requests.quotes_closed). Cerrar el envío es lo que
+--     promete el botón "Cerrar envío de cotizaciones y ver precios" y fija el
+--     recuento (un proveedor ya no puede cotizar), así que revelar es seguro.
+--     El FM no puede cerrar el envío (quotes_closed no está en la lista
+--     blanca de save_facility_management_request). Mientras estén ocultos, el
+--     delegado tampoco puede aprobar ni rechazar (55000): decidir a ciegas
+--     anularía el propósito de la regla.
 --   - Respuestas sin provider_id, provider_organization_id, team_member_id,
 --     created_by_user_id, approved_by_user_id, rejected_by_user_id,
 --     client_observation, desglose económico (subtotal, IGV, gastos
@@ -84,7 +88,8 @@ REVOKE ALL ON FUNCTION public.can_approve_quotes_as_facility_manager(uuid) FROM 
 -- -------------------------------------------------------------------------
 
 -- ¿Los importes de esta solicitud son visibles? Misma regla que
--- QuoteListDialog.loadQuotes: cotizaciones recibidas >= min_quotes.
+-- QuoteListDialog.loadQuotes: cotizaciones recibidas >= min_quotes, o envío
+-- de cotizaciones cerrado por el cliente (requests.quotes_closed).
 CREATE OR REPLACE FUNCTION public.facility_management_quote_prices_visible(_request_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -92,7 +97,7 @@ STABLE
 SET search_path = ''
 AS $$
   SELECT COALESCE((
-    SELECT (
+    SELECT COALESCE(r.quotes_closed, false) OR (
       SELECT count(*) FROM public.quotes q
       WHERE q.request_id = r.id AND q.status IN ('submitted', 'approved', 'rejected')
     ) >= r.min_quotes

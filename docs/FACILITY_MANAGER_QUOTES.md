@@ -1,7 +1,7 @@
 # Facility Manager · Cotizaciones delegadas (Fase 1 · Punto 9C.5)
 
 - Migración: `supabase/migrations/20260930120000_facility_manager_quotes_access.sql`.
-- Pruebas: `supabase/tests/facility_manager_quotes_access.test.sql` (162 aserciones).
+- Pruebas: `supabase/tests/facility_manager_quotes_access.test.sql` (172 aserciones).
 - Frontend: `src/lib/quoteData.ts`, `QuoteListDialog` (modo `delegated`),
   `RequestList`, `useRequestScope`, `facilityManagement.ts`.
 
@@ -59,17 +59,21 @@ permitido; `22023` razón demasiado larga.
 
 `amount` solo se devuelve cuando las cotizaciones recibidas
 (`submitted` + `approved` + `rejected`, sin borradores) alcanzan
-`requests.min_quotes`. Es la regla que la UI directa aplica al recargar
-(`QuoteListDialog.loadQuotes`), ahora aplicada **en el backend** a listados,
-detalle, aprobación y rechazo. Mientras estén ocultos:
+`requests.min_quotes` **o el cliente cerró el envío de cotizaciones**
+(`requests.quotes_closed`). Es la misma regla que aplica ahora la UI directa
+(`QuoteListDialog.loadQuotes`), aplicada **en el backend** a listados, detalle,
+aprobación y rechazo. Mientras estén ocultos:
 
 - `amount` es `null` y no aparece en ninguna otra parte de la respuesta;
 - `can_approve` es `false` y `approve`/`reject` responden `55000`
   ("decidir a ciegas" anularía el propósito de la regla).
 
 La respuesta sí informa `min_quotes`, `quotes_received`, `quotes_closed` y
-`prices_visible`. `quotes_closed` **no** revela importes (igual que el flujo
-directo tras recargar).
+`prices_visible`. Cerrar el envío revela los importes aunque no se haya llegado
+al mínimo (es lo que promete el botón "Cerrar envío de cotizaciones y ver
+precios"). Es seguro: cerrado, ningún proveedor puede cotizar (el recuento queda
+fijo) y el FM no puede cerrar el envío (`quotes_closed` no está en la lista
+blanca de `save_facility_management_request` ni en ninguna RPC delegada).
 
 ## 5. Qué devuelve y qué no
 
@@ -125,7 +129,7 @@ serializar decisiones concurrentes y escriben `audit_logs`
 | Aspecto | Cliente directo | FM delegado |
 |---|---|---|
 | Lectura | RLS sobre `quotes` | RPC minimizada |
-| Importes antes de `min_quotes` | Ocultos solo en la UI; la RLS ya los entrega | Ocultos **en el servidor** |
+| Importes antes de `min_quotes` y sin cerrar el envío | Ocultos solo en la UI; la RLS ya los entrega | Ocultos **en el servidor** |
 | Aprobar/rechazar con importes ocultos | Permitido | `55000` |
 | Aprobar | owner/admin/manager/requester | owner/admin/manager |
 | Rechazar con razón | La UI envía `NULL` | Admite razón opcional |
@@ -134,8 +138,8 @@ serializar decisiones concurrentes y escriben `audit_logs`
 
 ## 9. Verificación
 
-- pgTAP dedicado: **162/162**. Regresión completa local: **2169/2169**
-  (2007 previas + 162), 19 archivos.
+- pgTAP dedicado: **172/172**. Regresión completa local: **2179/2179**
+  (2007 previas + 172), 19 archivos.
 - Controles negativos (mutación temporal en la base local, restaurada):
   importes siempre visibles (12 fallos), payload que siempre incluye `amount` (4),
   rol technician en lectura (2), aprobar sin comprobar ocultación (4),
@@ -165,13 +169,13 @@ Las variantes se ejecutan dentro de una transacción descartable (prefijo
 `BEGIN; REVOKE …` + el archivo de prueba, cuyo `ROLLBACK` final también deshace
 el `REVOKE`), así que no queda ningún cambio en la base.
 
-| Variante (para `authenticated` y `anon`) | Suite 9C.5 (162) |
+| Variante (para `authenticated` y `anon`) | Suite 9C.5 (172) |
 |---|---|
-| ACL actual | 162 ok |
-| Sin `INSERT/UPDATE/DELETE/TRUNCATE` en **todas** las tablas públicas | 162 ok |
-| Sin DML en `quotes, requests, request_details, request_provider_access, audit_logs, organization_notifications, work_orders` | 162 ok |
-| Sin DML en `assets, client_branches, asset_criticality_assessments, maintenance_notices` (variante de 9C.4) | 162 ok |
-| **Sin ningún privilegio de tabla** (ni `SELECT`) | 156 ok, 0 fallos; se omiten las 6 aserciones que leen tablas crudas a propósito |
+| ACL actual | 172 ok |
+| Sin `INSERT/UPDATE/DELETE/TRUNCATE` en **todas** las tablas públicas | 172 ok |
+| Sin DML en `quotes, requests, request_details, request_provider_access, audit_logs, organization_notifications, work_orders` | 172 ok |
+| Sin DML en `assets, client_branches, asset_criticality_assessments, maintenance_notices` (variante de 9C.4) | 172 ok |
+| **Sin ningún privilegio de tabla** (ni `SELECT`) | 166 ok, 0 fallos; se omiten las 6 aserciones que leen tablas crudas a propósito |
 
 Conclusión: las cinco RPCs no necesitan acceso directo a tablas; todo lo hacen
 como `SECURITY DEFINER`. Las aserciones omitidas solo comprueban que el FM
@@ -185,7 +189,7 @@ Suites heredadas bajo esas variantes: fallan algunas que usan DML directo como
 `public_table_meta_privilege_hardening`). **Los resultados son idénticos con y
 sin la migración 9C.5** (se compararon quitando sus 10 funciones dentro de la
 misma transacción): no son regresiones, es la dependencia histórica de esas
-suites. Con la ACL real todas pasan: **2169/2169** (2007 + 162).
+suites. Con la ACL real todas pasan: **2179/2179** (2007 + 172).
 
 ### 11.2 Concurrencia real
 Dos sesiones `psql` simultáneas contra la base local, como el mismo FM
@@ -215,9 +219,9 @@ El bloqueo de la fila de `requests` es, por tanto, necesario y suficiente.
 ### 11.4 Mínimo de cotizaciones y cierre anticipado
 **Comportamiento actual (sin cambios):**
 
-- Los importes se muestran si `recibidas >= min_quotes`
-  (`QuoteListDialog.loadQuotes`; el comentario del código dice "regardless of
-  quotes_closed"). El servidor delegado aplica la misma regla.
+- **Antes de este cambio** los importes se mostraban solo si
+  `recibidas >= min_quotes` (`QuoteListDialog.loadQuotes`, "regardless of
+  quotes_closed"), y el servidor delegado aplicaba la misma regla.
 - El botón **"Cerrar envío de cotizaciones y ver precios"** hace
   `UPDATE requests SET quotes_closed = true` y fuerza `setShowPrices(true)` solo
   en el estado local. Al **reabrir** el diálogo se recalcula con
@@ -226,23 +230,32 @@ El bloqueo de la fila de `requests` es, por tanto, necesario y suficiente.
 - Cerrar impide nuevas cotizaciones (`can_provider_quote_request` exige
   `quotes_closed` falso), así que el recuento ya no puede crecer.
 
-**¿Puede una solicitud quedar bloqueada?** Sí, para el FM: solicitud cerrada con
+**¿Podía una solicitud quedar bloqueada?** Sí, para el FM: solicitud cerrada con
 `recibidas < min_quotes` (por ejemplo, `min_quotes = 3` y solo respondieron 2).
 - Delegado: importes ocultos, `can_approve = false`, aprobar/rechazar `55000`.
-- Cliente directo: puede decidir a ciegas (el flujo directo no exige importes
+- Cliente directo: podía decidir a ciegas (el flujo directo no exige importes
   visibles).
 - **Salida existente, sin cambiar reglas:** bajar `min_quotes` editando la
   solicitud (cliente directo, o FM con `requests.manage`; el formulario admite
   1-20 y `save_facility_management_request` valida `>= 1`). Cubierto por prueba.
 
-**Solución mínima propuesta (no aplicada, requiere decisión comercial):** que
-`facility_management_quote_prices_visible` devuelva `true` también cuando
-`requests.quotes_closed` sea verdadero, y que `QuoteListDialog.loadQuotes`
-(`setShowPrices(count >= min || quotesClosed)`) haga lo mismo en el flujo directo.
-Es seguro para 9C.5: solo el cliente (o quien edite la solicitud) cierra el
-envío, el FM delegado no puede cerrarlo (`quotes_closed` no está en la lista
-blanca de `save_facility_management_request`) y, una vez cerrado, ningún
-proveedor puede añadir cotizaciones, así que el recuento queda fijo.
+**Solución aplicada (mínima):**
+- `facility_management_quote_prices_visible` devuelve `true` si
+  `requests.quotes_closed` es verdadero **o** `recibidas >= min_quotes`.
+- `QuoteListDialog.loadQuotes` (flujo directo) aplica la misma condición
+  (`recibidas >= min_quotes || quotes_closed`). Es el único cambio en el flujo
+  directo: ahora el botón cumple lo que dice y los importes no vuelven a
+  ocultarse al reabrir el diálogo. No cambia permisos, RLS ni RPCs directas.
+- Una solicitud cerrada antes del mínimo ya no queda bloqueada para el FM.
+- Sin cerrar el envío, `min_quotes` sigue protegiendo los importes: ocultos en
+  servidor y en UI.
+- Pruebas (6b): abierta y bajo el mínimo => ocultos y `55000`; tras cerrar =>
+  visibles (listado y detalle), `can_approve` según rol, requester y otro FM
+  siguen sin acceso, el delegado aprueba y el resto queda rechazado; el FM no
+  puede escribir `quotes_closed`. Controles negativos: con la regla anterior
+  fallan 8 aserciones; con importes siempre visibles fallan 12 o más.
+- Smoke en navegador (local): cliente directo y FM manager ven los importes de
+  una solicitud cerrada con 2 de 3 recibidas, al reabrir el diálogo.
 
 **Conteos tras aprobar/rechazar:** `get_facility_management_quote_counts` cuenta
 solo `submitted`, así que baja al decidir; `quotes_received` y `prices_visible`

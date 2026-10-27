@@ -325,8 +325,9 @@ suite pgTAP.
   `docs/FACILITY_MANAGER_QUOTES.md`.
   - ver: `requests.view` + `quotes.view`, roles o/a/m/requester;
   - aprobar y rechazar: además `quotes.approve`, roles o/a/m;
-  - los importes se ocultan en el servidor hasta `min_quotes`, y mientras
-    tanto no se puede decidir;
+  - los importes se ocultan en el servidor hasta `min_quotes` o hasta que el
+    cliente cierre el envío de cotizaciones, y mientras tanto no se puede
+    decidir;
   - la RLS de `quotes` no se abre; el FM nunca cotiza como proveedor;
   - `quotes.manage` no abre nada (no hay operación de gestión validada).
 - Siguientes: OT, reportes.
