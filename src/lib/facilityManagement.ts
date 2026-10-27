@@ -210,8 +210,8 @@ export const canFacilityManagerManageMaintenanceNotices = (client: OperationalCl
 // ---------------------------------------------------------------------------
 // 9C.4: Solicitudes. Espejo de can_view/create/manage_requests_as_facility_
 // manager, can_convert_maintenance_notice_as_facility_manager y
-// can_plan_preventive_request_as_facility_manager. Cotizaciones, OT y
-// proveedores no se delegan.
+// can_plan_preventive_request_as_facility_manager. OT y proveedores no se
+// delegan; las cotizaciones se delegan en 9C.5 (más abajo).
 // ---------------------------------------------------------------------------
 const FM_REQUEST_ROLES: readonly OrganizationMemberRole[] = ['owner', 'admin', 'manager', 'requester'];
 
@@ -237,6 +237,19 @@ export const canFacilityManagerConvertNoticeToRequest = (client: OperationalClie
 export const canFacilityManagerPlanPreventiveRequest = (client: OperationalClientAccess) =>
   FM_MANAGER_ROLES.includes(client.membershipRole)
   && grants(client, 'preventive_maintenance.view', 'preventive_maintenance.manage', 'requests.view', 'requests.create');
+
+// ---------------------------------------------------------------------------
+// 9C.5: Cotizaciones del CLIENTE. Espejo de can_view_quotes_as_facility_manager
+// y can_approve_quotes_as_facility_manager. El FM decide en nombre del cliente,
+// nunca cotiza como proveedor. quotes.manage no abre ninguna operación.
+// ---------------------------------------------------------------------------
+/** Ver las cotizaciones recibidas de una solicitud: requests.view + quotes.view. */
+export const canFacilityManagerViewQuotes = (client: OperationalClientAccess) =>
+  FM_REQUEST_ROLES.includes(client.membershipRole) && grants(client, 'requests.view', 'quotes.view');
+
+/** Aprobar y rechazar: además quotes.approve, solo owner/admin/manager. */
+export const canFacilityManagerApproveQuotes = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'requests.view', 'quotes.view', 'quotes.approve');
 
 const MODULE_VIEW_CHECKS: Record<FacilityManagementOperationalModule, (client: OperationalClientAccess) => boolean> = {
   assets: canFacilityManagerViewAssets,

@@ -17,10 +17,12 @@ desde **9C.2**, `inspections.*` y `preventive_maintenance.*` (ver
 `maintenance_notices.*` (ver `docs/FACILITY_MANAGER_MAINTENANCE_NOTICES.md`).
 Desde **9C.4**, `requests.*`, incluidas la conversión de avisos y la
 solicitud preventiva (ver `docs/FACILITY_MANAGER_REQUESTS.md`). Desde
+**9C.5**, `quotes.view` y `quotes.approve` (ver
+`docs/FACILITY_MANAGER_QUOTES.md`; `quotes.manage` no abre nada). Desde
 **Punto 10**, las fotos y documentos R2 de activos siguen `assets.view` /
 `assets.manage` (ver `docs/ASSET_FILES_R2_PRODUCTIZATION.md`). El resto de
-módulos (cotizaciones, OT, reportes), además de inventario y los adjuntos de
-solicitudes, todavía no abre nada.
+módulos (OT, reportes), además de inventario y los adjuntos de solicitudes,
+todavía no abre nada.
 
 ## 1. Las tres capas
 
@@ -319,7 +321,16 @@ suite pgTAP.
     mismo "File not found" que un archivo inexistente;
   - sin política raw para el FM sobre `asset_documents`: solo RPCs y la Edge
     Function `asset-files`.
-- Siguientes: cotizaciones, OT, reportes.
+- **9C.5 (hecho):** Cotizaciones del cliente. Ver
+  `docs/FACILITY_MANAGER_QUOTES.md`.
+  - ver: `requests.view` + `quotes.view`, roles o/a/m/requester;
+  - aprobar y rechazar: además `quotes.approve`, roles o/a/m;
+  - los importes se ocultan en el servidor hasta `min_quotes` o hasta que el
+    cliente cierre el envío de cotizaciones, y mientras tanto no se puede
+    decidir;
+  - la RLS de `quotes` no se abre; el FM nunca cotiza como proveedor;
+  - `quotes.manage` no abre nada (no hay operación de gestión validada).
+- Siguientes: OT, reportes.
 
 ## 11. Verificación
 

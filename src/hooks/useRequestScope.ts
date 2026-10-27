@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  canFacilityManagerApproveQuotes,
   canFacilityManagerCreateRequests,
   canFacilityManagerManageRequests,
+  canFacilityManagerViewQuotes,
   canFacilityManagerViewRequests,
 } from '@/lib/facilityManagement';
 import type { FacilityManagementOperationalClient } from '@/types/facilityManagement';
@@ -25,8 +27,10 @@ export interface RequestScope {
   canManageOwnDraft: boolean;
   /** Public vs private invitations. */
   canManageAudience: boolean;
-  /** Quotes and "Generar OT" are never delegated. */
+  /** Quotes are delegated since 9C.5 (quotes.view); "Generar OT" is not. */
   canViewQuotes: boolean;
+  /** Approve / reject quotes on behalf of the client (quotes.approve). */
+  canApproveQuotes: boolean;
   canGenerateWorkOrder: boolean;
   /** The client roster (coordination contacts, "Encargado") and the client
    * technician directory stay private to the client's own members. */
@@ -48,6 +52,7 @@ export function useDirectRequestScope(): RequestScope {
     canManageOwnDraft: true,
     canManageAudience: true,
     canViewQuotes: true,
+    canApproveQuotes: true,
     canGenerateWorkOrder: true,
     canUseClientMemberDirectory: true,
     canUseClientTechnicianDirectory: true,
@@ -67,7 +72,8 @@ export function buildDelegatedRequestScope(client: FacilityManagementOperational
     canManage,
     canManageOwnDraft: canCreate,
     canManageAudience: canCreate || canManage,
-    canViewQuotes: false,
+    canViewQuotes: canFacilityManagerViewQuotes(client),
+    canApproveQuotes: canFacilityManagerApproveQuotes(client),
     canGenerateWorkOrder: false,
     canUseClientMemberDirectory: false,
     canUseClientTechnicianDirectory: false,
