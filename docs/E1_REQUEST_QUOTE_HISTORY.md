@@ -22,7 +22,7 @@ pero el listado la omitía. Lo mismo ocurría con solicitudes completadas.
   concurrencia, reglas `min_quotes`, payload de importes ni datos de negocio.
 
 ## Migración
-`20261107233000_e1_request_quote_history.sql`
+`20261107232637_e1_request_quote_history.sql`
 
 El helper `facility_management_quote_payload` de HF01 debe permanecer intacto.
 La migración se aplica **antes** del merge a la rama productiva, después de
