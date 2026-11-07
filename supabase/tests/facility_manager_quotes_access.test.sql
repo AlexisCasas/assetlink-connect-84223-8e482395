@@ -8,7 +8,7 @@
 -- código) del flujo directo del cliente.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(208);
+SELECT plan(211);
 
 -- -------------------------------------------------------------------------
 -- Fixture (sintético, se descarta con el ROLLBACK final)
@@ -386,6 +386,8 @@ SELECT throws_ok($$ SELECT public.get_facility_management_quote('e9200000-0000-0
 -- Conteos.
 SELECT is((SELECT (e->>'submitted_quotes')::int FROM jsonb_array_elements(public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')) e
            WHERE e->>'request_id' = 'e98e0000-0000-0000-0000-0000000000a1'), 2, 'counts: only submitted quotes of the request (the draft quote is not counted)');
+SELECT is((SELECT (e->>'received_quotes')::int FROM jsonb_array_elements(public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')) e
+           WHERE e->>'request_id' = 'e98e0000-0000-0000-0000-0000000000a1'), 2, 'E1: received_quotes includes received submissions but not drafts');
 SELECT is((SELECT count(*) FROM jsonb_array_elements(public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')) e
            WHERE e->>'request_id' IN ('e98e0000-0000-0000-0000-0000000000a3', 'e98e0000-0000-0000-0000-0000000000a4', 'e98e0000-0000-0000-0000-0000000000b1')),
   0::bigint, 'counts: no internal, draft or another client''s request');
@@ -521,7 +523,11 @@ SELECT ok((SELECT bool_and(message !~* '(facility|fm )' AND title !~* '(facility
 -- Conteos y resumen coherentes después de pasar de submitted a approved/rejected.
 SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000013');
 SELECT is((SELECT count(*) FROM jsonb_array_elements(public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')) e
-           WHERE e->>'request_id' = 'e98e0000-0000-0000-0000-0000000000a7'), 0::bigint, 'counts: after approving, the request has no quotes under review');
+           WHERE e->>'request_id' = 'e98e0000-0000-0000-0000-0000000000a7'), 1::bigint, 'E1: approved request remains in historical received counts');
+SELECT is((SELECT (e->>'received_quotes')::int FROM jsonb_array_elements(public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')) e
+           WHERE e->>'request_id' = 'e98e0000-0000-0000-0000-0000000000a7'), 3, 'E1: received_quotes remains 3 after approval and sibling rejections');
+SELECT is((SELECT (e->>'submitted_quotes')::int FROM jsonb_array_elements(public.get_facility_management_quote_counts('e9200000-0000-0000-0000-0000000000a1')) e
+           WHERE e->>'request_id' = 'e98e0000-0000-0000-0000-0000000000a7'), 0, 'E1: submitted_quotes stays 0, preserving the legacy field');
 SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000a7')->>'quotes_received')::int, 3,
   'summary: quotes_received does not drop when quotes become approved/rejected');
 SELECT is((public.get_facility_management_request_quotes('e9200000-0000-0000-0000-0000000000a1', 'e98e0000-0000-0000-0000-0000000000a7')->>'prices_visible')::boolean, true,

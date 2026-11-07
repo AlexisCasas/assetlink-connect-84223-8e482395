@@ -197,7 +197,7 @@ function mapDelegatedRequest(payload: DelegatedRequestPayload): Request {
   };
 }
 
-export async function fetchDelegatedRequests(clientOrganizationId: string, scope: 'sent' | 'drafts'): Promise<Request[]> {
+export async function fetchDelegatedRequests(clientOrganizationId: string, scope: 'sent' | 'drafts' | 'history'): Promise<Request[]> {
   const { data, error } = await supabase.rpc('get_facility_management_requests', {
     _client_organization_id: clientOrganizationId,
     _scope: scope,

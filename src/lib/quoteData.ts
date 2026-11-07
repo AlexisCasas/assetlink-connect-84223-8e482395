@@ -106,8 +106,8 @@ export async function fetchDelegatedQuoteCounts(clientOrganizationId: string): P
   });
   if (error) throw error;
   const counts: Record<string, number> = {};
-  for (const row of (data ?? []) as unknown as { request_id: string; submitted_quotes: number }[]) {
-    counts[row.request_id] = Number(row.submitted_quotes);
+  for (const row of (data ?? []) as unknown as { request_id: string; submitted_quotes: number; received_quotes?: number }[]) {
+    counts[row.request_id] = Number(row.received_quotes ?? row.submitted_quotes);
   }
   return counts;
 }

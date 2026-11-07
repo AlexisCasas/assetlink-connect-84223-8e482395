@@ -72,10 +72,8 @@ import {
 interface RequestListProps {
   /** Deep-link target from a notification (#requests?request=...&quote=...)
    * — Dashboard parses the hash and passes these down; this component never
-   * reads window.location.hash itself. Only requests with status='sent' are
-   * ever loaded here (existing query, unchanged) — a request that later
-   * moved to 'quoted'/'completed'/'anulado' degrades to the same "no se
-   * pudo abrir" message as a deleted/inaccessible one. */
+   * reads window.location.hash itself. Sent, quoted and completed requests
+   * are available; drafts and cancelled requests remain outside this list. */
   focusRequestId?: string;
   focusQuoteId?: string;
   /** Direct (default, historic) or delegated (Facility Manager, 9C.4). In
@@ -126,6 +124,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
   const [filterBranch, setFilterBranch] = useState<string>('all');
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterServiceType, setFilterServiceType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
 
   // Ordenamiento
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
@@ -218,9 +217,9 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
       // orders, no seed.
       try {
         setLoading(true);
-        setRequests(await fetchDelegatedRequests(organizationId, 'sent'));
+        setRequests(await fetchDelegatedRequests(organizationId, 'history'));
         // Quotes are delegated since 9C.5 (quotes.view): only the number of
-        // quotes under review per request, never an amount. Work orders and
+        // received quotes per request, never an amount. Work orders and
         // the forum are still never queried.
         if (requestScope.canViewQuotes) {
           try {
@@ -248,7 +247,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
         .from('requests')
         .select('*')
         .eq('organization_id', organizationId)
-        .eq('status', 'sent')
+        .in('status', ['sent', 'quoted', 'completed'])
         .order('created_at', { ascending: false });
       if (requestsError) throw requestsError;
 
@@ -262,7 +261,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
           .from('quotes')
           .select('request_id')
           .in('request_id', externalRequestIds)
-          .eq('status', 'submitted');
+          .in('status', ['submitted', 'approved', 'rejected']);
 
         const counts: Record<string, number> = {};
         (quotesData || []).forEach((q: any) => {
@@ -496,6 +495,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
         if (requestDate !== filterDate) return false;
       }
       if (filterServiceType !== 'all' && request.serviceType !== filterServiceType) return false;
+      if (filterStatus !== 'all' && request.status !== filterStatus) return false;
       return true;
     });
 
@@ -520,13 +520,14 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
       });
     }
     return result;
-  }, [requests, filterStore, filterBranch, filterDate, filterServiceType, sortKey, sortOrder, quoteCounts]);
+  }, [requests, filterStore, filterBranch, filterDate, filterServiceType, filterStatus, sortKey, sortOrder, quoteCounts]);
 
   const clearFilters = () => {
     setFilterStore('all');
     setFilterBranch('all');
     setFilterDate('');
     setFilterServiceType('all');
+    setFilterStatus('all');
   };
 
   return (
@@ -546,12 +547,14 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
         filterBranch={filterBranch}
         filterDate={filterDate}
         filterServiceType={filterServiceType}
+        filterStatus={filterStatus}
         uniqueStores={uniqueStores}
         uniqueBranches={uniqueBranches}
         onFilterStoreChange={setFilterStore}
         onFilterBranchChange={setFilterBranch}
         onFilterDateChange={setFilterDate}
         onFilterServiceTypeChange={setFilterServiceType}
+        onFilterStatusChange={setFilterStatus}
         onClearFilters={clearFilters}
         columnLabels={COLUMN_LABELS}
         visibleColumns={visibleColumns}
@@ -573,7 +576,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
               {!organizationId
                 ? 'Selecciona una organización activa para ver y crear solicitudes'
                 : requests.length === 0
-                ? (isDelegated ? 'El cliente no tiene solicitudes enviadas' : 'No tienes solicitudes enviadas')
+                ? (isDelegated ? 'El cliente no tiene solicitudes disponibles' : 'No tienes solicitudes disponibles')
                 : 'No hay solicitudes que coincidan con los filtros'}
             </p>
             {organizationId && requests.length === 0 && requestScope.canCreate && (
@@ -592,8 +595,8 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
           internalWorkOrders={internalWorkOrders}
           generatingRequestId={generatingRequestId}
           onGenerateWorkOrder={requestScope.canGenerateWorkOrder ? (r) => void handleGenerateWorkOrder(r) : undefined}
-          canEdit={isDelegated ? (r) => !!r.delegatedAccess?.canEdit : undefined}
-          canDelete={isDelegated ? (r) => !!r.delegatedAccess?.canAnnul : undefined}
+          canEdit={isDelegated ? (r) => r.status === 'sent' && !!r.delegatedAccess?.canEdit : (r) => r.status === 'sent'}
+          canDelete={isDelegated ? (r) => r.status === 'sent' && !!r.delegatedAccess?.canAnnul : (r) => r.status === 'sent'}
           expandedRequestId={expandedRequestId}
           expandedDetails={expandedDetails}
           columnOrder={columnOrder}
