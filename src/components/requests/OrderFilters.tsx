@@ -24,12 +24,15 @@ export interface OrderFiltersProps<TColumnKey extends string> {
   filterBranch: string;
   filterDate: string;
   filterServiceType: string;
+  /** Optional for request lists, without changing other consumers. */
+  filterStatus?: string;
   uniqueStores: string[];
   uniqueBranches: string[];
   onFilterStoreChange: (value: string) => void;
   onFilterBranchChange: (value: string) => void;
   onFilterDateChange: (value: string) => void;
   onFilterServiceTypeChange: (value: string) => void;
+  onFilterStatusChange?: (value: string) => void;
   onClearFilters: () => void;
   columnLabels: Record<TColumnKey, string>;
   visibleColumns: Record<TColumnKey, boolean>;
@@ -42,12 +45,14 @@ export function OrderFilters<TColumnKey extends string>({
   filterBranch,
   filterDate,
   filterServiceType,
+  filterStatus = 'all',
   uniqueStores,
   uniqueBranches,
   onFilterStoreChange,
   onFilterBranchChange,
   onFilterDateChange,
   onFilterServiceTypeChange,
+  onFilterStatusChange,
   onClearFilters,
   columnLabels,
   visibleColumns,
@@ -60,7 +65,7 @@ export function OrderFilters<TColumnKey extends string>({
         <Filter className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium">Filtros</span>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${onFilterStatusChange ? "lg:grid-cols-6" : "lg:grid-cols-5"}`}>
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Sucursal</Label>
           <Select value={filterStore} onValueChange={onFilterStoreChange}>
@@ -117,6 +122,22 @@ export function OrderFilters<TColumnKey extends string>({
           </Select>
         </div>
 
+        {onFilterStatusChange && (
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Estado</Label>
+            <Select value={filterStatus} onValueChange={onFilterStatusChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos los estados" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value="sent">Enviadas</SelectItem>
+                <SelectItem value="quoted">Cotizadas</SelectItem>
+                <SelectItem value="completed">Completadas</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <Button variant="outline" size="sm" onClick={onClearFilters} className="flex-1">
             Limpiar filtros
