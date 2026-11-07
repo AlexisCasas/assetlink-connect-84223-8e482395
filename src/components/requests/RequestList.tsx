@@ -219,7 +219,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
         setLoading(true);
         setRequests(await fetchDelegatedRequests(organizationId, 'history'));
         // Quotes are delegated since 9C.5 (quotes.view): only the number of
-        // quotes under review per request, never an amount. Work orders and
+        // received quotes per request, never an amount. Work orders and
         // the forum are still never queried.
         if (requestScope.canViewQuotes) {
           try {
@@ -595,8 +595,8 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
           internalWorkOrders={internalWorkOrders}
           generatingRequestId={generatingRequestId}
           onGenerateWorkOrder={requestScope.canGenerateWorkOrder ? (r) => void handleGenerateWorkOrder(r) : undefined}
-          canEdit={isDelegated ? (r) => !!r.delegatedAccess?.canEdit : (r) => r.status === 'sent' || r.status === 'quoted'}
-          canDelete={isDelegated ? (r) => !!r.delegatedAccess?.canAnnul : (r) => r.status === 'sent' || r.status === 'quoted'}
+          canEdit={isDelegated ? (r) => r.status === 'sent' && !!r.delegatedAccess?.canEdit : (r) => r.status === 'sent'}
+          canDelete={isDelegated ? (r) => r.status === 'sent' && !!r.delegatedAccess?.canAnnul : (r) => r.status === 'sent'}
           expandedRequestId={expandedRequestId}
           expandedDetails={expandedDetails}
           columnOrder={columnOrder}
