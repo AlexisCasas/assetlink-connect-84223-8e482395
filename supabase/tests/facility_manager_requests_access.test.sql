@@ -7,7 +7,7 @@
 -- = reglas nuevas del modo delegado; 42501 también = RLS / sin EXECUTE.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(211);
+SELECT plan(224);
 
 -- -------------------------------------------------------------------------
 -- Fixture (sintético, se descarta con el ROLLBACK final)
@@ -857,6 +857,84 @@ SELECT ok((SELECT is_public AND provider_organization_ids = '{}'::uuid[]
            FROM public.set_request_audience('d98e0000-0000-0000-0000-0000000000a4', true, '{}')), 'direct: set_request_audience returns the historic shape');
 SELECT pg_temp.as_user('d9100000-0000-0000-0000-000000000002');
 SELECT lives_ok($$ SELECT public.create_internal_work_order_from_request('d98e0000-0000-0000-0000-0000000000a2') $$, 'direct: client manager still generates the internal OT');
+
+-- -------------------------------------------------------------------------
+-- E1-FIX02. Historical scope is additive: sent/drafts are unchanged;
+-- quoted and completed are read-only in the UI, with no tenant leakage.
+-- -------------------------------------------------------------------------
+RESET ROLE;
+INSERT INTO public.requests
+  (id, organization_id, request_number, title, description, asset, location,
+   service_type, deadline, status, request_type, is_public, created_by)
+VALUES
+  ('d98e0000-0000-0000-0000-0000000000a8',
+   'd9200000-0000-0000-0000-0000000000a1',
+   'REQ-E1-COMPLETED', 'Histórico completado', 'Solo lectura', 'Activo',
+   'Lima', 'correctivo', now() + interval '10 days', 'completed',
+   'external', true, 'fixture');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('d9100000-0000-0000-0000-000000000013');
+SELECT ok(EXISTS(
+  SELECT 1 FROM jsonb_array_elements(public.get_facility_management_requests(
+    'd9200000-0000-0000-0000-0000000000a1','history')) e
+  WHERE e->>'request_number' = 'REQ-9C4-A4'
+), 'E1 history includes an authorized quoted request');
+SELECT ok(EXISTS(
+  SELECT 1 FROM jsonb_array_elements(public.get_facility_management_requests(
+    'd9200000-0000-0000-0000-0000000000a1','history')) e
+  WHERE e->>'request_number' = 'REQ-E1-COMPLETED'
+), 'E1 history includes an authorized completed request');
+SELECT ok(EXISTS(
+  SELECT 1 FROM jsonb_array_elements(public.get_facility_management_requests(
+    'd9200000-0000-0000-0000-0000000000a1','history')) e
+  WHERE e->>'request_number' = 'REQ-9C4-A1'
+), 'E1 history retains sent requests');
+SELECT ok(NOT EXISTS(
+  SELECT 1 FROM jsonb_array_elements(public.get_facility_management_requests(
+    'd9200000-0000-0000-0000-0000000000a1','history')) e
+  WHERE e->>'request_number' = 'REQ-9C4-A3'
+), 'E1 history excludes client drafts');
+SELECT ok(NOT EXISTS(
+  SELECT 1 FROM jsonb_array_elements(public.get_facility_management_requests(
+    'd9200000-0000-0000-0000-0000000000a1','history')) e
+  WHERE e->>'request_number' = 'REQ-9C4-A5'
+), 'E1 history excludes annulled requests');
+SELECT ok(NOT EXISTS(
+  SELECT 1 FROM jsonb_array_elements(public.get_facility_management_requests(
+    'd9200000-0000-0000-0000-0000000000a1','history')) e
+  WHERE e->>'request_number' = 'REQ-9C4-B1'
+), 'E1 history excludes another tenant');
+SELECT ok(NOT EXISTS(
+  SELECT 1 FROM jsonb_array_elements(public.get_facility_management_requests(
+    'd9200000-0000-0000-0000-0000000000a1','sent')) e
+  WHERE e->>'request_number' = 'REQ-9C4-A4'
+), 'E1 legacy sent scope remains limited to sent requests');
+SELECT ok(NOT EXISTS(
+  SELECT 1 FROM jsonb_array_elements(public.get_facility_management_requests(
+    'd9200000-0000-0000-0000-0000000000a1','sent')) e
+  WHERE e->>'request_number' = 'REQ-E1-COMPLETED'
+), 'E1 legacy sent scope excludes completed requests');
+SELECT is((SELECT (e->>'can_edit')::boolean
+  FROM jsonb_array_elements(public.get_facility_management_requests(
+    'd9200000-0000-0000-0000-0000000000a1','history')) e
+  WHERE e->>'request_number' = 'REQ-E1-COMPLETED'), false,
+  'E1 completed request cannot be edited');
+SELECT is((SELECT (e->>'can_annul')::boolean
+  FROM jsonb_array_elements(public.get_facility_management_requests(
+    'd9200000-0000-0000-0000-0000000000a1','history')) e
+  WHERE e->>'request_number' = 'REQ-E1-COMPLETED'), false,
+  'E1 completed request cannot be annulled');
+SELECT ok(public.get_facility_management_request(
+  'd9200000-0000-0000-0000-0000000000a1',
+  'd98e0000-0000-0000-0000-0000000000a8') IS NOT NULL,
+  'E1 completed request details remain readable');
+SELECT ok(public.get_facility_management_requests(
+  'd9200000-0000-0000-0000-0000000000a1','history')::text !~ 'fm-requests\\.test',
+  'E1 history retains person/email minimization');
+SELECT pg_temp.as_user('d9100000-0000-0000-0000-000000000019');
+SELECT throws_ok($ SELECT public.get_facility_management_requests(
+  'd9200000-0000-0000-0000-0000000000a1','history') $,
+  '42501', NULL, 'E1 history rejects unassigned FM manager');
 
 SELECT * FROM finish();
 ROLLBACK;
