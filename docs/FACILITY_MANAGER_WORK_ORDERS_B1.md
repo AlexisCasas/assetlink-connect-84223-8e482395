@@ -1,6 +1,6 @@
 # One Facility — 9C.6-B1: acceso delegado a OT (backend solo lectura)
 
-**Estado:** código preparado en rama, **NO aplicado a Supabase Cloud** y **NO desplegado en Vercel**.  
+**Estado:** backend B1 aprobado en QA aislado; **sin aplicación a Supabase Cloud, sin merge y sin despliegue a Vercel Production**.  
 **Contrato aprobado:** `docs/FACILITY_MANAGER_WORK_ORDERS_CONTRACT.md` (D1–D7 aprobadas; B2/C1/C2 fuera de alcance de B1).
 
 ## Alcance implementado
@@ -42,7 +42,7 @@ Archivo `supabase/tests/facility_manager_work_orders_read_access.test.sql` (51 a
 
 Cobertura prevista: roles permitidos, roles denegados, miembro no asignado, usuario desconocido, otro cliente, UUID inexistente, revocación de permisos, suspensión de relación, cliente suspendido, miembro inactivo, límites de paginación, estados, ocultación económica/textual, cierre anticipado de cotizaciones, activo con/sin grants, ACL de las RPCs y modo sin SELECT directo de tablas.
 
-**No confundir tests creados con tests ejecutados.** Esta entrega requiere ejecutar localmente la nueva suite y toda la regresión pgTAP antes de permitir `apply_migration` sobre Cloud.
+**QA aislado ejecutado:** GitHub Actions [run 42431580305](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/42431580305), commit `ed42da5`. Local `supabase start` PASS, `supabase test db` **PASS: 20 suites y 2282 aserciones**, con 51/51 de B1 y ACL estricta; `supabase stop --no-backup` PASS. No se utilizó Cloud.
 
 ## Gate de validación y despliegue
 
@@ -56,10 +56,15 @@ Cobertura prevista: roles permitidos, roles denegados, miembro no asignado, usua
 8. 9C.6-C1 implementará la interfaz en una entrega posterior; B1 no abre pantallas.
 
 ### Nota sobre plataforma de pruebas
-En esta sesión de orquestación solo se dispuso de MCP GitHub/Supabase Cloud de producción y un contenedor **sin** `supabase` CLI, Docker ni servidor PostgreSQL local. Por lo tanto, **no se afirma PASS de pgTAP**. Es intencional no ejecutar DDL/fixtures de pruebas contra la base de producción.
+Este contenedor no ofrece Docker/CLI, pero GitHub Actions ejecutó Docker + Supabase CLI en un runner aislado. Se validó el esquema y la regresión pgTAP completa con resultado PASS. No hubo DDL/fixtures sobre Cloud.
 
 ## Rollback previsto
 Antes de un futuro `apply_migration` generar un backup recuperable y snapshot de ACL/funciones. B1 añade RPCs nuevas; si se requiere desactivar, revocar EXECUTE en las dos RPC públicas sin alterar datos. Nunca borrar manualmente una fila del historial de migraciones como rollback ordinario. No modificar ni revertir las funciones de 9C.5.
 
 ## Próximo paso
-Revisar y ejecutar pruebas locales. Tras un PASS documentado, autorizar despliegue controlado de backend B1. Luego desarrollar 9C.6-C1; las escrituras de B2 quedan estrictamente separadas.
+La suite local aislada ya está PASS. Quedan revisión del PR, preflight y respaldo para Cloud, y autorización de integración/despliegue B1. Después desarrollar 9C.6-C1. Las escrituras B2 quedan separadas.
+
+
+### Estado posterior al QA
+
+PR #80 continúa Draft sin merge. Supabase Cloud: 84 migraciones, 29 OT y 0 RPC nuevas / 0 concesiones de permisos OT; comprobado mediante SQL de solo lectura. El gate de pruebas está cerrado en PASS, pero **no autoriza implícitamente desplegar en producción**.
