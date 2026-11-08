@@ -932,8 +932,8 @@ SELECT ok(public.get_facility_management_requests(
   'd9200000-0000-0000-0000-0000000000a1','history')::text !~ 'fm-requests\\.test',
   'E1 history retains person/email minimization');
 SELECT pg_temp.as_user('d9100000-0000-0000-0000-000000000019');
-SELECT throws_ok($ SELECT public.get_facility_management_requests(
-  'd9200000-0000-0000-0000-0000000000a1','history') $,
+SELECT throws_ok($qa$ SELECT public.get_facility_management_requests(
+  'd9200000-0000-0000-0000-0000000000a1','history') $qa$,
   '42501', NULL, 'E1 history rejects unassigned FM manager');
 
 SELECT * FROM finish();
