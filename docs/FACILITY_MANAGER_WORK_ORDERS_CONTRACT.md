@@ -1,6 +1,6 @@
 # One Facility — 9C.6-A: contrato funcional de órdenes de trabajo delegadas
 
-**Estado:** D1–D7 aprobadas por el responsable funcional el 07/11/2026. 9C.6-B1 implementado en rama de revisión; no desplegado en Supabase Cloud. 9C.6-B2/C1/C2/D pendientes.  
+**Estado:** D1–D7 aprobadas. 9C.6-B1 backend de lectura instalado en Supabase Cloud el 08/11/2026 con migración `20261108032643`, sin permisos OT concedidos ni interfaz activada. 9C.6-B2/C1/C2/D pendientes.  
 **Fecha de auditoría:** 2026-11-07.  
 **Repositorio:** `AlexisCasas/assetlink-connect-84223-8e482395`.  
 **Base auditada:** `productization/mvp`, commit `729bb381840a40994513e91d234a8bbe65df33ad`.  
