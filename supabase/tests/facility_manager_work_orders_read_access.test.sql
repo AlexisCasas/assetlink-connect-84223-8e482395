@@ -285,6 +285,11 @@ SET LOCAL ROLE authenticated;
 SELECT throws_ok($$ SELECT public.get_facility_management_work_orders('f6200000-0000-0000-0000-0000000000a1') $$,'42501',NULL,'Suspended client denies delegated access');
 
 RESET ROLE;
+-- Restore the client suspended by the immediately preceding negative test.
+-- Fixtures are transaction-scoped and discarded by the ROLLBACK below.
+UPDATE public.organizations
+SET status = 'active'
+WHERE id = 'f6200000-0000-0000-0000-0000000000a1';
 -- Strict ACL variant: no direct work-order / quote / request / asset SELECT.
 REVOKE SELECT ON public.work_orders, public.quotes, public.requests, public.assets FROM authenticated;
 SET LOCAL ROLE authenticated;
