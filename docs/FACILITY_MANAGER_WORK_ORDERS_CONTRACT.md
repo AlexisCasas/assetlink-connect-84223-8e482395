@@ -1,6 +1,6 @@
 # One Facility — 9C.6-A: contrato funcional de órdenes de trabajo delegadas
 
-**Estado:** propuesta de contrato para validación; NO es código implementado.  
+**Estado:** D1–D7 aprobadas por el responsable funcional el 07/11/2026. 9C.6-B1 implementado en rama de revisión; no desplegado en Supabase Cloud. 9C.6-B2/C1/C2/D pendientes.  
 **Fecha de auditoría:** 2026-11-07.  
 **Repositorio:** `AlexisCasas/assetlink-connect-84223-8e482395`.  
 **Base auditada:** `productization/mvp`, commit `729bb381840a40994513e91d234a8bbe65df33ad`.  
@@ -255,7 +255,7 @@ QA de escrituras: solo Supabase local/aislado hasta autorización explícita. En
 | **D6** | Acceso a nombre del proveedor y evidencias | Nombre comercial solo si permitido; informes/evidencias internas excluidos del contrato inicial |
 | **D7** | Cierre de OT interna por FM | No incluido inicialmente. Evaluar acción separada tras completar, nunca actualización indiscriminada de estado |
 
-Hasta aprobar D1–D7, 9C.6-A es un **borrador de contrato**, no un requisito definitivo ni autorización para ejecutar B/C.
+**APROBADO:** D1–D7 en su alcance y restricciones según esta tabla; su implementación se realizará por etapas. Esta aprobación funcional **no autoriza** desplegar una migración sin pruebas previas ni ejecutar escrituras de OT en Cloud. 9C.6-B1 es estrictamente de lectura.
 
 ## 13. Secuencia recomendada de entrega
 
@@ -279,4 +279,4 @@ Supabase Cloud (lecturas SQL; 2026-11-07):
 - Agregados de OT por tipo/estado; relación Makro Test → FM QA Test y concesiones OT.
 - Solo una etapa de diseño: no se ejecutó SQL DDL/DML ni se modificó GitHub Productivo.
 
-**Resultado 9C.6-A:** contrato documentado, **pendiente de aprobación funcional de D1–D7**.
+**Resultado 9C.6-A:** contrato **aprobado funcionalmente (D1–D7)**. 9C.6-B1 en rama, sujeto a pgTAP local/QA de seguridad, revisión y despliegue controlado posterior.
