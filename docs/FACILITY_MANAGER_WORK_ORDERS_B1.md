@@ -34,10 +34,11 @@ Notas:
 - `request_number` es correlativo; no se exponen IDs de otros usuarios/organizaciones ni documentos/evidencias del proveedor.
 - `operator_label` distingue «Interna» vs «Proveedor externo», sin ID del proveedor.
 - No hay acceso a materiales, inventario, actividades operadoras, bitácoras ni reportes de ejecución por estas RPCs.
+- Se excluyen OTs cuyo origen es una solicitud borrador o anulada, o cuya solicitud no pertenece al mismo cliente, tanto en listado como en detalle, incluso si la fila de OT apuntara a un ID válido.
 
 ## Seguridad y casos de prueba
 
-Archivo `supabase/tests/facility_manager_work_orders_read_access.test.sql` (50 aserciones).
+Archivo `supabase/tests/facility_manager_work_orders_read_access.test.sql` (51 aserciones).
 
 Cobertura prevista: roles permitidos, roles denegados, miembro no asignado, usuario desconocido, otro cliente, UUID inexistente, revocación de permisos, suspensión de relación, cliente suspendido, miembro inactivo, límites de paginación, estados, ocultación económica/textual, cierre anticipado de cotizaciones, activo con/sin grants, ACL de las RPCs y modo sin SELECT directo de tablas.
 
@@ -47,7 +48,7 @@ Cobertura prevista: roles permitidos, roles denegados, miembro no asignado, usua
 
 1. Refrescar una copia **aislada y descartable** de esquema local con migraciones del repo (nunca prod).
 2. Comprobar que la migración nueva carga sin errores, se instala exactamente una vez y no altera firmas/ACL de RPCs anteriores.
-3. Ejecutar la suite dedicada pgTAP (50/50) y la suite completa (`supabase test db --local`); resolver cualquier fallo antes de proceder.
+3. Ejecutar la suite dedicada pgTAP (51/51) y la suite completa (`supabase test db --local`); resolver cualquier fallo antes de proceder.
 4. Verificar ACL estricta, accesos positivos/negativos y que ni título, descripción, observaciones o importe revelen valores ocultos.
 5. Revisar GitHub diff y checks. Como B1 no cambia frontend, **no se requiere despliegue de Vercel** para probarlo localmente.
 6. Solo con PASS, respaldos y autorización de despliegue, aplicar **únicamente** la migración B1 a Supabase Cloud; revalidar firmas, ACL, 0 escrituras de negocio y NO conceder aún permisos de OT a relaciones reales.
