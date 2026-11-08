@@ -2,7 +2,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 -- Dynamic plan marker is substituted below.
-SELECT plan(48);
+SELECT plan(50);
 CREATE FUNCTION pg_temp.as_user(p_user uuid) RETURNS void LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claim.sub', COALESCE(p_user::text,''), true);
 $$;
@@ -268,6 +268,16 @@ UPDATE public.organizations SET status='suspended' WHERE id='f6200000-0000-0000-
 SET LOCAL ROLE authenticated;
 
 SELECT throws_ok($$ SELECT public.get_facility_management_work_orders('f6200000-0000-0000-0000-0000000000a1') $$,'42501',NULL,'Suspended client denies delegated access');
+
+RESET ROLE;
+-- Strict ACL variant: no direct work-order / quote / request / asset SELECT.
+REVOKE SELECT ON public.work_orders, public.quotes, public.requests, public.assets FROM authenticated;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('f6100000-0000-0000-0000-000000000004');
+SELECT is((public.get_facility_management_work_orders('f6200000-0000-0000-0000-0000000000a1')->>'total')::int,
+3,'Guarded RPC works without raw SELECT privileges');
+SELECT throws_ok($ SELECT * FROM public.work_orders LIMIT 1 $,
+'42501',NULL,'Raw work_orders SELECT is denied under strict ACL');
 
 SELECT * FROM finish();
 ROLLBACK;
