@@ -66,7 +66,7 @@ VALUES
 ('f6800000-0000-0000-0000-0000000000a1','f6200000-0000-0000-0000-0000000000a1','FM-OT-TEST-001','Cotizacion autorizada','Solicitud visible','Equipo QA','f6400000-0000-0000-0000-0000000000a1','Lima','correctivo',now()+interval '10 days','quoted','external',true,'fixture',1,false),
 ('f6800000-0000-0000-0000-0000000000a2','f6200000-0000-0000-0000-0000000000a1','FM-OT-TEST-002','Cotizacion bajo minimo','Solicitud restringida','Equipo QA','f6400000-0000-0000-0000-0000000000a1','Lima','correctivo',now()+interval '10 days','quoted','external',true,'fixture',2,false),
 ('f6800000-0000-0000-0000-0000000000a3','f6200000-0000-0000-0000-0000000000a1','FM-OT-TEST-003','Servicio interno','Solicitud interna','Equipo QA','f6400000-0000-0000-0000-0000000000a1','Lima','preventivo',now()+interval '10 days','sent','internal',false,'fixture',1,false),
-('f6800000-0000-0000-0000-0000000000b1','f6200000-0000-0000-0000-0000000000b1','FM-OT-TEST-004','Cliente B','Servicio B','Activo B','Lima','correctivo',now()+interval '10 days','sent','internal',false,'fixture',1,false);
+('f6800000-0000-0000-0000-0000000000b1','f6200000-0000-0000-0000-0000000000b1','FM-OT-TEST-004','Cliente B','Servicio B','Activo B',NULL,'Lima','correctivo',now()+interval '10 days','sent','internal',false,'fixture',1,false);
 
 INSERT INTO public.quotes
 (id,request_id,provider_organization_id,created_by_user_id,amount,description,status,total_amount)
