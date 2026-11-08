@@ -1,0 +1,43 @@
+name: "One Facility 9C.6-B1 - isolated database QA"
+
+on:
+  pull_request:
+    branches: ["productization/mvp"]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/9c6-b1-isolated-db-qa.yml"
+  push:
+    branches: ["feature/9c6-b1-fm-work-order-read"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fm-b1-db-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-pgtap:
+    name: "Supabase isolated migrations + full pgTAP"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: "Checkout PR code"
+        uses: actions/checkout@v4
+      - name: "Install pinned Supabase CLI"
+        uses: supabase/setup-cli@v1
+        with:
+          version: "2.79.0"
+      - name: "Confirm local CLI and Docker"
+        run: |
+          supabase --version
+          docker --version
+          supabase test db --help
+      - name: "Start disposable Supabase local stack (not linked to Cloud)"
+        run: supabase start
+      - name: "Full SQL regression including 9C.6-B1 pgTAP"
+        run: supabase test db
+      - name: "Stop and discard local stack"
+        if: always()
+        run: supabase stop --no-backup
