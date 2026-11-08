@@ -2,7 +2,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 -- Dynamic plan marker is substituted below.
-SELECT plan(50);
+SELECT plan(51);
 CREATE FUNCTION pg_temp.as_user(p_user uuid) RETURNS void LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claim.sub', COALESCE(p_user::text,''), true);
 $$;
@@ -82,6 +82,19 @@ VALUES
 ('f6a00000-0000-0000-0000-0000000000a3','f6800000-0000-0000-0000-0000000000a3',NULL,'f6200000-0000-0000-0000-0000000000a1','f6200000-0000-0000-0000-0000000000a1','internal','closed','Trabajo interno','Descripción del cliente','medium','OT-FM-003',NULL,'f6400000-0000-0000-0000-0000000000a1','NOTA INTERNA DE OPERADOR'),
 ('f6a00000-0000-0000-0000-0000000000b1','f6800000-0000-0000-0000-0000000000b1',NULL,'f6200000-0000-0000-0000-0000000000b1','f6200000-0000-0000-0000-0000000000b1','internal','pending','Trabajo de otro cliente','Privado B','low','OT-FM-004',NULL,NULL,'PRIVADO B');
 
+-- Deliberately invalid source state: must not appear through delegated OT RPCs.
+INSERT INTO public.requests
+(id,organization_id,request_number,title,description,asset,asset_id,location,service_type,deadline,status,request_type,is_public,created_by,min_quotes)
+VALUES ('f6800000-0000-0000-0000-0000000000a4','f6200000-0000-0000-0000-0000000000a1',
+'FM-OT-TEST-005','Borrador oculto','Solo borrador','Equipo QA','f6400000-0000-0000-0000-0000000000a1',
+'Lima','correctivo',now()+interval '10 days','draft','internal',false,'fixture',1);
+INSERT INTO public.work_orders
+(id,request_id,quote_id,client_organization_id,provider_organization_id,work_order_type,status,title,description,priority,work_order_number,total_amount,asset_id)
+VALUES ('f6a00000-0000-0000-0000-0000000000a4',
+'f6800000-0000-0000-0000-0000000000a4',NULL,
+'f6200000-0000-0000-0000-0000000000a1','f6200000-0000-0000-0000-0000000000a1',
+'internal','pending','No publicar','Borrador privado','low','OT-FM-DRAFT',NULL,'f6400000-0000-0000-0000-0000000000a1');
+
 -- Security and schema invariant checks run as test owner before switching roles.
 
 SELECT is((SELECT count(*)::int FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN
@@ -148,7 +161,9 @@ SELECT ok(public.get_facility_management_work_order('f6200000-0000-0000-0000-000
 
 SELECT throws_ok($$ SELECT public.get_facility_management_work_order('f6200000-0000-0000-0000-0000000000a1','f6a00000-0000-0000-0000-0000000000b1') $$,'42501',NULL,'Cross-client order ID denied');
 
-SELECT throws_ok($$ SELECT public.get_facility_management_work_order('f6200000-0000-0000-0000-0000000000a1','f6a00000-0000-0000-0000-0000000000ff') $$,'42501',NULL,'Unknown order ID denied indistinguishably');
+SELECT throws_ok($ SELECT public.get_facility_management_work_order('f6200000-0000-0000-0000-0000000000a1','f6a00000-0000-0000-0000-0000000000ff') $,'42501',NULL,'Unknown order ID denied indistinguishably');
+SELECT throws_ok($ SELECT public.get_facility_management_work_order('f6200000-0000-0000-0000-0000000000a1','f6a00000-0000-0000-0000-0000000000a4') $,
+'42501',NULL,'OT sourced from a draft request is not visible even with same client');
 
 SELECT throws_ok($$ SELECT public.get_facility_management_work_orders('f6200000-0000-0000-0000-0000000000b1') $$,'42501',NULL,'Manager A cannot list client B');
 
