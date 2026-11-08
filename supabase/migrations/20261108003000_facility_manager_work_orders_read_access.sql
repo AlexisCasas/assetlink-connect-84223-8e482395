@@ -95,6 +95,7 @@ AS $function$
       FROM public.requests r
       WHERE r.id = _work_order.request_id
         AND r.organization_id = _work_order.client_organization_id
+        AND r.status NOT IN ('draft', 'anulado')
     ),
     'asset_label', CASE
       WHEN COALESCE(_show_asset, false) THEN (
@@ -164,7 +165,13 @@ BEGIN
   SELECT COUNT(*) INTO v_total
   FROM public.work_orders wo
   WHERE wo.client_organization_id = _client_organization_id
-    AND (_status IS NULL OR wo.status = _status);
+    AND (_status IS NULL OR wo.status = _status)
+    AND EXISTS (
+      SELECT 1 FROM public.requests r
+      WHERE r.id = wo.request_id
+        AND r.organization_id = _client_organization_id
+        AND r.status NOT IN ('draft', 'anulado')
+    );
 
   SELECT COALESCE(pg_catalog.jsonb_agg(
     public.facility_management_work_order_read_payload(
@@ -180,6 +187,12 @@ BEGIN
     FROM public.work_orders wo
     WHERE wo.client_organization_id = _client_organization_id
       AND (_status IS NULL OR wo.status = _status)
+      AND EXISTS (
+        SELECT 1 FROM public.requests r
+        WHERE r.id = wo.request_id
+          AND r.organization_id = _client_organization_id
+          AND r.status NOT IN ('draft', 'anulado')
+      )
     ORDER BY wo.created_at DESC, wo.id DESC
     LIMIT _limit OFFSET _offset
   ) wo;
@@ -215,7 +228,13 @@ BEGIN
   SELECT wo.* INTO v_work_order
   FROM public.work_orders wo
   WHERE wo.client_organization_id = _client_organization_id
-    AND wo.id = _work_order_id;
+    AND wo.id = _work_order_id
+    AND EXISTS (
+      SELECT 1 FROM public.requests r
+      WHERE r.id = wo.request_id
+        AND r.organization_id = _client_organization_id
+        AND r.status NOT IN ('draft', 'anulado')
+    );
 
   IF v_work_order.id IS NULL THEN
     RAISE EXCEPTION 'Not authorized to view work order'
