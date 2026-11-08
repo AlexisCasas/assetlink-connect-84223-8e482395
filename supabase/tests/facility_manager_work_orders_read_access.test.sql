@@ -161,8 +161,8 @@ SELECT ok(public.get_facility_management_work_order('f6200000-0000-0000-0000-000
 
 SELECT throws_ok($$ SELECT public.get_facility_management_work_order('f6200000-0000-0000-0000-0000000000a1','f6a00000-0000-0000-0000-0000000000b1') $$,'42501',NULL,'Cross-client order ID denied');
 
-SELECT throws_ok($ SELECT public.get_facility_management_work_order('f6200000-0000-0000-0000-0000000000a1','f6a00000-0000-0000-0000-0000000000ff') $,'42501',NULL,'Unknown order ID denied indistinguishably');
-SELECT throws_ok($ SELECT public.get_facility_management_work_order('f6200000-0000-0000-0000-0000000000a1','f6a00000-0000-0000-0000-0000000000a4') $,
+SELECT throws_ok($qa$ SELECT public.get_facility_management_work_order('f6200000-0000-0000-0000-0000000000a1','f6a00000-0000-0000-0000-0000000000ff') $qa$,'42501',NULL,'Unknown order ID denied indistinguishably');
+SELECT throws_ok($qa$ SELECT public.get_facility_management_work_order('f6200000-0000-0000-0000-0000000000a1','f6a00000-0000-0000-0000-0000000000a4') $qa$,
 '42501',NULL,'OT sourced from a draft request is not visible even with same client');
 
 SELECT throws_ok($$ SELECT public.get_facility_management_work_orders('f6200000-0000-0000-0000-0000000000b1') $$,'42501',NULL,'Manager A cannot list client B');
@@ -291,7 +291,7 @@ SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('f6100000-0000-0000-0000-000000000004');
 SELECT is((public.get_facility_management_work_orders('f6200000-0000-0000-0000-0000000000a1')->>'total')::int,
 3,'Guarded RPC works without raw SELECT privileges');
-SELECT throws_ok($ SELECT * FROM public.work_orders LIMIT 1 $,
+SELECT throws_ok($qa$ SELECT * FROM public.work_orders LIMIT 1 $qa$,
 '42501',NULL,'Raw work_orders SELECT is denied under strict ACL');
 
 SELECT * FROM finish();
