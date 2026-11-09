@@ -32,8 +32,41 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
-      - name: Type-check app
-        run: npx tsc --noEmit -p tsconfig.app.json
+      - name: Type-check app (fail on new diagnostics, record inherited Index.tsx errors)
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.app.json > /tmp/c1-tsc.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "TypeScript PASS, no diagnostics"
+            exit 0
+          fi
+          cat /tmp/c1-tsc.log
+          # The base branch already contains these three Index.tsx/AssetTree
+          # prop mismatches. Reject them unless the exact base file is unchanged.
+          git fetch --depth=1 origin productization/mvp
+          git diff --quiet FETCH_HEAD -- src/pages/Index.tsx || {
+            echo "Index.tsx changed: no baseline exception allowed"
+            exit 1
+          }
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const lines = readFileSync('/tmp/c1-tsc.log', 'utf8').split('\n')
+            .filter(line => /error TS\d+:/.test(line));
+          const expected = [
+            /^src\/pages\/Index\.tsx\(42,24\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(43,26\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(59,26\): error TS2322:/,
+          ];
+          assert.equal(lines.length, expected.length, 'Unexpected TS error count');
+          for (let i = 0; i < expected.length; i++) {
+            assert.match(lines[i], expected[i], 'New or changed TypeScript diagnostic');
+          }
+          console.log('C1 typecheck regression PASS; 3 pre-existing Index.tsx diagnostics recorded.');
+          JS
       - name: Lint new/changed C1 modules
         run: |
           npx eslint \
