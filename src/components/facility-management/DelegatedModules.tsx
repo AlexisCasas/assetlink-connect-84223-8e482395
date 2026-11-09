@@ -17,6 +17,7 @@ import {
 } from '@/lib/facilityManagement';
 import type { FacilityManagementOperationalClient } from '@/types/facilityManagement';
 import { ManagedClientGate } from './ManagedClientGate';
+import { DelegatedWorkOrdersView } from './DelegatedWorkOrdersView';
 
 function DelegatedAssets({ client, focusAssetId }: { client: FacilityManagementOperationalClient; focusAssetId?: string }) {
   const scope = useMemo(() => buildDelegatedAssetScope(client), [client]);
@@ -115,6 +116,19 @@ export function DelegatedRequestsModule({ managedClientId, focusRequestId, focus
   return (
     <ManagedClientGate module="requests" requestedClientId={managedClientId}>
       {(client) => <DelegatedRequests key={client.clientOrganizationId} client={client} focusRequestId={focusRequestId} focusQuoteId={focusQuoteId} />}
+    </ManagedClientGate>
+  );
+}
+
+/** #managed-work-orders for an assigned FM, with requests.view + work_orders.view.
+ * The underlying list/detail invoke only the secured B1 read RPCs. */
+export function DelegatedWorkOrdersModule({ managedClientId, focusWorkOrderId }: {
+  managedClientId?: string;
+  focusWorkOrderId?: string;
+}) {
+  return (
+    <ManagedClientGate module="managed-work-orders" requestedClientId={managedClientId}>
+      {(client) => <DelegatedWorkOrdersView key={client.clientOrganizationId} client={client} focusWorkOrderId={focusWorkOrderId} />}
     </ManagedClientGate>
   );
 }
