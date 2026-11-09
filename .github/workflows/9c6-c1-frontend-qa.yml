@@ -96,7 +96,7 @@ jobs:
           assert.match(transport, /get_facility_management_work_orders/);
           assert.match(transport, /get_facility_management_work_order/);
           assert.doesNotMatch(transport + ui, /\.from\s*\(/);
-          assert.doesNotMatch(transport + ui, /useWorkOrders\\s*\\(|<WorkOrderDetailDialog|\\.rpc\\(['\"](?:update_work_order_operations|generate_operational_due_notifications)/);
+          assert.doesNotMatch(transport + ui, /useWorkOrders\s*\(|<WorkOrderDetailDialog|\.rpc\(['"](?:update_work_order_operations|generate_operational_due_notifications)/);
           assert.match(dashboard, /case 'managed-work-orders':/);
           assert.match(nav, /'managed-work-orders'/);
           assert.match(portfolio, /Ver órdenes de trabajo/);
