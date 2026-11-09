@@ -46,11 +46,13 @@ jobs:
           cat /tmp/c1-tsc.log
           # The base branch already contains these three Index.tsx/AssetTree
           # prop mismatches. Reject them unless the exact base file is unchanged.
-          git fetch --depth=1 origin productization/mvp
-          git diff --quiet FETCH_HEAD -- src/pages/Index.tsx || {
+          # Compare against the verified blob SHA of Index.tsx in
+          # productization/mvp. This avoids remote fetch/auth in the runner.
+          index_blob="$(git hash-object src/pages/Index.tsx)"
+          if [ "$index_blob" != "c1cac2b37bfb357c16d5f821cd9cbda067c5429b" ]; then
             echo "Index.tsx changed: no baseline exception allowed"
             exit 1
-          }
+          fi
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
           import { readFileSync } from 'node:fs';
