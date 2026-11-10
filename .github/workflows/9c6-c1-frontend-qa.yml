@@ -1,4 +1,4 @@
-name: One Facility 9C.6-C1 frontend QA
+name: One Facility 9C.6-C1/C2.1 frontend QA
 
 on:
   push:
@@ -69,11 +69,12 @@ jobs:
           }
           console.log('C1 typecheck regression PASS; 3 pre-existing Index.tsx diagnostics recorded.');
           JS
-      - name: Lint new/changed C1 modules
+      - name: Lint delegated C1/C2.1 modules
         run: |
           npx eslint \
             src/lib/delegatedWorkOrders.ts \
             src/components/facility-management/DelegatedWorkOrdersView.tsx \
+            src/components/facility-management/DelegatedWorkOrderPlanningForm.tsx \
             src/components/facility-management/DelegatedModules.tsx \
             src/components/facility-management/ManagedClientGate.tsx \
             src/components/facility-management/FacilityManagerPortfolioView.tsx \
@@ -82,7 +83,7 @@ jobs:
             src/lib/facilityManagement.ts \
             src/types/facilityManagement.ts \
             src/lib/entityNavigation.ts
-      - name: Confirm delegated transport is RPC-only and read-only
+      - name: Confirm least-privilege B1 reads and B2.1 write transport
         run: |
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
@@ -90,13 +91,17 @@ jobs:
           const read = (p) => readFileSync(p, 'utf8');
           const transport = read('src/lib/delegatedWorkOrders.ts');
           const ui = read('src/components/facility-management/DelegatedWorkOrdersView.tsx');
+          const planning = read('src/components/facility-management/DelegatedWorkOrderPlanningForm.tsx');
           const dashboard = read('src/pages/Dashboard.tsx');
           const nav = read('src/lib/entityNavigation.ts');
           const portfolio = read('src/components/facility-management/FacilityManagerPortfolioView.tsx');
           assert.match(transport, /get_facility_management_work_orders/);
           assert.match(transport, /get_facility_management_work_order/);
-          assert.doesNotMatch(transport + ui, /\.from\s*\(/);
-          assert.doesNotMatch(transport + ui, /useWorkOrders\s*\(|<WorkOrderDetailDialog|\.rpc\(['"](?:update_work_order_operations|generate_operational_due_notifications)/);
+          assert.match(transport, /update_facility_management_internal_work_order_schedule/);
+          assert.match(ui, /canFacilityManagerManageInternalWorkOrders/);
+          assert.match(planning, /updateDelegatedInternalWorkOrderPlanning/);
+          assert.doesNotMatch(transport + ui + planning, /\.from\s*\(/);
+          assert.doesNotMatch(transport + ui + planning, /useWorkOrders\s*\(|<WorkOrderDetailDialog|\.rpc\(['"](?:update_work_order_operations|generate_operational_due_notifications)/);
           assert.match(dashboard, /case 'managed-work-orders':/);
           assert.match(nav, /'managed-work-orders'/);
           assert.match(portfolio, /Ver órdenes de trabajo/);
