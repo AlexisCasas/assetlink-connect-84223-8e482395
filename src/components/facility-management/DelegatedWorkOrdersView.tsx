@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { canFacilityManagerManageInternalWorkOrders } from '@/lib/facilityManagement';
+import { canFacilityManagerAddExternalFollowup, canFacilityManagerManageInternalWorkOrders } from '@/lib/facilityManagement';
+import { DelegatedExternalFollowups } from './DelegatedExternalFollowups';
 import { DelegatedWorkOrderPlanningForm } from './DelegatedWorkOrderPlanningForm';
 import { ClipboardList, Eye, LockKeyhole, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -96,6 +97,9 @@ function WorkOrderDetail({
     && canFacilityManagerManageInternalWorkOrders(client)
     && order.workOrderType === 'internal'
     && ['pending', 'assigned', 'in_progress'].includes(order.status);
+  const canFollowup = !!order
+    && order.workOrderType === 'external'
+    && canFacilityManagerAddExternalFollowup(client);
 
   return (
     <Dialog open={!!orderId} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -104,7 +108,11 @@ function WorkOrderDetail({
           <DialogTitle>Detalle de orden de trabajo</DialogTitle>
           <DialogDescription>
             Información autorizada de {client.clientOrganizationName}.
-            {canPlan ? ' Puedes coordinar prioridad y fechas de esta OT interna.' : ' Vista de solo lectura.'}
+            {canPlan
+              ? ' Puedes coordinar prioridad y fechas de esta OT interna.'
+              : canFollowup
+                ? ' Puedes registrar seguimiento del lado del cliente, sin alterar la ejecución.'
+                : ' Vista de solo lectura operativa.'}
           </DialogDescription>
         </DialogHeader>
         {!validId || query.isError ? (
@@ -121,7 +129,7 @@ function WorkOrderDetail({
               <RequestTypeBadge type={order.workOrderType} />
               <WorkOrderStatusBadge status={order.status} />
               <WorkOrderPriorityBadge priority={order.priority} />
-              <Badge variant="outline">{canPlan ? 'Planificación autorizada' : 'Solo lectura'}</Badge>
+              <Badge variant="outline">{canPlan ? 'Planificación autorizada' : canFollowup ? 'Seguimiento FM autorizado' : 'Solo lectura'}</Badge>
             </div>
             <h3 className="text-base font-medium">{order.title}</h3>
             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -162,6 +170,13 @@ function WorkOrderDetail({
                 </p>
               )}
             </div>
+            {order.workOrderType === 'external' && (
+              <DelegatedExternalFollowups
+                key={client.relationshipId + ':' + order.id}
+                client={client}
+                workOrderId={order.id}
+              />
+            )}
             <p className="text-xs text-muted-foreground">
               La planificación operativa, los materiales, los reportes y las acciones de cierre corresponden a la organización ejecutora.
             </p>

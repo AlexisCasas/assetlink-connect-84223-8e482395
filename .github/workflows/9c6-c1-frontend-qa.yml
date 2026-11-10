@@ -73,6 +73,8 @@ jobs:
         run: |
           npx eslint \
             src/lib/delegatedWorkOrders.ts \
+            src/lib/delegatedWorkOrderFollowups.ts \
+            src/components/facility-management/DelegatedExternalFollowups.tsx \
             src/components/facility-management/DelegatedWorkOrdersView.tsx \
             src/components/facility-management/DelegatedWorkOrderPlanningForm.tsx \
             src/components/facility-management/DelegatedModules.tsx \
@@ -147,5 +149,28 @@ jobs:
           console.log('C2.2 transport / scope / confirmation / legacy segregation PASS');
           JS
 
+      - name: C2.3 D4 safe external client notes only
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const get=(path)=>readFileSync(path,'utf8');
+          const api=get('src/lib/delegatedWorkOrderFollowups.ts');
+          const view=get('src/components/facility-management/DelegatedWorkOrdersView.tsx');
+          const panel=get('src/components/facility-management/DelegatedExternalFollowups.tsx');
+          const grants=get('src/lib/facilityManagement.ts');
+          assert.match(api,/get_facility_management_work_order_followups/);
+          assert.match(api,/add_facility_management_work_order_followup/);
+          assert.match(api,/_relationship_id:/);
+          assert.match(api,/_idempotency_key:/);
+          assert.doesNotMatch(api+panel,/\.from\s*\(|work_order_work_logs|update_work_order_operations|service_role/i);
+          assert.match(view,/order\.workOrderType === 'external'/);
+          assert.match(panel,/canFacilityManagerAddExternalFollowup/);
+          assert.match(panel,/requestKey\.current/);
+          assert.match(panel,/maxLength=\{2000\}/);
+          assert.match(panel,/Seguimiento del cliente/);
+          assert.match(grants,/canFacilityManagerAddExternalFollowup/);
+          console.log('C2.3 scoped FM followup UI security PASS');
+          JS
       - name: Build frontend
         run: npm run build
