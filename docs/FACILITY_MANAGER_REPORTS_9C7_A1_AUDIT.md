@@ -1,7 +1,7 @@
 # One Facility — 9C.7-A1: auditoría y contrato propuesto de reportes delegados
 
 **Fecha:** 2026-11-10  
-**Estado:** A1 AUDITORÍA COMPLETADA / D1–D7 PROPUESTAS (NO aprobadas todavía).  
+**Estado:** A1 AUDITORÍA COMPLETADA / **A2 D1–D7 APROBADAS funcionalmente por el responsable del proyecto (2026-11-10)**. Esta aprobación autoriza el diseño y QA aislado de B1, **no** migración a Cloud, GRANT de `reports.view`, merge ni despliegue.  
 **Base auditada:** `productization/mvp`, merge 9C.6-D `4ca3e68c4b2e83f989f2fbdb326563afae7b4c8a`.  
 **Entorno:** Supabase Cloud One Facility, auditoría exclusivamente SELECT / transacciones revertidas. No migración, no GRANT, no despliegue.
 
@@ -32,7 +32,7 @@ El dashboard existente **no implementa acceso delegado FM**.
 
 Estos son datos de corte, **no** esperados fijos de prueba. Las pruebas deberán cargar datos sintéticos y comparar contra agregaciones permitidas, no hardcodear `23`, `9`, `25`.
 
-## 3. Decisiones D1–D7 propuestas (puerta funcional antes de B1)
+## 3. Decisiones D1–D7 APROBADAS (9C.7-A2)
 
 | ID | Propuesta conservadora | Motivación / efecto |
 |---|---|---|
@@ -82,4 +82,4 @@ Cualquier dimensión sin permiso se devuelve como `null` con `available=false`, 
 - **D — QA y activación**: preflight, aprobación para migración Cloud, lectura denegada por defecto a FM sin `reports.view`, acceso positivo con grant explícito aprobado, revocación y verificación. Merge/deploy sólo con autorización.
 - **B2/C2 (opcional, posterior)**: reportes de tendencias, rango de fechas, backlog, cotizaciones sin importes, exportación y portafolio consolidado, únicamente tras nuevo contrato de visibilidad.
 
-**NO-GO actuales:** implementar B1 antes de decidir D1–D7, conceder `reports.view` silenciosamente, exponer datos operativos del proveedor, sumar importes por defecto, sumar varios clientes sin ámbito, probar con OT reales nuevas, aplicar migraciones/merge/desplegar por el solo hecho de presentar este A1.
+**NO-GO actuales:** implementar B1 fuera de lo aprobado en D1–D7, conceder `reports.view` silenciosamente, exponer datos operativos del proveedor, sumar importes por defecto, sumar varios clientes sin ámbito, probar con OT reales nuevas, aplicar migraciones/merge/desplegar por el solo hecho de presentar este A1.
