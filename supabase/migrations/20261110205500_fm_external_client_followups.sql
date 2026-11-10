@@ -185,11 +185,11 @@ BEGIN
   v_message:=btrim(_body);
   -- Display-only snapshot; never used for authorization. Keep author UUID
   -- private to audit/storage, and never expose email or auth metadata.
-  SELECT COALESCE(
+  SELECT pg_catalog.left(COALESCE(
     NULLIF(pg_catalog.btrim(u.raw_user_meta_data->>'name'),''),
     NULLIF(pg_catalog.split_part(u.email,'@',1),''),
     'Miembro Facility Manager'
-  ) INTO v_author_name
+  ),120) INTO v_author_name
   FROM auth.users u WHERE u.id=auth.uid();
   IF v_author_name IS NULL THEN
     RAISE EXCEPTION 'Authentication is required' USING ERRCODE='42501';
