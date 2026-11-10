@@ -78,13 +78,20 @@ SELECT ok((SELECT bool_and(p.prosecdef AND p.proconfig @> ARRAY['search_path=""'
   'Both FM creation functions are SECURITY DEFINER with empty search_path');
 SELECT ok((SELECT bool_and(NOT has_function_privilege('anon',p.oid,'EXECUTE')
   AND NOT has_function_privilege('service_role',p.oid,'EXECUTE')
-  AND has_function_privilege('authenticated',p.oid,'EXECUTE'))
+  AND NOT has_function_privilege('authenticated',p.oid,'EXECUTE'))
   FROM pg_proc p WHERE p.pronamespace='public'::regnamespace
     AND p.proname IN ('create_facility_management_internal_work_order','create_facility_management_work_order_from_quote')),
-  'Creation RPC ACL allows authenticated only');
+  'Staged Cloud creation RPC ACL denies all API roles, including authenticated');
 SELECT is((SELECT count(*)::int FROM pg_proc WHERE pronamespace='public'::regnamespace
   AND proname IN ('create_facility_management_internal_work_order','create_facility_management_work_order_from_quote')),2,
   'Exactly two new public creation functions');
+
+-- B2.2-D is deployed inert. For controlled isolated tests ONLY, simulate
+-- the later C2.2 activation within the transaction that ends in ROLLBACK.
+GRANT EXECUTE ON FUNCTION public.create_facility_management_internal_work_order(uuid,uuid)
+  TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_facility_management_work_order_from_quote(uuid,uuid)
+  TO authenticated;
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('b6100000-0000-0000-0000-000000000004');
