@@ -6,7 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useFacilityManagement } from '@/hooks/useFacilityManagement';
-import { isFacilityManagementRelationshipEditable } from '@/lib/facilityManagement';
+import { canFacilityManagerViewWorkOrders, isFacilityManagementRelationshipEditable } from '@/lib/facilityManagement';
+import { useFacilityManagementOperationalClients } from '@/hooks/useFacilityManagementOperationalClients';
+import { navigateToEntity } from '@/lib/entityNavigation';
 import type { FacilityManagementMember, FacilityManagementPortfolioEntry } from '@/types/facilityManagement';
 import { FacilityManagementPermissionsEditor } from './FacilityManagementPermissionsEditor';
 import { FacilityManagementMembersEditor } from './FacilityManagementMembersEditor';
@@ -17,6 +19,11 @@ import { FacilityManagementStatusBadge } from './FacilityManagementStatusBadge';
  * organización. Ver la cartera no da acceso operativo al cliente. */
 export function FacilityManagerPortfolioView() {
   const { getPortfolio, getMembers, setMembers } = useFacilityManagement();
+  // Only assigned users with effective grants can open a client's delegated OTs.
+  const { clients: operationalClients } = useFacilityManagementOperationalClients();
+  const accessibleWorkOrderClientIds = new Set(
+    operationalClients.filter(canFacilityManagerViewWorkOrders).map((client) => client.clientOrganizationId),
+  );
   const [portfolio, setPortfolio] = useState<FacilityManagementPortfolioEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +99,17 @@ export function FacilityManagerPortfolioView() {
                     <TableCell><FacilityManagementStatusBadge status={entry.status} /></TableCell>
                     <TableCell>{entry.permissions.length}</TableCell>
                     <TableCell>{entry.assignedMemberCount}</TableCell>
-                    <TableCell className="text-right"><Button size="sm" onClick={() => setSelectedId(entry.relationshipId)}>Gestionar</Button></TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        {accessibleWorkOrderClientIds.has(entry.clientOrganizationId) && (
+                          <Button size="sm" variant="outline" onClick={() => navigateToEntity({
+                            view: 'managed-work-orders',
+                            managedClientId: entry.clientOrganizationId,
+                          })}>Ver OT</Button>
+                        )}
+                        <Button size="sm" onClick={() => setSelectedId(entry.relationshipId)}>Gestionar</Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -108,9 +125,15 @@ export function FacilityManagerPortfolioView() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">{selected.clientOrganizationName} <FacilityManagementStatusBadge status={selected.status} /></DialogTitle>
                 <DialogDescription>
-                  Solo el cliente puede cambiar permisos o el estado de la relación. El acceso operativo a sus módulos todavía no está habilitado en esta versión.
+                  Solo el cliente puede cambiar permisos o el estado de la relación. El acceso operativo depende de los permisos concedidos y de tu asignación al cliente.
                 </DialogDescription>
               </DialogHeader>
+              {accessibleWorkOrderClientIds.has(selected.clientOrganizationId) && (
+                <Button variant="outline" onClick={() => {
+                  setSelectedId(null);
+                  navigateToEntity({ view: 'managed-work-orders', managedClientId: selected.clientOrganizationId });
+                }}>Ver órdenes de trabajo</Button>
+              )}
               <section className="space-y-3">
                 <h3 className="text-sm font-semibold">Permisos recibidos</h3>
                 <FacilityManagementPermissionsEditor value={selected.permissions} />

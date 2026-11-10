@@ -1,0 +1,106 @@
+name: One Facility 9C.6-C1 frontend QA
+
+on:
+  push:
+    branches: ["feature/9c6-c1-fm-work-order-ui"]
+  pull_request:
+    branches: ["productization/mvp"]
+    paths:
+      - "src/**"
+      - ".github/workflows/9c6-c1-frontend-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fm-c1-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck-lint-build:
+    name: "TypeScript, scoped lint and Vite build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Type-check app (fail on new diagnostics, record inherited Index.tsx errors)
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.app.json > /tmp/c1-tsc.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "TypeScript PASS, no diagnostics"
+            exit 0
+          fi
+          cat /tmp/c1-tsc.log
+          # The base branch already contains these three Index.tsx/AssetTree
+          # prop mismatches. Reject them unless the exact base file is unchanged.
+          # Compare against the verified blob SHA of Index.tsx in
+          # productization/mvp. This avoids remote fetch/auth in the runner.
+          index_blob="$(git hash-object src/pages/Index.tsx)"
+          if [ "$index_blob" != "c1cac2b37bfb357c16d5f821cd9cbda067c5429b" ]; then
+            echo "Index.tsx changed: no baseline exception allowed"
+            exit 1
+          fi
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const lines = readFileSync('/tmp/c1-tsc.log', 'utf8').split('\n')
+            .filter(line => /error TS\d+:/.test(line));
+          const expected = [
+            /^src\/pages\/Index\.tsx\(42,24\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(43,26\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(59,26\): error TS2322:/,
+          ];
+          assert.equal(lines.length, expected.length, 'Unexpected TS error count');
+          for (let i = 0; i < expected.length; i++) {
+            assert.match(lines[i], expected[i], 'New or changed TypeScript diagnostic');
+          }
+          console.log('C1 typecheck regression PASS; 3 pre-existing Index.tsx diagnostics recorded.');
+          JS
+      - name: Lint new/changed C1 modules
+        run: |
+          npx eslint \
+            src/lib/delegatedWorkOrders.ts \
+            src/components/facility-management/DelegatedWorkOrdersView.tsx \
+            src/components/facility-management/DelegatedModules.tsx \
+            src/components/facility-management/ManagedClientGate.tsx \
+            src/components/facility-management/FacilityManagerPortfolioView.tsx \
+            src/components/layout/Sidebar.tsx \
+            src/pages/Dashboard.tsx \
+            src/lib/facilityManagement.ts \
+            src/types/facilityManagement.ts \
+            src/lib/entityNavigation.ts
+      - name: Confirm delegated transport is RPC-only and read-only
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const read = (p) => readFileSync(p, 'utf8');
+          const transport = read('src/lib/delegatedWorkOrders.ts');
+          const ui = read('src/components/facility-management/DelegatedWorkOrdersView.tsx');
+          const dashboard = read('src/pages/Dashboard.tsx');
+          const nav = read('src/lib/entityNavigation.ts');
+          const portfolio = read('src/components/facility-management/FacilityManagerPortfolioView.tsx');
+          assert.match(transport, /get_facility_management_work_orders/);
+          assert.match(transport, /get_facility_management_work_order/);
+          assert.doesNotMatch(transport + ui, /\.from\s*\(/);
+          assert.doesNotMatch(transport + ui, /useWorkOrders\s*\(|<WorkOrderDetailDialog|\.rpc\(['"](?:update_work_order_operations|generate_operational_due_notifications)/);
+          assert.match(dashboard, /case 'managed-work-orders':/);
+          assert.match(nav, /'managed-work-orders'/);
+          assert.match(portfolio, /Ver órdenes de trabajo/);
+          assert.match(ui, /Solo lectura/);
+          JS
+      - name: Build frontend
+        run: npm run build

@@ -243,6 +243,10 @@ export const canFacilityManagerPlanPreventiveRequest = (client: OperationalClien
 // y can_approve_quotes_as_facility_manager. El FM decide en nombre del cliente,
 // nunca cotiza como proveedor. quotes.manage no abre ninguna operación.
 // ---------------------------------------------------------------------------
+/** OT delegadas: solo lectura; work_orders.manage nunca sustituye ambos permisos de lectura. */
+export const canFacilityManagerViewWorkOrders = (client: OperationalClientAccess) =>
+  FM_REQUEST_ROLES.includes(client.membershipRole) && grants(client, 'requests.view', 'work_orders.view');
+
 /** Ver las cotizaciones recibidas de una solicitud: requests.view + quotes.view. */
 export const canFacilityManagerViewQuotes = (client: OperationalClientAccess) =>
   FM_REQUEST_ROLES.includes(client.membershipRole) && grants(client, 'requests.view', 'quotes.view');
@@ -258,6 +262,7 @@ const MODULE_VIEW_CHECKS: Record<FacilityManagementOperationalModule, (client: O
   'preventive-maintenance': canFacilityManagerViewPreventive,
   backlog: canFacilityManagerViewMaintenanceNotices,
   requests: canFacilityManagerViewRequests,
+  'managed-work-orders': canFacilityManagerViewWorkOrders,
   // Borradores: solo quien puede crear solicitudes.
   drafts: canFacilityManagerCreateRequests,
 };

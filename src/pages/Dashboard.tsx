@@ -25,7 +25,7 @@ import { BacklogView } from '@/components/backlog/BacklogView';
 import { PreventiveMaintenanceView } from '@/components/preventive-maintenance/PreventiveMaintenanceView';
 import { PreventiveMaintenanceSummaryCard } from '@/components/dashboard/PreventiveMaintenanceSummaryCard';
 import { FacilityManagementAccessDenied, FacilityManagementView } from '@/components/facility-management/FacilityManagementView';
-import { DelegatedAssetsModule, DelegatedBacklogModule, DelegatedCriticalityModule, DelegatedDraftsModule, DelegatedInspectionsModule, DelegatedPreventiveMaintenanceModule, DelegatedRequestsModule } from '@/components/facility-management/DelegatedModules';
+import { DelegatedAssetsModule, DelegatedBacklogModule, DelegatedCriticalityModule, DelegatedDraftsModule, DelegatedInspectionsModule, DelegatedPreventiveMaintenanceModule, DelegatedRequestsModule, DelegatedWorkOrdersModule } from '@/components/facility-management/DelegatedModules';
 import { getFacilityManagementMode } from '@/lib/facilityManagement';
 import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { useToast } from '@/hooks/use-toast';
@@ -179,6 +179,11 @@ const Dashboard = () => {
         return <ApprovedProvidersList />;
       case 'branches':
         return <BranchesList />;
+      case 'managed-work-orders':
+        // Delegated client-side viewing is separate from FM's own operating orders.
+        // A direct deep link never bypasses ManagedClientGate / B1 RPC authorization.
+        if (currentOrganization?.organizationType !== 'facility_manager') return <FacilityManagementAccessDenied />;
+        return <DelegatedWorkOrdersModule managedClientId={focus.managedClientId} focusWorkOrderId={focus.workOrderId} />;
       case 'work-orders':
         // A technician only ever sees their own assigned work — even via
         // direct hash navigation, never the organization's full list. The
