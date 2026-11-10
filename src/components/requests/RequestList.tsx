@@ -20,6 +20,8 @@ import {
   mapRequestRow,
 } from '@/lib/requestData';
 import { fetchDelegatedQuoteCounts } from '@/lib/quoteData';
+import { createDelegatedInternalWorkOrder } from '@/lib/delegatedWorkOrders';
+import { navigateToEntity } from '@/lib/entityNavigation';
 import { useAssets } from '@/hooks/useAssets';
 import { NO_ASSET_ACCESS_SCOPE } from '@/hooks/useAssetScope';
 import { useDirectRequestScope, type RequestScope } from '@/hooks/useRequestScope';
@@ -118,6 +120,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
   // OTs internas ya generadas, por request_id (solicitudes internas no usan cotizaciones)
   const [internalWorkOrders, setInternalWorkOrders] = useState<Record<string, { id: string }>>({});
   const [generatingRequestId, setGeneratingRequestId] = useState<string | null>(null);
+  const [pendingDelegatedRequest, setPendingDelegatedRequest] = useState<Request | null>(null);
 
   // Filtros
   const [filterStore, setFilterStore] = useState<string>('all');
@@ -217,6 +220,7 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
       // orders, no seed.
       try {
         setLoading(true);
+        setInternalWorkOrders({});
         setRequests(await fetchDelegatedRequests(organizationId, 'history'));
         // Quotes are delegated since 9C.5 (quotes.view): only the number of
         // received quotes per request, never an amount. Work orders and
@@ -299,13 +303,25 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
   const handleGenerateWorkOrder = async (request: Request) => {
     setGeneratingRequestId(request.id);
     try {
-      const { data, error } = await supabase.rpc('create_internal_work_order_from_request', {
-        target_request_id: request.id,
-        target_assigned_member_id: request.internalResponsibleMemberId || null,
-      });
-      if (error) throw error;
-      if (data) setInternalWorkOrders((current) => ({ ...current, [request.id]: { id: data.id } }));
-      toast({ title: 'Orden de trabajo generada', description: `Se generó la OT para "${request.title || request.requestNumber}".` });
+      if (isDelegated) {
+        if (!organizationId || !requestScope.canCreateDelegatedInternalWorkOrder || request.requestType !== 'internal'
+          || !['sent', 'quoted', 'completed'].includes(request.status)) {
+          throw new Error('Esta solicitud no permite crear una orden delegada.');
+        }
+        // The D3 RPC rechecks FM assignment, grants and origin; it also
+        // returns the existing OT on repeated/concurrent calls.
+        const order = await createDelegatedInternalWorkOrder(organizationId, request.id);
+        setInternalWorkOrders((current) => ({ ...current, [request.id]: { id: order.id } }));
+        toast({ title: 'Orden disponible', description: `OT ${order.workOrderNumber}. Puedes abrirla desde la solicitud.` });
+      } else {
+        const { data, error } = await supabase.rpc('create_internal_work_order_from_request', {
+          target_request_id: request.id,
+          target_assigned_member_id: request.internalResponsibleMemberId || null,
+        });
+        if (error) throw error;
+        if (data) setInternalWorkOrders((current) => ({ ...current, [request.id]: { id: data.id } }));
+        toast({ title: 'Orden de trabajo generada', description: `Se generó la OT para "${request.title || request.requestNumber}".` });
+      }
     } catch (error) {
       console.error('Error generating internal work order:', error);
       toast({
@@ -594,7 +610,13 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
           assetPaths={assetPaths}
           internalWorkOrders={internalWorkOrders}
           generatingRequestId={generatingRequestId}
-          onGenerateWorkOrder={requestScope.canGenerateWorkOrder ? (r) => void handleGenerateWorkOrder(r) : undefined}
+          onGenerateWorkOrder={requestScope.canGenerateWorkOrder ? (r) => {
+            if (isDelegated) setPendingDelegatedRequest(r);
+            else void handleGenerateWorkOrder(r);
+          } : undefined}
+          onOpenWorkOrder={isDelegated && organizationId ? (workOrderId) => {
+            navigateToEntity({ view: 'managed-work-orders', managedClientId: organizationId, workOrderId });
+          } : undefined}
           canEdit={isDelegated ? (r) => r.status === 'sent' && !!r.delegatedAccess?.canEdit : (r) => r.status === 'sent'}
           canDelete={isDelegated ? (r) => r.status === 'sent' && !!r.delegatedAccess?.canAnnul : (r) => r.status === 'sent'}
           expandedRequestId={expandedRequestId}
@@ -638,7 +660,13 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
           onClose={() => { setShowQuotesDialog(false); setSelectedRequest(null); }}
           request={selectedRequest}
           focusQuoteId={selectedRequest.id === focusRequestId ? focusQuoteId : undefined}
-          delegated={isDelegated && organizationId ? { clientOrganizationId: organizationId } : undefined}
+          delegated={isDelegated && organizationId ? {
+            clientOrganizationId: organizationId,
+            canCreateWorkOrder: requestScope.canCreateDelegatedExternalWorkOrder,
+            onOpenWorkOrder: (workOrderId: string) => navigateToEntity({
+              view: 'managed-work-orders', managedClientId: organizationId, workOrderId,
+            }),
+          } : undefined}
         />
       )}
 
@@ -795,6 +823,30 @@ export const RequestList = ({ focusRequestId, focusQuoteId, scope }: RequestList
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!pendingDelegatedRequest} onOpenChange={(open) => {
+        if (!open) setPendingDelegatedRequest(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Generar orden de trabajo interna?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Solicitud {pendingDelegatedRequest?.requestNumber ?? ''} de {requestScope.organizationName ?? 'este cliente'}.
+              La orden quedará pendiente y sin técnico ni planificador asignado.
+              Si ya existe una OT para esta solicitud, se recuperará sin crear otra.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={!!generatingRequestId} onClick={() => {
+              if (pendingDelegatedRequest) void handleGenerateWorkOrder(pendingDelegatedRequest);
+              setPendingDelegatedRequest(null);
+            }}>
+              Generar o abrir OT
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>

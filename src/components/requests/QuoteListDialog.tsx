@@ -5,6 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
+import { createDelegatedExternalWorkOrder } from '@/lib/delegatedWorkOrders';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { FileText, Clock, CheckCircle, User, MessageSquare, MessageCircle, ThumbsUp, Lock, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,8 +33,13 @@ interface QuoteListDialogProps {
   /** Facility Manager operating on behalf of the client (9C.5). Quotes are
    * read and decided only through the delegated RPCs: amounts arrive hidden
    * until the minimum is reached, and there is no chat, observation, quote
-   * closing nor work-order creation. Absent = the historic direct flow. */
-  delegated?: { clientOrganizationId: string };
+   * closing. B2.2 creates OT only through a separate FM RPC and grant gate.
+   * Absent = the historic direct client flow. */
+  delegated?: {
+    clientOrganizationId: string;
+    canCreateWorkOrder: boolean;
+    onOpenWorkOrder: (workOrderId: string) => void;
+  };
 }
 
 interface Quote {
@@ -66,6 +76,7 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId, delegate
   const [quotesClosed, setQuotesClosed] = useState(false);
   const [closingQuotes, setClosingQuotes] = useState(false);
   const [creatingWorkOrderId, setCreatingWorkOrderId] = useState<string | null>(null);
+  const [pendingDelegatedQuoteId, setPendingDelegatedQuoteId] = useState<string | null>(null);
   const { toast } = useToast();
   const { currentOrganization, currentMembership } = useAuth();
   const clientApprovalRoles = ['owner', 'admin', 'manager', 'requester'];
@@ -319,24 +330,34 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId, delegate
   const handleCreateWorkOrder = async (quoteId: string) => {
     try {
       setCreatingWorkOrderId(quoteId);
-      const { data, error } = await supabase.rpc('create_work_order_from_quote', {
-        target_quote_id: quoteId,
-      });
-
-      if (error) throw error;
-
-      setQuotes((current) => current.map((quote) => (
-        quote.id === quoteId ? { ...quote, work_order_id: data.id } : quote
-      )));
-      toast({
-        title: 'Orden creada',
-        description: 'La orden de trabajo fue creada para la cotizacion aprobada.',
-      });
+      if (delegated) {
+        if (!delegated.canCreateWorkOrder || !quotes.some((q) => q.id === quoteId && q.status === 'approved')) {
+          throw new Error('No tienes autorización para generar esta orden.');
+        }
+        const order = await createDelegatedExternalWorkOrder(delegated.clientOrganizationId, quoteId);
+        setQuotes((current) => current.map((quote) => (
+          quote.id === quoteId ? { ...quote, work_order_id: order.id } : quote
+        )));
+        toast({ title: 'Orden disponible', description: `OT ${order.workOrderNumber}. Puedes abrirla desde esta cotización.` });
+      } else {
+        const { data, error } = await supabase.rpc('create_work_order_from_quote', {
+          target_quote_id: quoteId,
+        });
+        if (error) throw error;
+        setQuotes((current) => current.map((quote) => (
+          quote.id === quoteId ? { ...quote, work_order_id: data.id } : quote
+        )));
+        toast({
+          title: 'Orden creada',
+          description: 'La orden de trabajo fue creada para la cotizacion aprobada.',
+        });
+      }
     } catch (error) {
       console.error('Error creating work order:', error);
       toast({
         title: 'Error',
-        description: 'No se pudo crear la orden de trabajo.',
+        description: delegated && error instanceof Error
+          ? error.message : 'No se pudo crear la orden de trabajo.',
         variant: 'destructive',
       });
     } finally {
@@ -508,8 +529,22 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId, delegate
 
                     {quote.status === 'approved' && (
                       <div className="flex items-center justify-between gap-3 border-t pt-3">
-                        {quote.work_order_id ? (
+                        {quote.work_order_id && isDelegated ? (
+                          <Button size="sm" variant="outline" onClick={() => delegated?.onOpenWorkOrder(quote.work_order_id!)}>
+                            <CheckCircle className="mr-2 h-4 w-4" /> Abrir OT autorizada
+                          </Button>
+                        ) : quote.work_order_id ? (
                           <Badge variant="secondary">Orden creada</Badge>
+                        ) : delegated?.canCreateWorkOrder ? (
+                          <Button
+                            size="sm"
+                            onClick={() => setPendingDelegatedQuoteId(quote.id)}
+                            disabled={!!creatingWorkOrderId}
+                            data-testid="delegated-external-create-ot"
+                          >
+                            <FileText className="mr-2 h-4 w-4" />
+                            {creatingWorkOrderId === quote.id ? 'Generando OT...' : 'Crear o abrir OT'}
+                          </Button>
                         ) : canDecideQuotes && !isDelegated ? (
                           <Button
                             size="sm"
@@ -520,7 +555,7 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId, delegate
                             {creatingWorkOrderId === quote.id ? 'Creando orden...' : 'Crear orden'}
                           </Button>
                         ) : (
-                          <p className="text-sm text-muted-foreground">Cotizacion aprobada</p>
+                          <p className="text-sm text-muted-foreground">Cotización aprobada · OT sin gestión delegada habilitada</p>
                         )}
                       </div>
                     )}
@@ -633,6 +668,28 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId, delegate
             </div>
           )}
         </div>
+
+        <AlertDialog open={!!pendingDelegatedQuoteId} onOpenChange={(open) => {
+          if (!open) setPendingDelegatedQuoteId(null);
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Generar orden de trabajo externa?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Se vinculará la cotización aprobada con una orden pendiente del cliente.
+                La organización proveedora conserva su ejecución; no se asignarán técnicos.
+                Si ya existe una OT para esta cotización, se recuperará sin duplicarla.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction disabled={!!creatingWorkOrderId} onClick={() => {
+                if (pendingDelegatedQuoteId) void handleCreateWorkOrder(pendingDelegatedQuoteId);
+                setPendingDelegatedQuoteId(null);
+              }}>Generar o abrir OT</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {chatQuote && (
           <QuoteChatDialog
