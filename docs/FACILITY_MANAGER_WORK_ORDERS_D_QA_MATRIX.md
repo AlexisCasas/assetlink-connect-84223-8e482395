@@ -1,5 +1,12 @@
 # One Facility — 9C.6-D · Cierre integral de QA
-**Estado: en evaluación.** Este archivo es una matriz de evidencias y criterios de cierre, NO un certificado de PASS hasta observar los workflows del commit exacto.
+**Estado: QA automatizado PASS; cierre funcional en evaluación.** Los casos con validación visual manual pendiente no se declaran cerrados por haber pasado SQL.
+
+## Evidencia automatizada aprobada (GitHub Actions)
+
+- Base del PR #87 `9267625fa9e14e8c9a74758c04e2b5ee112e66c8`: [QA SQL 42907152999](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/42907152999) **SUCCESS**: 23 suites, **2,405 aserciones pgTAP PASS**, concurrencia B2.2 de creación interna y externa PASS, concurrencia D4 de seguimiento PASS, recorrido completo `9C6_D_INTEGRAL_FLOW=PASS` y limpieza `supabase stop --no-backup` PASS.
+- [QA frontend 42907153251](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/42907153251) **SUCCESS**: TypeScript, ESLint focalizado, controles de privilegios B1/B2/C2/D4 y build Vite PASS.
+- Vercel Preview `dpl_8okW8fU1pLfPTmpqNsZQoWpscbLG` READY con el mismo SHA.
+- Cloud (read-only con `ROLLBACK`) PASS: FM autorizado lee OT y 1 nota D4; actor no asignado recibe `42501` para ambas. **Cero escrituras en Cloud**.
 
 ## Línea base Cloud y restricciones (2026-11-10)
 
@@ -14,27 +21,27 @@
 
 | Caso | Comportamiento esperado | Prueba/evidencia exigida | Estado de cierre |
 |---|---|---|---|
-| OT-01 | FM asignado y permisos completos ve lista/detalle sanitizados | `facility_manager_work_orders_read_access.test.sql`; integral D | Por verificar CI D |
-| OT-02 | Sin `work_orders.view` no accede | Suite de lectura + permisos | Por verificar CI D |
-| OT-03 | `work_orders.view` sin `requests.view` no accede | Suite de lectura | Por verificar CI D |
-| OT-04 | Owner FM no asignado queda fuera | Suite de lectura/gestión | Por verificar CI D |
-| OT-05 | Relación suspendida/inactiva bloquea | Suite de lectura + gestión | Por verificar CI D |
-| OT-06 | OT ajena y otro FM se deniegan | Suite de lectura + integral D | Por verificar CI D |
-| OT-07 | FM sin membresía cliente usa acceso delegado; no SELECT crudo | Integral D + RLS/ACL | Por verificar CI D |
-| OT-08 | Usuario con doble membresía respeta contexto/tenant | Suite `facility_manager_ui_integration.test.sql` + QA manual | Mixto; confirmar manual |
-| OT-09 | Estados de OT externa visibles sin operaciones del proveedor | Suite B1 + inspección visual | Mixto; confirmar manual |
-| OT-10 | Estados de OT interna visibles con alcance correcto | Suite B1 + inspección visual | Mixto; confirmar manual |
-| OT-11 | Precio y textos ocultos bajo mínimo de cotizaciones | Suite B1/B2.2 + UI | Por verificar CI D |
-| OT-12 | Precio visible solo con condiciones de cotización | Suite B1/B2.2 + QA previo de Makro | Por verificar CI D |
-| OT-13 | No acceso FM a partes, evidencias ni materiales | Suite B1 + comprobación UI | Mixto; confirmar manual |
-| OT-14 | Revocación corta accesos/caché | Suite B1 + D4 + cambio de sesión/refresh | Mixto; confirmar manual |
-| OT-15 | `work_orders.manage` sin view no autoriza gestión | Suite B2.1/B2.2 | Por verificar CI D |
-| OT-16 | FM no asigna técnico ni cambia estados externos | Suite B1/B2.2 + QA de UI | Por verificar CI D |
-| OT-17 | OT interna terminal no admite planificación | Suite B2.1 | Por verificar CI D |
-| OT-18 | Crear OT concurrentemente es idempotente | `run_fm_work_order_creation_concurrency.sh` | Por verificar CI D |
-| OT-19 | Deep link permitido solo si cliente y asignación coinciden | Suite B1 + QA manual de deep link | Mixto; confirmar manual |
-| OT-20 | Cliente directo/proveedor continúa operativo | Pruebas SQL heredadas + navegación cliente/proveedor | Mixto; confirmar manual |
-| OT-21 | SQL integral + concurrency + seguridad frontend + build + Preview | 2 pipelines HEAD, Preview READY | Por verificar CI D |
+| OT-01 | FM asignado y permisos completos ve lista/detalle sanitizados | `facility_manager_work_orders_read_access.test.sql`; integral D | Automático PASS |
+| OT-02 | Sin `work_orders.view` no accede | Suite de lectura + permisos | Automático PASS |
+| OT-03 | `work_orders.view` sin `requests.view` no accede | Suite de lectura | Automático PASS |
+| OT-04 | Owner FM no asignado queda fuera | Suite de lectura/gestión | Automático PASS |
+| OT-05 | Relación suspendida/inactiva bloquea | Suite de lectura + gestión | Automático PASS |
+| OT-06 | OT ajena y otro FM se deniegan | Suite de lectura + integral D | Automático PASS |
+| OT-07 | FM sin membresía cliente usa acceso delegado; no SELECT crudo | Integral D + RLS/ACL | Automático PASS |
+| OT-08 | Usuario con doble membresía respeta contexto/tenant | Suite `facility_manager_ui_integration.test.sql` + QA manual | Automático PASS; manual pendiente |
+| OT-09 | Estados de OT externa visibles sin operaciones del proveedor | Suite B1 + inspección visual | Automático PASS; manual pendiente |
+| OT-10 | Estados de OT interna visibles con alcance correcto | Suite B1 + inspección visual | Automático PASS; manual pendiente |
+| OT-11 | Precio y textos ocultos bajo mínimo de cotizaciones | Suite B1/B2.2 + UI | Automático PASS |
+| OT-12 | Precio visible solo con condiciones de cotización | Suite B1/B2.2 + QA previo de Makro | Automático PASS |
+| OT-13 | No acceso FM a partes, evidencias ni materiales | Suite B1 + comprobación UI | Automático PASS; manual pendiente |
+| OT-14 | Revocación corta accesos/caché | Suite B1 + D4 + cambio de sesión/refresh | Automático PASS; manual pendiente |
+| OT-15 | `work_orders.manage` sin view no autoriza gestión | Suite B2.1/B2.2 | Automático PASS |
+| OT-16 | FM no asigna técnico ni cambia estados externos | Suite B1/B2.2 + QA de UI | Automático PASS |
+| OT-17 | OT interna terminal no admite planificación | Suite B2.1 | Automático PASS |
+| OT-18 | Crear OT concurrentemente es idempotente | `run_fm_work_order_creation_concurrency.sh` | Automático PASS |
+| OT-19 | Deep link permitido solo si cliente y asignación coinciden | Suite B1 + QA manual de deep link | Automático PASS; manual pendiente |
+| OT-20 | Cliente directo/proveedor continúa operativo | Pruebas SQL heredadas + navegación cliente/proveedor | Automático PASS; manual pendiente |
+| OT-21 | SQL integral + concurrency + seguridad frontend + build + Preview | 2 pipelines HEAD, Preview READY | Automático PASS |
 
 **Extensión D4:** nota externa isolada por relación FM, autor real, auditoría sin texto, una nota por clave de idempotencia, lectura posible tras revocar manage. Prueba `facility_manager_work_order_followups_access.test.sql` (44 casos) + `run_fm_work_order_followups_concurrency.sh` y `run_fm_9c6_d_integral_regression.sh`.
 
