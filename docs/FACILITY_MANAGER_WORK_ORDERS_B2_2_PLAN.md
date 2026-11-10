@@ -1,6 +1,6 @@
 # One Facility — 9C.6-B2.2 (D3): creación de OT delegada
 
-**Estado:** diseño técnico / preflight de solo lectura, pendiente de implementación y QA aislado. **Fecha:** 2026-11-10.  
+**Estado:** preflight terminado; B2.2-B implementado en rama PR #84 (dos RPC + migración SQL); QA aislado B2.2-C en curso. Sin aplicación a Supabase Cloud. **Fecha:** 2026-11-10.  
 **Base GitHub:** `productization/mvp`, commit `7fc400e47c6017b80aeb3a4a71f16f19a52923d7` (PR #83 / C2.1 integrado).  
 **Supabase:** proyecto OneFacility `hplchnsseylngjopgbtl`. Ninguna escritura de OT, permiso o migración ejecutada para B2.2.
 
@@ -82,4 +82,12 @@ Validaciones obligatorias:
 | **B2.3/C2.3 (D4)** | Notas de seguimiento lado cliente en entidad separada | Nuevo contrato y PR |
 | **9C.6-D** | QA integral, limpieza y observabilidad final | PASS y cierre |
 
-**NO-GO de B2.2:** no aplicar migración en Supabase Cloud, no crear OT reales ni conceder permisos desde este PR de planificación. Este documento no implica implementación concluida.
+**NO-GO vigente:** no aplicar la migración a Supabase Cloud, no crear OT reales y no conceder permisos hasta PASS de QA aislado, revisión formal y autorización específica. Las dos RPC están en código, pero no están instaladas ni habilitadas en Cloud.
+
+## 6. Implementación en rama (2026-11-10)
+
+- Migración nueva: `supabase/migrations/20261110141500_fm_delegated_work_order_creation.sql` (2 RPC, helpers B1 existentes, sin nuevas tablas, grants de tabla o RLS).
+- Pruebas nuevas: `supabase/tests/facility_manager_work_orders_create_access.test.sql` (36 aserciones pgTAP; fixtures aisladas con `ROLLBACK`).
+- CI: `.github/workflows/9c6-b1-isolated-db-qa.yml` se ejecuta en PR al modificar `supabase/**`; incluye regresiones previas.
+- Se conserva el índice único `work_orders_quote_id_key` para cotizaciones y `uq_work_orders_internal_request` para solicitudes internas.
+- Estado de QA: ejecución GitHub Actions `42829072597` iniciada; no declarar PASS antes de revisar resultados y estrés concurrente específico.
