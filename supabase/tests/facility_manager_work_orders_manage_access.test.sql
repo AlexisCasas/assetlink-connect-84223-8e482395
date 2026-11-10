@@ -120,6 +120,8 @@ SELECT is((SELECT count(*)::int FROM pg_proc WHERE pronamespace='public'::regnam
 
 SELECT is((public.update_facility_management_internal_work_order_schedule('f6200000-0000-0000-0000-0000000000a1'::uuid,'f6a00000-0000-0000-0000-0000000000a3'::uuid,'medium',NULL,NULL,'high',NULL,NULL)->>'priority')::text,'high','Assigned manager can update priority on pending internal OT');
 
+RESET ROLE;
+-- Assert persisted values and audit under the test owner, not FM (strict RLS).
 SELECT is((SELECT priority FROM public.work_orders WHERE id='f6a00000-0000-0000-0000-0000000000a3'),'high','Priority persisted');
 
 SELECT is((SELECT count(*)::int FROM public.audit_logs WHERE record_id='f6a00000-0000-0000-0000-0000000000a3' AND action='facility_manager_internal_work_order_planning'),1,'Exactly one planning audit event created');
@@ -133,10 +135,15 @@ SELECT is((SELECT new_data->>'priority' FROM public.audit_logs WHERE record_id='
 SELECT ok((SELECT old_data FROM public.audit_logs WHERE record_id='f6a00000-0000-0000-0000-0000000000a3' AND action='facility_manager_internal_work_order_planning' LIMIT 1) ?& ARRAY['priority','scheduled_at','due_at'],'Audit captures all and only relevant fields');
 
 SELECT ok(NOT ((SELECT new_data FROM public.audit_logs WHERE record_id='f6a00000-0000-0000-0000-0000000000a3' AND action='facility_manager_internal_work_order_planning' LIMIT 1) ? 'observations'),'Provider observations excluded from audit');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('f6100000-0000-0000-0000-000000000004');
 
 SELECT is((public.update_facility_management_internal_work_order_schedule('f6200000-0000-0000-0000-0000000000a1'::uuid,'f6a00000-0000-0000-0000-0000000000a3'::uuid,'high',NULL,NULL,'high',NULL,NULL)->>'priority'),'high','No-op request returns sanitized OT');
 
+RESET ROLE;
 SELECT is((SELECT count(*)::int FROM public.audit_logs WHERE record_id='f6a00000-0000-0000-0000-0000000000a3' AND action='facility_manager_internal_work_order_planning'),1,'No-op did not duplicate audit');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('f6100000-0000-0000-0000-000000000004');
 
 SELECT throws_ok($sql$ SELECT public.update_facility_management_internal_work_order_schedule('f6200000-0000-0000-0000-0000000000a1'::uuid,'f6a00000-0000-0000-0000-0000000000a3'::uuid,'medium',NULL,NULL,'urgent',NULL,NULL) $sql$,'40001',NULL,'Stale expected priority rejected');
 
@@ -148,9 +155,12 @@ SELECT throws_ok($sql$ SELECT public.update_facility_management_internal_work_or
 
 SELECT is(((public.update_facility_management_internal_work_order_schedule('f6200000-0000-0000-0000-0000000000a1'::uuid,'f6a00000-0000-0000-0000-0000000000a3'::uuid,'high',NULL,NULL,'urgent',now()+interval '2 days',now()+interval '4 days'))->>'priority'),'urgent','Authorized dates and priority update accepted');
 
+RESET ROLE;
 SELECT ok((SELECT scheduled_at=now()+interval '2 days' AND due_at=now()+interval '4 days' FROM public.work_orders WHERE id='f6a00000-0000-0000-0000-0000000000a3'),'Both dates persisted correctly');
 
 SELECT is((SELECT count(*)::int FROM public.audit_logs WHERE record_id='f6a00000-0000-0000-0000-0000000000a3' AND action='facility_manager_internal_work_order_planning'),2,'Date change creates one additional audit');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('f6100000-0000-0000-0000-000000000004');
 
 SELECT throws_ok($sql$ SELECT public.update_facility_management_internal_work_order_schedule('f6200000-0000-0000-0000-0000000000a1'::uuid,'f6a00000-0000-0000-0000-0000000000a3'::uuid,'urgent',NULL,NULL,'low',NULL,NULL) $sql$,'40001',NULL,'Stale dates rejected even when priority matches');
 
