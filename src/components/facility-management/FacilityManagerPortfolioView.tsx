@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useFacilityManagement } from '@/hooks/useFacilityManagement';
-import { canFacilityManagerViewWorkOrders, isFacilityManagementRelationshipEditable } from '@/lib/facilityManagement';
+import { canFacilityManagerViewReports, canFacilityManagerViewWorkOrders, isFacilityManagementRelationshipEditable } from '@/lib/facilityManagement';
 import { useFacilityManagementOperationalClients } from '@/hooks/useFacilityManagementOperationalClients';
 import { navigateToEntity } from '@/lib/entityNavigation';
 import type { FacilityManagementMember, FacilityManagementPortfolioEntry } from '@/types/facilityManagement';
@@ -23,6 +23,9 @@ export function FacilityManagerPortfolioView() {
   const { clients: operationalClients } = useFacilityManagementOperationalClients();
   const accessibleWorkOrderClientIds = new Set(
     operationalClients.filter(canFacilityManagerViewWorkOrders).map((client) => client.clientOrganizationId),
+  );
+  const accessibleReportClientIds = new Set(
+    operationalClients.filter(canFacilityManagerViewReports).map((client) => client.clientOrganizationId),
   );
   const [portfolio, setPortfolio] = useState<FacilityManagementPortfolioEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,6 +104,11 @@ export function FacilityManagerPortfolioView() {
                     <TableCell>{entry.assignedMemberCount}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        {accessibleReportClientIds.has(entry.clientOrganizationId) && (
+                          <Button size="sm" variant="outline" onClick={() => navigateToEntity({
+                            view: 'managed-reports', managedClientId: entry.clientOrganizationId,
+                          })}>Ver indicadores</Button>
+                        )}
                         {accessibleWorkOrderClientIds.has(entry.clientOrganizationId) && (
                           <Button size="sm" variant="outline" onClick={() => navigateToEntity({
                             view: 'managed-work-orders',
@@ -128,6 +136,12 @@ export function FacilityManagerPortfolioView() {
                   Solo el cliente puede cambiar permisos o el estado de la relación. El acceso operativo depende de los permisos concedidos y de tu asignación al cliente.
                 </DialogDescription>
               </DialogHeader>
+              {accessibleReportClientIds.has(selected.clientOrganizationId) && (
+                <Button variant="outline" onClick={() => {
+                  setSelectedId(null);
+                  navigateToEntity({ view: 'managed-reports', managedClientId: selected.clientOrganizationId });
+                }}>Ver indicadores</Button>
+              )}
               {accessibleWorkOrderClientIds.has(selected.clientOrganizationId) && (
                 <Button variant="outline" onClick={() => {
                   setSelectedId(null);

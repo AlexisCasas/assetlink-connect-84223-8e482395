@@ -18,6 +18,7 @@ import {
 import type { FacilityManagementOperationalClient } from '@/types/facilityManagement';
 import { ManagedClientGate } from './ManagedClientGate';
 import { DelegatedWorkOrdersView } from './DelegatedWorkOrdersView';
+import { DelegatedClientMetricsView } from './DelegatedClientMetricsView';
 
 function DelegatedAssets({ client, focusAssetId }: { client: FacilityManagementOperationalClient; focusAssetId?: string }) {
   const scope = useMemo(() => buildDelegatedAssetScope(client), [client]);
@@ -129,6 +130,15 @@ export function DelegatedWorkOrdersModule({ managedClientId, focusWorkOrderId }:
   return (
     <ManagedClientGate module="managed-work-orders" requestedClientId={managedClientId}>
       {(client) => <DelegatedWorkOrdersView key={client.clientOrganizationId} client={client} focusWorkOrderId={focusWorkOrderId} />}
+    </ManagedClientGate>
+  );
+}
+
+/** #managed-reports 9C.7: explicit FM client, report grant, server RPC scope. */
+export function DelegatedReportsModule({ managedClientId }: { managedClientId?: string }) {
+  return (
+    <ManagedClientGate module="managed-reports" requestedClientId={managedClientId}>
+      {(client) => <DelegatedClientMetricsView key={client.relationshipId} client={client} />}
     </ManagedClientGate>
   );
 }

@@ -21,6 +21,7 @@ const MODULE_LABELS: Record<FacilityManagementOperationalModule, string> = {
   requests: 'Solicitudes',
   drafts: 'Borradores de solicitudes',
   'managed-work-orders': 'Órdenes de trabajo',
+  'managed-reports': 'Indicadores',
 };
 
 interface Props {
