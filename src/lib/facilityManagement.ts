@@ -247,6 +247,12 @@ export const canFacilityManagerPlanPreventiveRequest = (client: OperationalClien
 export const canFacilityManagerViewWorkOrders = (client: OperationalClientAccess) =>
   FM_REQUEST_ROLES.includes(client.membershipRole) && grants(client, 'requests.view', 'work_orders.view');
 
+/** B2.1: priority/dates only on internal nonterminal OT; server rechecks.
+ * A grant to manage never implies view, and role requester cannot manage. */
+export const canFacilityManagerManageInternalWorkOrders = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole)
+  && grants(client, 'requests.view', 'work_orders.view', 'work_orders.manage');
+
 /** Ver las cotizaciones recibidas de una solicitud: requests.view + quotes.view. */
 export const canFacilityManagerViewQuotes = (client: OperationalClientAccess) =>
   FM_REQUEST_ROLES.includes(client.membershipRole) && grants(client, 'requests.view', 'quotes.view');
