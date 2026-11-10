@@ -11,6 +11,7 @@ import { fetchDelegatedClientMetrics } from '@/lib/delegatedClientMetrics';
 import { canFacilityManagerViewReports, canFacilityManagerViewWorkOrders } from '@/lib/facilityManagement';
 import { navigateToEntity } from '@/lib/entityNavigation';
 import type { FacilityManagementOperationalClient } from '@/types/facilityManagement';
+import { DelegatedClientTrendsPanel } from './DelegatedClientTrendsPanel';
 
 type CardIcon = typeof ClipboardList;
 
@@ -189,9 +190,10 @@ export function DelegatedClientMetricsView({ client }: { client: FacilityManagem
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Estos indicadores muestran una fotografía actual, no tendencias ni cumplimiento histórico de SLA.
+            Las tarjetas anteriores representan una fotografía actual de órdenes, solicitudes y activos.
             No incluyen importes, horas, técnicos ni información privada del proveedor.
           </p>
+          <DelegatedClientTrendsPanel client={client} />
         </>
       )}
     </div>
