@@ -62,7 +62,7 @@ BEGIN
     AND EXISTS (
       SELECT 1 FROM public.organizations provider
       WHERE provider.id = v_quote.provider_organization_id
-        AND provider.organization_type = 'provider_company'
+        AND provider.organization_type IN ('provider_company','subcontractor_company')
         AND provider.status = 'active'
     );
 
