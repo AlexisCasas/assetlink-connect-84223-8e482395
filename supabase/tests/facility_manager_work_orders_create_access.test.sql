@@ -1,7 +1,7 @@
 -- One Facility | 9C.6-B2.2 D3 | isolated pgTAP; all fixture changes rolled back.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(36);
+SELECT plan(38);
 CREATE FUNCTION pg_temp.as_user(p_user uuid) RETURNS void LANGUAGE sql AS $fn$
   SELECT set_config('request.jwt.claim.sub',coalesce(p_user::text,''),true);
 $fn$;
@@ -21,7 +21,8 @@ INSERT INTO public.organizations(id,name,organization_type) VALUES
 ('b6200000-0000-0000-0000-0000000000b1','QA B22 Client B','client_company'),
 ('b6200000-0000-0000-0000-0000000000fa','QA B22 FM A','facility_manager'),
 ('b6200000-0000-0000-0000-0000000000fb','QA B22 FM B','facility_manager'),
-('b6200000-0000-0000-0000-0000000000c1','QA B22 Provider','provider_company');
+('b6200000-0000-0000-0000-0000000000c1','QA B22 Provider','provider_company'),
+('b6200000-0000-0000-0000-0000000000c2','QA B22 Subcontractor','subcontractor_company');
 
 INSERT INTO public.organization_members(id,organization_id,user_id,role,is_active) VALUES
 ('b6300000-0000-0000-0000-000000000001','b6200000-0000-0000-0000-0000000000a1','b6100000-0000-0000-0000-000000000001','owner',true),
@@ -62,12 +63,14 @@ VALUES
 ('b6800000-0000-0000-0000-0000000000a1','b6200000-0000-0000-0000-0000000000a1','B22-INT-01','Interna autorizada','Servicio interno QA','Equipo','b6400000-0000-0000-0000-0000000000a1','Lima','preventivo',now()+interval '10 days','sent','internal',false,'fixture',1,false),
 ('b6800000-0000-0000-0000-0000000000a2','b6200000-0000-0000-0000-0000000000a1','B22-INT-DRAFT','Interna borrador','No crear','Equipo','b6400000-0000-0000-0000-0000000000a1','Lima','preventivo',now()+interval '10 days','draft','internal',false,'fixture',1,false),
 ('b6800000-0000-0000-0000-0000000000a3','b6200000-0000-0000-0000-0000000000a1','B22-EXT-01','Externa costo S/ 1700','Externa sensible','Equipo','b6400000-0000-0000-0000-0000000000a1','Lima','correctivo',now()+interval '10 days','quoted','external',true,'fixture',3,false),
+('b6800000-0000-0000-0000-0000000000a4','b6200000-0000-0000-0000-0000000000a1','B22-SUB-01','Externa subcontratista','Subcontratacion','Equipo','b6400000-0000-0000-0000-0000000000a1','Lima','correctivo',now()+interval '10 days','quoted','external',true,'fixture',3,false),
 ('b6800000-0000-0000-0000-0000000000b1','b6200000-0000-0000-0000-0000000000b1','B22-INT-B','Otro cliente','Privada B','Equipo',NULL,'Lima','correctivo',now()+interval '10 days','sent','internal',false,'fixture',1,false);
 
 INSERT INTO public.quotes(id,request_id,provider_organization_id,amount,description,status,total_amount)
 VALUES
 ('b6900000-0000-0000-0000-0000000000a1','b6800000-0000-0000-0000-0000000000a3','b6200000-0000-0000-0000-0000000000c1',1700,'Descripcion sensible S/ 1700','approved',1700),
-('b6900000-0000-0000-0000-0000000000a2','b6800000-0000-0000-0000-0000000000a3','b6200000-0000-0000-0000-0000000000c1',1500,'Oferta no aprobada','submitted',1500);
+('b6900000-0000-0000-0000-0000000000a2','b6800000-0000-0000-0000-0000000000a3','b6200000-0000-0000-0000-0000000000c1',1500,'Oferta no aprobada','submitted',1500),
+('b6900000-0000-0000-0000-0000000000a3','b6800000-0000-0000-0000-0000000000a4','b6200000-0000-0000-0000-0000000000c2',900,'Subcontratista aprobado','approved',900);
 
 SELECT ok((SELECT bool_and(p.prosecdef AND p.proconfig @> ARRAY['search_path=""'::text])
   FROM pg_proc p WHERE p.pronamespace='public'::regnamespace
@@ -134,6 +137,15 @@ SELECT ok((SELECT planner_member_id IS NULL AND assigned_member_id IS NULL AND s
  AND work_order_type='external' AND provider_organization_id='b6200000-0000-0000-0000-0000000000c1'
  FROM public.work_orders WHERE quote_id='b6900000-0000-0000-0000-0000000000a1'),
  'External FM creation does not impersonate an operator');
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('b6100000-0000-0000-0000-000000000002');
+SELECT lives_ok($qa$ SELECT public.create_facility_management_work_order_from_quote('b6200000-0000-0000-0000-0000000000a1','b6900000-0000-0000-0000-0000000000a3') $qa$,
+  'FM can create an external OT for an approved subcontractor quote');
+RESET ROLE;
+SELECT ok((SELECT provider_organization_id='b6200000-0000-0000-0000-0000000000c2'::uuid AND work_order_type='external'
+ FROM public.work_orders WHERE quote_id='b6900000-0000-0000-0000-0000000000a3'::uuid),
+ 'Subcontractor remains the operator, FM is not the provider');
 
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('b6100000-0000-0000-0000-000000000004');
