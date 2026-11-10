@@ -136,6 +136,9 @@ jobs:
           assert.match(quote, /createDelegatedExternalWorkOrder\(delegated.clientOrganizationId, quoteId\)/);
           assert.match(quote, /delegated\?\.canCreateWorkOrder/);
           assert.match(quote, /pendingDelegatedQuoteId/);
+          assert.match(quote, /delegated-external-verify-existing/);
+          assert.match(quote, /Verificar OT existente/);
+          assert.match(quote, /Se consultará la vinculación/);
           assert.match(quote, /¿Generar orden de trabajo externa\?/);
           assert.match(table, /onOpenWorkOrder\?\./);
           // Legacy client flows must remain available in the direct branch only.
