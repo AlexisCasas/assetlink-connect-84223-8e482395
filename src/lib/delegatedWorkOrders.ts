@@ -2,9 +2,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { isValidUuid } from '@/lib/providerHelpers';
 
 /**
- * 9C.6-C1: only the two public B1 RPCs. The generated Supabase types predate
- * the B1 Cloud migration; do not edit generated types or use raw tables.
- * RPC names, argument names and response shapes are contract-checked here.
+ * B1 read RPCs + B2.1 narrowly scoped planning RPC. Never use raw tables,
+ * provider/operator RPCs or alter generated Supabase types. The B2.1 RPC
+ * revalidates grants and checks expected values before writing.
  */
 export type DelegatedWorkOrderStatus = 'pending' | 'assigned' | 'in_progress' | 'completed' | 'closed';
 export type DelegatedWorkOrderStatusFilter = DelegatedWorkOrderStatus | 'all';
@@ -42,12 +42,13 @@ export interface DelegatedWorkOrderPage {
   offset: number;
 }
 
-type RpcName = 'get_facility_management_work_orders' | 'get_facility_management_work_order';
+type RpcName = 'get_facility_management_work_orders' | 'get_facility_management_work_order'
+  | 'update_facility_management_internal_work_order_schedule';
 type RpcArgs = Record<string, string | number | null>;
-type RpcResult = { data: unknown; error: { message: string } | null };
+type RpcResult = { data: unknown; error: { message: string; code?: string } | null };
 
 // Keep Supabase's method bound to the client: rpc uses its REST client internally.
-const callReadRpc = supabase.rpc.bind(supabase) as unknown as (
+const callDelegatedRpc = supabase.rpc.bind(supabase) as unknown as (
   name: RpcName,
   args: RpcArgs,
 ) => PromiseLike<RpcResult>;
@@ -115,7 +116,7 @@ export async function fetchDelegatedWorkOrders(
     throw new Error('Paginación no válida.');
   }
 
-  const { data, error } = await callReadRpc('get_facility_management_work_orders', {
+  const { data, error } = await callDelegatedRpc('get_facility_management_work_orders', {
     _client_organization_id: clientOrganizationId,
     _status: status === 'all' ? null : status,
     _limit: limit,
@@ -142,7 +143,7 @@ export async function fetchDelegatedWorkOrder(
   if (!isValidUuid(clientOrganizationId) || !isValidUuid(workOrderId)) {
     throw new Error('Orden no disponible o sin acceso.');
   }
-  const { data, error } = await callReadRpc('get_facility_management_work_order', {
+  const { data, error } = await callDelegatedRpc('get_facility_management_work_order', {
     _client_organization_id: clientOrganizationId,
     _work_order_id: workOrderId,
   });
@@ -152,5 +153,74 @@ export async function fetchDelegatedWorkOrder(
     throw new Error(error.message);
   }
   if (data === null) throw new Error('Orden no disponible o sin acceso.');
+  return parseWorkOrder(data);
+}
+
+/** B2.1: the only write call in the delegated OT module.
+ * The 3 expected fields must be copied unchanged from the B1 DTO to retain
+ * timestamp precision and correctly detect conflicts on the server. */
+export type InternalPlanningPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface InternalWorkOrderPlanningChanges {
+  priority: InternalPlanningPriority;
+  scheduledAt: string | null;
+  dueAt: string | null;
+}
+
+export class DelegatedPlanningConflictError extends Error {
+  constructor() { super('La planificación cambió desde que abriste la orden. Actualiza los datos antes de volver a guardar.'); }
+}
+
+export async function updateDelegatedInternalWorkOrderPlanning(
+  clientOrganizationId: string,
+  previous: DelegatedWorkOrder,
+  next: InternalWorkOrderPlanningChanges,
+): Promise<DelegatedWorkOrder> {
+  if (!isValidUuid(clientOrganizationId) || !isValidUuid(previous.id)) {
+    throw new Error('Orden no disponible o sin acceso.');
+  }
+  if (
+    previous.workOrderType !== 'internal' ||
+    !['pending','assigned','in_progress'].includes(previous.status) ||
+    !(['low', 'medium', 'high', 'urgent'] as string[]).includes(previous.priority) ||
+    !(['low', 'medium', 'high', 'urgent'] as string[]).includes(next.priority)
+  ) {
+    throw new Error('Esta orden no permite modificar su planificación.');
+  }
+  const time = (raw: string | null): number | null => {
+    if (raw === null) return null;
+    const value = Date.parse(raw);
+    if (!Number.isFinite(value)) throw new Error('La fecha indicada no es válida.');
+    return value;
+  };
+  const scheduled = time(next.scheduledAt);
+  const due = time(next.dueAt);
+  if (scheduled !== null && due !== null && scheduled > due) {
+    throw new Error('La fecha programada no puede ser posterior a la fecha límite.');
+  }
+
+  const { data, error } = await callDelegatedRpc('update_facility_management_internal_work_order_schedule', {
+    _client_organization_id: clientOrganizationId,
+    _work_order_id: previous.id,
+    _expected_priority: previous.priority,
+    _expected_scheduled_at: previous.scheduledAt,
+    _expected_due_at: previous.dueAt,
+    _priority: next.priority,
+    _scheduled_at: next.scheduledAt,
+    _due_at: next.dueAt,
+  });
+
+  if (error) {
+    if (error.code === '40001' || error.message.includes('planning changed')) {
+      throw new DelegatedPlanningConflictError();
+    }
+    if (error.code === '42501' || error.message.includes('Not authorized')) {
+      throw new Error('Ya no tienes permiso para gestionar esta orden o su estado cambió.');
+    }
+    if (error.code === '22023') {
+      throw new Error('La prioridad o las fechas no son válidas.');
+    }
+    throw new Error('No se pudo guardar la planificación. Inténtalo nuevamente.');
+  }
   return parseWorkOrder(data);
 }

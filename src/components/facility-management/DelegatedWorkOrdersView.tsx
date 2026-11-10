@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { canFacilityManagerManageInternalWorkOrders } from '@/lib/facilityManagement';
+import { DelegatedWorkOrderPlanningForm } from './DelegatedWorkOrderPlanningForm';
 import { ClipboardList, Eye, LockKeyhole, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
@@ -61,10 +63,12 @@ function WorkOrderDetail({
   client,
   orderId,
   onClose,
+  onSaved,
 }: {
   client: FacilityManagementOperationalClient;
   orderId: string | null;
   onClose: () => void;
+  onSaved: () => void;
 }) {
   const { currentOrganization, user } = useAuth();
   const validId = !!orderId && isValidUuid(orderId);
@@ -86,13 +90,21 @@ function WorkOrderDetail({
   });
 
   const order = validId && query.isSuccess ? query.data : null;
+  // Client-side eligibility is only a UI hint: the B2.1 RPC revalidates
+  // the active relationship, assignment, three grants and OT status on save.
+  const canPlan = !!order
+    && canFacilityManagerManageInternalWorkOrders(client)
+    && order.workOrderType === 'internal'
+    && ['pending', 'assigned', 'in_progress'].includes(order.status);
+
   return (
     <Dialog open={!!orderId} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Detalle de orden de trabajo</DialogTitle>
           <DialogDescription>
-            Información autorizada de {client.clientOrganizationName}. Vista de solo lectura.
+            Información autorizada de {client.clientOrganizationName}.
+            {canPlan ? ' Puedes coordinar prioridad y fechas de esta OT interna.' : ' Vista de solo lectura.'}
           </DialogDescription>
         </DialogHeader>
         {!validId || query.isError ? (
@@ -109,7 +121,7 @@ function WorkOrderDetail({
               <RequestTypeBadge type={order.workOrderType} />
               <WorkOrderStatusBadge status={order.status} />
               <WorkOrderPriorityBadge priority={order.priority} />
-              <Badge variant="outline">Solo lectura</Badge>
+              <Badge variant="outline">{canPlan ? 'Planificación autorizada' : 'Solo lectura'}</Badge>
             </div>
             <h3 className="text-base font-medium">{order.title}</h3>
             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -130,6 +142,17 @@ function WorkOrderDetail({
                 <p className="whitespace-pre-wrap text-sm">{order.description}</p>
               </div>
             )}
+            {canPlan && (
+              <DelegatedWorkOrderPlanningForm
+                key={`${order.id}:${order.priority}:${order.scheduledAt ?? ''}:${order.dueAt ?? ''}`}
+                clientOrganizationId={client.clientOrganizationId}
+                workOrder={order}
+                onSaved={() => {
+                  void query.refetch();
+                  onSaved();
+                }}
+              />
+            )}
             <div className="rounded-md border bg-muted/30 p-4">
               <p className="text-xs text-muted-foreground">Importe de la orden</p>
               <p className="mt-1 font-semibold">{formatPrice(order)}</p>
@@ -149,7 +172,7 @@ function WorkOrderDetail({
   );
 }
 
-/** 9C.6-C1: client-side read-only presentation of the two minimized B1 RPCs.
+/** 9C.6-C1/C2.1: B1 safe reads; B2.1 internal-only planning when authorized.
  * The ManagedClientGate is mounted by DelegatedWorkOrdersModule, and every RPC
  * re-checks the active relationship, member assignment, roles and grants.
  * Never mount WorkOrdersList/useWorkOrders/WorkOrderDetailDialog here. */
@@ -297,7 +320,12 @@ export function DelegatedWorkOrdersView({
           )}
         </CardContent>
       </Card>
-      <WorkOrderDetail client={client} orderId={focusWorkOrderId ?? null} onClose={closeDetail} />
+      <WorkOrderDetail
+        client={client}
+        orderId={focusWorkOrderId ?? null}
+        onClose={closeDetail}
+        onSaved={() => void query.refetch()}
+      />
     </div>
   );
 }
