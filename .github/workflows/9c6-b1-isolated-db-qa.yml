@@ -42,6 +42,8 @@ jobs:
         run: bash supabase/tests/run_fm_work_order_creation_concurrency.sh
       - name: "9C.6-B2.3 D4 two-session followup idempotency (isolated DB)"
         run: bash supabase/tests/run_fm_work_order_followups_concurrency.sh
+      - name: "9C.6-D complete FM journey (isolated DB; ROLLBACK)"
+        run: bash supabase/tests/run_fm_9c6_d_integral_regression.sh
       - name: "Stop and discard local stack"
         if: always()
         run: supabase stop --no-backup
