@@ -1,6 +1,6 @@
 # One Facility · 9C.6-B2.1 — Planificación delegada de OT internas
 
-**Estado:** implementación propuesta en PR; **no aplicada a Supabase Cloud ni habilitada en frontend**.
+**Estado:** migración **instalada en Supabase Cloud**, QA aislado PASS y PR #82 listo para integración; frontend de edición C2.1 **no implementado ni habilitado**.
 **Fecha:** 10/11/2026.
 **Base:** `productization/mvp` desde el merge de 9C.6-C1, commit `3b2a027`.
 
@@ -42,7 +42,7 @@ Archivo dedicado: `supabase/tests/facility_manager_work_orders_manage_access.tes
 
 Cobertura: sin grant, roles owner/admin/manager y requester/technician/no asignado, otros clientes, UUID inexistente, orden externa y orden de solicitud borrador, estado cerrado/completado, prioridad y fecha inválida, valores esperados obsoletos, persistencia, auditoría del actor y de los cambios, idempotencia, revocación de cada grant, relación suspendida y membresía inactiva.
 
-**Gate obligatorio:** `supabase start` aislado + `supabase test db` completa + revisión de CI/seguridad. No aplicar migración a Cloud, no fusionar PR ni conceder `work_orders.manage` hasta tener PASS verificable, revisión de permisos y autorización de liberación.
+**QA completado:** GitHub Actions [run 42761748381](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/42761748381): **21 suites / 2,323 aserciones PASS**, incluidas las 41 nuevas de B2.1. La migración fue aplicada a Cloud como versión `20261110061336` y sus controles de ACL y RLS pasaron. El usuario FM de QA sin `work_orders.manage` recibió `42501`. **No conceder `work_orders.manage` ni habilitar la interfaz hasta QA de C2.1 y autorización específica de ese permiso.**
 
 ## Etapas siguientes
 
@@ -54,4 +54,11 @@ Cobertura: sin grant, roles owner/admin/manager y requester/technician/no asigna
 
 ### Recuperación
 
-Si se desplegara B2.1 y luego hubiera incidente, la mitigación inmediata es `REVOKE EXECUTE` de la nueva RPC a `authenticated` (sin alterar B1/C1) y revertir solo el frontend C2.1 si ya estuviera activo. El rollback no elimina la entrada de historial de migraciones ni los registros de auditoría; valorar backup independiente antes de desplegar.
+La migración B2.1 ya está instalada. Ante incidente, utilizar con autorización el script `docs/rollbacks/9c6-b2-1-soft-disable.sql` que revoca `EXECUTE` de la nueva RPC (sin alterar B1/C1). Este procedimiento no sustituye un backup ni revierte registros existentes; tampoco borra el historial de migraciones.
+## Verificación tras aplicación a Cloud
+
+- `apply_migration`: éxito; versión `20261110061336_fm_internal_work_order_planning`. El contenido SQL corresponde al blob `68f2efe32fffdae175e6234aebf92469e43418f5`, probado en CI; el nombre de archivo en GitHub se alineó con Cloud sin alterar SQL.
+- 86 migraciones totales; 29 OT, 11 audit_logs y 13 grants FM; 1 grant `work_orders.view` de QA y **0 grants `work_orders.manage`**.
+- RPC `SECURITY DEFINER`, `search_path` vacío, `lock_timeout=3s`; `anon` sin EXECUTE y `authenticated` con EXECUTE condicionado a validación interna.
+- QA contra Cloud con usuario FM asignado, sin manage: rechazo `42501` esperado. No se ejecutaron escrituras de OT productivas.
+- RLS de `work_orders` y `audit_logs` sigue habilitado con una política por tabla.
