@@ -1,0 +1,115 @@
+name: "One Facility 9C.7-C1 - delegated KPI frontend QA"
+
+on:
+  push:
+    branches: ["feature/9c7-c1-client-kpi-dashboard"]
+  pull_request:
+    branches: ["productization/mvp", "feature/9c7-b1-client-metrics-rpc"]
+    paths:
+      - "src/**"
+      - ".github/workflows/9c7-c1-frontend-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fm-9c7-c1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: "9C.7-C1 TypeScript, isolated UI security and Vite build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: TypeScript (reject new diagnostics)
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.app.json > /tmp/9c7-tsc.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then echo "9C7_TYPECHECK=PASS"; exit 0; fi
+          cat /tmp/9c7-tsc.log
+          index_blob="$(git hash-object src/pages/Index.tsx)"
+          if [ "$index_blob" != "c1cac2b37bfb357c16d5f821cd9cbda067c5429b" ]; then
+            echo "9C7_NO_GO=base_index_changed"; exit 1
+          fi
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const errors = readFileSync('/tmp/9c7-tsc.log', 'utf8').split('\n').filter(x => /error TS\d+:/.test(x));
+          const expected = [
+            /^src\/pages\/Index\.tsx\(42,24\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(43,26\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(59,26\): error TS2322:/,
+          ];
+          assert.equal(errors.length, 3, 'New TypeScript diagnostics');
+          expected.forEach((regex, i) => assert.match(errors[i], regex));
+          console.log('9C7_TYPECHECK=PASS (3 pre-existing Index.tsx issues only)');
+          JS
+      - name: Lint changed delegated reporting modules
+        run: |
+          npx eslint \
+            src/lib/delegatedClientMetrics.ts \
+            src/components/facility-management/DelegatedClientMetricsView.tsx \
+            src/components/facility-management/DelegatedModules.tsx \
+            src/components/facility-management/ManagedClientGate.tsx \
+            src/components/facility-management/FacilityManagerPortfolioView.tsx \
+            src/components/layout/Sidebar.tsx \
+            src/pages/Dashboard.tsx \
+            src/lib/facilityManagement.ts \
+            src/types/facilityManagement.ts \
+            src/lib/entityNavigation.ts
+      - name: 9C.7-C1 least privilege, isolation and navigation assertions
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const read = p => readFileSync(p, 'utf8');
+          const transport = read('src/lib/delegatedClientMetrics.ts');
+          const page = read('src/components/facility-management/DelegatedClientMetricsView.tsx');
+          const modules = read('src/components/facility-management/DelegatedModules.tsx');
+          const gate = read('src/components/facility-management/ManagedClientGate.tsx');
+          const nav = read('src/lib/entityNavigation.ts');
+          const dashboard = read('src/pages/Dashboard.tsx');
+          const sidebar = read('src/components/layout/Sidebar.tsx');
+          const portfolio = read('src/components/facility-management/FacilityManagerPortfolioView.tsx');
+          const permissions = read('src/lib/facilityManagement.ts');
+          assert.match(transport, /get_facility_management_client_metrics/);
+          assert.match(transport, /_client_organization_id: clientId/);
+          assert.match(transport, /_relationship_id: relationshipId/);
+          assert.doesNotMatch(transport+page, /\.from\s*\(|get_dashboard_metrics|service_role|total_amount|provider_organization_id/);
+          assert.match(transport, /availability/);
+          assert.match(transport, /raw\.work_orders !== null/);
+          assert.match(transport, /raw\.requests !== null/);
+          assert.match(transport, /raw\.assets !== null/);
+          assert.match(page, /client\.relationshipId/);
+          assert.match(page, /currentOrganization\?\.id/);
+          assert.match(page, /user\?\.id/);
+          assert.match(page, /gcTime: 0/);
+          assert.match(page, /refetchOnWindowFocus: true/);
+          assert.match(permissions, /canFacilityManagerViewReports/);
+          assert.match(permissions, /grants\(client, 'reports\.view'\)/);
+          assert.match(permissions, /'managed-reports': canFacilityManagerViewReports/);
+          assert.match(modules, /ManagedClientGate module="managed-reports"/);
+          assert.match(gate, /'managed-reports': 'Indicadores'/);
+          assert.match(dashboard, /case 'managed-reports':/);
+          assert.match(nav, /'managed-reports'/);
+          assert.match(sidebar, /canViewDelegatedReports &&/);
+          assert.match(portfolio, /Ver indicadores/);
+          assert.match(page, /Sin acceso/);
+          console.log('9C7_C1_SECURE_UI=PASS');
+          JS
+      - name: Build Vite frontend
+        run: npm run build
