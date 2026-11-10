@@ -149,8 +149,8 @@ BEGIN
       'daily',pg_catalog.jsonb_agg(
         pg_catalog.jsonb_build_object(
           'date',s.day::date::text,
-          'created',pg_catalog.coalesce(t.created_count,0),
-          'completed',pg_catalog.coalesce(t.completed_count,0)
+          'created',COALESCE(t.created_count,0),
+          'completed',COALESCE(t.completed_count,0)
         ) ORDER BY s.day)
     ) INTO v_work_orders
     FROM pg_catalog.generate_series(
@@ -173,7 +173,7 @@ BEGIN
       'daily',pg_catalog.jsonb_agg(
         pg_catalog.jsonb_build_object(
           'date',s.day::date::text,
-          'created',pg_catalog.coalesce(e.created_count,0)
+          'created',COALESCE(e.created_count,0)
         ) ORDER BY s.day)
     ) INTO v_requests
     FROM pg_catalog.generate_series(
