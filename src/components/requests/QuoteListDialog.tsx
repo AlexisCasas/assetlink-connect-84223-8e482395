@@ -530,9 +530,23 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId, delegate
                     {quote.status === 'approved' && (
                       <div className="flex items-center justify-between gap-3 border-t pt-3">
                         {quote.work_order_id && isDelegated ? (
-                          <Button size="sm" variant="outline" onClick={() => delegated?.onOpenWorkOrder(quote.work_order_id!)}>
-                            <CheckCircle className="mr-2 h-4 w-4" /> Abrir OT autorizada
-                          </Button>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button size="sm" variant="outline" onClick={() => delegated?.onOpenWorkOrder(quote.work_order_id!)}>
+                              <CheckCircle className="mr-2 h-4 w-4" /> Abrir OT autorizada
+                            </Button>
+                            {delegated?.canCreateWorkOrder && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={!!creatingWorkOrderId}
+                                onClick={() => setPendingDelegatedQuoteId(quote.id)}
+                                data-testid="delegated-external-verify-existing"
+                              >
+                                <FileText className="mr-2 h-4 w-4" />
+                                {creatingWorkOrderId === quote.id ? 'Verificando...' : 'Verificar OT existente'}
+                              </Button>
+                            )}
+                          </div>
                         ) : quote.work_order_id ? (
                           <Badge variant="secondary">Orden creada</Badge>
                         ) : delegated?.canCreateWorkOrder ? (
@@ -674,11 +688,14 @@ export const QuoteListDialog = ({ open, onClose, request, focusQuoteId, delegate
         }}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>¿Generar orden de trabajo externa?</AlertDialogTitle>
+              <AlertDialogTitle>
+                {quotes.some((q) => q.id === pendingDelegatedQuoteId && !!q.work_order_id)
+                  ? '¿Verificar la OT existente?' : '¿Generar orden de trabajo externa?'}
+              </AlertDialogTitle>
               <AlertDialogDescription>
-                Se vinculará la cotización aprobada con una orden pendiente del cliente.
-                La organización proveedora conserva su ejecución; no se asignarán técnicos.
-                Si ya existe una OT para esta cotización, se recuperará sin duplicarla.
+                {quotes.some((q) => q.id === pendingDelegatedQuoteId && !!q.work_order_id)
+                  ? 'Se consultará la vinculación de esta cotización aprobada con su OT. La operación es idempotente: no crea otra orden ni modifica la existente.'
+                  : 'Se vinculará la cotización aprobada con una orden pendiente del cliente. La organización proveedora conserva su ejecución; no se asignarán técnicos. Si ya existe una OT, se recuperará sin duplicarla.'}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
