@@ -8,6 +8,7 @@ on:
     paths:
       - "src/**"
       - ".github/workflows/9c6-c1-frontend-qa.yml"
+      - "docs/FACILITY_MANAGER_WORK_ORDERS_D_QA_MATRIX.md"
   workflow_dispatch:
 
 permissions:
