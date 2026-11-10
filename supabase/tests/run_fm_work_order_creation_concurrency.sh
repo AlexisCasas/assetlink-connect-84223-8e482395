@@ -17,6 +17,9 @@ trap 'rm -rf "$TEMP_DIR"' EXIT
 # The CI workflow ALWAYS destroys its disposable stack afterward.
 db <<'SQL'
 BEGIN;
+-- Only inside this disposable Docker DB. Cloud functions stay disabled.
+GRANT EXECUTE ON FUNCTION public.create_facility_management_internal_work_order(uuid,uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_facility_management_work_order_from_quote(uuid,uuid) TO authenticated;
 INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES
  ('c6100000-0000-0000-0000-000000000001','fm-concurrent-qa@example.invalid','{}');
 INSERT INTO public.organizations(id,name,organization_type) VALUES
