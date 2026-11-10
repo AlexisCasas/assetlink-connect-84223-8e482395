@@ -19,9 +19,13 @@ CREATE TABLE public.facility_management_work_order_followups (
   relationship_id uuid NOT NULL REFERENCES public.organization_relationships(id) ON DELETE RESTRICT,
   work_order_id uuid NOT NULL REFERENCES public.work_orders(id) ON DELETE RESTRICT,
   author_user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
+  author_name_snapshot text NOT NULL,
   idempotency_key uuid NOT NULL,
   body text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT fm_wo_followup_author_name_length CHECK (
+    length(btrim(author_name_snapshot)) BETWEEN 1 AND 120
+  ),
   CONSTRAINT fm_wo_followup_body_length CHECK (
     length(btrim(body)) BETWEEN 1 AND 2000
   ),
@@ -133,11 +137,12 @@ BEGIN
 
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
     'id',n.id,'body',n.body,'created_at',n.created_at,
+    'author_name',n.author_name_snapshot,
     'authored_by_me',(n.author_user_id=auth.uid())
   ) ORDER BY n.created_at DESC,n.id DESC),'[]'::jsonb)
   INTO v_items
   FROM (
-    SELECT id,body,created_at,author_user_id
+    SELECT id,body,created_at,author_user_id,author_name_snapshot
     FROM public.facility_management_work_order_followups
     WHERE client_organization_id=_client_organization_id
       AND relationship_id=_relationship_id
@@ -165,6 +170,7 @@ AS $function$
 DECLARE v_note public.facility_management_work_order_followups%ROWTYPE;
         v_new boolean:=false;
         v_message text;
+        v_author_name text;
 BEGIN
   IF NOT public.has_facility_management_followup_relation_access(
     _client_organization_id,_relationship_id,
@@ -177,6 +183,17 @@ BEGIN
     OR length(btrim(_body)) NOT BETWEEN 1 AND 2000
   THEN RAISE EXCEPTION 'Invalid follow-up text or request ID' USING ERRCODE='22023'; END IF;
   v_message:=btrim(_body);
+  -- Display-only snapshot; never used for authorization. Keep author UUID
+  -- private to audit/storage, and never expose email or auth metadata.
+  SELECT COALESCE(
+    NULLIF(pg_catalog.btrim(u.raw_user_meta_data->>'name'),''),
+    NULLIF(pg_catalog.split_part(u.email,'@',1),''),
+    'Miembro Facility Manager'
+  ) INTO v_author_name
+  FROM auth.users u WHERE u.id=auth.uid();
+  IF v_author_name IS NULL THEN
+    RAISE EXCEPTION 'Authentication is required' USING ERRCODE='42501';
+  END IF;
 
   -- Never lock/update operational work order fields. Share lock prevents
   -- concurrent removal or identity-changing updates during note creation.
@@ -205,10 +222,10 @@ BEGIN
 
   INSERT INTO public.facility_management_work_order_followups (
     client_organization_id,relationship_id,work_order_id,
-    author_user_id,idempotency_key,body
+    author_user_id,author_name_snapshot,idempotency_key,body
   ) VALUES (
     _client_organization_id,_relationship_id,_work_order_id,
-    auth.uid(),_idempotency_key,v_message
+    auth.uid(),v_author_name,_idempotency_key,v_message
   )
   ON CONFLICT (relationship_id,work_order_id,idempotency_key) DO NOTHING
   RETURNING * INTO v_note;
@@ -244,6 +261,7 @@ BEGIN
 
   RETURN pg_catalog.jsonb_build_object(
     'id',v_note.id,'body',v_note.body,'created_at',v_note.created_at,
+    'author_name',v_note.author_name_snapshot,
     'authored_by_me',true
   );
 END

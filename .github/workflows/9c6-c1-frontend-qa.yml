@@ -163,6 +163,8 @@ jobs:
           assert.match(api,/add_facility_management_work_order_followup/);
           assert.match(api,/_relationship_id:/);
           assert.match(api,/_idempotency_key:/);
+          assert.match(api,/author_name/);
+          assert.match(panel,/note\.authorName/);
           assert.doesNotMatch(api+panel,/\.from\s*\(|work_order_work_logs|update_work_order_operations|service_role/i);
           assert.match(view,/order\.workOrderType === 'external'/);
           assert.match(panel,/canFacilityManagerAddExternalFollowup/);

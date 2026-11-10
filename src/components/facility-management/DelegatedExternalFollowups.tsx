@@ -122,7 +122,7 @@ export function DelegatedExternalFollowups({
           {notes.map((note) => (
             <li key={note.id} className="rounded-md border bg-muted/20 p-3">
               <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
-                <span>{note.authoredByMe ? 'Tú' : 'Equipo Facility Manager'}</span>
+                <span>{note.authorName}{note.authoredByMe ? ' · tú' : ''}</span>
                 <time dateTime={note.createdAt}>{formatNoteDate(note.createdAt)}</time>
               </div>
               <p className="mt-2 whitespace-pre-wrap break-words text-sm">{note.body}</p>

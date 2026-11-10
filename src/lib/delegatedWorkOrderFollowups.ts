@@ -7,6 +7,7 @@ export interface DelegatedExternalFollowup {
   id: string;
   body: string;
   createdAt: string;
+  authorName: string;
   authoredByMe: boolean;
 }
 export interface DelegatedExternalFollowupPage {
@@ -35,12 +36,14 @@ function parseNote(value: unknown): DelegatedExternalFollowup {
     || typeof n.body !== 'string' || n.body.length < 1 || n.body.length > 2000
     || typeof n.created_at !== 'string'
     || !Number.isFinite(Date.parse(n.created_at))
+    || typeof n.author_name !== 'string' || !n.author_name.trim() || n.author_name.length > 120
     || typeof n.authored_by_me !== 'boolean')
     throw new Error('Respuesta del seguimiento no válida.');
   return {
     id: n.id,
     body: n.body,
     createdAt: n.created_at,
+    authorName: n.author_name,
     authoredByMe: n.authored_by_me,
   };
 }

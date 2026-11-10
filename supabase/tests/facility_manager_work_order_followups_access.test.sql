@@ -2,7 +2,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 -- Dynamic plan marker is substituted below.
-SELECT plan(43);
+SELECT plan(44);
 CREATE FUNCTION pg_temp.as_user(p_user uuid) RETURNS void LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claim.sub', COALESCE(p_user::text,''), true);
 $$;
@@ -11,7 +11,7 @@ INSERT INTO auth.users (id,email,raw_user_meta_data) VALUES
   ('d6100000-0000-0000-0000-000000000001','co@fm-workorder-qa.test','{}'),
   ('d6100000-0000-0000-0000-000000000002','owner@fm-workorder-qa.test','{}'),
   ('d6100000-0000-0000-0000-000000000003','admin@fm-workorder-qa.test','{}'),
-  ('d6100000-0000-0000-0000-000000000004','manager@fm-workorder-qa.test','{}'),
+  ('d6100000-0000-0000-0000-000000000004','manager@fm-workorder-qa.test','{"name":"Manager QA"}'),
   ('d6100000-0000-0000-0000-000000000005','requester@fm-workorder-qa.test','{}'),
   ('d6100000-0000-0000-0000-000000000006','tech@fm-workorder-qa.test','{}'),
   ('d6100000-0000-0000-0000-000000000007','viewer@fm-workorder-qa.test','{}'),
@@ -221,6 +221,10 @@ SELECT is((public.get_facility_management_work_order_followups(
  'd6200000-0000-0000-0000-0000000000a1','d6700000-0000-0000-0000-0000000000a1',
  'd6a00000-0000-0000-0000-0000000000a1')->'items'->0->>'authored_by_me'),
  'true','Author gets authored_by_me, not raw actor ID');
+SELECT is((public.get_facility_management_work_order_followups(
+ 'd6200000-0000-0000-0000-0000000000a1','d6700000-0000-0000-0000-0000000000a1',
+ 'd6a00000-0000-0000-0000-0000000000a1')->'items'->0->>'author_name'),
+ 'Manager QA','Read DTO exposes display-name snapshot, not email or UUID');
 SELECT ok(NOT (public.get_facility_management_work_order_followups(
  'd6200000-0000-0000-0000-0000000000a1','d6700000-0000-0000-0000-0000000000a1',
  'd6a00000-0000-0000-0000-0000000000a1')->'items'->0 ? 'author_user_id'),
