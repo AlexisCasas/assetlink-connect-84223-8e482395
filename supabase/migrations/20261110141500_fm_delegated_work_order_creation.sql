@@ -261,11 +261,10 @@ BEGIN
 END
 $function$;
 
+-- STAGED RELEASE / B2.2-D: fail closed in Cloud. Even with relation
+-- grants accidentally enabled, the API has no EXECUTE privilege.
+-- C2.2 must authorize and apply a SEPARATE GRANT migration, after UI QA.
 REVOKE ALL ON FUNCTION public.create_facility_management_work_order_from_quote(uuid,uuid)
-  FROM PUBLIC, anon, service_role;
+  FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.create_facility_management_internal_work_order(uuid,uuid)
-  FROM PUBLIC, anon, service_role;
-GRANT EXECUTE ON FUNCTION public.create_facility_management_work_order_from_quote(uuid,uuid)
-  TO authenticated;
-GRANT EXECUTE ON FUNCTION public.create_facility_management_internal_work_order(uuid,uuid)
-  TO authenticated;
+  FROM PUBLIC, anon, authenticated, service_role;
