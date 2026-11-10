@@ -1,8 +1,8 @@
 # One Facility — 9C.6-B2.2 (D3): creación de OT delegada
 
-**Estado:** preflight terminado; B2.2-B implementado en rama PR #84 (dos RPC + migración SQL); QA aislado B2.2-C en curso. Sin aplicación a Supabase Cloud. **Fecha:** 2026-11-10.  
+**Estado:** B2.2-B/C completos y QA PASS; B2.2-D instalado en Cloud en modo inerte, sin EXECUTE para API. PR #84 permanece Draft / sin merge. **Fecha:** 2026-11-10.  
 **Base GitHub:** `productization/mvp`, commit `7fc400e47c6017b80aeb3a4a71f16f19a52923d7` (PR #83 / C2.1 integrado).  
-**Supabase:** proyecto OneFacility `hplchnsseylngjopgbtl`. Ninguna escritura de OT, permiso o migración ejecutada para B2.2.
+**Supabase:** proyecto OneFacility `hplchnsseylngjopgbtl`. Migración `20261110142255_fm_delegated_work_order_creation_staged` aplicada; las dos RPC están deshabilitadas. Sin escritura de OT ni cambio en grants de relación.
 
 ## 1. Contexto y decisión
 
@@ -19,7 +19,7 @@
 - Duplicados actuales: **0** por cotización y **0** por solicitud interna.
 - Protección concurrente *ya instalada*: `work_orders_quote_id_key` UNIQUE (`quote_id`) y `uq_work_orders_internal_request` UNIQUE (`request_id`) **WHERE `quote_id IS NULL`**. Evitar crear índices redundantes.
 - Funciones legacy: `create_work_order_from_quote(uuid)` y `create_internal_work_order_from_request(uuid,uuid)` retornan filas completas `work_orders`, autorizan por membresía directa del cliente y no son reutilizables directamente como endpoints FM.
-- **No existen todavía** RPC de creación con prefijo `create_facility_management%work_order%`.
+- En el preflight **no existían** las dos RPC de creación delegada; tras B2.2-D se instalaron con EXECUTE revocado.
 - C2.1 validada en producción; `work_orders.manage` temporales = 0 tras cierre.
 
 ## 3. Diseño de API B2.2
@@ -52,7 +52,7 @@ Validaciones obligatorias:
 
 - Ambas RPC públicas devuelven solamente el DTO sanitizado de `get_facility_management_work_order(_client_organization_id,_work_order_id)`, **jamás `RETURNS work_orders`**.
 - Prohibido exponer `total_amount`, `quote.description`, identificadores internos de miembros, correos, materiales y datos de proveedor que no pasen por el gate de confidencialidad 9C.5/B1.
-- `SECURITY DEFINER` únicamente con verificación expresa de `auth.uid()`, `SET search_path=''`, objetos schema-calificados, lock timeout definido; revocar `PUBLIC/anon` y otorgar `EXECUTE` solo a `authenticated`.
+- `SECURITY DEFINER` únicamente con verificación expresa de `auth.uid()`, `SET search_path=''`, objetos schema-calificados, lock timeout definido; en B2.2-D revocar `EXECUTE` a `PUBLIC/anon/authenticated/service_role`; habilitar `authenticated` únicamente en una migración posterior, tras autorización específica de C2.2.
 - Registro en `audit_logs` para **nueva** creación: `organization_id` = cliente; `actor_user_id=auth.uid()`; acción distinguible interna/externa; contenido mínimo (ID de solicitud/cotización si autorizado para auditoría, OT y tipo), sin importe ni descripción libre.
 - No modificar las RPC legacy ni las RLS existentes del cliente/operador como atajo. Las funciones FM nuevas deben ser rutas independientes.
 
@@ -82,12 +82,22 @@ Validaciones obligatorias:
 | **B2.3/C2.3 (D4)** | Notas de seguimiento lado cliente en entidad separada | Nuevo contrato y PR |
 | **9C.6-D** | QA integral, limpieza y observabilidad final | PASS y cierre |
 
-**NO-GO vigente:** no aplicar la migración a Supabase Cloud, no crear OT reales y no conceder permisos hasta PASS de QA aislado, revisión formal y autorización específica. Las dos RPC están en código, pero no están instaladas ni habilitadas en Cloud.
+**NO-GO de activación:** las dos RPC están instaladas pero bloqueadas por ACL. No conceder EXECUTE, no crear OT reales de QA y no habilitar `work_orders.manage` hasta C2.2, nueva aprobación y verificación de permisos.
 
 ## 6. Implementación en rama (2026-11-10)
 
-- Migración nueva: `supabase/migrations/20261110141500_fm_delegated_work_order_creation.sql` (2 RPC, helpers B1 existentes, sin nuevas tablas, grants de tabla o RLS).
-- Pruebas nuevas: `supabase/tests/facility_manager_work_orders_create_access.test.sql` (36 aserciones pgTAP; fixtures aisladas con `ROLLBACK`).
+- Migración nueva: `supabase/migrations/20261110142255_fm_delegated_work_order_creation_staged.sql` (2 RPC, helpers B1 existentes, sin nuevas tablas, grants de tabla o RLS).
+- Pruebas nuevas: `supabase/tests/facility_manager_work_orders_create_access.test.sql` (38 aserciones pgTAP; fixtures aisladas con `ROLLBACK`).
 - CI: `.github/workflows/9c6-b1-isolated-db-qa.yml` se ejecuta en PR al modificar `supabase/**`; incluye regresiones previas.
 - Se conserva el índice único `work_orders_quote_id_key` para cotizaciones y `uq_work_orders_internal_request` para solicitudes internas.
-- Estado de QA: ejecución GitHub Actions `42829072597` iniciada; no declarar PASS antes de revisar resultados y estrés concurrente específico.
+- Estado de QA: GitHub Actions `42832815476` **SUCCESS** (22 suites / 2,361 aserciones + concurrencia real interna y externa PASS); teardown de Docker PASS.
+
+## 7. Instalación B2.2-D — Supabase Cloud
+
+- Versión Supabase: `20261110142255`, nombre `fm_delegated_work_order_creation_staged`.
+- SQL idéntico al validado en QA, con `EXECUTE` revocado a `anon/authenticated/service_role/PUBLIC`.
+- ACL post-deploy: dos RPC JSONB, `SECURITY DEFINER`, `search_path=''`, `lock_timeout=3s`, y 0 roles API ejecutables.
+- Base previa/posterior: 29 OT, 13 `audit_logs`, 13 grants FM, 0 `work_orders.manage`, RLS activa; huellas de datos idénticas.
+- Plan Supabase Free: **sin respaldo automático ni dump completo verificado**. Se cuenta con fingerprint de preflight y rollback focalizado (no reemplazan un backup físico/lógico).
+- Reversión preparada: `docs/rollbacks/9c6-b2-2-remove-inert-rpcs.sql` (no ejecutar sin autorización).
+- Informe de preflight/postcheck: `docs/FACILITY_MANAGER_WORK_ORDERS_B2_2_CLOUD_DEPLOYMENT.md`.
