@@ -107,5 +107,45 @@ jobs:
           assert.match(portfolio, /Ver órdenes de trabajo/);
           assert.match(ui, /Solo lectura/);
           JS
+      - name: C2.2 D3 delegated creation UI transport and privilege gates
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const read = (path) => readFileSync(path, 'utf8');
+          const transport = read('src/lib/delegatedWorkOrders.ts');
+          const scope = read('src/hooks/useRequestScope.ts');
+          const helper = read('src/lib/facilityManagement.ts');
+          const req = read('src/components/requests/RequestList.tsx');
+          const quote = read('src/components/requests/QuoteListDialog.tsx');
+          const table = read('src/components/requests/OrderTable.tsx');
+          assert.match(transport, /create_facility_management_internal_work_order/);
+          assert.match(transport, /create_facility_management_work_order_from_quote/);
+          assert.match(transport, /createDelegatedInternalWorkOrder/);
+          assert.match(transport, /createDelegatedExternalWorkOrder/);
+          assert.doesNotMatch(transport, /\.from\s*\(|create_internal_work_order_from_request|create_work_order_from_quote\s*['"]|service_role/i);
+          assert.match(helper, /canFacilityManagerCreateInternalWorkOrders/);
+          assert.match(helper, /canFacilityManagerCreateExternalWorkOrders/);
+          assert.match(helper, /grants\(client, 'requests.view', 'work_orders.view', 'work_orders.manage', 'quotes.view'\)/);
+          assert.match(scope, /canCreateDelegatedInternalWorkOrder:/);
+          assert.match(scope, /canCreateDelegatedExternalWorkOrder:/);
+          assert.match(req, /pendingDelegatedRequest/);
+          assert.match(req, /createDelegatedInternalWorkOrder\(organizationId, request.id\)/);
+          assert.match(req, /onOpenWorkOrder=\{isDelegated/);
+          assert.match(req, /¿Generar orden de trabajo interna\?/);
+          assert.match(quote, /createDelegatedExternalWorkOrder\(delegated.clientOrganizationId, quoteId\)/);
+          assert.match(quote, /delegated\?\.canCreateWorkOrder/);
+          assert.match(quote, /pendingDelegatedQuoteId/);
+          assert.match(quote, /delegated-external-verify-existing/);
+          assert.match(quote, /Verificar OT existente/);
+          assert.match(quote, /Se consultará la vinculación/);
+          assert.match(quote, /¿Generar orden de trabajo externa\?/);
+          assert.match(table, /onOpenWorkOrder\?\./);
+          // Legacy client flows must remain available in the direct branch only.
+          assert.match(req, /supabase.rpc\('create_internal_work_order_from_request'/);
+          assert.match(quote, /supabase.rpc\('create_work_order_from_quote'/);
+          console.log('C2.2 transport / scope / confirmation / legacy segregation PASS');
+          JS
+
       - name: Build frontend
         run: npm run build
