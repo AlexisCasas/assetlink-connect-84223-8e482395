@@ -187,7 +187,6 @@ BEGIN
   -- private to audit/storage, and never expose email or auth metadata.
   SELECT pg_catalog.left(COALESCE(
     NULLIF(pg_catalog.btrim(u.raw_user_meta_data->>'name'),''),
-    NULLIF(pg_catalog.split_part(u.email,'@',1),''),
     'Miembro Facility Manager'
   ),120) INTO v_author_name
   FROM auth.users u WHERE u.id=auth.uid();
