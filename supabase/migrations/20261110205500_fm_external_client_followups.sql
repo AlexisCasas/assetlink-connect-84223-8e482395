@@ -195,21 +195,19 @@ BEGIN
     RAISE EXCEPTION 'Authentication is required' USING ERRCODE='42501';
   END IF;
 
-  -- Never lock/update operational work order fields. Share lock prevents
-  -- concurrent removal or identity-changing updates during note creation.
+  -- Share-lock the OT and its source request, without updating either.
+  -- This closes the race where a request becomes draft/annulled mid-write.
   PERFORM wo.id FROM public.work_orders wo
+  JOIN public.requests r
+    ON r.id=wo.request_id
+   AND r.organization_id=_client_organization_id
+   AND r.status NOT IN ('draft','anulado')
   WHERE wo.id=_work_order_id
     AND wo.client_organization_id=_client_organization_id
     AND wo.work_order_type='external'
     AND wo.quote_id IS NOT NULL
     AND wo.provider_organization_id<>wo.client_organization_id
-    AND EXISTS (
-      SELECT 1 FROM public.requests r
-      WHERE r.id=wo.request_id
-        AND r.organization_id=_client_organization_id
-        AND r.status NOT IN ('draft','anulado')
-    )
-  FOR SHARE OF wo;
+  FOR SHARE OF wo, r;
   IF NOT FOUND
   THEN RAISE EXCEPTION 'Not authorized to add this follow-up' USING ERRCODE='42501'; END IF;
 
