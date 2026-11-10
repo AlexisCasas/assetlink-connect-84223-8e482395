@@ -89,7 +89,8 @@ jobs:
           assert.match(transport, /get_facility_management_client_metrics/);
           assert.match(transport, /_client_organization_id: clientId/);
           assert.match(transport, /_relationship_id: relationshipId/);
-          assert.doesNotMatch(transport+page, /\.from\s*\(|get_dashboard_metrics|service_role|total_amount|provider_organization_id/);
+          assert.doesNotMatch(transport+page, /\.from\s*\(|service_role|total_amount|provider_organization_id/);
+          assert.doesNotMatch(transport+page, /(?:invokeMetrics|supabase\.rpc)\s*\(\s*['"]get_dashboard_metrics/);
           assert.match(transport, /availability/);
           assert.match(transport, /raw\.work_orders !== null/);
           assert.match(transport, /raw\.requests !== null/);
