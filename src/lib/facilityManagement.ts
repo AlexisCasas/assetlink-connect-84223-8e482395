@@ -263,6 +263,12 @@ export const canFacilityManagerCreateExternalWorkOrders = (client: OperationalCl
   FM_MANAGER_ROLES.includes(client.membershipRole)
   && grants(client, 'requests.view', 'work_orders.view', 'work_orders.manage', 'quotes.view');
 
+/** D4 external OT client-side follow-up: never grants provider execution.
+ * Backend checks same specific FM relationship again, including assignment. */
+export const canFacilityManagerAddExternalFollowup = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole)
+  && grants(client, 'requests.view', 'work_orders.view', 'work_orders.manage');
+
 /** Ver las cotizaciones recibidas de una solicitud: requests.view + quotes.view. */
 export const canFacilityManagerViewQuotes = (client: OperationalClientAccess) =>
   FM_REQUEST_ROLES.includes(client.membershipRole) && grants(client, 'requests.view', 'quotes.view');

@@ -40,6 +40,8 @@ jobs:
         run: supabase test db
       - name: "9C.6-B2.2 two-session creation concurrency (isolated DB only)"
         run: bash supabase/tests/run_fm_work_order_creation_concurrency.sh
+      - name: "9C.6-B2.3 D4 two-session followup idempotency (isolated DB)"
+        run: bash supabase/tests/run_fm_work_order_followups_concurrency.sh
       - name: "Stop and discard local stack"
         if: always()
         run: supabase stop --no-backup
