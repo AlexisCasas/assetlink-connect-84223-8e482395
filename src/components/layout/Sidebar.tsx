@@ -10,7 +10,7 @@ import { ORGANIZATION_ROLE_LABELS } from '@/lib/organizationRoles';
 import { FACILITY_MANAGEMENT_NAV_LABELS, getFacilityManagementMode } from '@/lib/facilityManagement';
 import { isProviderFacingOrganizationType } from '@/types/providerRelationship';
 import { useFacilityManagementOperationalClients } from '@/hooks/useFacilityManagementOperationalClients';
-import { canFacilityManagerCreateRequests, canFacilityManagerViewAssets, canFacilityManagerViewCriticality, canFacilityManagerViewInspections, canFacilityManagerViewMaintenanceNotices, canFacilityManagerViewPreventive, canFacilityManagerViewRequests, canFacilityManagerViewWorkOrders } from '@/lib/facilityManagement';
+import { canFacilityManagerCreateRequests, canFacilityManagerViewAssets, canFacilityManagerViewCriticality, canFacilityManagerViewInspections, canFacilityManagerViewMaintenanceNotices, canFacilityManagerViewPreventive, canFacilityManagerViewRequests, canFacilityManagerViewWorkOrders, canFacilityManagerViewReports } from '@/lib/facilityManagement';
 import { 
   LayoutDashboard,
   Package,
@@ -39,7 +39,7 @@ import {
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'managed-work-orders' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin' | 'users' | 'facility-management') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'managed-work-orders' | 'managed-reports' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin' | 'users' | 'facility-management') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -135,6 +135,7 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   const canViewDelegatedRequests = operationalClients.some(canFacilityManagerViewRequests);
   const canViewDelegatedDrafts = operationalClients.some(canFacilityManagerCreateRequests);
   const canViewDelegatedWorkOrders = operationalClients.some(canFacilityManagerViewWorkOrders);
+  const canViewDelegatedReports = operationalClients.some(canFacilityManagerViewReports);
 
   return (
     <aside className={cn(
@@ -216,6 +217,8 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
         {canViewDelegatedDrafts && <Button variant={currentView === 'drafts' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('drafts')}><AlertCircle className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Borradores de clientes'}</Button>}
 
         {canViewDelegatedWorkOrders && <Button variant={currentView === 'managed-work-orders' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('managed-work-orders')}><ClipboardList className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Órdenes de clientes'}</Button>}
+
+        {canViewDelegatedReports && <Button variant={currentView === 'managed-reports' ? 'default' : 'ghost'} className={cn('w-full justify-start', collapsed && 'justify-center px-2')} onClick={() => onViewChange?.('managed-reports')}><BarChart3 className={cn('h-4 w-4', !collapsed && 'mr-2')} />{!collapsed && 'Indicadores de clientes'}</Button>}
 
         {canViewWorkOrders && (
           <Button
