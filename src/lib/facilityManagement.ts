@@ -253,6 +253,16 @@ export const canFacilityManagerManageInternalWorkOrders = (client: OperationalCl
   FM_MANAGER_ROLES.includes(client.membershipRole)
   && grants(client, 'requests.view', 'work_orders.view', 'work_orders.manage');
 
+/** B2.2: creation uses the same internal grant/role gate as B2.1 planning.
+ * Only a UI hint: the creation RPC authorizes again after locking the request. */
+export const canFacilityManagerCreateInternalWorkOrders = canFacilityManagerManageInternalWorkOrders;
+
+/** B2.2 external creation requires quotes.view additionally, but NEVER
+ * quotes.approve: approving a quote is a separate delegated capability. */
+export const canFacilityManagerCreateExternalWorkOrders = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole)
+  && grants(client, 'requests.view', 'work_orders.view', 'work_orders.manage', 'quotes.view');
+
 /** Ver las cotizaciones recibidas de una solicitud: requests.view + quotes.view. */
 export const canFacilityManagerViewQuotes = (client: OperationalClientAccess) =>
   FM_REQUEST_ROLES.includes(client.membershipRole) && grants(client, 'requests.view', 'quotes.view');

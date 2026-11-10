@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   canFacilityManagerApproveQuotes,
+  canFacilityManagerCreateInternalWorkOrders,
+  canFacilityManagerCreateExternalWorkOrders,
   canFacilityManagerCreateRequests,
   canFacilityManagerManageRequests,
   canFacilityManagerViewQuotes,
@@ -32,6 +34,9 @@ export interface RequestScope {
   /** Approve / reject quotes on behalf of the client (quotes.approve). */
   canApproveQuotes: boolean;
   canGenerateWorkOrder: boolean;
+  /** D3 creation gates; these never authorize direct client/operator RPCs. */
+  canCreateDelegatedInternalWorkOrder: boolean;
+  canCreateDelegatedExternalWorkOrder: boolean;
   /** The client roster (coordination contacts, "Encargado") and the client
    * technician directory stay private to the client's own members. */
   canUseClientMemberDirectory: boolean;
@@ -54,6 +59,8 @@ export function useDirectRequestScope(): RequestScope {
     canViewQuotes: true,
     canApproveQuotes: true,
     canGenerateWorkOrder: true,
+    canCreateDelegatedInternalWorkOrder: false,
+    canCreateDelegatedExternalWorkOrder: false,
     canUseClientMemberDirectory: true,
     canUseClientTechnicianDirectory: true,
   }), [currentOrganization]);
@@ -74,7 +81,9 @@ export function buildDelegatedRequestScope(client: FacilityManagementOperational
     canManageAudience: canCreate || canManage,
     canViewQuotes: canFacilityManagerViewQuotes(client),
     canApproveQuotes: canFacilityManagerApproveQuotes(client),
-    canGenerateWorkOrder: false,
+    canGenerateWorkOrder: canFacilityManagerCreateInternalWorkOrders(client),
+    canCreateDelegatedInternalWorkOrder: canFacilityManagerCreateInternalWorkOrders(client),
+    canCreateDelegatedExternalWorkOrder: canFacilityManagerCreateExternalWorkOrders(client),
     canUseClientMemberDirectory: false,
     canUseClientTechnicianDirectory: false,
   };

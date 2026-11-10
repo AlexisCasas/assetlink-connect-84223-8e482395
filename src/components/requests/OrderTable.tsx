@@ -96,6 +96,8 @@ interface OrderTableProps {
   onOpenQuotes?: (r: Request) => void;
   onDelete: (id: string) => void;
   onGenerateWorkOrder?: (r: Request) => void;
+  /** Only in delegated mode: navigate through the authorized B1 detail. */
+  onOpenWorkOrder?: (id: string) => void;
   /** Per-row permissions (delegated mode). Default: allowed. */
   canEdit?: (r: Request) => boolean;
   canDelete?: (r: Request) => boolean;
@@ -127,6 +129,7 @@ export const OrderTable = ({
   onOpenQuotes,
   onDelete,
   onGenerateWorkOrder,
+  onOpenWorkOrder,
   canEdit = () => true,
   canDelete = () => true,
   onDragStart,
@@ -229,7 +232,15 @@ export const OrderTable = ({
               )}
               {isInternal ? (onGenerateWorkOrder && (
                 internalWorkOrder ? (
-                  <Button variant="ghost" size="icon" disabled title="OT generada" className="text-emerald-600">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={!onOpenWorkOrder}
+                    onClick={() => onOpenWorkOrder?.(internalWorkOrder.id)}
+                    title={onOpenWorkOrder ? 'Abrir OT autorizada' : 'OT generada'}
+                    aria-label={onOpenWorkOrder ? 'Abrir OT autorizada' : 'OT generada'}
+                    className="text-emerald-600"
+                  >
                     <CheckCircle2 className="h-4 w-4" />
                   </Button>
                 ) : (

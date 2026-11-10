@@ -2,9 +2,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { isValidUuid } from '@/lib/providerHelpers';
 
 /**
- * B1 read RPCs + B2.1 narrowly scoped planning RPC. Never use raw tables,
- * provider/operator RPCs or alter generated Supabase types. The B2.1 RPC
- * revalidates grants and checks expected values before writing.
+ * B1 reads, B2.1 planning and B2.2 creation RPCs. Never use raw tables,
+ * provider/operator RPCs or alter generated Supabase types. Backend
+ * authorizes creation/updates independently of client-side capability hints.
  */
 export type DelegatedWorkOrderStatus = 'pending' | 'assigned' | 'in_progress' | 'completed' | 'closed';
 export type DelegatedWorkOrderStatusFilter = DelegatedWorkOrderStatus | 'all';
@@ -43,7 +43,9 @@ export interface DelegatedWorkOrderPage {
 }
 
 type RpcName = 'get_facility_management_work_orders' | 'get_facility_management_work_order'
-  | 'update_facility_management_internal_work_order_schedule';
+  | 'update_facility_management_internal_work_order_schedule'
+  | 'create_facility_management_internal_work_order'
+  | 'create_facility_management_work_order_from_quote';
 type RpcArgs = Record<string, string | number | null>;
 type RpcResult = { data: unknown; error: { message: string; code?: string } | null };
 
@@ -224,3 +226,41 @@ export async function updateDelegatedInternalWorkOrderPlanning(
   }
   return parseWorkOrder(data);
 }
+
+/** C2.2 transport: never invoke legacy client/operator creation RPCs.
+ * B2.2 functions are installed with EXECUTE revoked until separately activated.
+ * Concurrent/repeated clicks are idempotent on the server. */
+async function createDelegatedWorkOrder(
+  clientOrganizationId: string,
+  sourceId: string,
+  source: 'internal' | 'external',
+): Promise<DelegatedWorkOrder> {
+  if (!isValidUuid(clientOrganizationId) || !isValidUuid(sourceId)) {
+    throw new Error('Solicitud o cotización no disponible para este cliente.');
+  }
+  const name: RpcName = source === 'internal'
+    ? 'create_facility_management_internal_work_order'
+    : 'create_facility_management_work_order_from_quote';
+  const { data, error } = await callDelegatedRpc(name, {
+    _client_organization_id: clientOrganizationId,
+    ...(source === 'internal' ? { _request_id: sourceId } : { _quote_id: sourceId }),
+  });
+  if (error) {
+    if (error.code === '42501' || error.code === 'PGRST202'
+      || /permission denied|Not authorized|schema cache/i.test(error.message)) {
+      throw new Error('La creación de órdenes todavía no está habilitada para este cliente, o ya no tienes autorización.');
+    }
+    throw new Error('No se pudo generar la orden. Comprueba el estado de la solicitud y vuelve a intentarlo.');
+  }
+  const order = parseWorkOrder(data);
+  if (order.workOrderType !== source) {
+    throw new Error('La respuesta de la orden no coincide con el origen autorizado.');
+  }
+  return order;
+}
+
+export const createDelegatedInternalWorkOrder = (clientOrganizationId: string, requestId: string) =>
+  createDelegatedWorkOrder(clientOrganizationId, requestId, 'internal');
+
+export const createDelegatedExternalWorkOrder = (clientOrganizationId: string, quoteId: string) =>
+  createDelegatedWorkOrder(clientOrganizationId, quoteId, 'external');
