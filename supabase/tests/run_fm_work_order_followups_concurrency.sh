@@ -24,6 +24,12 @@ GRANT EXECUTE ON FUNCTION public.add_facility_management_work_order_followup(uui
   TO authenticated;
 SQL
 
+order_id="$(docker exec -i "$DB_CONTAINER" psql -X -q -At -v ON_ERROR_STOP=1 -U postgres -d postgres -c "SELECT id FROM public.work_orders WHERE quote_id='c6900000-0000-0000-0000-0000000000a1'::uuid")"
+if ! [[ "$order_id" =~ ^[a-f0-9-]{36}$ ]]; then
+  echo "FAIL: invalid local external OT UUID: $order_id" >&2
+  exit 1
+fi
+
 # Serializing on the external work order makes both clients overlap at the
 # source lock before competing over the unique idempotency key.
 docker exec -i "$DB_CONTAINER" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d postgres >"$tmp/holder" 2>&1 <<'SQL' &
@@ -36,14 +42,14 @@ SQL
 hold_pid=$!
 sleep 0.2
 for i in 1 2; do
-  docker exec -i "$DB_CONTAINER" psql -X -q -At -v ON_ERROR_STOP=1 -U postgres -d postgres >"$tmp/$i" 2>&1 <<'SQL' &
+  docker exec -i "$DB_CONTAINER" psql -X -q -At -v ON_ERROR_STOP=1 -U postgres -d postgres >"$tmp/$i" 2>&1 <<SQL &
 BEGIN;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','c6100000-0000-0000-0000-000000000001',true);
 SELECT (public.add_facility_management_work_order_followup(
  'c6200000-0000-0000-0000-0000000000a1'::uuid,
  'c6700000-0000-0000-0000-0000000000a1'::uuid,
- (SELECT id FROM public.work_orders WHERE quote_id='c6900000-0000-0000-0000-0000000000a1'::uuid),
+ '$order_id'::uuid,
  'Coordinación D4 de prueba concurrente',
  'c6b00000-0000-0000-0000-000000000001'::uuid
 )->>'id');
