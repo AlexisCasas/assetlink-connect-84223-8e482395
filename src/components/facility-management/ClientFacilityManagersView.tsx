@@ -181,7 +181,7 @@ export function ClientFacilityManagersView() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">{selected.facilityManagerOrganizationName} <FacilityManagementStatusBadge status={selected.status} /></DialogTitle>
                 <DialogDescription>
-                  Los permisos se conceden a la empresa. El acceso a los módulos todavía no está habilitado en esta versión.
+                  Los permisos se administran por cliente. Cada módulo requiere sus permisos específicos y la asignación del equipo del Facility Manager.
                 </DialogDescription>
               </DialogHeader>
               <section className="space-y-3">
