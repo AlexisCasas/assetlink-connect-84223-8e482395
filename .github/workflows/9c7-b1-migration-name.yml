@@ -1,0 +1,25 @@
+name: "9C.7-B1 Generate versioned migration path (one-time)"
+on:
+  push:
+    branches: ["feature/9c7-b1-client-metrics-rpc"]
+    paths:
+      - ".github/workflows/9c7-b1-migration-name.yml"
+permissions:
+  contents: read
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Install pinned Supabase CLI v2"
+        uses: supabase/setup-cli@v1
+        with:
+          version: "2.79.0"
+      - name: "Generate canonical migration filename, no DB connection"
+        run: |
+          supabase --version
+          supabase migration new fm_delegated_client_metrics
+          echo "9C7_B1_MIGRATION_GENERATED_PATHS_BEGIN"
+          find supabase/migrations -maxdepth 1 -type f -name "*_fm_delegated_client_metrics.sql" -print | sort
+          echo "9C7_B1_MIGRATION_GENERATED_PATHS_END"
