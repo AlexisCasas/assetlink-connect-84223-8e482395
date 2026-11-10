@@ -1,7 +1,7 @@
 # One Facility — 9C.7-B2/C2-A1 | Contrato para tendencias e indicadores históricos
 
 **Fecha de auditoría:** 2026-11-10.  
-**Estado:** AUDITORÍA A1 COMPLETADA; **decisiones D8–D15 PROPUESTAS y pendientes de aprobación**.  
+**Estado:** AUDITORÍA A1 COMPLETADA / **D8–D15 APROBADAS por el responsable del proyecto (2026-11-10)**. Autoriza desarrollo de B2/C2 y QA aislado; no autoriza migraciones a Cloud, permisos permanentes, merge ni Production.  
 **Rama base:** `productization/mvp` commit `7369c90c68e20838092150b75122aed480d6f6d5`.  
 **Límites:** Solo inspección GitHub y consultas SELECT a Supabase Cloud; **sin** migraciones, grants, escritura en tablas, merge, ni despliegue.
 
@@ -38,7 +38,7 @@ La tabla `work_orders` tiene `created_at`, `started_at`, `completed_at`, `due_at
 ### Calidad temporal y zona horaria
 `organizations` **no tiene campo de timezone**. El cálculo de día/mes debe informar la zona usada y el filtro debe ser consistente con esa misma zona (incluidos medianoche y cambios de horario). Para el piloto peruano usar `America/Lima` **expresamente visible**, sin anunciarlo como estándar global; definir modelo de zona por organización antes de habilitar globalmente clientes de otros husos.
 
-## 3. Contrato D8–D15 propuesto (requiere aprobación funcional)
+## 3. Contrato D8–D15 APROBADO (9C.7-B2-A2)
 
 | ID | Decisión propuesta | Fundamento / límite |
 |---|---|---|
@@ -87,4 +87,4 @@ Para una relación FM con `reports.view + requests.view + work_orders.view`, el 
 - `src/components/facility-management/ClientFacilityManagersView.tsx` y `FacilityManagementPermissionsEditor.tsx` (grants administrados por cliente).
 - [9C.7 cierre V1](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/pull/91#issuecomment-6782073955).
 
-**NO-GO:** presentar cifras de esta auditoría como métricas disponibles en la app, aprobar D8–D15 por inferencia, conceder `reports.view` de manera permanente sin acto del cliente, migrar Cloud, fusionar este PR o desplegar una pantalla todavía inexistente.
+**NO-GO:** presentar cifras de esta auditoría como métricas disponibles en la app, interpretar la aprobación de D8–D15 como autorización de despliegue, conceder `reports.view` de manera permanente sin acto del cliente, migrar Cloud, fusionar este PR o desplegar una pantalla todavía inexistente.
