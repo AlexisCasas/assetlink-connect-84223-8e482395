@@ -277,6 +277,10 @@ export const canFacilityManagerViewQuotes = (client: OperationalClientAccess) =>
 export const canFacilityManagerApproveQuotes = (client: OperationalClientAccess) =>
   FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'requests.view', 'quotes.view', 'quotes.approve');
 
+/** 9C.7: reports.view is mandatory even when individual domain grants exist. */
+export const canFacilityManagerViewReports = (client: OperationalClientAccess) =>
+  FM_MANAGER_ROLES.includes(client.membershipRole) && grants(client, 'reports.view');
+
 const MODULE_VIEW_CHECKS: Record<FacilityManagementOperationalModule, (client: OperationalClientAccess) => boolean> = {
   assets: canFacilityManagerViewAssets,
   criticality: canFacilityManagerViewCriticality,
@@ -285,6 +289,7 @@ const MODULE_VIEW_CHECKS: Record<FacilityManagementOperationalModule, (client: O
   backlog: canFacilityManagerViewMaintenanceNotices,
   requests: canFacilityManagerViewRequests,
   'managed-work-orders': canFacilityManagerViewWorkOrders,
+  'managed-reports': canFacilityManagerViewReports,
   // Borradores: solo quien puede crear solicitudes.
   drafts: canFacilityManagerCreateRequests,
 };
