@@ -1,0 +1,101 @@
+name: "One Facility 9C.7 - visible reports permission gate"
+
+on:
+  push:
+    branches: ["fix/9c7-reports-access-visibility"]
+  pull_request:
+    branches: ["productization/mvp"]
+    paths:
+      - "src/components/facility-management/FacilityManagerPortfolioView.tsx"
+      - "src/lib/delegatedReportsAccessReason.ts"
+      - ".github/workflows/9c7-indicators-access-gate-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fm-9c7-reports-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: "9C.7 report action visibility, authorization and Vite QA"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: ESLint only changed modules
+        run: |
+          npx eslint \
+            src/lib/delegatedReportsAccessReason.ts \
+            src/components/facility-management/FacilityManagerPortfolioView.tsx
+      - name: Regression - report access reasons and fail-closed actions
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          import ts from 'typescript';
+
+          const source = readFileSync('src/lib/delegatedReportsAccessReason.ts', 'utf8');
+          const js = ts.transpileModule(source, {
+            compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+          }).outputText;
+          const { delegatedReportsAccessReason: reason } = await import('data:text/javascript,' + encodeURIComponent(js));
+
+          const entry = {
+            status: 'active',
+            clientOrganizationStatus: 'active',
+            permissions: ['reports.view', 'requests.view', 'work_orders.view'],
+          };
+          const context = { entry, allowed: true, loading: false, error: false };
+          assert.equal(reason(context), null, 'authorized FM manager retains working reports action');
+          assert.match(reason({ ...context, entry: { ...entry, permissions: ['requests.view'] } }), /reports\.view/,
+            'grant absent: visible guidance identifies the client-granted permission');
+          assert.match(reason({ ...context, entry: { ...entry, status: 'suspended' } }), /no está activo/,
+            'suspended relationship remains blocked');
+          assert.match(reason({ ...context, entry: { ...entry, clientOrganizationStatus: 'inactive' } }), /no está activo/,
+            'inactive client remains blocked');
+          assert.match(reason({ ...context, allowed: false }), /asignado/,
+            'permission alone never substitutes for user assignment');
+          assert.match(reason({ ...context, loading: true }), /Verificando/,
+            'loading must not enable a user before checking access');
+          assert.match(reason({ ...context, error: true }), /No se pudo verificar/,
+            'failed client-access lookup fails closed');
+          assert.match(reason({ ...context, allowed: true, loading: true }), /Verificando/,
+            'stale positive grant is not actionable while refreshing');
+          assert.match(reason({ ...context, allowed: true, error: true }), /No se pudo verificar/,
+            'an access verification error overrides cached positive UI');
+          const portfolio = readFileSync('src/components/facility-management/FacilityManagerPortfolioView.tsx', 'utf8');
+          const gate = readFileSync('src/components/facility-management/DelegatedModules.tsx', 'utf8');
+          const auth = readFileSync('src/lib/facilityManagement.ts', 'utf8');
+          assert.match(portfolio, /<ReportsAccessAction entry=\{entry\}/,
+            'cartera renders indicators action independent of availability');
+          assert.match(portfolio, /<ReportsAccessAction entry=\{selected\}/,
+            'client detail renders indicators action independent of availability');
+          assert.match(portfolio, /disabled=\{reason !== null\}/,
+            'inaccessible action is disabled');
+          assert.match(portfolio, /if \(reason === null\) onOpen\(\)/,
+            'inaccessible action cannot navigate');
+          assert.match(portfolio, /aria-describedby=\{reason \? reasonId : undefined\}/,
+            'reason is accessible to assistive tech');
+          assert.match(portfolio, /\{reason\}/,
+            'blocked reason is shown, not just a hidden tooltip');
+          assert.doesNotMatch(portfolio, /accessibleReportClientIds\.has\([^)]*\)\s*&&\s*\(/,
+            'old conditional which hid the reports action is gone');
+          assert.match(gate, /<ManagedClientGate module="managed-reports"/,
+            'existing protected route is unchanged');
+          assert.match(auth, /grants\(client, 'reports\.view'\)/,
+            'frontend still requires explicit reports.view');
+          console.log('9C7_REPORTS_GATE_REGRESSION=PASS (9 behavior checks + 9 source contracts)');
+          JS
+      - name: Build Vite
+        run: npm run build
