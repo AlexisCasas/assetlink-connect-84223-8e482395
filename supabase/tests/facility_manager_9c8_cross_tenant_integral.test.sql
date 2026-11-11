@@ -77,7 +77,7 @@ SELECT throws_ok($denied$ SELECT public.get_facility_management_client_metrics('
 SELECT throws_ok($denied$ SELECT public.get_facility_management_client_metrics('e9200000-0000-0000-0000-0000000000b1'::uuid,'e9700000-0000-0000-0000-0000000000b2'::uuid) $denied$, '42501', NULL, 'FM A identity cannot access B by borrowing FM B relationship');
 SELECT throws_ok($denied$ SELECT public.get_facility_management_client_metrics('e9200000-0000-0000-0000-0000000000b1'::uuid,'e9700000-0000-0000-0000-0000000000a1'::uuid) $denied$, '42501', NULL, 'Mismatched client and relationship rejected');
 SELECT throws_ok($denied$ SELECT public.get_facility_management_client_trends('e9200000-0000-0000-0000-0000000000a1'::uuid,'e9700000-0000-0000-0000-0000000000a2'::uuid,'2026-09-01'::date,'2026-09-02'::date,'America/Lima'::text) $denied$, '42501', NULL, 'FM A identity cannot read trends through FM B relationship');
-SELECT throws_ok($denied$ SELECT public.get_facility_management_work_orders('e9200000-0000-0000-0000-0000000000b1'::uuid) $denied$, '42501', NULL, 'FM A identity cannot list the other client's orders');
+SELECT throws_ok($denied$ SELECT public.get_facility_management_work_orders('e9200000-0000-0000-0000-0000000000b1'::uuid) $denied$, '42501', NULL, 'FM A identity cannot list the other client orders');
 SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000004');
 SELECT is((SELECT count(*) FROM public.get_my_facility_management_clients()),2::bigint,'FM B manager sees its two assigned client relationships');
 SELECT is((public.get_facility_management_client_metrics('e9200000-0000-0000-0000-0000000000a1'::uuid,'e9700000-0000-0000-0000-0000000000a2'::uuid)->'work_orders'->>'total')::int,1,'FM B manager sees its client A OT through own relationship');
