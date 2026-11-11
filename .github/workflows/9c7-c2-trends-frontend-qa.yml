@@ -1,0 +1,134 @@
+name: "One Facility 9C.7-C2 - historical trends UI QA"
+
+on:
+  push:
+    branches: ["feature/9c7-c2-client-trends-ui"]
+  pull_request:
+    branches: ["feature/9c7-b2-client-daily-trends-rpc", "productization/mvp"]
+    paths:
+      - "src/**"
+      - ".github/workflows/9c7-c2-trends-frontend-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fm-9c7-c2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: "9C.7-C2 TS, ESLint, isolation, dates and Vite build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: TypeScript without any new diagnostics
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.app.json > /tmp/9c7-c2-tsc.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then echo "9C7_C2_TS=PASS"; exit 0; fi
+          cat /tmp/9c7-c2-tsc.log
+          test "$(git hash-object src/pages/Index.tsx)" = "c1cac2b37bfb357c16d5f821cd9cbda067c5429b" ||
+            { echo "NO_GO: Index.tsx baseline changed"; exit 1; }
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const messages = readFileSync('/tmp/9c7-c2-tsc.log','utf8').split('\n').filter(x=>/error TS\d+:/.test(x));
+          const allowed = [
+            /^src\/pages\/Index\.tsx\(42,24\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(43,26\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(59,26\): error TS2322:/,
+          ];
+          assert.equal(messages.length, 3, 'unexpected TypeScript regression');
+          allowed.forEach((regex,i)=>assert.match(messages[i],regex));
+          console.log('9C7_C2_TS=PASS (preexisting Index diagnostics only)');
+          JS
+      - name: ESLint changed historical reporting modules
+        run: |
+          npx eslint \
+            src/lib/delegatedClientTrends.ts \
+            src/components/facility-management/DelegatedClientTrendsPanel.tsx \
+            src/components/facility-management/DelegatedClientMetricsView.tsx \
+            src/components/facility-management/ClientFacilityManagersView.tsx
+      - name: Secure UI source contract checks
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const transport = readFileSync('src/lib/delegatedClientTrends.ts','utf8');
+          const panel = readFileSync('src/components/facility-management/DelegatedClientTrendsPanel.tsx','utf8');
+          const snapshot = readFileSync('src/components/facility-management/DelegatedClientMetricsView.tsx','utf8');
+          const client = readFileSync('src/components/facility-management/ClientFacilityManagersView.tsx','utf8');
+          assert.match(transport,/get_facility_management_client_trends/);
+          assert.match(transport,/_client_organization_id: clientId/);
+          assert.match(transport,/_relationship_id: relationshipId/);
+          assert.match(transport,/_time_zone: PILOT_TRENDS_TIME_ZONE/);
+          assert.match(transport,/PILOT_TRENDS_TIME_ZONE = 'America\/Lima'/);
+          assert.match(transport,/days > 366/);
+          assert.match(transport,/raw\.work_orders !== null/);
+          assert.match(transport,/raw\.requests !== null/);
+          assert.match(transport,/dateRangeError/);
+          assert.doesNotMatch(transport+panel,/\.from\s*\(|service_role|total_amount|provider_organization_id/);
+          assert.match(panel,/canFacilityManagerViewReports\(client\)/);
+          assert.match(panel,/visibleDelegatedClientTrends\(query,\s*!!allowed,\s*!rangeError\)/);
+          assert.doesNotMatch(panel,/const data\s*=\s*!rangeError\s*\?\s*query\.data/);
+          assert.match(panel,/client\.relationshipId, client\.clientOrganizationId/);
+          assert.match(panel,/user\?\.id/);
+          assert.match(panel,/currentOrganization\?\.id/);
+          assert.match(panel,/startDate, endDate, PILOT_TRENDS_TIME_ZONE/);
+          assert.match(panel,/gcTime: 0/);
+          assert.match(panel,/Sin acceso/);
+          assert.match(panel,/DailyTable/);
+          assert.match(panel,/ChartContainer/);
+          assert.match(panel,/Últimos \{days\} días/);
+          assert.match(panel,/Incluye borradores/);
+          assert.match(snapshot,/DelegatedClientTrendsPanel client=\{client\}/);
+          assert.doesNotMatch(client,/El acceso a los módulos todavía no está habilitado/);
+          assert.match(client,/Cada módulo requiere sus permisos específicos/);
+          console.log('9C7_C2_SECURE_UI=PASS');
+          JS
+      - name: Regression - hide stale trends during refresh or denied access
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          import ts from 'typescript';
+          const source = readFileSync('src/lib/delegatedClientTrendsVisibility.ts', 'utf8');
+          const js = ts.transpileModule(source, {
+            compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+          }).outputText;
+          const { visibleDelegatedClientTrends } = await import('data:text/javascript,' + encodeURIComponent(js));
+          const payload = { workOrders: { daily: [{ date: '2026-09-01', created: 2, completed: 0 }] } };
+          const success = { data: payload, isSuccess: true, isFetching: false };
+          assert.equal(visibleDelegatedClientTrends(success, true, true), payload,
+            'valid successful series remains visible');
+          assert.equal(visibleDelegatedClientTrends({ ...success, isFetching: true }, true, true), null,
+            'cached history hidden while revalidating access');
+          assert.equal(visibleDelegatedClientTrends({ ...success, isSuccess: false }, true, true), null,
+            'cached history hidden after a denied or failed refetch');
+          assert.equal(visibleDelegatedClientTrends(success, false, true), null,
+            'cached history hidden after client-side permission loss');
+          assert.equal(visibleDelegatedClientTrends(success, true, false), null,
+            'invalid calendar range cannot show a prior response');
+          assert.equal(visibleDelegatedClientTrends({ ...success, data: undefined }, true, true), null,
+            'no cached payload is not confused with zero events');
+          const empty = { workOrders: { daily: [{ date: '2026-09-01', created: 0, completed: 0 }] } };
+          assert.equal(visibleDelegatedClientTrends({ ...success, data: empty }, true, true), empty,
+            'authorized zero-event days remain visible');
+          console.log('9C7_C2_STALE_TRENDS_REGRESSION=PASS');
+          JS
+      - name: Build Vite
+        run: npm run build
