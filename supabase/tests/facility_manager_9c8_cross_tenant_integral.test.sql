@@ -110,7 +110,7 @@ SELECT throws_ok($denied$ SELECT public.get_facility_management_client_trends('e
 SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000004');
 SELECT is((public.get_facility_management_client_metrics('e9200000-0000-0000-0000-0000000000a1'::uuid,'e9700000-0000-0000-0000-0000000000a2'::uuid)->'work_orders'->>'total')::int,1,'revoking FM A must not revoke independent FM B relationship');
 SELECT pg_temp.as_user('e9100000-0000-0000-0000-000000000005');
-SELECT is((public.get_facility_management_client_metrics('e9200000-0000-0000-0000-0000000000b1'::uuid,'e9700000-0000-0000-0000-0000000000b2'::uuid)->'work_orders'->>'total')::int,1,'revoking one FM relationship does not affect another client's grant');
+SELECT is((public.get_facility_management_client_metrics('e9200000-0000-0000-0000-0000000000b1'::uuid,'e9700000-0000-0000-0000-0000000000b2'::uuid)->'work_orders'->>'total')::int,1,'revoking one FM relationship does not affect another client grant');
 RESET ROLE;
 DELETE FROM public.facility_management_permissions WHERE relationship_id='e9700000-0000-0000-0000-0000000000b2'::uuid AND permission='requests.view';
 SET LOCAL ROLE authenticated;
