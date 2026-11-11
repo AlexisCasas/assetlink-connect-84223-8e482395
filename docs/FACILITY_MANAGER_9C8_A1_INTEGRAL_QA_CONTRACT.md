@@ -1,7 +1,7 @@
 # One Facility — 9C.8-A1 · Auditoría y contrato propuesto de QA integral multi-tenant
 
 **Fecha:** 2026-11-11.  
-**Estado:** A1 INVENTARIO + PREFLIGHT CLOUD READ-ONLY COMPLETADOS. **D1–D8 PROPUESTAS, NO APROBADAS AÚN.**  
+**Estado:** A1 INVENTARIO + PREFLIGHT CLOUD READ-ONLY COMPLETADOS. **D1–D8 APROBADAS por el responsable (2026-11-11) para desarrollo y ejecución del QA aislado en GitHub.**  
 **Base:** `productization/mvp`, SHA `534ff223b4810c8cc49d8ef435497a856fdd914f`; PR #95 merged y QA visual PASS informado por el responsable.  
 **No autorizados por este documento:** escrituras Supabase Cloud, concesiones/revocaciones de permisos, usuarios sintéticos persistidos, nuevas OT, merge o nuevo despliegue Production.
 
@@ -52,7 +52,7 @@ Objetivo: confirmar que autorizaciones, datos, navegación, cache, clientes dire
 
 **Estado actual:** los casos tienen cobertura **parcial** en suites anteriores; **ninguno se marca QA integral PASS todavía** sin ejecución consolidada de las evidencias exigidas.
 
-## 4. Decisiones D1–D8 propuestas para aprobación
+## 4. Decisiones D1–D8 aprobadas para QA aislado
 
 | Código | Decisión | Límite |
 |---|---|---|
@@ -78,5 +78,5 @@ Objetivo: confirmar que autorizaciones, datos, navegación, cache, clientes dire
 - [x] Confirmación de continuidad 9C.7 → 9C.8.
 - [x] Inventario de suites SQL/workflows y preflight Cloud solo lectura.
 - [x] Matriz de regresión inicial, riesgos y exclusiones.
-- [ ] Aprobación explícita de D1–D8.
+- [x] Aprobación explícita de D1–D8 (2026-11-11).
 - [ ] Ejecución consolidada 9C.8 y QA manual: **aún NO realizados**.
