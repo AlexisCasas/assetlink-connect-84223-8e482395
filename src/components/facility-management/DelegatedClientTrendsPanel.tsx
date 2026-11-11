@@ -17,6 +17,7 @@ import {
   shiftCalendarDate,
   todayInLima,
 } from '@/lib/delegatedClientTrends';
+import { visibleDelegatedClientTrends } from '@/lib/delegatedClientTrendsVisibility';
 import { canFacilityManagerViewReports } from '@/lib/facilityManagement';
 import type { FacilityManagementOperationalClient } from '@/types/facilityManagement';
 
@@ -119,7 +120,7 @@ export function DelegatedClientTrendsPanel({ client }: { client: FacilityManagem
     setPreset(String(days) as DaysPreset);
   };
 
-  const data = !rangeError ? query.data : null;
+  const data = visibleDelegatedClientTrends(query, !!allowed, !rangeError);
   const orders = data?.workOrders?.daily ?? null;
   const requests = data?.requests?.daily ?? null;
   const orderTotals = useMemo(() => orders
@@ -185,6 +186,11 @@ export function DelegatedClientTrendsPanel({ client }: { client: FacilityManagem
       {rangeError && <p role="alert" className="text-sm text-destructive">{rangeError}</p>}
       {!rangeError && query.isPending && (
         <p role="status" className="text-sm text-muted-foreground">Consultando tendencias autorizadas…</p>
+      )}
+      {!rangeError && query.isFetching && !query.isPending && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Revalidando permisos y tendencias…
+        </p>
       )}
       {!rangeError && query.isError && (
         <Card role="alert">
