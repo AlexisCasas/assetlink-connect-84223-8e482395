@@ -1,0 +1,136 @@
+name: "One Facility 9C.8-B1 - integral multi-tenant QA"
+
+on:
+  push:
+    branches: ["qa/9c8-b1-cross-tenant-integral"]
+  pull_request:
+    branches: ["productization/mvp"]
+    paths:
+      - "supabase/**"
+      - "src/**"
+      - ".github/workflows/9c8-b1-integral-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fm-9c8-integral-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-database:
+    name: "9C.8 migrations, full pgTAP (43 new assertions), concurrency and D4 journey"
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: supabase/setup-cli@v1
+        with:
+          version: "2.79.0"
+      - name: Verify isolated CLI context
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -f supabase/.temp/project-ref || { echo "NO_GO: linked project detected"; exit 1; }
+          supabase --version
+          docker --version
+          test -f supabase/tests/facility_manager_9c8_cross_tenant_integral.test.sql
+          test -f supabase/tests/run_fm_9c6_d_integral_regression.sh
+          grep -q '^ROLLBACK;' supabase/tests/facility_manager_9c8_cross_tenant_integral.test.sql
+      - name: Start disposable, unlinked Supabase stack
+        run: supabase start
+      - name: ALL migrations and pgTAP suites (including 9C.8)
+        run: supabase test db
+      - name: OT creation concurrency; isolated Docker only
+        run: bash supabase/tests/run_fm_work_order_creation_concurrency.sh
+      - name: External follow-up idempotency; isolated Docker only
+        run: bash supabase/tests/run_fm_work_order_followups_concurrency.sh
+      - name: Full 9C.6-D delegated journey; transaction rollback
+        run: bash supabase/tests/run_fm_9c6_d_integral_regression.sh
+      - name: Destroy local database and files
+        if: always()
+        run: supabase stop --no-backup
+
+  frontend-contract:
+    name: "9C.8 access boundary, TypeScript regression, lint and Vite"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: TypeScript no new diagnostics (legacy Index baseline only)
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.app.json > /tmp/9c8-tsc.log 2>&1
+          result=$?
+          set -e
+          if [ "$result" -eq 0 ]; then echo "9C8_TYPESCRIPT=PASS"; exit 0; fi
+          cat /tmp/9c8-tsc.log
+          test "$(git hash-object src/pages/Index.tsx)" = "c1cac2b37bfb357c16d5f821cd9cbda067c5429b" ||
+            { echo "NO_GO: modified baseline file with TypeScript exceptions"; exit 1; }
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const diagnostics = readFileSync('/tmp/9c8-tsc.log','utf8').split('\n').filter(x=>/error TS\d+:/.test(x));
+          const expected = [
+            /^src\/pages\/Index\.tsx\(42,24\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(43,26\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(59,26\): error TS2322:/,
+          ];
+          assert.equal(diagnostics.length, expected.length);
+          for (let i=0;i<expected.length;i++) assert.match(diagnostics[i],expected[i]);
+          console.log("9C8_TYPESCRIPT=PASS (only three unchanged inherited diagnostics)");
+          JS
+      - name: Lint cross-tenant FM access, KPI, trends and portfolio
+        run: |
+          npx eslint \
+            src/lib/facilityManagement.ts \
+            src/lib/delegatedReportsAccessReason.ts \
+            src/lib/delegatedClientTrends.ts \
+            src/lib/delegatedClientTrendsVisibility.ts \
+            src/hooks/useFacilityManagementOperationalClients.ts \
+            src/components/facility-management/FacilityManagerPortfolioView.tsx \
+            src/components/facility-management/ManagedClientGate.tsx \
+            src/components/facility-management/DelegatedClientMetricsView.tsx \
+            src/components/facility-management/DelegatedClientTrendsPanel.tsx
+      - name: Source contract - explicit relationship/client scopes and no unauthorized UI navigation
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const read=p=>readFileSync(p,'utf8');
+          const portfolio=read('src/components/facility-management/FacilityManagerPortfolioView.tsx');
+          const gate=read('src/components/facility-management/ManagedClientGate.tsx');
+          const clients=read('src/hooks/useFacilityManagementOperationalClients.ts');
+          const metrics=read('src/lib/delegatedClientMetrics.ts');
+          const trends=read('src/lib/delegatedClientTrends.ts');
+          const visible=read('src/lib/delegatedClientTrendsVisibility.ts');
+          const reports=read('src/lib/facilityManagement.ts');
+          assert.match(portfolio,/<ReportsAccessAction entry=\{entry\}/);
+          assert.match(portfolio,/<ReportsAccessAction entry=\{selected\}/);
+          assert.match(portfolio,/disabled=\{reason !== null\}/);
+          assert.match(portfolio,/if \(reason === null\) onOpen\(\)/);
+          assert.match(gate,/useManagedClient\(module, requestedClientId\)/);
+          assert.match(clients,/\.filter\(\(row\) => row\.facility_manager_organization_id === facilityManagerId\)/);
+          assert.match(clients,/clients\.filter\(\(client\) => canFacilityManagerOpenModule\(client, module\)\)/);
+          assert.match(reports,/grants\(client, 'reports\.view'\)/);
+          assert.match(metrics,/_client_organization_id:/);
+          assert.match(metrics,/_relationship_id:/);
+          assert.match(trends,/_client_organization_id:/);
+          assert.match(trends,/_relationship_id:/);
+          assert.match(visible,/isFetching/);
+          assert.match(visible,/isSuccess/);
+          assert.doesNotMatch(metrics+trends,/service_role|\.from\s*\(/i);
+          console.log('9C8_FRONTEND_CONTRACT=PASS');
+          JS
+      - run: npm run build
