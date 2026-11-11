@@ -83,6 +83,8 @@ jobs:
           assert.match(transport,/dateRangeError/);
           assert.doesNotMatch(transport+panel,/\.from\s*\(|service_role|total_amount|provider_organization_id/);
           assert.match(panel,/canFacilityManagerViewReports\(client\)/);
+          assert.match(panel,/visibleDelegatedClientTrends\(query,\s*!!allowed,\s*!rangeError\)/);
+          assert.doesNotMatch(panel,/const data\s*=\s*!rangeError\s*\?\s*query\.data/);
           assert.match(panel,/client\.relationshipId, client\.clientOrganizationId/);
           assert.match(panel,/user\?\.id/);
           assert.match(panel,/currentOrganization\?\.id/);
@@ -97,6 +99,36 @@ jobs:
           assert.doesNotMatch(client,/El acceso a los módulos todavía no está habilitado/);
           assert.match(client,/Cada módulo requiere sus permisos específicos/);
           console.log('9C7_C2_SECURE_UI=PASS');
+          JS
+      - name: Regression - hide stale trends during refresh or denied access
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          import ts from 'typescript';
+          const source = readFileSync('src/lib/delegatedClientTrendsVisibility.ts', 'utf8');
+          const js = ts.transpileModule(source, {
+            compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+          }).outputText;
+          const { visibleDelegatedClientTrends } = await import('data:text/javascript,' + encodeURIComponent(js));
+          const payload = { workOrders: { daily: [{ date: '2026-09-01', created: 2, completed: 0 }] } };
+          const success = { data: payload, isSuccess: true, isFetching: false };
+          assert.equal(visibleDelegatedClientTrends(success, true, true), payload,
+            'valid successful series remains visible');
+          assert.equal(visibleDelegatedClientTrends({ ...success, isFetching: true }, true, true), null,
+            'cached history hidden while revalidating access');
+          assert.equal(visibleDelegatedClientTrends({ ...success, isSuccess: false }, true, true), null,
+            'cached history hidden after a denied or failed refetch');
+          assert.equal(visibleDelegatedClientTrends(success, false, true), null,
+            'cached history hidden after client-side permission loss');
+          assert.equal(visibleDelegatedClientTrends(success, true, false), null,
+            'invalid calendar range cannot show a prior response');
+          assert.equal(visibleDelegatedClientTrends({ ...success, data: undefined }, true, true), null,
+            'no cached payload is not confused with zero events');
+          const empty = { workOrders: { daily: [{ date: '2026-09-01', created: 0, completed: 0 }] } };
+          assert.equal(visibleDelegatedClientTrends({ ...success, data: empty }, true, true), empty,
+            'authorized zero-event days remain visible');
+          console.log('9C7_C2_STALE_TRENDS_REGRESSION=PASS');
           JS
       - name: Build Vite
         run: npm run build
