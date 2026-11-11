@@ -9,6 +9,7 @@ import { useFacilityManagement } from '@/hooks/useFacilityManagement';
 import { canFacilityManagerViewReports, canFacilityManagerViewWorkOrders, isFacilityManagementRelationshipEditable } from '@/lib/facilityManagement';
 import { useFacilityManagementOperationalClients } from '@/hooks/useFacilityManagementOperationalClients';
 import { navigateToEntity } from '@/lib/entityNavigation';
+import { delegatedReportsAccessReason } from '@/lib/delegatedReportsAccessReason';
 import type { FacilityManagementMember, FacilityManagementPortfolioEntry } from '@/types/facilityManagement';
 import { FacilityManagementPermissionsEditor } from './FacilityManagementPermissionsEditor';
 import { FacilityManagementMembersEditor } from './FacilityManagementMembersEditor';
@@ -17,10 +18,41 @@ import { FacilityManagementStatusBadge } from './FacilityManagementStatusBadge';
 /** Vista del Facility Manager (owner/admin): cartera administrativa, permisos
  * recibidos en solo lectura y asignación de personas de su propia
  * organización. Ver la cartera no da acceso operativo al cliente. */
+/** The reports entry stays discoverable even without access; the route gate is unchanged. */
+function ReportsAccessAction({ entry, allowed, loading, error, context, onOpen }: {
+  entry: FacilityManagementPortfolioEntry;
+  allowed: boolean;
+  loading: boolean;
+  error: boolean;
+  context: 'row' | 'dialog';
+  onOpen: () => void;
+}) {
+  const reason = delegatedReportsAccessReason({ entry, allowed, loading, error });
+  const reasonId = `fm-reports-reason-${context}-${entry.relationshipId}`;
+
+  return (
+    <div className={context === 'row' ? 'flex max-w-64 flex-col items-end gap-1' : 'flex flex-col items-start gap-1'}
+      data-testid={`fm-reports-action-${context}`}>
+      <Button type="button" size={context === 'row' ? 'sm' : 'default'} variant="outline"
+        disabled={reason !== null}
+        aria-describedby={reason ? reasonId : undefined}
+        onClick={() => { if (reason === null) onOpen(); }}>
+        Ver indicadores
+      </Button>
+      {reason && (
+        <p id={reasonId} data-testid={`fm-reports-reason-${context}`}
+          className={context === 'row' ? 'text-right text-xs text-muted-foreground' : 'text-xs text-muted-foreground'}>
+          {reason}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function FacilityManagerPortfolioView() {
   const { getPortfolio, getMembers, setMembers } = useFacilityManagement();
   // Only assigned users with effective grants can open a client's delegated OTs.
-  const { clients: operationalClients } = useFacilityManagementOperationalClients();
+  const { clients: operationalClients, loading: reportsAccessLoading, error: reportsAccessError } = useFacilityManagementOperationalClients();
   const accessibleWorkOrderClientIds = new Set(
     operationalClients.filter(canFacilityManagerViewWorkOrders).map((client) => client.clientOrganizationId),
   );
@@ -104,11 +136,12 @@ export function FacilityManagerPortfolioView() {
                     <TableCell>{entry.assignedMemberCount}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {accessibleReportClientIds.has(entry.clientOrganizationId) && (
-                          <Button size="sm" variant="outline" onClick={() => navigateToEntity({
+                        <ReportsAccessAction entry={entry}
+                          allowed={accessibleReportClientIds.has(entry.clientOrganizationId)}
+                          loading={reportsAccessLoading} error={!!reportsAccessError} context="row"
+                          onOpen={() => navigateToEntity({
                             view: 'managed-reports', managedClientId: entry.clientOrganizationId,
-                          })}>Ver indicadores</Button>
-                        )}
+                          })} />
                         {accessibleWorkOrderClientIds.has(entry.clientOrganizationId) && (
                           <Button size="sm" variant="outline" onClick={() => navigateToEntity({
                             view: 'managed-work-orders',
@@ -136,12 +169,13 @@ export function FacilityManagerPortfolioView() {
                   Solo el cliente puede cambiar permisos o el estado de la relación. El acceso operativo depende de los permisos concedidos y de tu asignación al cliente.
                 </DialogDescription>
               </DialogHeader>
-              {accessibleReportClientIds.has(selected.clientOrganizationId) && (
-                <Button variant="outline" onClick={() => {
+              <ReportsAccessAction entry={selected}
+                allowed={accessibleReportClientIds.has(selected.clientOrganizationId)}
+                loading={reportsAccessLoading} error={!!reportsAccessError} context="dialog"
+                onOpen={() => {
                   setSelectedId(null);
                   navigateToEntity({ view: 'managed-reports', managedClientId: selected.clientOrganizationId });
-                }}>Ver indicadores</Button>
-              )}
+                }} />
               {accessibleWorkOrderClientIds.has(selected.clientOrganizationId) && (
                 <Button variant="outline" onClick={() => {
                   setSelectedId(null);
