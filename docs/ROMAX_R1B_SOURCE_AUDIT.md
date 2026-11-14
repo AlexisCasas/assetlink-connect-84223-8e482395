@@ -68,3 +68,21 @@ La matriz detallada entregada al responsable incluye nombre original y archivo/h
 ROMAX aprobó separar los 2 casos Makro Surco/Central y SMP/REX, además de las 4 parejas de sede no numerada vs sede 1. Así, Makro quedó con **33** sedes, no 27. Se cargaron en Supabase **145** sedes: Makro 33, National 8, Oechsle 31, Sodimac/Maestro 54, Tgestiona 19, Cassinelli 0. Cada una con referencia de origen única, client_id y tenant de ROMAX; los 289 registros de contactos siguen pendientes (0 contactos). No se crearon lugares National/TIENDA ni Tgestiona/TIENDAS VARIAS (ITSE).
 
 **Casos de personas por depurar:** National contiene cinco filas con rótulos de nivel, no identidades personales confirmadas; Tgestiona presenta seis celdas con dos nombres. Es necesario no importar rótulos como personas y revisar las celdas dobles antes de migrar; la respuesta H16 sobre siglas es todavía pendiente.
+
+## L3 — Importación de contactos depurados (14-nov-2026)
+
+La revisión de las seis hojas individuales produjo 289 filas de origen, de las cuales 270 tenían una persona identificable. Se retuvieron 19 para revisión humana: National 5 etiquetas de cargo, Oechsle 8 filas sin nombre y Tgestiona 6 celdas de dos personas. La consolidación individual incluyó una equivalencia altamente respaldada en Sodimac/Maestro (mismo correo, teléfono y local con dos variantes del nombre), resultando en **170 contactos distintos**.
+
+Distribución insertada y validada:
+
+| Cliente | Contactos | Vínculos con sedes |
+| --- | ---: | ---: |
+| Cassinelli | 10 | 0 |
+| Makro | 59 | 59 |
+| National | 14 | 26 |
+| Oechsle | 21 | 23 |
+| Sodimac / Maestro | 57 | 107 |
+| Tgestiona | 9 | 69 |
+| **Total** | **170** | **284** |
+
+En Cloud: 20 contactos con más de una sede; 0 vínculos cruzados; 170 claves únicas; prueba de duplicados `ON CONFLICT DO NOTHING` insertó 0 contactos y 0 vínculos. No se alteraron las 10 organizaciones, 33 solicitudes ni 22 cotizaciones existentes. Ver docs/ROMAX_R1B_CONTACTS_IMPORT_QA.md para el gate completo. El libro de excepciones privado proporciona referencias de hoja/celda sin divulgación de PII en GitHub.

@@ -40,7 +40,7 @@
 ## Información que aún debe resolverse
 
 1. **H16:** ROMAX no ha definido el significado exacto de PVS, PVH, PVE y VIV. No expandir siglas ni inferir titulares de facturación.
-2. **Relación muchos-a-muchos de contactos:** `commercial_client_contacts.commercial_site_id` es opcional, pero permite una sola sede por persona. Para reflejar cobertura de varias sedes, crear una tabla de relación `commercial_contact_sites` con FKs compuestas que comprueben mismo proveedor, mismo cliente y sede. Evitar duplicar personas por cada establecimiento.
+2. **Relación muchos-a-muchos de contactos:** `commercial_client_contacts.commercial_site_id` es opcional, pero permite una sola sede por persona. Para reflejar cobertura de varias sedes, usar la tabla de relación implementada `commercial_client_contact_sites` con FKs compuestas que comprueben mismo proveedor, mismo cliente y sede. Evitar duplicar personas por cada establecimiento.
 3. **Datos personales ambiguos:** cinco filas National con nombres tipo nivel de contacto, seis celdas Tgestiona que contienen dos nombres. Revisar en el archivo privado sin publicar PII; no convertir estas cadenas en un usuario real ni en dos personas hasta conciliar datos.
 4. **Facturación Sodimac/Maestro:** pendiente de contrastar razón social de cotizaciones históricas, sin separar por intuición.
 5. **Tgestiona ITSE:** los trabajos se registrarán en objetos de oportunidad/servicio o cotización, nunca como sitio virtual TIENDAS VARIAS.
@@ -53,3 +53,7 @@
 - Actualizar plan maestro y auditoría pública con los totales y estado real, sin datos personales ni URLs privadas.
 
 **Documentos hermanos:** `docs/ROMAX_PILOT_MASTER_PLAN.md`, `docs/ROMAX_R1B_HOMOLOGATION_GATE.md`, `docs/ROMAX_R1B_SOURCE_AUDIT.md`.
+
+## Estado posterior — Contactos L3 (14-nov-2026)
+
+Este documento fue redactado antes de la implementación del enlace multisitio. **El punto 2 y el 'Próximo gate R1-B' superiores quedan superados para la carga principal:** la tabla `commercial_client_contact_sites` está activa, probada y tiene 284 enlaces correctos a 170 contactos de ROMAX. La excepción H16 y 19 fichas personales ambiguas siguen en revisión; no deben rellenarse automáticamente. Fuente de estado actual: docs/ROMAX_R1B_CONTACTS_IMPORT_QA.md.
