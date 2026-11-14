@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   Package,
   FileText,
+  FileSearch,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -39,7 +40,7 @@ import {
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'managed-work-orders' | 'managed-reports' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin' | 'users' | 'facility-management') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'quote-history' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'managed-work-orders' | 'managed-reports' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin' | 'users' | 'facility-management') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -489,6 +490,17 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               {!collapsed && 'Solicitudes Públicas'}
             </Button>
             </>
+            )}
+
+            {currentOrganization?.organizationType === 'provider_company' && !!currentMembership?.isActive && (
+              <Button
+                variant={currentView === 'quote-history' ? 'default' : 'ghost'}
+                className={cn('w-full justify-start', collapsed && 'justify-center px-2')}
+                onClick={() => onViewChange?.('quote-history')}
+              >
+                <FileSearch className={cn('h-4 w-4', !collapsed && 'mr-2')} />
+                {!collapsed && 'Histórico cotizaciones'}
+              </Button>
             )}
             
             <Button
