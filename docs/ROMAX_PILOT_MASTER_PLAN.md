@@ -30,7 +30,7 @@
 | --- | --- | --- | --- |
 | R0 | Organización ROMAX y primer usuario | Hecho: organización activa, un miembro activo owner | Login real y acceso en rol ROMAX; revalidar cuando aplique |
 | R1-A | Modelo comercial híbrido | Cerrado: PR #98 y #99 mergeados; migración 20261114161357 aplicada; tablas vacías y RLS activo | PASS realizado en CI aislado y revisión SQL post-Cloud |
-| R1-B | Depurar e importar clientes, sedes y contactos | **En ejecución**: 6 clientes y **145 sedes** homologadas cargadas y verificadas; 0 contactos, quedan relaciones multisitio y H16 | QA de contactos, asociación multisitio y validación final de datos |
+| R1-B | Depurar e importar clientes, sedes y contactos | **Carga principal PASS:** 6 clientes, 145 sedes, 170 contactos y 284 vínculos; quedan 19 excepciones y H16 | Revisar excepciones, confirmar siglas y cerrar lote sin ambigüedades |
 | R1-C | Homologación de sedes y relaciones comerciales | Pendiente | Relación cliente-sede-contacto consistente, casos ambiguos resueltos |
 | R1-D | Histórico de cotizaciones ROMAX 2026 | Pendiente | Lote piloto ~25 cotizaciones, archivos origen, fecha, moneda, estado distinguido |
 | R1-E | Pantalla de consulta comercial/histórico | Pendiente | ROMAX busca por cliente/sede/fecha/servicio sin clientes logueados |
@@ -113,4 +113,12 @@ ROMAX respondió H01–H15 y H17; **H16 queda pendiente**: qué significan PVS/P
 
 **Carga L2 real verificada en Supabase Cloud:** 145 sedes en commercial_client_sites con source_system=romax_r1b_homologation_20261114, 145 source_key distintas: Makro 33, National 8, Oechsle 31, Sodimac / Maestro 54, Tgestiona 19, Cassinelli 0. Clientes=6; contactos=0; organizaciones=10; solicitudes=33; cotizaciones=22. No se ha cambiado el esquema, clientes externos ni la UI. El libro privado de homologación revisado conserva la relación entre etiqueta y celda fuente. Ver docs/ROMAX_R1B_HOMOLOGATION_DECISIONS.md.
 
-**Próximo desarrollo:** modelar contactos compartidos con relación muchos-a-muchos entre commercial_client_contacts y commercial_client_sites, manteniendo FKs del mismo tenant y mismo cliente; después limpiar los 289 registros fuente (cinco placeholders de National y seis celdas con dos nombres de Tgestiona a revisar), importar y ejecutar QA de contactos. Nunca duplicar usuarios ni crear organizaciones cliente artificiales.
+**Hito realizado después:** PR #103 mergeado; migración 20261114165704 activó commercial_client_contact_sites. Lote L3 importado y verificado: 170 contactos con 284 enlaces, manteniendo 19 filas en revisión. Véase sección 11 y docs/ROMAX_R1B_CONTACTS_IMPORT_QA.md.
+
+## 11. R1-B L3 — Contactos importados y verificados (14-nov-2026)
+
+**Resultado productivo comprobado:** 6 clientes, 145 sedes, 170 contactos comerciales y 284 asociaciones contacto-sede en ROMAX. Contactos con varias sedes: 20. Todos tienen claves de importación únicas, 0 asociaciones de otro cliente/organización. Validación RLS con owner ROMAX: 170 contactos/284 vínculos visibles; un miembro de otra organización ve 0/0. Idempotencia: reinsertar un contacto o vínculo existente devolvió 0 nuevos. Baseline original intacta: 10 organizaciones, 33 requests, 22 quotes.
+
+**Depuración:** 289 fichas de fuente, 270 filas utilizables, 19 en cuarentena (5 marcadores no personales National, 8 sin nombre Oechsle, 6 filas con dos nombres Tgestiona). Un par de variantes de un mismo contacto Sodimac/Maestro con mismo correo/teléfono/sede se consolidó en una identidad, resultando 170 en lugar de los 171 inicialmente previstos. La matriz privada de excepciones contiene hoja/celda exacta; no está en GitHub público.
+
+**Próximo paso:** ROMAX confirma las 19 excepciones y H16 (siglas PVS/PVH/PVE/VIV). Continuar R1-D con el histórico de cotizaciones 2026 (lote piloto y estado documental), sin crear solicitudes artificiales. No se requirió cambiar interfaz ni desplegar Vercel para la carga del directorio.
