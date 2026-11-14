@@ -262,7 +262,11 @@ export function CommercialQuoteHistoryView() {
                 />
                 <Select
                   value={draft.referenceField}
-                  onValueChange={(value: 'document' | 'filename') => setDraft((current) => ({ ...current, referenceField: value }))}
+                  onValueChange={(value) => {
+                    if (value === 'document' || value === 'filename') {
+                      setDraft((current) => ({ ...current, referenceField: value }));
+                    }
+                  }}
                 >
                   <SelectTrigger aria-label="Tipo de correlativo"><SelectValue /></SelectTrigger>
                   <SelectContent>
