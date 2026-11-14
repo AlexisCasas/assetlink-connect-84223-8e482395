@@ -26,9 +26,9 @@ INSERT INTO public.commercial_clients (id,organization_id,business_name) VALUES
 INSERT INTO public.commercial_client_sites (id,organization_id,commercial_client_id,site_name) VALUES
  ('a1400000-0000-0000-0000-000000000001','a1200000-0000-0000-0000-000000000001','a1300000-0000-0000-0000-000000000001','A1 Site');
 
-SELECT ok(has_table('public','commercial_clients'), 'clients table');
-SELECT ok(has_table('public','commercial_client_sites'), 'sites table');
-SELECT ok(has_table('public','commercial_client_contacts'), 'contacts table');
+SELECT has_table('public','commercial_clients','clients table');
+SELECT has_table('public','commercial_client_sites','sites table');
+SELECT has_table('public','commercial_client_contacts','contacts table');
 SELECT ok(NOT has_table_privilege('anon','public.commercial_clients','SELECT'),'anon cannot read');
 SELECT ok(NOT has_table_privilege('authenticated','public.commercial_clients','DELETE'),'no hard delete');
 SELECT ok(NOT has_column_privilege('authenticated','public.commercial_clients','organization_id','UPDATE'),'tenant immutable');
