@@ -13,7 +13,7 @@
 
 ## Modelo protegido
 
-Migracion: supabase/migrations/20261114172300_commercial_quote_history.sql (version a sincronizar con Supabase Cloud tras aplicar).
+Migracion final: supabase/migrations/20261114172357_commercial_quote_history.sql (sincronizada con Supabase Cloud).
 
 - commercial_quote_history: organizacion proveedora, cliente/sede comercial opcionales con FK compuestas del mismo tenant; nombre del cliente y sede tal como figuran en el documento; correlativo impreso, correlativo del archivo, estado de revision, fecha, titulo del servicio, moneda, campos numericos opcionales y estado comercial.
 - commercial_quote_history_documents: PDF u hoja de calculo asociados a la propuesta. Identidad unica por organizacion + proveedor de documentos + identificador del archivo, nunca por numero de propuesta. No vincular PDF y XLSX solo por nombre parecido.
@@ -30,7 +30,7 @@ Migracion: supabase/migrations/20261114172300_commercial_quote_history.sql (vers
 6. **Importes:** hay formatos dispares, separadores decimales y neto vs IGV. En L1 los importes quedan NULL y price_review=pending hasta validacion financiera contra PDF/XLSX; no sugerir como precio vigente.
 7. Originales siguen en Drive. Solamente metadatos, referencias y evidencia privada en Supabase, nunca PDFs, importes ni PII en GitHub publico.
 8. commercial_status=unverified hasta verificar envio, adjudicacion o rechazo por evidencia adicional.
-9. Cuatro documentos sin cliente de los seis del directorio quedan unmatched, visibles para ROMAX sin crear clientes ficticios ni deducir intermediarios.
+9. Cinco documentos requieren validar el contratante: 4 Plaza Vea/InRetail y 1 Hipermercado Ceramicos. Permanecen sin cliente comercial asignado, visibles para ROMAX sin crear clientes ficticios ni deducir intermediarios.
 
 ## Gate de despliegue y QA
 
@@ -49,3 +49,13 @@ Migracion: supabase/migrations/20261114172300_commercial_quote_history.sql (vers
 - Guardar las pruebas de diferencia entre numero del archivo y numero impreso; no repararlas silenciosamente.
 
 **Continuidad:** docs/ROMAX_PILOT_MASTER_PLAN.md y docs/ROMAX_R1B_CONTACTS_IMPORT_QA.md. Actualizar este documento tras la implantacion.
+
+## L1 concluido - 14-nov-2026
+
+**Lote importado y validado:** 25 cotizaciones y 25 archivos PDF, provenientes de carpetas comerciales 2026. Se asociaron 10 Makro, 9 Cassinelli y 1 Oechsle; otras 5 requieren revision de contratante. Se enlazaron 10 sedes Makro comprobables. Todas las referencias y fechas estan respaldadas por contenido PDF, sin importar valores economicos ni declarar aprobaciones.
+
+**QA:** dos suites GitHub Actions PASS (incluyendo 23 aserciones del test R1-D); RLS Cloud: owner ROMAX 25/25, usuario de otra organizacion 0/0; importacion idempotente 0 duplicados, 0 asociaciones de tenant equivocadas. Correlativo RMX-2026-0212 repetido en dos documentos independientes; archivo RMX-2026-0199 contiene internamente RMX-2026-0180, discrepancia conservada.
+
+**Version migracion en Cloud:** 20261114172357 (nombre sincronizado en PR de cierre). **Control de continuidad:** organizaciones=10, solicitudes=33, cotizaciones operativas=22; directorio ROMAX 6 clientes, 145 sedes, 170 contactos y 284 relaciones sin cambios.
+
+**Siguiente gate:** R1-D2 precios/IGV/partidas validados por documento y R1-E interfaz de consulta para ROMAX. Ninguno esta implementado en este lote; no se modifico frontend ni se desplego Vercel. Ver docs/ROMAX_R1D_PILOT_IMPORT_QA.md.
