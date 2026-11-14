@@ -30,7 +30,7 @@
 | --- | --- | --- | --- |
 | R0 | Organización ROMAX y primer usuario | Hecho: organización activa, un miembro activo owner | Login real y acceso en rol ROMAX; revalidar cuando aplique |
 | R1-A | Modelo comercial híbrido | Cerrado: PR #98 y #99 mergeados; migración 20261114161357 aplicada; tablas vacías y RLS activo | PASS realizado en CI aislado y revisión SQL post-Cloud |
-| R1-B | Depurar e importar clientes, sedes y contactos | **En ejecución**: fuente de contactos inspeccionada; auditoría en docs/ROMAX_R1B_SOURCE_AUDIT.md | Importación idempotente reconciliada, excepción de alias revisada, sin datos duplicados |
+| R1-B | Depurar e importar clientes, sedes y contactos | **En ejecución**: fuente inspeccionada, 289 registros únicos detectados y **6/6 clientes comerciales ya importados**; sedes y contactos aún en cero | Importación idempotente reconciliada, alias revisados y contactos/sedes validados |
 | R1-C | Homologación de sedes y relaciones comerciales | Pendiente | Relación cliente-sede-contacto consistente, casos ambiguos resueltos |
 | R1-D | Histórico de cotizaciones ROMAX 2026 | Pendiente | Lote piloto ~25 cotizaciones, archivos origen, fecha, moneda, estado distinguido |
 | R1-E | Pantalla de consulta comercial/histórico | Pendiente | ROMAX busca por cliente/sede/fecha/servicio sin clientes logueados |
@@ -98,3 +98,9 @@
 ## 8. Siguiente acción técnica
 
 Continuar R1-B con el inventario de clientes y el subconjunto de datos sin ambigüedades; guardar auditoría cuantitativa en docs/ROMAX_R1B_SOURCE_AUDIT.md. No integrar cambios de interfaz ni IA antes de cerrar trazabilidad de los maestros.
+
+## 9. Último estado operativo verificado (14-nov-2026)
+
+**Supabase Cloud OneFacility / ROMAX:** 6 clientes comerciales con procedencia romax_contactos_consolidados_20261109 y source_key única (Cassinelli, Makro, National, Oechsle, Sodimac / Maestro, Tgestiona). 0 sedes y 0 contactos comerciales importados. No se inventó razón social o RUC y no hay vínculo client_company externo. Conteos heredados sin cambios: 10 organizaciones, 33 solicitudes y 22 cotizaciones.
+
+**Próximo paso seguro:** tabla de alias de 160 etiquetas de sede y 289 filas únicas de contacto; separar sede física real, alias y grupos de locales antes de vincular contactos. En especial confirmar MK/MKR y marcas Sodimac/Maestro. Releer Supabase antes de cualquier reejecución.
