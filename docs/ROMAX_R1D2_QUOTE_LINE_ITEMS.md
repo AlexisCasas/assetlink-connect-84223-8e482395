@@ -20,17 +20,13 @@ Migracion propuesta: supabase/migrations/20261114181500_romax_quote_history_deta
 - Gestion de seguridad, PDR, UND 1, precio unitario no disponible.
 
 **Pagina 1 / materiales y equipos de apoyo:**
-- Garruchas, UND 10 x S/65.00 = S/650.00.
-- Consumibles, UND 1 x S/200.00 = S/200.00.
+- Garruchas: cantidad y tarifa documentadas en PDF original (no transcribir importes en GitHub publico).
+- Consumibles: cantidad y tarifa documentadas en PDF original.
 
 **Pagina 2 / resumen economico:**
-- Mano de obra S/650.00.
-- Materiales y consumibles S/850.00.
-- Movilizacion/desmovilizacion S/200.00.
-- Gastos generales + utilidad S/340.00.
-- TOTAL COSTO DEL SERVICIO SIN INCLUIR IGV S/2,040.00.
-- Control aritmetico: 650+850+200+340=2,040. **Los precios del PDF NO incluyen IGV.** No inferir total bruto hasta confirmar IGV.
-- El documento se utiliza como referencia historica, no como precio vigente ni prueba de adjudicacion.
+- Mano de obra, materiales y consumibles, movilizacion/desmovilizacion, gastos generales y utilidad, y total sin IGV, cada uno en un componente separado con su valor de fuente reservado en Supabase.
+- Verificar que la suma de componentes coincida con el total documental. El PDF indica que los precios **no incluyen IGV**. No inferir total bruto hasta confirmar IGV.
+- Documento de referencia historica, no precio vigente ni prueba de adjudicacion.
 
 ## Extraccion de los otros 24 PDFs
 
