@@ -138,21 +138,22 @@ export function CommercialQuoteHistoryView() {
   }, [organizationId, filters, page, reloadCounter]);
 
   const visibleSelected = selected?.organization_id === organizationId ? selected : null;
+  const selectedQuoteId = visibleSelected?.id ?? null;
   useEffect(() => {
     let active = true;
     setDocuments([]);
     setDocumentsError(null);
     setDocumentsLoading(false);
-    if (!organizationId || !visibleSelected) return () => { active = false; };
+    if (!organizationId || !selectedQuoteId) return () => { active = false; };
     setDocumentsLoading(true);
-    void getCommercialQuoteDocuments(organizationId, visibleSelected.id)
+    void getCommercialQuoteDocuments(organizationId, selectedQuoteId)
       .then((data) => { if (active) setDocuments(data); })
       .catch(() => {
         if (active) setDocumentsError('No se pudo consultar el documento de origen.');
       })
       .finally(() => { if (active) setDocumentsLoading(false); });
     return () => { active = false; };
-  }, [organizationId, visibleSelected?.id]);
+  }, [organizationId, selectedQuoteId]);
 
   if (!organizationId) {
     return (
@@ -259,6 +260,16 @@ export function CommercialQuoteHistoryView() {
                   onChange={(event) => setDraft((current) => ({ ...current, reference: event.target.value }))}
                   placeholder="Ej. RMX-2026-0212"
                 />
+                <Select
+                  value={draft.referenceField}
+                  onValueChange={(value: 'document' | 'filename') => setDraft((current) => ({ ...current, referenceField: value }))}
+                >
+                  <SelectTrigger aria-label="Tipo de correlativo"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="document">Número impreso en PDF</SelectItem>
+                    <SelectItem value="filename">Número del nombre de archivo</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="history-from">Desde</Label>
