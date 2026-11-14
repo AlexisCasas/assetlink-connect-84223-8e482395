@@ -33,7 +33,7 @@
 | R1-B | Depurar e importar clientes, sedes y contactos | **Carga principal PASS:** 6 clientes, 145 sedes, 170 contactos y 284 vínculos; quedan 19 excepciones y H16 | Revisar excepciones, confirmar siglas y cerrar lote sin ambigüedades |
 | R1-C | Homologación de sedes y relaciones comerciales | Pendiente | Relación cliente-sede-contacto consistente, casos ambiguos resueltos |
 | R1-D | Histórico de cotizaciones ROMAX 2026 | **R1-D1 PASS:** 25 PDFs importados, 20 clientes vinculados y 5 pendientes; **R1-D2 pendiente** de validación económica | Confirmar importes neto/IGV/bruto, revisar 5 contratantes y reutilización de partidas históricas |
-| R1-E | Pantalla de consulta comercial/histórico | Pendiente | ROMAX busca por cliente/sede/fecha/servicio sin clientes logueados |
+| R1-E | Pantalla de consulta comercial/histórico | **En desarrollo PR:** ruta #quote-history, filtros cliente/sede/servicio/correlativo/fechas, 15 por página y detalle PDF | QA CI y revisión visual de 15 escenarios; merge/deploy solo tras autorización |
 | R2 | Catálogo independiente de costos de materiales y mano de obra | Pendiente | Fecha de vigencia, unidad, moneda, proveedor y procedencia en cada costo |
 | R3 | Captura Gmail cotizaciones | Pendiente | OAuth, deduplicación, filtro de correos relevantes, oportunidad a nombre de ROMAX |
 | R4 | Cotizador asistido IA | Pendiente | Borrador con referencias verificables, números deterministas y revisión humana |
@@ -138,3 +138,9 @@ Gate: CI de migraciones y pruebas pgTAP en Supabase local, merge, migracion Clou
 **QA Cloud:** owner ROMAX lee 25 cotizaciones y 25 documentos; usuario activo de otra organizacion lee 0/0. 0 duplicados en reintento de cotizacion o documento, 0 referencias entre tenants equivocados, 0 documentos sin fecha, 0 variaciones en conteos productivos base: organizaciones 10, solicitudes 33, cotizaciones operativas 22; directorio ROMAX 6 clientes, 145 sedes, 170 contactos y 284 vinculos.
 
 **Siguiente desarrollo:** R1-E, pantalla de busqueda comercial de historial ROMAX, para aprovechar el piloto; en paralelo R1-D2, conciliacion de importes y partidas contra fuente PDF/XLSX. Mantener pendiente la validacion de los cinco contratantes, los 19 contactos excepcionales R1-B y H16. Ninguno de estos pendientes se corrige mediante suposiciones. No hubo despliegue de frontend o Vercel durante R1-D1. Evidencia: docs/ROMAX_R1D_PILOT_IMPORT_QA.md y docs/ROMAX_R1D_HISTORICAL_QUOTES.md.
+
+## 14. R1-E - Pantalla de consulta del historico (14-nov-2026)
+
+Se desarrollo en rama de PR una pantalla web de consulta para organizaciones provider_company activas, con nueva ruta #quote-history, menu Histórico cotizaciones, filtros por cliente comercial, sede homologada, servicio, fecha y correlativo. El usuario elige referencia impresa en PDF o numero de archivo, preservando discrepancias (caso 0180/0199) y el numero duplicado 0212 en dos trabajos distintos. Tabla paginada (15/page) y detalle PDF obtenido bajo demanda; al abrir Drive se requieren sus permisos propios. Se muestran 5 contratantes no homologados y ningun importe de los 25 hasta validar los costos en R1-D2.
+
+Gates: PR, compilacion/lint/regresion, evaluacion visual de escenarios E1-E15, luego merge y despliegue Vercel de forma controlada tras autorizacion. Sin cambios de SQL ni permisos productivos en R1-E; RLS server de R1-D1 sigue vigente. Ver docs/ROMAX_R1E_HISTORICAL_QUOTES_UI.md. Una vez desplegado, registrar URL/SHA y QA real. El desarrollo no resuelve por si mismo los 5 contratantes, 19 excepciones de contactos ni H16.
