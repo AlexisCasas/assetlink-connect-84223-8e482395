@@ -156,3 +156,12 @@ Gates: PR, compilacion/lint/regresion, evaluacion visual de escenarios E1-E15, l
 
 **QA R1-D2A aplicado (14-nov-2026):** PR #108 PASS; migracion Supabase 20261114182230; 25 textos documentales privados y 5 partidas + 5 componentes estructurados del ejemplo RMX-2026-6200, sin precios inventados. Seguridad RLS ROMAX 25/5/5 vs otro tenant 0/0/0. Los restantes 24 PDFs siguen pendientes de homologacion de partidas. PR de continuidad sincroniza version Cloud y documentos. Ver docs/ROMAX_R1D2A_IMPORT_QA.md.
 
+
+
+## 16. R1-D2B - Presentacion tabular reutilizada (14-nov-2026)
+
+Hallazgo del QA visual de ROMAX: en cotizaciones como RMX-2026-4087, la transcripcion de PDF se mostraba en un bloque de texto sin estructura, mientras el cotizador operativo ya tenia un esquema tabular de partidas. Se reutilizo la presentacion de QuoteForm mediante el componente compartido QuoteItemsTable, manteniendo el editor y habilitando un modo de consulta historica solo lectura.
+
+Las cotizaciones con partidas estructuradas muestran tablas por servicio/material con descripcion, cantidad, unidad, tarifa y parcial, y un resumen economico tabular con origen por pagina y revision. Las otras 24 conservan tablas en estado pendiente y el texto fuente se presenta como transcripcion por filas (no homologadas), sin asociar cantidades y precios de forma especulativa.
+
+El desarrollo esta en PR y debe pasar build, QA visual y regresiones antes de cualquier merge o deploy a Vercel Production. No hay nuevas migraciones ni cambios a Supabase Cloud. Ver docs/ROMAX_R1D2B_TABULAR_HISTORY_UI.md para checklist T1-T8.
