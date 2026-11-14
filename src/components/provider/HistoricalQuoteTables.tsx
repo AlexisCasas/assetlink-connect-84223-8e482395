@@ -13,7 +13,7 @@ const SECTION_NAMES: Record<CommercialQuoteLineItem['section_kind'], string> = {
 };
 
 const COST_ORDER: CommercialQuoteCostComponent['component_kind'][] = [
-  'labor', 'materials', 'mobilization', 'overhead_profit', 'tax', 'net_total', 'gross_total', 'other',
+  'labor', 'materials', 'mobilization', 'overhead_profit', 'net_total', 'tax', 'gross_total', 'other', 
 ];
 
 const formatQuantity = (amount: number | null): string =>
@@ -37,7 +37,7 @@ function sourceTextRows(sourceText: string): string[] {
 function ReviewLabel({ status }: { status: string }) {
   return (
     <Badge variant={status === 'verified' ? 'secondary' : 'outline'} className="whitespace-nowrap">
-      {status === 'verified' ? 'Verificado' : status === 'needs_review' ? 'Revisar' : 'Sin homologar'}
+      {status === 'verified' ? 'Verificado' : status === 'needs_review' ? 'Revisar' : 'Extraído · sin validar'}
     </Badge>
   );
 }
