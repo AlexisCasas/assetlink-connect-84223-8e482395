@@ -45,10 +45,12 @@ function ReviewLabel({ status }: { status: string }) {
 function QuoteReadOnlySection({
   kind,
   lines,
+  components,
   groupLabel,
 }: {
   kind: CommercialQuoteLineItem['section_kind'];
   lines: CommercialQuoteLineItem[];
+  components: CommercialQuoteCostComponent[];
   groupLabel?: string;
 }) {
   const rows = lines
@@ -59,6 +61,21 @@ function QuoteReadOnlySection({
     ? rows.reduce((sum, line) => sum + (line.line_total ?? 0), 0)
     : null;
   const currency = rows[0]?.currency_code ?? 'PEN';
+  // Historical section totals are authoritative document components, NOT a
+  // sum of only the priced rows. The PDF may contain unpriced descriptions
+  // and group totals that have no unambiguous unit-price breakdown.
+  const componentKind = kind === 'service' ? 'labor' : kind === 'material' ? 'materials' : null;
+  const component = components.find((entry) => entry.component_kind === componentKind);
+  const documentSubtotal = component ? Number(component.amount) : null;
+  const shownSubtotal = documentSubtotal ?? subtotal;
+  const discrepancy = documentSubtotal !== null && subtotal !== null
+    ? Math.round((documentSubtotal - subtotal) * 100) / 100 : null;
+  const hasDiscrepancy = discrepancy !== null && Math.abs(discrepancy) >= 0.01;
+  const singleRow = rows.length === 1 ? rows[0] : null;
+  const impliedEquivalent = kind === 'material' && hasDiscrepancy
+    && singleRow?.quantity !== null && Number(singleRow?.quantity) > 0
+    ? documentSubtotal! / Number(singleRow!.quantity) : null;
+  const groupTitle = groupLabel || SECTION_NAMES[kind].replace(/^\\d+\\.\\s*/, '');
 
   return (
     <section className="space-y-2 rounded-lg border bg-card p-3 sm:p-4" aria-label={SECTION_NAMES[kind]}>
@@ -68,13 +85,18 @@ function QuoteReadOnlySection({
       </div>
       <QuoteItemsTable mode="historical" currencyLabel={currency === 'PEN' ? 'S/' : currency}>
         <TableBody>
-          {groupLabel && rows.length > 0 && (
+          {(groupLabel || documentSubtotal !== null) && rows.length > 0 && (
             <TableRow className="bg-muted/40 font-semibold">
               <TableCell colSpan={4} className="whitespace-normal break-words">
-                {groupLabel}
+                {groupTitle}
+                {documentSubtotal !== null && (
+                  <p className="mt-1 text-xs font-normal text-muted-foreground">
+                    Subtotal documental de la sección · sin IGV · sin validación comercial
+                  </p>
+                )}
               </TableCell>
               <TableCell className="text-right tabular-nums">
-                {formatMoney(subtotal, currency)}
+                {formatMoney(shownSubtotal, currency)}
               </TableCell>
             </TableRow>
           )}
@@ -99,7 +121,7 @@ function QuoteReadOnlySection({
               <TableCell className="whitespace-nowrap text-right font-mono tabular-nums">{formatMoney(line.line_total, line.currency_code)}</TableCell>
             </TableRow>
           ))}
-          {subtotal !== null && !groupLabel && (
+          {subtotal !== null && !groupLabel && documentSubtotal === null && (
             <TableRow className="bg-muted/30">
               <TableCell colSpan={4} className="text-right font-semibold">
                 Suma de parciales del PDF (sin validar):
@@ -111,6 +133,20 @@ function QuoteReadOnlySection({
           )}
         </TableBody>
       </QuoteItemsTable>
+      {hasDiscrepancy && (
+        <p className="rounded-md border p-3 text-sm text-muted-foreground" role="note">
+          El subtotal documental de esta sección es {formatMoney(documentSubtotal, currency)},
+          mientras que las partidas con parcial identificable suman {formatMoney(subtotal, currency)}.
+          Diferencia sin atribuir a una partida: {formatMoney(discrepancy, currency)}.
+          {impliedEquivalent !== null && (
+            <span>
+              {' '}Si todo el subtotal se distribuyera entre {formatQuantity(singleRow!.quantity)} {singleRow!.unit_label || 'unidades'},
+              el equivalente calculado sería {formatMoney(impliedEquivalent, currency)} por unidad.
+              Este cálculo no reemplaza el precio unitario que figura en el PDF.
+            </span>
+          )}
+        </p>
+      )}
     </section>
   );
 }
@@ -267,7 +303,12 @@ export function HistoricalQuoteTables({ breakdown }: { breakdown: CommercialQuot
   const hasServiceLines = breakdown.lines.some((line) => line.section_kind === 'service');
   const hasMaterialLines = breakdown.lines.some((line) => line.section_kind === 'material');
   const serviceGroup = breakdown.sections.find((section) => section.section_kind === 'service_scope');
-  const groupLabel = hasServiceLines ? serviceGroup?.section_text.split('\n')[0]?.trim() : undefined;
+  const isClassicServiceList = serviceGroup?.original_heading?.trim() === '1. DESCRIPCIÓN DEL SERVICIO';
+  const serviceCount = breakdown.lines.filter((line) => line.section_kind === 'service').length;
+  const groupLabel = !hasServiceLines ? undefined
+    : isClassicServiceList && (serviceCount > 1 || hasMaterialLines)
+      ? 'Listado de servicios'
+      : serviceGroup?.section_text.split('\n')[0]?.trim();
   // The PDF proposal heading and economic-summary labels are represented by
   // the structured services/summary tables. Hide only these duplicate narrative
   // copies, never the independent technical or contractual sections.
@@ -286,9 +327,9 @@ export function HistoricalQuoteTables({ breakdown }: { breakdown: CommercialQuot
           Se presenta la misma tabla de cotización sin completar unidades, cantidades o tarifas no comprobadas.
         </p>
       )}
-      <QuoteReadOnlySection kind="service" lines={breakdown.lines} groupLabel={groupLabel} />
+      <QuoteReadOnlySection kind="service" lines={breakdown.lines} components={breakdown.components} groupLabel={groupLabel} />
       {(hasMaterialLines || !hasServiceLines) && (
-        <QuoteReadOnlySection kind="material" lines={breakdown.lines} />
+        <QuoteReadOnlySection kind="material" lines={breakdown.lines} components={breakdown.components} />
       )}
       {hasServiceLines && !hasMaterialLines && (
         <p className="text-xs text-muted-foreground">
@@ -298,8 +339,8 @@ export function HistoricalQuoteTables({ breakdown }: { breakdown: CommercialQuot
       )}
       {hasAdditionalKinds && (
         <>
-          <QuoteReadOnlySection kind="equipment" lines={breakdown.lines} />
-          <QuoteReadOnlySection kind="other" lines={breakdown.lines} />
+          <QuoteReadOnlySection kind="equipment" lines={breakdown.lines} components={breakdown.components} />
+          <QuoteReadOnlySection kind="other" lines={breakdown.lines} components={breakdown.components} />
         </>
       )}
       <HistoricalCostTable components={breakdown.components} />
