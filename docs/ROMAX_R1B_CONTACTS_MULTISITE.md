@@ -26,9 +26,9 @@ Auditoría previa en origen:
 | Makro | 59 | 59 | 59 |
 | National | 31 | 26 | 14 |
 | Oechsle | 33 | 25 | 21 |
-| Sodimac / Maestro | 108 | 108 | 58 |
+| Sodimac / Maestro | 108 | 108 | 57 |
 | Tgestiona | 48 | 42 | 9 |
-| **Total** | **289** | **270** | **171** |
+| **Total** | **289** | **270** | **170** |
 
 Las 19 filas en revisión: 5 rótulos genéricos de nivel de contacto (National), 8 fichas sin nombre de persona (Oechsle) y 6 celdas con dos nombres (Tgestiona). No convertir etiquetas en personas ni asignar a una identidad suplantada; los detalles privados y referencias de celda se entregan fuera de GitHub.
 
@@ -47,7 +47,7 @@ Las 19 filas en revisión: 5 rótulos genéricos de nivel de contacto (National)
 2. Confirmar RLS, grants, FKs cruzadas, acceso owner/viewer/outsider y compatibilidad con todas las pruebas anteriores.
 3. Merge del PR, aplicar migración en Supabase Cloud con versión sincronizada con \`supabase_migrations.schema_migrations\`.
 4. Verificar tabla vacía y seguridad con consultas de solo lectura.
-5. Importar solamente 171 contactos candidatos en lotes transaccionales, con cláusula de no duplicación y registro de claves de origen; crear vínculos exclusivamente contra sedes homologadas existentes.
+5. Importar solamente 170 contactos depurados en lotes transaccionales, con cláusula de no duplicación y registro de claves de origen; crear vínculos exclusivamente contra sedes homologadas existentes.
 6. Verificar conciliación real: 6 clientes, 145 sedes, contactos únicos, vínculos únicos, 19 filas excluidas, sin cambios en 10 organizaciones, 33 solicitudes ni 22 cotizaciones preexistentes (revisar línea de base).
 7. Registrar informe agregado de importación y excepciones/hoja-fila en archivo **privado**, no publicarlas en repositorio abierto.
 
@@ -56,3 +56,15 @@ Las 19 filas en revisión: 5 rótulos genéricos de nivel de contacto (National)
 ## Resguardo
 
 Se mantiene \`is_active\` de contactos y sedes para bajas lógicas; la eliminación de un vínculo no borra personas, sitios ni históricos. Las credenciales privadas y los archivos con PII jamás van a GitHub.
+
+## Resultado de implantación L3 (14-nov-2026)
+
+- PR #103 mergeado después de los dos workflows GitHub Actions de migración / pgTAP en base aislada: **PASS**.
+- Migración Cloud aplicada bajo la versión **20261114165704**, sincronizada con el nombre del archivo en el repositorio en el PR posterior de cierre.
+- Importación real: **170** contactos y **284** vínculos, todos trazados por `source_system=romax_contactos_20261114`. **20** contactos tienen más de una sede. Casos sin local: se conserva contacto a nivel cliente, nunca una sede ficticia.
+- Consolidación adicional: dos fichas de Sodimac/Maestro con el mismo correo, teléfono y sede pero variación de segundo nombre se unificaron en un contacto, reteniendo la evidencia de origen. Otros homónimos o teléfonos compartidos no se fusionan sin prueba.
+- RLS Cloud verificada: el owner ROMAX consulta 170 contactos/284 vínculos y un usuario activo de otra organización obtiene 0/0. Supabase Security Advisors no reportó hallazgos de seguridad en la tabla nueva.
+- Integridad Cloud: 0 referencias cruzadas incorrectas; 170 source keys únicas; reinsertar un contacto o vínculo existente creó 0 filas. Baseline intacta: 10 organizaciones, 33 solicitudes y 22 cotizaciones.
+- Excepciones: 19 filas retenidas en el libro de revisión privado (National 5, Oechsle 8, Tgestiona 6); H16 no cambia los datos cargados hasta recibir definición.
+
+**Siguiente gate:** revisión de las 19 excepciones y preparación del histórico R1-D; el lote L3 está finalizado con estas excepciones documentadas.
