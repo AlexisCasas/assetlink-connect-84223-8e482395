@@ -68,6 +68,7 @@ export interface QuoteHistoryFilters {
   siteId: string;
   service: string;
   reference: string;
+  referenceField: 'document' | 'filename';
   fromDate: string;
   toDate: string;
 }
@@ -76,6 +77,7 @@ export const EMPTY_QUOTE_HISTORY_FILTERS: QuoteHistoryFilters = {
   siteId: 'all',
   service: '',
   reference: '',
+  referenceField: 'document',
   fromDate: '',
   toDate: '',
 };
@@ -121,7 +123,12 @@ export async function getCommercialQuoteHistory(
 
   if (filters.siteId !== 'all') query = query.eq('commercial_site_id', filters.siteId);
   if (filters.service.trim()) query = query.ilike('service_title', '%' + filters.service.trim().slice(0, 120) + '%');
-  if (filters.reference.trim()) query = query.ilike('reference_document', '%' + filters.reference.trim().slice(0, 80) + '%');
+  if (filters.reference.trim()) {
+    // The printed code and filename code can differ. Search the one the
+    // user explicitly selected; do not conflate or silently fix them.
+    query = query.ilike(filters.referenceField === 'filename' ? 'reference_filename' : 'reference_document',
+      '%' + filters.reference.trim().slice(0, 80) + '%');
+  }
   if (filters.fromDate) query = query.gte('proposal_date', filters.fromDate);
   if (filters.toDate) query = query.lte('proposal_date', filters.toDate);
 
