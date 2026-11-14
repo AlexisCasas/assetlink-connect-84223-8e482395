@@ -144,3 +144,12 @@ Gate: CI de migraciones y pruebas pgTAP en Supabase local, merge, migracion Clou
 Se desarrollo en rama de PR una pantalla web de consulta para organizaciones provider_company activas, con nueva ruta #quote-history, menu Histórico cotizaciones, filtros por cliente comercial, sede homologada, servicio, fecha y correlativo. El usuario elige referencia impresa en PDF o numero de archivo, preservando discrepancias (caso 0180/0199) y el numero duplicado 0212 en dos trabajos distintos. Tabla paginada (15/page) y detalle PDF obtenido bajo demanda; al abrir Drive se requieren sus permisos propios. Se muestran 5 contratantes no homologados y ningun importe de los 25 hasta validar los costos en R1-D2.
 
 Gates: PR, compilacion/lint/regresion, evaluacion visual de escenarios E1-E15, luego merge y despliegue Vercel de forma controlada tras autorizacion. Sin cambios de SQL ni permisos productivos en R1-E; RLS server de R1-D1 sigue vigente. Ver docs/ROMAX_R1E_HISTORICAL_QUOTES_UI.md. Una vez desplegado, registrar URL/SHA y QA real. El desarrollo no resuelve por si mismo los 5 contratantes, 19 excepciones de contactos ni H16.
+
+
+## 15. Correctivo R1-D2A - Detalle de servicios, materiales y costos
+
+**Hallazgo tras despliegue R1-E:** el usuario detecto que la pantalla no mostraba el listado de servicios ni los materiales/precios presentes en los PDF, requisito para la futura investigacion historica con IA. Se reviso directamente la cotizacion RMX-2026-6200 Makro Huacho (2 paginas) y se confirmaron cinco partidas y cinco componentes economicos, con total sin IGV conservado solo en Supabase.
+
+**Solucion en desarrollo (PR R1-D2A):** tres nuevas tablas para partidas, componentes y texto extraido del PDF; referencias por pagina, revision por valor, RLS y lectura por demanda en detalle. Guardar los 25 textos de PDF como material documental raw_unverified, pero estructurar valores y cantidades solo despues de validacion del formato visual/Excel de origen. Primer ejemplo estructurado: RMX-2026-6200. No convertir valores historicos sin verificar en lista vigente para IA.
+
+**Control:** ejecutar QA aislado, comprobar importacion y aislamiento entre organizaciones, despues merge/migracion/despliegue de frontend con seguridad. La fase R1-D2 completa seguira abierta hasta verificar las partidas de los restantes 24 documentos y el IGV. Ver docs/ROMAX_R1D2_QUOTE_LINE_ITEMS.md.
