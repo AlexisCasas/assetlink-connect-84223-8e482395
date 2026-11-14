@@ -67,3 +67,7 @@ Se comparara con el ejemplo clasico RMX-2026-6200 ya cargado. La propuesta 4087 
 4. El contrato para la IA requerira referencias por documento, descripcion alineada a precio confirmado, estado de validacion y **vigencia**; no usar importes historicos extraidos como precios aprobados.
 
 **Estado R1-D2:** homologacion completa del lote de 25 sigue pendiente; la primera prueba solo valida compatibilidad y seguridad.
+
+## Ejecucion confirmada
+
+PR #111 mergeado; cinco suites QA PASS. Migracion Cloud version 20261114213637 y piloto RMX-2026-4087 aplicado: seis secciones de alcance, tecnica, seguridad, soporte, economia y condiciones; tres componentes de resumen (neto, impuesto, total) extraidos sin verificar y con pagina desconocida = NULL. Control de aritmetica de filas del PDF y resumen PASS. 0 asignaciones precio/descripcion a filas ambiguas. RLS ROMAX 6/3 frente a otra organizacion 0/0. Ver docs/ROMAX_R1D2C_PILOT_QA.md.
