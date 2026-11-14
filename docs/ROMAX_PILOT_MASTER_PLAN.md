@@ -32,7 +32,7 @@
 | R1-A | Modelo comercial híbrido | Cerrado: PR #98 y #99 mergeados; migración 20261114161357 aplicada; tablas vacías y RLS activo | PASS realizado en CI aislado y revisión SQL post-Cloud |
 | R1-B | Depurar e importar clientes, sedes y contactos | **Carga principal PASS:** 6 clientes, 145 sedes, 170 contactos y 284 vínculos; quedan 19 excepciones y H16 | Revisar excepciones, confirmar siglas y cerrar lote sin ambigüedades |
 | R1-C | Homologación de sedes y relaciones comerciales | Pendiente | Relación cliente-sede-contacto consistente, casos ambiguos resueltos |
-| R1-D | Histórico de cotizaciones ROMAX 2026 | Pendiente | Lote piloto ~25 cotizaciones, archivos origen, fecha, moneda, estado distinguido |
+| R1-D | Histórico de cotizaciones ROMAX 2026 | **En desarrollo:** 25 PDFs reales revisados, migración y QA preparados en PR de R1-D | Lote piloto 25 con metadatos fiables, RLS y no-regresión; importes sujetos a verificación |
 | R1-E | Pantalla de consulta comercial/histórico | Pendiente | ROMAX busca por cliente/sede/fecha/servicio sin clientes logueados |
 | R2 | Catálogo independiente de costos de materiales y mano de obra | Pendiente | Fecha de vigencia, unidad, moneda, proveedor y procedencia en cada costo |
 | R3 | Captura Gmail cotizaciones | Pendiente | OAuth, deduplicación, filtro de correos relevantes, oportunidad a nombre de ROMAX |
@@ -122,3 +122,9 @@ ROMAX respondió H01–H15 y H17; **H16 queda pendiente**: qué significan PVS/P
 **Depuración:** 289 fichas de fuente, 270 filas utilizables, 19 en cuarentena (5 marcadores no personales National, 8 sin nombre Oechsle, 6 filas con dos nombres Tgestiona). Un par de variantes de un mismo contacto Sodimac/Maestro con mismo correo/teléfono/sede se consolidó en una identidad, resultando 170 en lugar de los 171 inicialmente previstos. La matriz privada de excepciones contiene hoja/celda exacta; no está en GitHub público.
 
 **Próximo paso:** ROMAX confirma las 19 excepciones y H16 (siglas PVS/PVH/PVE/VIV). Continuar R1-D con el histórico de cotizaciones 2026 (lote piloto y estado documental), sin crear solicitudes artificiales. No se requirió cambiar interfaz ni desplegar Vercel para la carga del directorio.
+
+## 12. Preparacion R1-D - Historico 2026 (14-nov-2026)
+
+Se inspeccionaron 25 PDFs reales en las carpetas ROMAX de cotizaciones 2026, seleccionados de varios responsables: 10 de Makro, 10 Cassinelli/HMC, 1 Oechsle y 4 Plaza Vea/InRetail (no homologados en el directorio). El numero del PDF puede diferir del numero en el nombre del archivo, y hay correlativos repetidos en propuestas de distintos trabajos. No se mezclaran importaciones por numero; la clave sera el archivo y su procedencia. En esta fase importes quedan pendientes de validacion documental por neto/IGV, y la carpeta de enviados no confirma aceptacion. Modelo propuesto: commercial_quote_history + commercial_quote_history_documents, RLS lectura solo ROMAX, sin escrituras desde web. Ver docs/ROMAX_R1D_HISTORICAL_QUOTES.md.
+
+Gate: CI de migraciones y pruebas pgTAP en Supabase local, merge, migracion Cloud, carga piloto de 25 y QA de identidad, ausencia de duplicados y aislamiento antes de pasar a R1-E. La muestra no valida automaticamente la relacion entre Plaza Vea y Tgestiona/National, ni convierte cotizaciones en precios vigentes.
