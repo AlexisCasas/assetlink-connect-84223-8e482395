@@ -1,7 +1,7 @@
 -- ROMAX R1-D2C: disposable database only.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(15);
+SELECT plan(16);
 CREATE FUNCTION pg_temp.as_user(p_id uuid) RETURNS void LANGUAGE sql AS $$
  SELECT set_config('request.jwt.claim.sub',coalesce(p_id::text,''),true)
 $$;
@@ -47,6 +47,12 @@ SELECT throws_ok($$ INSERT INTO public.commercial_quote_history_sections
  (organization_id,history_id,section_order,section_kind,original_heading,section_text,source_page)
  VALUES ('e2200000-0000-0000-0000-000000000001','e2300000-0000-0000-0000-000000000001',2,'technical','Bad page','Unknown source page',0) $$,
  '23514',NULL,'invalid page blocked');
+INSERT INTO public.commercial_quote_history_cost_components
+ (organization_id,history_id,component_kind,amount,source_page,source_label)
+ VALUES ('e2200000-0000-0000-0000-000000000001','e2300000-0000-0000-0000-000000000001','net_total',100,NULL,'Synthetic net without confirmed page');
+SELECT is((SELECT source_page FROM public.commercial_quote_history_cost_components
+ WHERE source_label='Synthetic net without confirmed page'),NULL::integer,'unknown economic-summary page stays NULL');
+
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000001');
 SELECT is((SELECT count(*) FROM public.commercial_quote_history_sections),1::bigint,'owner A sees own section only');
