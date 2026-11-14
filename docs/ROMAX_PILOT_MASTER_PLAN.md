@@ -148,7 +148,7 @@ Gates: PR, compilacion/lint/regresion, evaluacion visual de escenarios E1-E15, l
 
 ## 15. Correctivo R1-D2A - Detalle de servicios, materiales y costos
 
-**Hallazgo tras despliegue R1-E:** el usuario detecto que la pantalla no mostraba el listado de servicios ni los materiales/precios presentes en los PDF, requisito para la futura investigacion historica con IA. Se reviso directamente la cotizacion RMX-2026-6200 Makro Huacho (2 paginas) y se confirmaron cinco partidas y cinco componentes economicos, con subtotal neto S/2040 sin IGV.
+**Hallazgo tras despliegue R1-E:** el usuario detecto que la pantalla no mostraba el listado de servicios ni los materiales/precios presentes en los PDF, requisito para la futura investigacion historica con IA. Se reviso directamente la cotizacion RMX-2026-6200 Makro Huacho (2 paginas) y se confirmaron cinco partidas y cinco componentes economicos, con total sin IGV conservado solo en Supabase.
 
 **Solucion en desarrollo (PR R1-D2A):** tres nuevas tablas para partidas, componentes y texto extraido del PDF; referencias por pagina, revision por valor, RLS y lectura por demanda en detalle. Guardar los 25 textos de PDF como material documental raw_unverified, pero estructurar valores y cantidades solo despues de validacion del formato visual/Excel de origen. Primer ejemplo estructurado: RMX-2026-6200. No convertir valores historicos sin verificar en lista vigente para IA.
 
