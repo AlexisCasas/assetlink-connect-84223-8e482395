@@ -30,7 +30,7 @@
 | --- | --- | --- | --- |
 | R0 | Organización ROMAX y primer usuario | Hecho: organización activa, un miembro activo owner | Login real y acceso en rol ROMAX; revalidar cuando aplique |
 | R1-A | Modelo comercial híbrido | Cerrado: PR #98 y #99 mergeados; migración 20261114161357 aplicada; tablas vacías y RLS activo | PASS realizado en CI aislado y revisión SQL post-Cloud |
-| R1-B | Depurar e importar clientes, sedes y contactos | **En ejecución**: fuente inspeccionada, 289 registros únicos detectados y **6/6 clientes comerciales ya importados**; sedes y contactos aún en cero | Importación idempotente reconciliada, alias revisados y contactos/sedes validados |
+| R1-B | Depurar e importar clientes, sedes y contactos | **En ejecución**: 6 clientes y **145 sedes** homologadas cargadas y verificadas; 0 contactos, quedan relaciones multisitio y H16 | QA de contactos, asociación multisitio y validación final de datos |
 | R1-C | Homologación de sedes y relaciones comerciales | Pendiente | Relación cliente-sede-contacto consistente, casos ambiguos resueltos |
 | R1-D | Histórico de cotizaciones ROMAX 2026 | Pendiente | Lote piloto ~25 cotizaciones, archivos origen, fecha, moneda, estado distinguido |
 | R1-E | Pantalla de consulta comercial/histórico | Pendiente | ROMAX busca por cliente/sede/fecha/servicio sin clientes logueados |
@@ -106,3 +106,11 @@ Continuar R1-B con el inventario de clientes y el subconjunto de datos sin ambig
 **Homologación revisada:** el Excel original consta de ocho hojas, incluido BASE GENERAL, seis hojas por cliente y RESUMEN. BASE GENERAL y las hojas individuales contienen el mismo universo de 289 fichas, no duplicados accidentales dentro de un mismo origen. Se identificaron 160 etiquetas de sede en bruto; 54 corresponden a Makro y permiten proponer 27 agrupaciones. Se entregó una matriz de homologación privada con 17 decisiones identificadas H01-H17, con archivo/hoja/fila. Ver docs/ROMAX_R1B_HOMOLOGATION_GATE.md.
 
 **Siguiente gate:** esperar validación de ROMAX en H01-H17 (prioridad alta primero) antes de fusionar grupos ambiguos o asignar contactos. La matriz de revisión contiene datos operativos del cliente y NO debe subirse al repositorio público. En Cloud siguen 6 clientes, 0 sedes, 0 contactos salvo verificación nueva.
+
+## 10. Resultado de homologación confirmado por ROMAX (14-nov-2026)
+
+ROMAX respondió H01–H15 y H17; **H16 queda pendiente**: qué significan PVS/PVH/PVE/VIV y a nombre de quién se factura. Las siglas se preservaron literalmente. Regla H01: Makro Surco tienda y Oficina Central separadas; H02 SMP (REX) separado de SMP - MK; H03 sin número separado de sucursal 1 de Arequipa, Piura, Trujillo y Zárate. National es FM intermediario que opera comercialmente como cliente de ROMAX (registrado en sus notas), sin nueva organización. SFERA/MAC se conservan como sedes diferentes. Sodimac/Maestro continúa agrupado hasta revisar cotizaciones. Grupos Tgestiona desdoblados: H10 3, H11 3, H12 2, H13 3, H14 2, sin asignación arbitraria de contactos. TIENDA (National) y TIENDAS VARIAS (ITSE) no se importan como sedes. Los contactos sin sede quedan a nivel cliente.
+
+**Carga L2 real verificada en Supabase Cloud:** 145 sedes en commercial_client_sites con source_system=romax_r1b_homologation_20261114, 145 source_key distintas: Makro 33, National 8, Oechsle 31, Sodimac / Maestro 54, Tgestiona 19, Cassinelli 0. Clientes=6; contactos=0; organizaciones=10; solicitudes=33; cotizaciones=22. No se ha cambiado el esquema, clientes externos ni la UI. El libro privado de homologación revisado conserva la relación entre etiqueta y celda fuente. Ver docs/ROMAX_R1B_HOMOLOGATION_DECISIONS.md.
+
+**Próximo desarrollo:** modelar contactos compartidos con relación muchos-a-muchos entre commercial_client_contacts y commercial_client_sites, manteniendo FKs del mismo tenant y mismo cliente; después limpiar los 289 registros fuente (cinco placeholders de National y seis celdas con dos nombres de Tgestiona a revisar), importar y ejecutar QA de contactos. Nunca duplicar usuarios ni crear organizaciones cliente artificiales.
