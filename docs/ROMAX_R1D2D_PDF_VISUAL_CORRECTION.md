@@ -46,3 +46,17 @@ La extracción de texto del PDF devuelve las cifras y descripciones en bloques s
 | V10 | CI frontend, regresión y Vercel Preview PASS antes de merge/deploy |
 
 **Continuidad:** consultar también `docs/ROMAX_R1D2C_PILOT_QA.md` y `docs/ROMAX_PILOT_MASTER_PLAN.md`. Para futuros formatos, revisar el PDF renderizado o archivo Excel específico antes de distribuir tarifas entre actividades.
+## Ejecución del piloto y comprobaciones reales
+
+- **Fuente original:** PDF A4 de una página, renderizado y revisado visualmente. Ítems 1.00, 2.00 y 3.00 correctamente vinculados a suministro de ventiladores, sistema eléctrico y puesta a tierra respectivamente.
+- **Escritura controlada en Supabase Cloud:** 3 partidas, 6 secciones corregidas con procedencia `pdf_visual_review` y página 1, 3 componentes del resumen económico con página 1. Las 3 tarifas y parciales se almacenaron exclusivamente en la base privada.
+- **Conciliación:** suma de unidades por tarifa coincide con parcial por partida; los tres parciales coinciden con el subtotal del grupo y el neto del resumen; IGV del 18 % y total documental también coinciden.
+- **Composición corregida:** 4 notas de aclaraciones técnicas (2.1–2.4), 6 de seguridad (3.1–3.6), 6 de gestión/entrega (4.1–4.6), 3 conceptos del resumen (5.1–5.3), 5 rótulos de condiciones comerciales (6.1–6.5), conservando forma de pago sin valor.
+- **Sin material independiente:** 0 partidas adicionales de `material` para 4087. Solo se presenta el listado de servicios con su grupo.
+- **Estados:** 0 precios o secciones elevados arbitrariamente a `verified`; los importes históricos siguen `extracted_unverified`.
+- **RLS real:** owner ROMAX ve 3 partidas / 6 secciones / 3 componentes; otro miembro de organización ajena ve 0 / 0 / 0.
+- **Sin regresión de datos:** 25 cotizaciones históricas, 25 documentos, 25 textos fuente, 33 solicitudes y 22 cotizaciones operativas sin cambios; 5 partidas del piloto clásico 6200 conservadas.
+- **QA de PR #113:** cuatro suites GitHub Actions PASS; Vercel Preview READY. El cambio del frontend queda pendiente de merge y release de producción.
+- **Sin DDL:** se reutilizaron las tablas de R1-D2A/C y la navegación existente; no se agregaron roles ni permisos.
+
+**Advertencia de continuidad:** el control matemático y el cotejo visual prueban la fidelidad de los valores al documento, no que esos valores deban volver a cotizarse hoy. Para propuestas asistidas por IA se necesitará la revisión comercial correspondiente.
