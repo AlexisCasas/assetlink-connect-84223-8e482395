@@ -13,7 +13,7 @@ const SECTION_NAMES: Record<CommercialQuoteLineItem['section_kind'], string> = {
 };
 
 const COST_ORDER: CommercialQuoteCostComponent['component_kind'][] = [
-  'labor', 'materials', 'mobilization', 'overhead_profit', 'tax', 'net_total', 'gross_total', 'other',
+  'labor', 'materials', 'mobilization', 'overhead_profit', 'net_total', 'tax', 'gross_total', 'other', 
 ];
 
 const formatQuantity = (amount: number | null): string =>
@@ -37,7 +37,7 @@ function sourceTextRows(sourceText: string): string[] {
 function ReviewLabel({ status }: { status: string }) {
   return (
     <Badge variant={status === 'verified' ? 'secondary' : 'outline'} className="whitespace-nowrap">
-      {status === 'verified' ? 'Verificado' : status === 'needs_review' ? 'Revisar' : 'Sin homologar'}
+      {status === 'verified' ? 'Verificado' : status === 'needs_review' ? 'Revisar' : 'Extraído · sin validar'}
     </Badge>
   );
 }
@@ -45,9 +45,11 @@ function ReviewLabel({ status }: { status: string }) {
 function QuoteReadOnlySection({
   kind,
   lines,
+  groupLabel,
 }: {
   kind: CommercialQuoteLineItem['section_kind'];
   lines: CommercialQuoteLineItem[];
+  groupLabel?: string;
 }) {
   const rows = lines
     .filter((line) => line.section_kind === kind)
@@ -66,6 +68,16 @@ function QuoteReadOnlySection({
       </div>
       <QuoteItemsTable mode="historical" currencyLabel={currency === 'PEN' ? 'S/' : currency}>
         <TableBody>
+          {groupLabel && rows.length > 0 && (
+            <TableRow className="bg-muted/40 font-semibold">
+              <TableCell colSpan={4} className="whitespace-normal break-words">
+                {groupLabel}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatMoney(subtotal, currency)}
+              </TableCell>
+            </TableRow>
+          )}
           {rows.length === 0 ? (
             <TableRow>
               <TableCell colSpan={5} className="py-5 text-center text-muted-foreground">
@@ -87,7 +99,7 @@ function QuoteReadOnlySection({
               <TableCell className="whitespace-nowrap text-right font-mono tabular-nums">{formatMoney(line.line_total, line.currency_code)}</TableCell>
             </TableRow>
           ))}
-          {subtotal !== null && (
+          {subtotal !== null && !groupLabel && (
             <TableRow className="bg-muted/30">
               <TableCell colSpan={4} className="text-right font-semibold">
                 Suma de parciales del PDF (sin validar):
@@ -171,7 +183,7 @@ function HistoricalQuoteSections({ sections }: { sections: CommercialQuoteSectio
   return (
     <section className="space-y-2 rounded-lg border bg-card p-3 sm:p-4" aria-label="Otras secciones del documento">
       <div className="rounded-md bg-muted px-3 py-2">
-        <h4 className="font-semibold">Alcance técnico y condiciones de origen</h4>
+        <h4 className="font-semibold">Aclaraciones técnicas, seguridad y condiciones</h4>
       </div>
       <p className="text-xs text-muted-foreground">
         Se conserva la redacción del documento. Una sección extraída no equivale a una partida económica
@@ -252,6 +264,17 @@ function SourceTextTable({ text }: { text: string }) {
 
 export function HistoricalQuoteTables({ breakdown }: { breakdown: CommercialQuoteBreakdown }) {
   const hasStructuredLines = breakdown.lines.length > 0;
+  const hasServiceLines = breakdown.lines.some((line) => line.section_kind === 'service');
+  const hasMaterialLines = breakdown.lines.some((line) => line.section_kind === 'material');
+  const serviceGroup = breakdown.sections.find((section) => section.section_kind === 'service_scope');
+  const groupLabel = hasServiceLines ? serviceGroup?.section_text.split('\n')[0]?.trim() : undefined;
+  // The PDF proposal heading and economic-summary labels are represented by
+  // the structured services/summary tables. Hide only these duplicate narrative
+  // copies, never the independent technical or contractual sections.
+  const supplementarySections = breakdown.sections.filter((section) =>
+    !(section.section_kind === 'service_scope' && hasServiceLines)
+    && !(section.section_kind === 'economic_summary' && breakdown.components.length > 0)
+  );
   const hasAdditionalKinds = breakdown.lines.some(
     (line) => line.section_kind === 'equipment' || line.section_kind === 'other',
   );
@@ -263,8 +286,16 @@ export function HistoricalQuoteTables({ breakdown }: { breakdown: CommercialQuot
           Se presenta la misma tabla de cotización sin completar unidades, cantidades o tarifas no comprobadas.
         </p>
       )}
-      <QuoteReadOnlySection kind="service" lines={breakdown.lines} />
-      <QuoteReadOnlySection kind="material" lines={breakdown.lines} />
+      <QuoteReadOnlySection kind="service" lines={breakdown.lines} groupLabel={groupLabel} />
+      {(hasMaterialLines || !hasServiceLines) && (
+        <QuoteReadOnlySection kind="material" lines={breakdown.lines} />
+      )}
+      {hasServiceLines && !hasMaterialLines && (
+        <p className="text-xs text-muted-foreground">
+          Este documento no contiene un listado independiente de materiales y consumibles.
+          El suministro incluido se conserva dentro de las partidas de servicios.
+        </p>
+      )}
       {hasAdditionalKinds && (
         <>
           <QuoteReadOnlySection kind="equipment" lines={breakdown.lines} />
@@ -272,7 +303,7 @@ export function HistoricalQuoteTables({ breakdown }: { breakdown: CommercialQuot
         </>
       )}
       <HistoricalCostTable components={breakdown.components} />
-      <HistoricalQuoteSections sections={breakdown.sections} />
+      <HistoricalQuoteSections sections={supplementarySections} />
       {breakdown.source && <SourceTextTable text={breakdown.source.source_text} />}
       {!breakdown.source && !hasStructuredLines && breakdown.components.length === 0 && (
         <p className="text-xs text-muted-foreground">La extracción documental aún no está disponible para este registro.</p>
