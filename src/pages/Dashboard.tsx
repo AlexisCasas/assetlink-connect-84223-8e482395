@@ -166,7 +166,11 @@ const Dashboard = () => {
         // Membership and owner-specific data access are rechecked by RLS.
         if (currentOrganization?.organizationType !== 'provider_company' || !currentMembership?.isActive
             || currentMembership.organizationId !== currentOrganization.id) {
-          return <ProviderFacingAccessDenied />;
+          return (
+            <div className="flex h-full items-center justify-center p-6">
+              <p className="text-sm text-muted-foreground">El histórico comercial está disponible solo para proveedores activos.</p>
+            </div>
+          );
         }
         return <CommercialQuoteHistoryView />;
       case 'profile':
