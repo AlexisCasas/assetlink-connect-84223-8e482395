@@ -189,16 +189,28 @@ export interface CommercialQuoteCostComponent {
   amount: number;
   currency_code: string;
   source_label: string;
-  source_page: number;
+  source_page: number | null;
   review_status: 'extracted_unverified' | 'verified' | 'needs_review';
 }
 export interface CommercialQuoteSourceExtract {
   source_text: string;
   review_status: 'raw_unverified' | 'reviewed';
 }
+export interface CommercialQuoteSection {
+  id: string;
+  section_order: number;
+  section_kind: string;
+  original_heading: string;
+  section_text: string;
+  source_page: number | null;
+  provenance: 'pdf_extracted_text' | 'pdf_visual_review' | 'xlsx_source';
+  review_status: 'extracted_unverified' | 'needs_review' | 'verified';
+}
+
 export interface CommercialQuoteBreakdown {
   lines: CommercialQuoteLineItem[];
   components: CommercialQuoteCostComponent[];
+  sections: CommercialQuoteSection[];
   source: CommercialQuoteSourceExtract | null;
 }
 
@@ -210,7 +222,7 @@ export async function getCommercialQuoteBreakdown(
   organizationId: string,
   historyId: string,
 ): Promise<CommercialQuoteBreakdown> {
-  const [lines, components, extracts] = await Promise.all([
+  const [lines, components, sections, extracts] = await Promise.all([
     historyReader.from<CommercialQuoteLineItem>('commercial_quote_history_line_items')
       .select('id,section_kind,line_order,description,unit_label,quantity,unit_price,line_total,currency_code,source_page,source_note,review_status')
       .eq('organization_id', organizationId).eq('history_id', historyId)
@@ -218,12 +230,17 @@ export async function getCommercialQuoteBreakdown(
     historyReader.from<CommercialQuoteCostComponent>('commercial_quote_history_cost_components')
       .select('id,component_kind,amount,currency_code,source_label,source_page,review_status')
       .eq('organization_id', organizationId).eq('history_id', historyId),
+    historyReader.from<CommercialQuoteSection>('commercial_quote_history_sections')
+      .select('id,section_order,section_kind,original_heading,section_text,source_page,provenance,review_status')
+      .eq('organization_id', organizationId).eq('history_id', historyId)
+      .order('section_order', { ascending: true }),
     historyReader.from<CommercialQuoteSourceExtract>('commercial_quote_history_source_extracts')
       .select('source_text,review_status')
       .eq('organization_id', organizationId).eq('history_id', historyId),
   ]);
   if (lines.error) throw new Error(lines.error.message);
   if (components.error) throw new Error(components.error.message);
+  if (sections.error) throw new Error(sections.error.message);
   if (extracts.error) throw new Error(extracts.error.message);
-  return { lines: lines.data ?? [], components: components.data ?? [], source: extracts.data?.[0] ?? null };
+  return { lines: lines.data ?? [], components: components.data ?? [], sections: sections.data ?? [], source: extracts.data?.[0] ?? null };
 }

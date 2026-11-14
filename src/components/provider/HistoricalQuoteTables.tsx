@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { QuoteItemsTable } from '@/components/requests/QuoteItemsTable';
 import type {
-  CommercialQuoteBreakdown, CommercialQuoteCostComponent, CommercialQuoteLineItem,
+  CommercialQuoteBreakdown, CommercialQuoteCostComponent, CommercialQuoteLineItem, CommercialQuoteSection,
 } from '@/lib/commercialQuoteHistory';
 
 const SECTION_NAMES: Record<CommercialQuoteLineItem['section_kind'], string> = {
@@ -137,7 +137,7 @@ function HistoricalCostTable({ components }: { components: CommercialQuoteCostCo
               >
                 <TableCell className="min-w-[220px]">{component.source_label}</TableCell>
                 <TableCell className="whitespace-nowrap text-right tabular-nums">{formatMoney(component.amount, component.currency_code)}</TableCell>
-                <TableCell className="text-center">{component.source_page}</TableCell>
+                <TableCell className="text-center">{component.source_page ?? 'Por confirmar'}</TableCell>
                 <TableCell><ReviewLabel status={component.review_status} /></TableCell>
               </TableRow>
             ))}
@@ -151,11 +151,71 @@ function HistoricalCostTable({ components }: { components: CommercialQuoteCostCo
   );
 }
 
+const TYPE_LABELS: Record<string,string> = {
+  service_scope: 'Alcance y trabajos incluidos',
+  material_scope: 'Materiales y consumibles',
+  labor: 'Mano de obra',
+  equipment: 'Equipos y herramientas',
+  additional_costs: 'Costos adicionales',
+  technical: 'Aclaraciones técnicas',
+  safety: 'Consideraciones de seguridad',
+  management_delivery: 'Gestión y entrega',
+  commercial_terms: 'Condiciones comerciales',
+  economic_summary: 'Resumen económico',
+  internal_costs: 'Estructura de costos internos',
+  other: 'Otras condiciones',
+};
+
+function HistoricalQuoteSections({ sections }: { sections: CommercialQuoteSection[] }) {
+  if (sections.length === 0) return null;
+  return (
+    <section className="space-y-2 rounded-lg border bg-card p-3 sm:p-4" aria-label="Otras secciones del documento">
+      <div className="rounded-md bg-muted px-3 py-2">
+        <h4 className="font-semibold">Alcance técnico y condiciones de origen</h4>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Se conserva la redacción del documento. Una sección extraída no equivale a una partida económica
+        validada; los precios y cantidades se homologan por separado.
+      </p>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader className="bg-muted/70">
+            <TableRow>
+              <TableHead className="min-w-[170px]">Sección</TableHead>
+              <TableHead className="min-w-[280px]">Detalle del documento</TableHead>
+              <TableHead className="min-w-[100px]">Procedencia</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sections.map((section) => (
+              <TableRow key={section.id}>
+                <TableCell className="align-top">
+                  <p className="font-medium">{TYPE_LABELS[section.section_kind] ?? 'Sección complementaria'}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{section.original_heading}</p>
+                </TableCell>
+                <TableCell className="align-top">
+                  <p className="whitespace-pre-wrap break-words text-sm">{section.section_text}</p>
+                </TableCell>
+                <TableCell className="align-top">
+                  <p className="text-xs text-muted-foreground">
+                    {section.source_page ? 'PDF · pág. ' + section.source_page : 'Página por confirmar'}
+                  </p>
+                  <div className="mt-1"><ReviewLabel status={section.review_status} /></div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
+  );
+}
+
 function SourceTextTable({ text }: { text: string }) {
   const lines = sourceTextRows(text);
   const visible = lines.slice(0, 300);
   return (
-    <details className="rounded-lg border bg-card p-3 sm:p-4" open>
+    <details className="rounded-lg border bg-card p-3 sm:p-4">
       <summary className="cursor-pointer font-semibold">
         Transcripción tabular del PDF · {lines.length} líneas (no homologadas)
       </summary>
@@ -212,6 +272,7 @@ export function HistoricalQuoteTables({ breakdown }: { breakdown: CommercialQuot
         </>
       )}
       <HistoricalCostTable components={breakdown.components} />
+      <HistoricalQuoteSections sections={breakdown.sections} />
       {breakdown.source && <SourceTextTable text={breakdown.source.source_text} />}
       {!breakdown.source && !hasStructuredLines && breakdown.components.length === 0 && (
         <p className="text-xs text-muted-foreground">La extracción documental aún no está disponible para este registro.</p>

@@ -165,3 +165,12 @@ Hallazgo del QA visual de ROMAX: en cotizaciones como RMX-2026-4087, la transcri
 Las cotizaciones con partidas estructuradas muestran tablas por servicio/material con descripcion, cantidad, unidad, tarifa y parcial, y un resumen economico tabular con origen por pagina y revision. Las otras 24 conservan tablas en estado pendiente y el texto fuente se presenta como transcripcion por filas (no homologadas), sin asociar cantidades y precios de forma especulativa.
 
 El desarrollo esta en PR y debe pasar build, QA visual y regresiones antes de cualquier merge o deploy a Vercel Production. No hay nuevas migraciones ni cambios a Supabase Cloud. Ver docs/ROMAX_R1D2B_TABULAR_HISTORY_UI.md para checklist T1-T8.
+
+
+## 17. R1-D2C — Auditoria multi-formato e inicio de homologacion (14-nov-2026)
+
+Se revisaron los 25 textos de PDF en ROMAX y los documentos fuente de muestra, mas la plantilla Excel oficial 2026 de tres hojas. Familias documentales: 15 clasicos, 7 de propuesta economica detallada, 2 por metrajes, 1 mixto. No se puede homologar solo por correlativo porque existen numeros duplicados y diferencias entre archivo y PDF.
+
+**Contrato aprobado para piloto:** conservar partidas de servicios/materiales solo cuando se asocien de forma respaldada con cantidad/unidad/precio; separar costos internos de precios de venta; mantener resumen neto/IGV/bruto cuando la evidencia lo soporte; agregar secciones tecnicas, seguridad, soporte y condiciones comerciales como datos narrativos protegidos por tenant. Las paginas de PDF desconocidas permanecen NULL. El primer caso nuevo es RMX-2026-4087 (formato detallado), comparado con RMX-2026-6200 (clasico previamente estructurado). No adjudicar importes de filas numericas a textos del PDF aplanado de 4087 hasta validar su tabla visual o fuente Excel.
+
+Nueva tabla commercial_quote_history_sections y consulta UI bajo RLS; se mantiene la separacion extracted_unverified versus verified. Plan de QA: CI de migraciones, RLS de nuevo tenant, cotejo del resumen financiero del piloto, idempotencia y lectura visual en Vercel. El resto del lote no se importa automaticamente. Ver docs/ROMAX_R1D2C_HOMOLOGATION_AUDIT_PILOT.md.
