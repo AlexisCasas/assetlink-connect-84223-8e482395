@@ -55,4 +55,4 @@ El total de 289 coincide con el pie del documento original; no corresponde carga
 
 ## Estado
 
-Al redactar este documento: fuente inspeccionada y deduplicación diagnosticada. Esta auditoría no implica por sí sola que se hayan insertado clientes, sedes o contactos. Verificar Supabase antes de marcar cualquier lote como completado.
+**Carga L1 verificada (14-nov-2026):** 6 de 6 clientes comerciales insertados en Supabase OneFacility, organización ROMAX, con source_system = romax_contactos_consolidados_20261109 y 6 source_key distintas. Registros destino: Cassinelli, Makro, National, Oechsle, Sodimac / Maestro (agrupación provisional) y Tgestiona. Conteo post-write: clientes=6, sedes=0, contactos=0. No se crearon organizaciones cliente, vínculos externos, razones sociales/RUC inventados ni cambios en requests/quotes (33/22); total de organizaciones=10. Las 289 fichas únicas de contacto y 160 etiquetas brutas de sede siguen PENDIENTES de normalización y carga.
