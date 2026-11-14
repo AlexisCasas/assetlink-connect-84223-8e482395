@@ -137,7 +137,7 @@ function HistoricalCostTable({ components }: { components: CommercialQuoteCostCo
               >
                 <TableCell className="min-w-[220px]">{component.source_label}</TableCell>
                 <TableCell className="whitespace-nowrap text-right tabular-nums">{formatMoney(component.amount, component.currency_code)}</TableCell>
-                <TableCell className="text-center">{component.source_page}</TableCell>
+                <TableCell className="text-center">{component.source_page ?? 'Por confirmar'}</TableCell>
                 <TableCell><ReviewLabel status={component.review_status} /></TableCell>
               </TableRow>
             ))}
