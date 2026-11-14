@@ -27,7 +27,7 @@ const formatMoney = (amount: number | null, currency: string): string =>
  * flatten columns in arbitrary order, so these lines are NEVER turned into
  * quantities, unit rates or assigned descriptions automatically.
  */
-export function sourceTextRows(sourceText: string): string[] {
+function sourceTextRows(sourceText: string): string[] {
   return sourceText
     .split(/\r?\n/)
     .map((line) => line.trim())
