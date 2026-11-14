@@ -4,7 +4,7 @@
 
 ## Contrato de datos nuevo
 
-Migracion propuesta: supabase/migrations/20261114181500_romax_quote_history_details.sql.
+Migracion propuesta: supabase/migrations/20261114182230_romax_quote_history_details.sql.
 
 - commercial_quote_history_line_items: una fila por servicio/material/equipo, con descripcion, unidad, cantidad, precio unitario y subtotal **opcional**, pagina del PDF, orden y review_status. No inventar precios que faltan en el documento; dejar NULL.
 - commercial_quote_history_cost_components: resumen economico (mano de obra, materiales, movilizacion, GG+utilidad, total sin IGV, IGV y total bruto cuando existan). Se conserva el rotulo tal como figura en el PDF.
@@ -52,3 +52,8 @@ Se almacenara el texto original extraido de cada uno con estado raw_unverified e
 - Los textos fuente contienen informacion privada ROMAX: consultas solo con RLS/RPC autorizadas por proveedor; nunca inyectar todo el corpus a terceros ni publicar PDFs como dataset abierto.
 
 Referencia: docs/ROMAX_PILOT_MASTER_PLAN.md, docs/ROMAX_R1D_PILOT_IMPORT_QA.md, docs/ROMAX_R1E_HISTORICAL_QUOTES_UI.md.
+
+## Estado aplicado (14-nov-2026)
+
+PR #108 fusionado; las cinco suites CI (incluida integracion multitenant) completadas con PASS. Migracion Supabase Cloud version 20261114182230. En Cloud hay 25 textos de PDF preservados como raw_unverified y un desglose estructurado piloto de 5 partidas y 5 componentes (RMX-2026-6200). Los importes se registran solamente en Cloud y siguen extracted_unverified. QA: ROMAX owner lee 25/5/5, otra organizacion 0/0/0; la suma de materiales y de componentes contra el total de origen dio PASS. Otros 24 PDFs pendientes de desglose con confirmacion de tabla/partida. No inferir cifras ni crear precios vigentes.
+

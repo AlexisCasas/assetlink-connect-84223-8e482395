@@ -150,6 +150,9 @@ Gates: PR, compilacion/lint/regresion, evaluacion visual de escenarios E1-E15, l
 
 **Hallazgo tras despliegue R1-E:** el usuario detecto que la pantalla no mostraba el listado de servicios ni los materiales/precios presentes en los PDF, requisito para la futura investigacion historica con IA. Se reviso directamente la cotizacion RMX-2026-6200 Makro Huacho (2 paginas) y se confirmaron cinco partidas y cinco componentes economicos, con total sin IGV conservado solo en Supabase.
 
-**Solucion en desarrollo (PR R1-D2A):** tres nuevas tablas para partidas, componentes y texto extraido del PDF; referencias por pagina, revision por valor, RLS y lectura por demanda en detalle. Guardar los 25 textos de PDF como material documental raw_unverified, pero estructurar valores y cantidades solo despues de validacion del formato visual/Excel de origen. Primer ejemplo estructurado: RMX-2026-6200. No convertir valores historicos sin verificar en lista vigente para IA.
+**Solucion implementada (PR #108):** tres nuevas tablas para partidas, componentes y texto extraido del PDF; referencias por pagina, revision por valor, RLS y lectura por demanda en detalle. Guardar los 25 textos de PDF como material documental raw_unverified, pero estructurar valores y cantidades solo despues de validacion del formato visual/Excel de origen. Primer ejemplo estructurado: RMX-2026-6200. No convertir valores historicos sin verificar en lista vigente para IA.
 
 **Control:** ejecutar QA aislado, comprobar importacion y aislamiento entre organizaciones, despues merge/migracion/despliegue de frontend con seguridad. La fase R1-D2 completa seguira abierta hasta verificar las partidas de los restantes 24 documentos y el IGV. Ver docs/ROMAX_R1D2_QUOTE_LINE_ITEMS.md.
+
+**QA R1-D2A aplicado (14-nov-2026):** PR #108 PASS; migracion Supabase 20261114182230; 25 textos documentales privados y 5 partidas + 5 componentes estructurados del ejemplo RMX-2026-6200, sin precios inventados. Seguridad RLS ROMAX 25/5/5 vs otro tenant 0/0/0. Los restantes 24 PDFs siguen pendientes de homologacion de partidas. PR de continuidad sincroniza version Cloud y documentos. Ver docs/ROMAX_R1D2A_IMPORT_QA.md.
+
