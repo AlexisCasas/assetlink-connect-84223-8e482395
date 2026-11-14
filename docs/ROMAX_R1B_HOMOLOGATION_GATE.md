@@ -1,6 +1,6 @@
-# ROMAX R1-B — Control de homologación pendiente
+# ROMAX R1-B — Control de homologación y validación
 
-**Estado al 14-nov-2026:** levantamiento de sedes terminado, revisión del responsable ROMAX pendiente. Las sedes y contactos NO se han insertado en Supabase. Se mantiene una hoja de revisión privada fuera de GitHub, con todas las filas de origen exactas, 160 etiquetas y 17 preguntas.
+**Estado actualizado 14-nov-2026:** ROMAX confirmó H01–H15 y H17. H16 permanece pendiente. Se importaron 145 sedes en Supabase y se verificaron 6 clientes, 145 sedes y 0 contactos. La matriz de homologación con fila/celda exacta se conserva en un Excel privado, fuera del repositorio público.
 
 ## Contexto de datos y reconciliación
 
@@ -60,3 +60,19 @@ Fuente principal: el Excel consolidado privado de ROMAX, con ocho hojas: BASE GE
 - docs/ROMAX_PILOT_MASTER_PLAN.md — plan maestro R0–R6, decisiones, situación, próximo paso.
 - docs/ROMAX_R1B_SOURCE_AUDIT.md — recuento de filas y estrategia de carga.
 - docs/ROMAX_R1A_COMMERCIAL_DIRECTORY.md — esquema híbrido y seguridad R1-A.
+
+## Resultado L2 — 145 sedes aplicadas
+
+| Cliente | Sedes resultantes |
+| --- | ---: |
+| Makro | 33 |
+| National | 8 |
+| Oechsle | 31 |
+| Sodimac / Maestro | 54 |
+| Tgestiona | 19 |
+| Cassinelli | 0 |
+| **Total** | **145** |
+
+Control: las 160 etiquetas originales se mantuvieron trazables en la matriz privada; 145 registros únicos se insertaron con source_system `romax_r1b_homologation_20261114` y claves de origen únicas. No se crearon sedes TIENDA ni TIENDAS VARIAS (ITSE); no se atribuyeron contactos multisitio a un sitio arbitrario. Los conteos de 10 organizaciones, 33 solicitudes y 22 cotizaciones permanecieron intactos. La ficha de National indica su rol comercial de Facility Manager intermediario.
+
+**Pendiente:** definir H16 (siglas); implementar relación multi-sede para contactos y auditar nombres ambiguos de personas (5 placeholders National + 6 celdas Tgestiona con más de un nombre). El listado anterior de 17 casos y pasos pendientes queda como historial de prevalidación, no como estado actual. Ver docs/ROMAX_R1B_HOMOLOGATION_DECISIONS.md.
