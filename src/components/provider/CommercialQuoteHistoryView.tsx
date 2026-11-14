@@ -15,6 +15,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { AlertCircle, ExternalLink, FileSearch, FileText, Loader2, Search, X } from 'lucide-react';
+import { HistoricalQuoteTables } from './HistoricalQuoteTables';
 import {
   EMPTY_QUOTE_HISTORY_FILTERS, QUOTE_HISTORY_PAGE_SIZE,
   getCommercialQuoteDirectory, getCommercialQuoteDocuments, getCommercialQuoteHistory,
@@ -31,18 +32,6 @@ const formatDate = (date: string | null): string => {
   if (Number.isNaN(parsed.getTime())) return date;
   return new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(parsed);
 };
-
-const formatSourceAmount = (amount: number | null, currency: string): string =>
-  amount === null ? '—' : new Intl.NumberFormat('es-PE', { style: 'currency', currency }).format(amount);
-
-const sectionLabels: Record<string, string> = {
-  service: 'Listado de servicios',
-  material: 'Descripción de materiales',
-  equipment: 'Equipos de apoyo',
-  other: 'Otras partidas',
-};
-
-const componentOrder = ['labor', 'materials', 'mobilization', 'overhead_profit', 'tax', 'net_total', 'gross_total', 'other'];
 
 const formatVerifiedAmount = (row: CommercialQuoteHistory): string => {
   if (row.price_review !== 'verified') return 'Sin validar';
@@ -87,6 +76,7 @@ export function CommercialQuoteHistoryView() {
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
   const [breakdown, setBreakdown] = useState<CommercialQuoteBreakdown | null>(null);
+  const [loadedBreakdownId, setLoadedBreakdownId] = useState<string | null>(null);
   const [breakdownLoading, setBreakdownLoading] = useState(false);
   const [breakdownError, setBreakdownError] = useState<string | null>(null);
 
@@ -174,12 +164,18 @@ export function CommercialQuoteHistoryView() {
   useEffect(() => {
     let active = true;
     setBreakdown(null);
+    setLoadedBreakdownId(null);
     setBreakdownError(null);
     setBreakdownLoading(false);
     if (!organizationId || !selectedQuoteId) return () => { active = false; };
     setBreakdownLoading(true);
     void getCommercialQuoteBreakdown(organizationId, selectedQuoteId)
-      .then((data) => { if (active) setBreakdown(data); })
+      .then((data) => {
+        if (active) {
+          setBreakdown(data);
+          setLoadedBreakdownId(selectedQuoteId);
+        }
+      })
       .catch(() => {
         if (active) setBreakdownError('No se pudo consultar el desglose de la cotización.');
       })
@@ -478,86 +474,15 @@ export function CommercialQuoteHistoryView() {
                 <div>
                   <h3 className="font-semibold">Partidas históricas cotizadas</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Valores extraídos del PDF de origen. No representan tarifas vigentes ni precios aprobados para reutilización.
+                    Mismo formato de partidas que el cotizador, en modo solo lectura. Las tarifas extraídas no son precios vigentes.
                   </p>
                 </div>
-                {breakdownLoading && <p className="text-muted-foreground">Cargando partidas del PDF…</p>}
-                {breakdownError && <p className="text-destructive" role="alert">{breakdownError}</p>}
-                {!breakdownLoading && !breakdownError && breakdown && breakdown.lines.length === 0 && (
-                  <p className="rounded-md border p-3 text-muted-foreground">
-                    El desglose de partidas todavía está pendiente de revisión estructurada. Puedes consultar el texto extraído y el PDF.
-                  </p>
+                {(breakdownLoading || (!breakdownError && loadedBreakdownId !== selectedQuoteId)) && (
+                  <p className="text-muted-foreground">Cargando tablas del PDF…</p>
                 )}
-                {!breakdownLoading && !breakdownError && breakdown && (
-                  <>
-                    {(['service', 'material', 'equipment', 'other'] as const).map((section) => {
-                      const rows = breakdown.lines.filter((item) => item.section_kind === section);
-                      if (rows.length === 0) return null;
-                      return (
-                        <div key={section} className="space-y-2">
-                          <h4 className="font-medium">{sectionLabels[section]}</h4>
-                          <div className="overflow-x-auto rounded-md border">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Descripción</TableHead>
-                                  <TableHead>Und.</TableHead>
-                                  <TableHead className="text-right">Cant.</TableHead>
-                                  <TableHead className="text-right">Precio unit.</TableHead>
-                                  <TableHead className="text-right">Parcial</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {rows.map((item) => (
-                                  <TableRow key={item.id}>
-                                    <TableCell className="min-w-[210px]">
-                                      <p>{item.description}</p>
-                                      <p className="mt-1 text-xs text-muted-foreground">PDF pág. {item.source_page} · {item.review_status === 'verified' ? 'Verificado' : 'Pendiente de validar'}</p>
-                                    </TableCell>
-                                    <TableCell>{item.unit_label || '—'}</TableCell>
-                                    <TableCell className="text-right">{item.quantity ?? '—'}</TableCell>
-                                    <TableCell className="whitespace-nowrap text-right">{formatSourceAmount(item.unit_price, item.currency_code)}</TableCell>
-                                    <TableCell className="whitespace-nowrap text-right">{formatSourceAmount(item.line_total, item.currency_code)}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {breakdown.components.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="font-medium">Resumen económico del documento</h4>
-                        <div className="divide-y rounded-md border">
-                          {[...breakdown.components].sort((a,b) => componentOrder.indexOf(a.component_kind) - componentOrder.indexOf(b.component_kind)).map((component) => (
-                            <div key={component.id} className="flex flex-wrap items-center justify-between gap-2 p-3">
-                              <div>
-                                <p>{component.source_label}</p>
-                                <p className="text-xs text-muted-foreground">PDF pág. {component.source_page} · {component.review_status === 'verified' ? 'Verificado' : 'Pendiente de validar'}</p>
-                              </div>
-                              <span className="font-medium">{formatSourceAmount(component.amount, component.currency_code)}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Subtotales y partidas del PDF no son automáticamente equivalentes a costos unitarios. El IGV se maneja por separado.
-                        </p>
-                      </div>
-                    )}
-                    {breakdown.source && (
-                      <details className="rounded-md border p-3">
-                        <summary className="cursor-pointer font-medium">Ver texto original extraído del PDF (sin homologar)</summary>
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          La disposición de tablas puede diferir respecto al archivo visual. Usa el PDF para validar cifras y correspondencia entre columnas.
-                        </p>
-                        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{breakdown.source.source_text}</pre>
-                      </details>
-                    )}
-                    {!breakdown.source && breakdown.lines.length === 0 && breakdown.components.length === 0 && (
-                      <p className="text-xs text-muted-foreground">La extracción documental aún no está disponible para esta cotización.</p>
-                    )}
-                  </>
+                {breakdownError && <p className="text-destructive" role="alert">{breakdownError}</p>}
+                {breakdown && loadedBreakdownId === selectedQuoteId && (
+                  <HistoricalQuoteTables breakdown={breakdown} />
                 )}
               </div>
               <div className="space-y-2">
