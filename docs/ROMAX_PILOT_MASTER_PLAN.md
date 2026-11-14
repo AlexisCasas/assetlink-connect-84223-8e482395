@@ -193,3 +193,12 @@ Se cargaron en Supabase Cloud las cotizaciones RMX-2026-2215, 2217, 2218 y 2219,
 QA Cloud: los cuatro netos del resumen concilian con la suma de sus componentes; owner ROMAX 17/16/19 registros visibles frente a usuario ajeno 0/0/0, reintentos 0 duplicados. Las excepciones principales son: 2217 tiene una diferencia no explicada entre la partida de agua identificable y el subtotal de materiales; 2218 conserva cuatro materiales sin atribuirles cifras; 2215 requiere confirmar distribución entre actividades; 2219 exige cotejar visualmente el servicio y su única línea económica. Ninguna excepción fue completada mediante suposiciones.
 
 Este lote todavía requiere cotejo visual/PDF o XLSX fuente para considerarse homologación financiera definitiva. El frontend productivo existente consume las tablas, por lo que no se necesitó desplegar Vercel. Informe detallado: docs/ROMAX_R1D2E_CLASSIC_BATCH1_QA.md. Mantener los próximos grupos de 3 a 5 documentos y gates de RLS y conciliación idénticos.
+
+
+## 20. R1-D2E2 - Subtotales de secciones del lote clasico (14-nov-2026)
+
+Se revisaron con el usuario las cotizaciones RMX-2026-2215, 2217 y 2218, confirmando que el encabezado gris de "Listado de servicios" debe reflejar el subtotal documental del grupo, sin confundir la primera descripcion con un encabezado. Igual criterio para el subtotal de "Descripcion de materiales y consumibles". Los servicios y materiales sin desglose unitario permanecen en filas separadas sin importes inventados.
+
+En la cotizacion 2217 el usuario confirmo que el unico servicio lleva el subtotal documental correspondiente. La fila de servicio se actualizo en Supabase Cloud con dicho **parcial** y sin asignar unidad, cantidad ni precio unitario artificial. El PDF contiene un precio unitario y parcial de cisterna que no explican totalmente su subtotal de materiales: la interfaz presenta las cifras de fuente, diferencia y un equivalente global **calculado**, sin reemplazar el precio original ni inferir IGV.
+
+El formato detallado (4087) conserva su grupo original; el 2219 permanece sin cambios de datos. Implementacion frontend en PR R1-D2E2: subtotal proveniente de componentes economicos, no de la suma incompleta de lineas. Mantener RLS, no elevar estados de revision y verificar CI/Vercel antes de publicar. Ver docs/ROMAX_R1D2E2_SECTION_SUBTOTAL_QA.md.
