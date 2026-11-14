@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { QuoteItemsTable } from './QuoteItemsTable';
 import { Request, QuoteSection, QuoteSectionItem, QuoteSalesConditions } from '@/types/request';
 import { X, Plus, Trash2, Edit2, Save, Mail, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -284,17 +285,7 @@ export const QuoteForm = ({ request, onClose, onSave, existingQuote }: QuoteForm
                   </div>
                 </div>
 
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[45%]">Descripción</TableHead>
-                        <TableHead className="w-[15%]">Cantidad</TableHead>
-                        <TableHead className="w-[15%]">Unidad</TableHead>
-                        <TableHead className="w-[20%]">Precio Total (S/)</TableHead>
-                        <TableHead className="w-[5%]"></TableHead>
-                      </TableRow>
-                    </TableHeader>
+                <QuoteItemsTable mode="editing">
                     <TableBody>
                       {section.items.map(item => (
                         <TableRow key={item.id}>
@@ -323,8 +314,7 @@ export const QuoteForm = ({ request, onClose, onSave, existingQuote }: QuoteForm
                         <TableCell />
                       </TableRow>
                     </TableBody>
-                  </Table>
-                </div>
+                </QuoteItemsTable>
               </div>
             ))}
           </div>
