@@ -62,3 +62,9 @@ El total de 289 coincide con el pie del documento original; no corresponde carga
 Se reabrió el XLSX binario y se verificaron las 8 hojas originales. Conciliación exacta: 289 filas de hojas individuales y 289 coincidencias en BASE GENERAL. De 160 etiquetas no vacías de sedes, se propusieron 27 agrupaciones Makro a partir de 54 etiquetas, respaldadas parcialmente por un libro histórico 2025. Los identificadores H01–H17 de validación están descritos en docs/ROMAX_R1B_HOMOLOGATION_GATE.md. Las etiquetas multi-sede o genéricas permanecen en cuarentena; sin altas de sedes/contactos en Supabase durante este gate.
 
 La matriz detallada entregada al responsable incluye nombre original y archivo/hoja/celda para cada caso, **no se versiona en GitHub público**.
+
+## Carga L2 confirmada (14-nov-2026)
+
+ROMAX aprobó separar los 2 casos Makro Surco/Central y SMP/REX, además de las 4 parejas de sede no numerada vs sede 1. Así, Makro quedó con **33** sedes, no 27. Se cargaron en Supabase **145** sedes: Makro 33, National 8, Oechsle 31, Sodimac/Maestro 54, Tgestiona 19, Cassinelli 0. Cada una con referencia de origen única, client_id y tenant de ROMAX; los 289 registros de contactos siguen pendientes (0 contactos). No se crearon lugares National/TIENDA ni Tgestiona/TIENDAS VARIAS (ITSE).
+
+**Casos de personas por depurar:** National contiene cinco filas con rótulos de nivel, no identidades personales confirmadas; Tgestiona presenta seis celdas con dos nombres. Es necesario no importar rótulos como personas y revisar las celdas dobles antes de migrar; la respuesta H16 sobre siglas es todavía pendiente.
