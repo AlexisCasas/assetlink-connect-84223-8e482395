@@ -189,7 +189,7 @@ export interface CommercialQuoteCostComponent {
   amount: number;
   currency_code: string;
   source_label: string;
-  source_page: number;
+  source_page: number | null;
   review_status: 'extracted_unverified' | 'verified' | 'needs_review';
 }
 export interface CommercialQuoteSourceExtract {
