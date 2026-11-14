@@ -60,3 +60,12 @@ COMMENT ON TABLE public.commercial_quote_history_sections IS
  'ROMAX provider-owned narrative/technical/contractual sections of archived quotes, with original headings and review status; no automatic price inference.';
 COMMENT ON COLUMN public.commercial_quote_history_sections.source_page IS
  'NULL when PDF page cannot be grounded; never guess page from flattened text.';
+
+
+-- The extraction of some historical templates loses PDF page boundaries.
+-- Preserve numeric summary facts as UNVERIFIED without fabricating a page.
+-- Existing rows with known page numbers keep them unchanged.
+ALTER TABLE public.commercial_quote_history_cost_components
+  ALTER COLUMN source_page DROP NOT NULL;
+COMMENT ON COLUMN public.commercial_quote_history_cost_components.source_page IS
+ 'Nullable when the source PDF page has not been confirmed; do not guess a page from flattened extraction.';
