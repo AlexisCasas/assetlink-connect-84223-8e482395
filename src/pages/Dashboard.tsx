@@ -5,6 +5,7 @@ import { AssetsView } from '@/components/assets/AssetsView';
 import { RequestList } from '@/components/requests/RequestList';
 import { DraftList } from '@/components/requests/DraftList';
 import { ProviderRequestList } from '@/components/requests/ProviderRequestList';
+import { CommercialQuoteHistoryView } from '@/components/provider/CommercialQuoteHistoryView';
 import { DashboardMetricsCards } from '@/components/dashboard/DashboardMetricsCards';
 import { TrafficLightSummaryCard } from '@/components/dashboard/TrafficLightSummaryCard';
 import { OrganizationProfile } from '@/components/organization/OrganizationProfile';
@@ -159,6 +160,15 @@ const Dashboard = () => {
       case 'public-requests':
         if (!isProviderFacingOrganizationType(currentOrganization?.organizationType)) return <ProviderFacingAccessDenied />;
         return <PublicRequestList />;
+      case 'quote-history':
+        // R1-E: provider-owned commercial history. Never serve it to client,
+        // facility_manager, subcontractor or platform_admin orgs via hash.
+        // Membership and owner-specific data access are rechecked by RLS.
+        if (currentOrganization?.organizationType !== 'provider_company' || !currentMembership?.isActive
+            || currentMembership.organizationId !== currentOrganization.id) {
+          return <ProviderFacingAccessDenied />;
+        }
+        return <CommercialQuoteHistoryView />;
       case 'profile':
         return <OrganizationProfile />;
       case 'notifications':
