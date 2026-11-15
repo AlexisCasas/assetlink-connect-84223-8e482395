@@ -291,13 +291,14 @@ export function CommercialQuoteHistoryView() {
                 <Select
                   value={draft.referenceField}
                   onValueChange={(value) => {
-                    if (value === 'document' || value === 'filename') {
+                    if (value === 'both' || value === 'document' || value === 'filename') {
                       setDraft((current) => ({ ...current, referenceField: value }));
                     }
                   }}
                 >
                   <SelectTrigger aria-label="Tipo de correlativo"><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="both">Ambos correlativos (recomendado)</SelectItem>
                     <SelectItem value="document">Número impreso en PDF</SelectItem>
                     <SelectItem value="filename">Número del nombre de archivo</SelectItem>
                   </SelectContent>
@@ -378,6 +379,12 @@ export function CommercialQuoteHistoryView() {
                       <TableCell className="whitespace-nowrap text-sm">{formatDate(quote.proposal_date)}</TableCell>
                       <TableCell className="min-w-[140px]">
                         <div className="font-medium">{quote.reference_document || quote.reference_filename || 'Sin referencia'}</div>
+                        {quote.reference_document && quote.reference_filename
+                          && quote.reference_document !== quote.reference_filename && (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            Archivo: {quote.reference_filename}
+                          </div>
+                        )}
                         {quote.reference_review === 'mismatch' && (
                           <Badge variant="destructive" className="mt-1">Referencia distinta</Badge>
                         )}
