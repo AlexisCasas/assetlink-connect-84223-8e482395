@@ -215,3 +215,12 @@ El formato detallado (4087) conserva su grupo original; el 2219 permanece sin ca
 **QA real:** RLS owner ROMAX 22/16/19 frente a otro tenant 0/0/0; errores de cálculo de partidas 0; estados `verified` asignados por error 0; reimportación idempotente 0 duplicados; solicitudes y cotizaciones operativas conservadas (33/22). Totales acumulados ROMAX: 47 partidas, 38 secciones y 46 componentes, con 25 PDFs/textos originales intactos.
 
 **Pendientes:** seis documentos clásicos por estructurar, luego seis propuestas detalladas, dos formatos de metraje y uno mixto. La fidelidad al PDF no equivale a aprobar tarifas vigentes para la IA. Ver informe `docs/ROMAX_R1D2F_CLASSIC_BATCH2_QA.md`.
+
+
+## 22. R1-D2G — Tercer lote clásico documentado (14-nov-2026)
+
+Se verificaron visualmente los PDF originales RMX-2026-0197, RMX-2026-5160 y RMX-2026-5161 (4 páginas). En Supabase Cloud se cargaron **23 partidas** (12 servicios y 11 materiales/equipos), **12 secciones narrativas** y **15 componentes financieros**. Se respetan las cantidades y tarifas de materiales del documento original, sin asignar precios unitarios a actividades con solo subtotal grupal.
+
+**QA de importación:** tres subtotales de materiales concilian exactamente con sus partidas; los grupos económicos cuadran en 0197 y 5161; en 5160 se conserva la discrepancia entre suma con céntimos y total entero redondeado, `needs_review`, sin ajuste artificial. RLS ROMAX 23/12/15, otro tenant 0/0/0, multiplicaciones erradas 0, duplicados 0, promociones comerciales a `verified` 0. Los documentos originales, las 33 solicitudes y las 22 cotizaciones operativas se preservan.
+
+**Progreso:** 13 de 25 cotizaciones estructuradas. Acumulado ROMAX 70 partidas, 50 secciones y 61 componentes. Restan **3 clásicos** (5063, 6167, 6195), **6 detalladas**, **2 por metraje** y **1 mixta**. Vercel productivo READY, sin requerirse despliegue para este lote. Informe: `docs/ROMAX_R1D2G_CLASSIC_BATCH3_QA.md`.
