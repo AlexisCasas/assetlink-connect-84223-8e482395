@@ -224,3 +224,14 @@ Se verificaron visualmente los PDF originales RMX-2026-0197, RMX-2026-5160 y RMX
 **QA de importación:** tres subtotales de materiales concilian exactamente con sus partidas; los grupos económicos cuadran en 0197 y 5161; en 5160 se conserva la discrepancia entre suma con céntimos y total entero redondeado, `needs_review`, sin ajuste artificial. RLS ROMAX 23/12/15, otro tenant 0/0/0, multiplicaciones erradas 0, duplicados 0, promociones comerciales a `verified` 0. Los documentos originales, las 33 solicitudes y las 22 cotizaciones operativas se preservan.
 
 **Progreso:** 13 de 25 cotizaciones estructuradas. Acumulado ROMAX 70 partidas, 50 secciones y 61 componentes. Restan **3 clásicos** (5063, 6167, 6195), **6 detalladas**, **2 por metraje** y **1 mixta**. Vercel productivo READY, sin requerirse despliegue para este lote. Informe: `docs/ROMAX_R1D2G_CLASSIC_BATCH3_QA.md`.
+
+
+## 23. R1-D2H — Cuarto lote clásico, familia estructurada (14-nov-2026)
+
+Se revisaron visualmente los PDF originales **RMX-2026-5063, 6167 y 6195** (5 páginas) y se incorporaron **32 partidas**, **10 secciones narrativas** y **15 componentes económicos** al histórico privado de ROMAX. Las cantidades y tarifas de materiales concilian en los tres documentos; los servicios sin desglose individual conservan el subtotal de mano de obra del PDF sin repartirlo artificialmente.
+
+Excepciones documentadas: 5063 y 6195 presentan redondeo entre componentes monetarios y total neto impreso; la primera actividad de 6195 dice «Cambio de 30 porcelanatos», pero la columna de cantidad muestra 38, ambas evidencias preservadas con `needs_review`. En 6167 y 6195 la sección de aclaraciones técnicas únicamente contiene la letra «C» y no se convirtió en una aclaración inventada.
+
+QA de Supabase: 0 errores de multiplicación, 0 precios de servicio inferidos, 0 promociones de revisión comercial, reintento de importación 0 duplicados y **RLS propietario ROMAX 32/10/15 frente a otro tenant 0/0/0**. No cambiaron los 25 documentos, 33 solicitudes ni 22 cotizaciones operativas; no se requirió desplegar Vercel.
+
+**Progreso:** 16 de 25 cotizaciones estructuradas, con acumulados de 102 partidas, 60 secciones y 76 componentes. **Familia clásica estructurada; quedan 6 detalladas, 2 por metrajes y 1 mixta**. La estructuración fiel al documento no constituye aprobación comercial ni vigencia de sus tarifas. Informe completo: `docs/ROMAX_R1D2H_CLASSIC_BATCH4_QA.md`.
