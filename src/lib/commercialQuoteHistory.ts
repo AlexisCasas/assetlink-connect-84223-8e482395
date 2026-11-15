@@ -17,6 +17,7 @@ interface ReadQuery<T> extends PromiseLike<ReadResult<T>> {
   gte(column: string, value: string): ReadQuery<T>;
   lte(column: string, value: string): ReadQuery<T>;
   ilike(column: string, pattern: string): ReadQuery<T>;
+  or(filters: string): ReadQuery<T>;
   order(column: string, options?: { ascending?: boolean }): ReadQuery<T>;
   range(start: number, end: number): ReadQuery<T>;
 }
@@ -68,7 +69,7 @@ export interface QuoteHistoryFilters {
   siteId: string;
   service: string;
   reference: string;
-  referenceField: 'document' | 'filename';
+  referenceField: 'both' | 'document' | 'filename';
   fromDate: string;
   toDate: string;
 }
@@ -77,7 +78,7 @@ export const EMPTY_QUOTE_HISTORY_FILTERS: QuoteHistoryFilters = {
   siteId: 'all',
   service: '',
   reference: '',
-  referenceField: 'document',
+  referenceField: 'both',
   fromDate: '',
   toDate: '',
 };
@@ -102,9 +103,8 @@ export async function getCommercialQuoteDirectory(organizationId: string): Promi
   return { clients: clients.data ?? [], sites: sites.data ?? [] };
 }
 
-/** Never interpolate filter text into PostgREST .or() expressions. Every
- * filter is an individually bound Supabase filter with the tenant scoped
- * first, so the owner RLS is applied on top of the explicit organization id.
+/** Reference OR filters accept only a strict whitelist before entering PostgREST
+ * grammar. Tenant RLS is enforced regardless of client filters.
  */
 export async function getCommercialQuoteHistory(
   organizationId: string,
@@ -124,10 +124,19 @@ export async function getCommercialQuoteHistory(
   if (filters.siteId !== 'all') query = query.eq('commercial_site_id', filters.siteId);
   if (filters.service.trim()) query = query.ilike('service_title', '%' + filters.service.trim().slice(0, 120) + '%');
   if (filters.reference.trim()) {
-    // The printed code and filename code can differ. Search the one the
-    // user explicitly selected; do not conflate or silently fix them.
-    query = query.ilike(filters.referenceField === 'filename' ? 'reference_filename' : 'reference_document',
-      '%' + filters.reference.trim().slice(0, 80) + '%');
+    const reference = filters.reference.trim().slice(0, 80);
+    // Both codes identify the same row. Reject grammar/wildcard characters
+    // before using PostgREST's OR syntax; do not interpolate unrestricted text.
+    if (!/^[A-Za-z0-9 -]+$/.test(reference)) {
+      throw new Error('El correlativo solo admite letras, números, espacios y guiones.');
+    }
+    if (filters.referenceField === 'both') {
+      query = query.or('reference_document.ilike.%' + reference
+        + '%,reference_filename.ilike.%' + reference + '%');
+    } else {
+      query = query.ilike(filters.referenceField === 'filename' ? 'reference_filename' : 'reference_document',
+        '%' + reference + '%');
+    }
   }
   if (filters.fromDate) query = query.gte('proposal_date', filters.fromDate);
   if (filters.toDate) query = query.lte('proposal_date', filters.toDate);
