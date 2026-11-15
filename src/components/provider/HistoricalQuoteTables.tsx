@@ -107,7 +107,7 @@ function QuoteReadOnlySection({
       </div>
       <QuoteItemsTable mode="historical" currencyLabel={currency === 'PEN' ? 'S/' : currency}>
         <TableBody>
-          {(groupLabel || documentSubtotal !== null) && rows.length > 0 && (
+          {!hasNestedGroups && (groupLabel || documentSubtotal !== null) && rows.length > 0 && (
             <TableRow className="bg-muted/40 font-semibold">
               <TableCell colSpan={4} className="whitespace-normal break-words">
                 {groupTitle}
@@ -136,7 +136,7 @@ function QuoteReadOnlySection({
                 </div>
                 {groupRows.has(line.id) && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Subtotal del grupo: {formatMoney(line.line_total, line.currency_code)} · incluye {groupChildren.get(line.id)?.length ?? 0} subpartida(s); no es una partida adicional
+                    Subtotal informativo · incluye {groupChildren.get(line.id)?.length ?? 0} subpartida(s) · no sumar como partida adicional
                   </p>
                 )}
                 {hasNestedGroups && !groupRows.has(line.id) && (
@@ -151,14 +151,14 @@ function QuoteReadOnlySection({
               <TableCell>{line.unit_label || '—'}</TableCell>
               <TableCell className="whitespace-nowrap text-right tabular-nums">{formatMoney(line.unit_price, line.currency_code)}</TableCell>
               <TableCell className="whitespace-nowrap text-right font-mono tabular-nums">
-                {groupRows.has(line.id) ? '—' : formatMoney(line.line_total, line.currency_code)}
+                {formatMoney(line.line_total, line.currency_code)}
               </TableCell>
             </TableRow>
           ))}
-          {subtotal !== null && (hasNestedGroups || (!groupLabel && documentSubtotal === null)) && (
+          {subtotal !== null && ((hasNestedGroups && valuedGroups.length > 1) || (!hasNestedGroups && !groupLabel && documentSubtotal === null)) && (
             <TableRow className="bg-muted/30">
               <TableCell colSpan={4} className="text-right font-semibold">
-                {hasNestedGroups ? 'Subtotal consolidado de los grupos (no sumar subpartidas otra vez):' : 'Suma de parciales del PDF (sin validar):'}
+                {hasNestedGroups ? 'Subtotal de los grupos (sin duplicar detalles):' : 'Suma de parciales del PDF (sin validar):'}
               </TableCell>
               <TableCell className="text-right font-semibold tabular-nums">
                 {formatMoney(subtotal, currency)}
