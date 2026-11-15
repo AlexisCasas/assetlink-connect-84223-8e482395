@@ -202,3 +202,16 @@ Se revisaron con el usuario las cotizaciones RMX-2026-2215, 2217 y 2218, confirm
 En la cotizacion 2217 el usuario confirmo que el unico servicio lleva el subtotal documental correspondiente. La fila de servicio se actualizo en Supabase Cloud con dicho **parcial** y sin asignar unidad, cantidad ni precio unitario artificial. El PDF contiene un precio unitario y parcial de cisterna que no explican totalmente su subtotal de materiales: la interfaz presenta las cifras de fuente, diferencia y un equivalente global **calculado**, sin reemplazar el precio original ni inferir IGV.
 
 El formato detallado (4087) conserva su grupo original; el 2219 permanece sin cambios de datos. Implementacion frontend en PR R1-D2E2: subtotal proveniente de componentes economicos, no de la suma incompleta de lineas. Mantener RLS, no elevar estados de revision y verificar CI/Vercel antes de publicar. Ver docs/ROMAX_R1D2E2_SECTION_SUBTOTAL_QA.md.
+
+
+## 21. R1-D2F — Segundo lote de cuatro cotizaciones clásicas (14-nov-2026)
+
+**Despliegue verificado:** Vercel producción `one-facility.vercel.app` en estado READY, con el componente de históricos actualizado de PR #115. No fue necesario desplegar código para este lote.
+
+**Documentos cargados:** RMX-2026-2210, 2221, 4084 y 5162, vinculados a los PDF originales de Google Drive y cotejados visualmente (cinco páginas). Se incorporaron a Supabase Cloud **22 partidas** (14 de servicios y 8 de materiales/equipos), **16 secciones documentales** y **19 componentes económicos**, sin modificar cabeceras ni inventar unitarios para servicios agrupados.
+
+**Conciliación:** tres documentos cuadran exactamente; uno (4084) muestra el total neto del PDF redondeado a soles enteros, mientras la suma de componentes tiene céntimos. Se preservó el total impreso, el desglose real y `needs_review` para ese total sin generar una línea artificial. IGV no incluido en documentos, por lo que no se agregaron impuestos no declarados.
+
+**QA real:** RLS owner ROMAX 22/16/19 frente a otro tenant 0/0/0; errores de cálculo de partidas 0; estados `verified` asignados por error 0; reimportación idempotente 0 duplicados; solicitudes y cotizaciones operativas conservadas (33/22). Totales acumulados ROMAX: 47 partidas, 38 secciones y 46 componentes, con 25 PDFs/textos originales intactos.
+
+**Pendientes:** seis documentos clásicos por estructurar, luego seis propuestas detalladas, dos formatos de metraje y uno mixto. La fidelidad al PDF no equivale a aprobar tarifas vigentes para la IA. Ver informe `docs/ROMAX_R1D2F_CLASSIC_BATCH2_QA.md`.
