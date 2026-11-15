@@ -60,7 +60,7 @@ function QuoteReadOnlySection({
   // source-backed R1-D2I rows (not arbitrary headings) and cannot be added twice.
   // Other historical layouts retain the original flat-line calculation.
   const isValueGroup = (line: CommercialQuoteLineItem): boolean =>
-    /^PDF 1\\. PROPUESTA ECONÓMICA; Grupo \\d+(?:[, :]|$)/i.test(line.source_note ?? '');
+    /^PDF 1\. PROPUESTA ECONÓMICA; Grupo \d+(?:[, :]|$)/i.test(line.source_note ?? '');
   const valuedGroups = rows.filter(isValueGroup);
   const hasNestedGroups = valuedGroups.length > 0;
   const groupRows = new Set(valuedGroups.map((line) => line.id));
@@ -136,11 +136,11 @@ function QuoteReadOnlySection({
                 </div>
                 {groupRows.has(line.id) && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Total del grupo · incluye {groupChildren.get(line.id)?.length ?? 0} subpartida(s)
+                    Subtotal del grupo: {formatMoney(line.line_total, line.currency_code)} · incluye {groupChildren.get(line.id)?.length ?? 0} subpartida(s); no es una partida adicional
                   </p>
                 )}
                 {hasNestedGroups && !groupRows.has(line.id) && (
-                  <p className="ml-5 text-xs text-muted-foreground">Detalle incluido · no sumar de nuevo</p>
+                  <p className="ml-5 text-xs text-muted-foreground">Subpartida incluida en el subtotal del grupo</p>
                 )}
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span>PDF · pág. {line.source_page}</span>
@@ -150,13 +150,15 @@ function QuoteReadOnlySection({
               <TableCell className="text-right tabular-nums">{formatQuantity(line.quantity)}</TableCell>
               <TableCell>{line.unit_label || '—'}</TableCell>
               <TableCell className="whitespace-nowrap text-right tabular-nums">{formatMoney(line.unit_price, line.currency_code)}</TableCell>
-              <TableCell className="whitespace-nowrap text-right font-mono tabular-nums">{formatMoney(line.line_total, line.currency_code)}</TableCell>
+              <TableCell className="whitespace-nowrap text-right font-mono tabular-nums">
+                {groupRows.has(line.id) ? '—' : formatMoney(line.line_total, line.currency_code)}
+              </TableCell>
             </TableRow>
           ))}
           {subtotal !== null && (hasNestedGroups || (!groupLabel && documentSubtotal === null)) && (
             <TableRow className="bg-muted/30">
               <TableCell colSpan={4} className="text-right font-semibold">
-                {hasNestedGroups ? 'Total de grupos (sin duplicar subpartidas):' : 'Suma de parciales del PDF (sin validar):'}
+                {hasNestedGroups ? 'Subtotal consolidado de los grupos (no sumar subpartidas otra vez):' : 'Suma de parciales del PDF (sin validar):'}
               </TableCell>
               <TableCell className="text-right font-semibold tabular-nums">
                 {formatMoney(subtotal, currency)}
