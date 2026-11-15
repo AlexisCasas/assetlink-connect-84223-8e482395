@@ -30,3 +30,17 @@ Comprobación SQL por archivo fuente exacto: grupos = neto documental y neto + I
 - Verificar disponibilidad del despliegue Vercel en equipo y proyecto correctos. La consulta SQL de QA no autoriza declarar el frontend como ya publicado.
 - La paginación y los filtros de cliente/sede/fecha permanecen con la misma semántica, salvo la nueva opción predeterminada de correlativo combinado.
 - Los grupos valorizados de otros formatos deben revisarse individualmente; **no** se aplicó una heurística universal de exclusión de precios.
+
+
+## Corrección visual posterior — encabezado sin importe duplicado (14-nov-2026)
+
+A raíz de observación directa, se precisó la representación del subtotal de grupo: **el grupo no constituye una partida adicional y su precio es el subtotal de sus subpartidas cuando estas están plenamente valorizadas**. Se eliminó la fila sintética que repetía el subtotal de sección para documentos jerárquicos, y el grupo se presenta **una sola vez** como encabezado con subtotal informativo en la columna monetaria. Las subpartidas siguen abajo, indentadas. En documentos con un solo grupo no se repite una fila de subtotal al final; cuando hay varios grupos, el consolidado inferior se obtiene sumando exclusivamente grupos, no las subpartidas. El resumen económico documental continúa como sección independiente.
+
+También se corrigió una expresión regular en `HistoricalQuoteTables.tsx` que tenía barras invertidas duplicadas y por ello no detectaba correctamente las marcas `source_note` `PDF 1. PROPUESTA ECONÓMICA; Grupo N`. La detección quedó restringida a las filas explícitas de ese lote, evitando alterar las familias de PDF con otro formato.
+
+Verificación SQL por `source_file_id`:
+- 0199 (PDF impreso 0180): **subpartidas S/ 700 + S/ 100 = grupo S/ 800 = neto S/ 800**; IGV S/ 144, total S/ 944.
+- 0212 Cassinelli Piura: **S/ 3,000 + S/ 900 + S/ 500 = grupo S/ 4,400 = neto S/ 4,400**; IGV S/ 792, total S/ 5,192.
+- 0209 Larco: grupos S/ 15,000 + S/ 12,500 + S/ 15,000 = neto S/ 42,500; IGV S/ 7,650, total S/ 50,150. **Sus subpartidas no disponen de parciales estructurados conciliables** y no se afirma que su suma respalde los grupos.
+
+**QA SQL: 3/3 conciliación neto + IGV = bruto PASS.** Cambios de frontend revisados por lectura de código; la prueba visual con una sesión autenticada y el despliegue productivo no se declaran PASS sin verificación. No se alteraron PDF, Supabase, precios, RLS ni documentos de origen.
