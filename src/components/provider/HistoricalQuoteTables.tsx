@@ -56,14 +56,36 @@ function QuoteReadOnlySection({
   const rows = lines
     .filter((line) => line.section_kind === kind)
     .sort((a, b) => a.line_order - b.line_order);
-  const allPartialsPresent = rows.length > 0 && rows.every((line) => line.line_total !== null);
-  const subtotal = allPartialsPresent
-    ? rows.reduce((sum, line) => sum + (line.line_total ?? 0), 0)
-    : null;
+  // A valorized PDF group already includes its child subpartidas. These are
+  // source-backed R1-D2I rows (not arbitrary headings) and cannot be added twice.
+  // Other historical layouts retain the original flat-line calculation.
+  const isValueGroup = (line: CommercialQuoteLineItem): boolean =>
+    /^PDF 1\\. PROPUESTA ECONÓMICA; Grupo \\d+(?:[, :]|$)/i.test(line.source_note ?? '');
+  const valuedGroups = rows.filter(isValueGroup);
+  const hasNestedGroups = valuedGroups.length > 0;
+  const groupRows = new Set(valuedGroups.map((line) => line.id));
+  // Children in these three detailed quotes are placed after their group until
+  // the next group. A child subtotal is explanatory, not an extra sale amount.
+  const groupChildren: Map<string, CommercialQuoteLineItem[]> = new Map();
+  let activeGroup: string | null = null;
+  for (const line of rows) {
+    if (groupRows.has(line.id)) {
+      activeGroup = line.id;
+      groupChildren.set(line.id, []);
+    } else if (activeGroup) {
+      groupChildren.get(activeGroup)!.push(line);
+    }
+  }
   const currency = rows[0]?.currency_code ?? 'PEN';
-  // Historical section totals are authoritative document components, NOT a
-  // sum of only the priced rows. The PDF may contain unpriced descriptions
-  // and group totals that have no unambiguous unit-price breakdown.
+  const baseRows = hasNestedGroups
+    ? rows.filter((line) => groupRows.has(line.id))
+    : rows;
+  const allPartialsPresent = baseRows.length > 0 && baseRows.every((line) => line.line_total !== null);
+  const subtotal = allPartialsPresent
+    ? baseRows.reduce((sum, line) => sum + (line.line_total ?? 0), 0)
+    : null;
+  // Independent section components are authoritative when present. Otherwise
+  // count each parent group once, excluding the included detail.
   const componentKind = kind === 'service' ? 'labor' : kind === 'material' ? 'materials' : null;
   const component = components.find((entry) => entry.component_kind === componentKind);
   const documentSubtotal = component ? Number(component.amount) : null;
@@ -107,9 +129,19 @@ function QuoteReadOnlySection({
               </TableCell>
             </TableRow>
           ) : rows.map((line) => (
-            <TableRow key={line.id}>
+            <TableRow key={line.id} className={groupRows.has(line.id) ? 'bg-muted/30 font-semibold' : ''}>
               <TableCell className="min-w-[240px] align-top">
-                <div className="font-medium break-words">{line.description}</div>
+                <div className={groupRows.has(line.id) ? 'font-semibold break-words' : hasNestedGroups ? 'ml-5 break-words' : 'font-medium break-words'}>
+                  {line.description}
+                </div>
+                {groupRows.has(line.id) && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Total del grupo · incluye {groupChildren.get(line.id)?.length ?? 0} subpartida(s)
+                  </p>
+                )}
+                {hasNestedGroups && !groupRows.has(line.id) && (
+                  <p className="ml-5 text-xs text-muted-foreground">Detalle incluido · no sumar de nuevo</p>
+                )}
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span>PDF · pág. {line.source_page}</span>
                   <ReviewLabel status={line.review_status} />
@@ -121,10 +153,10 @@ function QuoteReadOnlySection({
               <TableCell className="whitespace-nowrap text-right font-mono tabular-nums">{formatMoney(line.line_total, line.currency_code)}</TableCell>
             </TableRow>
           ))}
-          {subtotal !== null && !groupLabel && documentSubtotal === null && (
+          {subtotal !== null && (hasNestedGroups || (!groupLabel && documentSubtotal === null)) && (
             <TableRow className="bg-muted/30">
               <TableCell colSpan={4} className="text-right font-semibold">
-                Suma de parciales del PDF (sin validar):
+                {hasNestedGroups ? 'Total de grupos (sin duplicar subpartidas):' : 'Suma de parciales del PDF (sin validar):'}
               </TableCell>
               <TableCell className="text-right font-semibold tabular-nums">
                 {formatMoney(subtotal, currency)}
