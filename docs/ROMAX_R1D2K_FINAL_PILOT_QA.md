@@ -29,3 +29,13 @@ Se declara **100 % de la extracción estructural del conjunto piloto**, no 100 %
 
 ### Próxima fase recomendada
 QA integral de los 25 históricos: reconciliación por estructura y plantilla, separación rigurosa de grupos/filas, pruebas de sesión y RLS en interfaz, revisión de las advertencias de costos unitarios ausentes y etiquetas económicas mixtas, y despliegue controlado del frontend cuando Vercel lo permita.
+
+
+## Aclaraciones del usuario y revisión de excepciones — 16-nov-2026
+
+- **RMX-2026-6195 (Plaza Vea):** el usuario confirmó que la cantidad válida para la actividad descrita en el PDF como “Cambio de 30 porcelanatos…” es **38**. Se actualizó la nota de procedencia del registro correcto (ID `04f24303-9008-4431-bc24-260092e5bd5b`), conservando la descripción original y quantity=38; unit_price y line_total permanecen NULL porque el PDF no presenta tarifas individuales para esa actividad. Estado `extracted_unverified`; no se convierte en tarifa comercial verificada.
+- **RMX-2026-4080 (Makro Arequipa 2):** el usuario confirma que el documento especifica explícitamente “COSTO TOTAL DEL SERVICIO SIN INCLUIR EL IGV”. El neto S/ 2,560 se mantiene como subtotal sin IGV; no se genera IGV ni bruto.
+- **RMX-2026-2217 (Makro Trujillo 02):** el usuario indica que el importe correcto de materiales es S/ 2,150. El componente `materials` ya conserva S/ 2,150, con etiqueta documental `4.2 TOTAL COSTO MATERIALES Y CONSUMIBLES`. Al reabrir el PDF visual, la fila `CISTERNA DE AGUA` muestra por separado 40 M3 × S/ 45 = S/ 1,800, mientras que el subtotal 4.2 es S/ 2,150. La diferencia de S/ 350 se mantiene como excepción `needs_review`; no se sustituyó el unitario explícito S/ 45 ni se atribuyó el diferencial a otra partida sin evidencia. **Se requiere confirmar si el usuario se refiere al componente/subtotal de materiales (ya S/ 2,150) o si desea corregir la fila individual CISTERNA, lo que contradice las celdas visibles del PDF.**
+- Los demás componentes económicos mencionados por el usuario —incluyendo movilidad/desmovilización y G.G. + utilidad— se conservan como categorías independientes cuando el PDF las presenta.
+
+No se modificaron PDF originales, solicitudes, cotizaciones operativas, RLS, frontend ni Vercel. Evidencia SQL posterior: cantidad 38 confirmada en la fila correcta de 6195; 2217 conserva línea 40 × 45 = 1,800 y componente de materiales 2,150; 4080 conserva neto 2,560 sin IGV/bruto.
