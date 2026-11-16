@@ -58,3 +58,12 @@ Primero revisar visualmente el material sin identificar del caso 2217; después 
 **Privacidad:** este archivo del repositorio público excluye valores comerciales, datos personales, identificadores privados de Google Drive y contenido completo de los PDF.
 
 Referencia: docs/ROMAX_PILOT_MASTER_PLAN.md y docs/ROMAX_R1D2D_PDF_VISUAL_CORRECTION.md.
+
+
+## Cierre de excepción 2217 — ajuste autorizado por el usuario (16-nov-2026)
+
+El usuario confirmó que el importe correcto para la partida **CISTERNA DE AGUA** es el subtotal de materiales **S/ 2,150**. Se actualizó la línea histórica en Supabase: cantidad **40 M3**, precio unitario equivalente **S/ 53.75**, parcial **S/ 2,150**. El cálculo 40 × 53.75 = 2,150 concilia con el componente `4.2 TOTAL COSTO MATERIALES Y CONSUMIBLES` de S/ 2,150.
+
+El PDF original no se modificó. Se conserva la trazabilidad en `source_note`: el PDF muestra en esa fila S/ 45 y S/ 1,800, mientras el usuario autorizó sustituir esos valores en el registro histórico por el importe de sección. El registro de línea y el componente quedan `extracted_unverified`, no son tarifas comerciales vigentes aprobadas.
+
+**QA posterior:** partida × cantidad PASS; parcial de línea = subtotal materiales PASS; suma de componentes 4.1–4.4 = neto documental S/ 3,360 PASS. La excepción de distribución queda cerrada por instrucción expresa del usuario, manteniendo documentada la diferencia respecto del PDF original.
