@@ -2,7 +2,7 @@
 -- Synthetic tenants and rates are discarded with ROLLBACK.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(33);
+SELECT plan(34);
 
 CREATE FUNCTION pg_temp.as_user(p_user uuid)
 RETURNS void
@@ -347,6 +347,16 @@ SELECT is(
    WHERE source_reference = 'R2A-TEST-A1-V3'),
   4.00000000::numeric,
   'new USD rate uses the updated default FX snapshot'
+);
+SELECT throws_ok(
+  $
+    UPDATE public.provider_cost_rates
+    SET unit_code = 'UND'
+    WHERE source_reference = 'R2A-TEST-A1-V3'
+  $,
+  '23514',
+  NULL,
+  'draft rate cannot change to a unit that differs from its resource'
 );
 
 INSERT INTO public.provider_cost_rates (
