@@ -37,8 +37,8 @@ INSERT INTO public.provider_cost_suppliers(id,organization_id,display_name)
         ('b2300000-0000-0000-0000-000000000002','b2200000-0000-0000-0000-000000000001','Proveedor B');
 INSERT INTO public.provider_cost_items(id,organization_id,code,name,category_code,default_unit_code)
  VALUES ('b2400000-0000-0000-0000-000000000001','b2200000-0000-0000-0000-000000000001','MAT-001','Cable NH-80','MATERIAL','M');
-SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status)
- VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000001','M','USD',100,3.75,'manual',current_date,'unknown','supplier_quote',current_date ,'pending_review')$$,'owner can register sourced USD rate');
+SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_source,tax_treatment,source_type,valid_from,status)
+ VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000001','M','USD',100,'organization_default','unknown','supplier_quote',current_date ,'pending_review')$$,'owner can register sourced USD rate');
 SELECT is((SELECT unit_cost_pen FROM public.provider_cost_rates WHERE supplier_id='b2300000-0000-0000-0000-000000000001'),375.00::numeric,'PEN snapshot generated');
 SELECT is((SELECT version_number FROM public.provider_cost_rates WHERE supplier_id='b2300000-0000-0000-0000-000000000001'),1,'first version auto-numbered');
 SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status)
