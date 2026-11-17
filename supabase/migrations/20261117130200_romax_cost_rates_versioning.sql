@@ -91,13 +91,16 @@ BEGIN
    AND r.supplier_id IS NOT DISTINCT FROM NEW.supplier_id;
  END IF;
 
- IF TG_OP='UPDATE' AND NEW.status IS DISTINCT FROM OLD.status AND NEW.status='approved' THEN
+ IF TG_OP='UPDATE' AND NEW.status IS DISTINCT FROM OLD.status AND NEW.status IN ('approved','rejected') THEN
   v_role_ok := public.has_organization_role(NEW.organization_id,ARRAY['owner','admin','manager','quote_manager']::public.organization_member_role[]);
   IF NOT coalesce(v_role_ok,false) THEN
-   RAISE EXCEPTION 'Not authorized to approve this cost rate';
+   RAISE EXCEPTION 'Not authorized to review this cost rate';
   END IF;
   NEW.reviewed_by := auth.uid();
   NEW.reviewed_at := now();
+ ELSIF TG_OP='UPDATE' THEN
+  NEW.reviewed_by := OLD.reviewed_by;
+  NEW.reviewed_at := OLD.reviewed_at;
  END IF;
 
  IF NEW.currency_code='USD' AND NEW.fx_source='organization_default' THEN
@@ -130,7 +133,9 @@ CREATE TRIGGER provider_cost_rates_guard
 
 ALTER TABLE public.provider_cost_rates ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.provider_cost_rates FROM PUBLIC,anon,authenticated;
-GRANT SELECT,INSERT,UPDATE ON public.provider_cost_rates TO authenticated;
+GRANT SELECT ON public.provider_cost_rates TO authenticated;
+GRANT INSERT (organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,fx_reference,tax_treatment,tax_rate,source_type,source_reference,source_date,source_document_ref,source_notes,valid_from,valid_until,status) ON public.provider_cost_rates TO authenticated;
+GRANT UPDATE (unit_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,fx_reference,tax_treatment,tax_rate,source_type,source_reference,source_date,source_document_ref,source_notes,valid_from,valid_until,status,review_note,reviewed_by,reviewed_at) ON public.provider_cost_rates TO authenticated;
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.provider_cost_rates TO service_role;
 
 CREATE POLICY provider_cost_rates_read ON public.provider_cost_rates
