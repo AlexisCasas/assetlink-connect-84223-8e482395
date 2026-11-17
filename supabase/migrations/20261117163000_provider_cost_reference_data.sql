@@ -114,6 +114,7 @@ CREATE TABLE public.provider_cost_settings (
       (default_usd_pen_rate IS NOT NULL
         AND default_fx_source IS NOT NULL
         AND default_fx_date IS NOT NULL
+        AND default_fx_reference IS NOT NULL
         AND length(btrim(default_fx_reference)) > 0)
     )
 );
