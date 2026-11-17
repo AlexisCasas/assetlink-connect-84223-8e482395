@@ -346,7 +346,7 @@ BEGIN
 
         UPDATE public.provider_cost_rates
         SET valid_until = NEW.valid_from - 1,
-            review_note = 'Vigencia cerrada automáticamente al aprobar versión ' || NEW.version_number::text
+            review_note = concat_ws(E'\\n', NULLIF(review_note, ''), 'Vigencia cerrada automáticamente al aprobar versión ' || NEW.version_number::text)
         WHERE id = v_previous.id;
       END LOOP;
 
