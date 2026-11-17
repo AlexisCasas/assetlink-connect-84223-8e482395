@@ -74,7 +74,7 @@ Categoría y unidad son referencias obligatorias a los catálogos globales.
 Cada fila representa una versión de costo para un recurso y un proveedor opcional:
 - Recurso, proveedor opcional, unidad y versión.
 - Moneda original, costo unitario original, tipo de cambio snapshot y costo convertido a PEN.
-- Tratamiento tributario de origen: inclusive, exclusive, not_applicable o unknown; tasa solo cuando corresponda.
+- Tratamiento tributario de origen: inclusive, exclusive, not_applicable o unknown; tasa solo cuando corresponda y expresada en puntos porcentuales (18.0000 = 18%, no 0.18).
 - Fuente: supplier_quote, supplier_invoice, purchase_record, internal_cost_sheet, payroll_basis o manual.
 - Referencia documental, fecha y notas.
 - Vigencia desde obligatoria y hasta opcional.
