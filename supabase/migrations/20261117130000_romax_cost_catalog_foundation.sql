@@ -79,7 +79,9 @@ CREATE TABLE public.provider_cost_settings (
 
 ALTER TABLE public.provider_cost_settings ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.provider_cost_settings FROM PUBLIC,anon,authenticated;
-GRANT SELECT,INSERT,UPDATE ON public.provider_cost_settings TO authenticated;
+GRANT SELECT ON public.provider_cost_settings TO authenticated;
+GRANT INSERT (organization_id,base_currency_code,default_usd_pen_rate,fx_source,fx_date,fx_reference,updated_by) ON public.provider_cost_settings TO authenticated;
+GRANT UPDATE (base_currency_code,default_usd_pen_rate,fx_source,fx_date,fx_reference,updated_by) ON public.provider_cost_settings TO authenticated;
 CREATE POLICY provider_cost_settings_read ON public.provider_cost_settings
  FOR SELECT TO authenticated USING (public.is_organization_member(organization_id));
 CREATE POLICY provider_cost_settings_insert ON public.provider_cost_settings
