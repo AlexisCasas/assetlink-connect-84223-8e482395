@@ -52,7 +52,7 @@ CREATE TABLE public.provider_cost_units (
 INSERT INTO public.provider_cost_units (code, name, dimension, aliases)
 VALUES
   ('UND', 'Unidad', 'count', ARRAY['UNIDAD', 'UN', 'UNID']::text[]),
-  ('M', 'Metro', 'length', ARRAY['ML', 'METRO', 'METRO LINEAL']::text[]),
+  ('M', 'Metro', 'length', ARRAY['METRO', 'METRO LINEAL', 'M LINEAL']::text[]),
   ('M2', 'Metro cuadrado', 'area', ARRAY['M²', 'METRO CUADRADO']::text[]),
   ('M3', 'Metro cúbico', 'volume', ARRAY['M³', 'METRO CUBICO']::text[]),
   ('KG', 'Kilogramo', 'mass', ARRAY['KILO', 'KILOGRAMO']::text[]),
