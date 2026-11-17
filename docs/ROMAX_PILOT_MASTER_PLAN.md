@@ -275,3 +275,10 @@ Decisiones aprobadas por ROMAX: fuentes mixtas (proveedores y costos internos); 
 Test pgTAP preparado: `supabase/tests/romax_r2a_cost_catalog.test.sql` (21 aserciones; solo base local/desechable). Documento técnico: `docs/ROMAX_R2A_COST_CATALOG_TECHNICAL_DESIGN.md`.
 
 **Estado honesto:** SQL y test escritos y sometidos a revisión estática inicial; pgTAP, aplicación de migraciones en local, advisors y CI todavía no ejecutados. No se aplicó nada en Supabase Cloud, no se crearon registros de negocio y no se desplegó Vercel. Los gates previos a Cloud son: ejecutar las tres migraciones en base desechable, correr las 21 pruebas, resolver fallos, ejecutar advisors y revisar PR. Se requiere autorización separada para aplicar a Supabase Cloud.
+
+
+## R2A — Ejecución controlada migración 1 (17-nov-2026)
+
+**R2A-01 PASS:** aplicadas en Supabase Cloud `20261117185721_romax_cost_catalog_foundation` y hardening `20261117185936_romax_cost_catalog_foundation_hardening`. Resultado 8 categorías, 13 unidades, RLS/grants verificados, FX no configurado y 0 filas settings persistentes. Pruebas transaccionales owner/actualización/aislamiento externo con ROLLBACK PASS. Advisors sin hallazgos de seguridad nuevos en las tablas R2A; los dos avisos de initplan y la FK sin índice se corrigieron. Queda un aviso de índice aún no usado, esperado por la tabla vacía. No se modificó el inventario ni cotizaciones existentes. Informe: `docs/ROMAX_R2A_01_FOUNDATION_QA.md`.
+
+Siguiente paso: R2A-02 proveedores y recursos, con ejecución y pruebas independientes. R2A-03 no se aplica hasta cerrar R2A-02.
