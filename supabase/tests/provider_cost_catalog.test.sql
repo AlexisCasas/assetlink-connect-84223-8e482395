@@ -284,13 +284,12 @@ SELECT throws_ok(
     )
     SELECT
       'e8200000-0000-0000-0000-000000000001',
-      i.id, s.id, 'M', 'PEN', 1, 'unknown',
+      i.id, 'e8400000-0000-0000-0000-000000000002'::uuid,
+      'M', 'PEN', 1, 'unknown',
       'supplier_quote', 'R2A-TEST-CROSS-TENANT', '2026-11-17'
     FROM public.provider_cost_items i
-    CROSS JOIN public.provider_cost_suppliers s
     WHERE i.organization_id = 'e8200000-0000-0000-0000-000000000001'
       AND i.code = 'CABLE-NH80'
-      AND s.id = 'e8400000-0000-0000-0000-000000000002'
   $$,
   '23503',
   NULL,
