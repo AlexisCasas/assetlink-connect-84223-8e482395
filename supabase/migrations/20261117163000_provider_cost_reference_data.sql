@@ -123,7 +123,7 @@ CREATE FUNCTION public.provider_cost_settings_assert_provider_org()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = ''
-AS $
+AS $function$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.organizations o
@@ -136,7 +136,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$function$;
 
 CREATE TRIGGER provider_cost_settings_assert_provider_org
   BEFORE INSERT OR UPDATE OF organization_id
@@ -148,13 +148,13 @@ CREATE FUNCTION public.provider_cost_settings_stamp()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = ''
-AS $
+AS $function$
 BEGIN
   NEW.updated_at := now();
   NEW.updated_by := COALESCE(auth.uid(), NEW.updated_by);
   RETURN NEW;
 END;
-$;
+$function$;
 
 CREATE TRIGGER provider_cost_settings_stamp_before_write
   BEFORE INSERT OR UPDATE ON public.provider_cost_settings
