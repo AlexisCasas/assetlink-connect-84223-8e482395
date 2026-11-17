@@ -119,17 +119,42 @@ CREATE TABLE public.provider_cost_settings (
     )
 );
 
+CREATE FUNCTION public.provider_cost_settings_assert_provider_org()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.organizations o
+    WHERE o.id = NEW.organization_id
+      AND o.organization_type = 'provider_company'
+      AND o.status = 'active'
+  ) THEN
+    RAISE EXCEPTION 'Cost settings require an active provider_company organization'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$;
+
+CREATE TRIGGER provider_cost_settings_assert_provider_org
+  BEFORE INSERT OR UPDATE OF organization_id
+  ON public.provider_cost_settings
+  FOR EACH ROW
+  EXECUTE FUNCTION public.provider_cost_settings_assert_provider_org();
+
 CREATE FUNCTION public.provider_cost_settings_stamp()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = ''
-AS $$
+AS $
 BEGIN
   NEW.updated_at := now();
-  NEW.updated_by := auth.uid();
+  NEW.updated_by := COALESCE(auth.uid(), NEW.updated_by);
   RETURN NEW;
 END;
-$$;
+$;
 
 CREATE TRIGGER provider_cost_settings_stamp_before_write
   BEFORE INSERT OR UPDATE ON public.provider_cost_settings
@@ -201,6 +226,8 @@ CREATE POLICY provider_cost_settings_update
     )
   );
 
+REVOKE ALL ON FUNCTION public.provider_cost_settings_assert_provider_org()
+  FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.provider_cost_settings_stamp()
   FROM PUBLIC, anon, authenticated;
 
