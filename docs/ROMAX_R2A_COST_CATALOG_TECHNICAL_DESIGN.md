@@ -128,3 +128,9 @@ La tabla `provider_cost_rates` y trigger de versionado/aprobación fueron aplica
 ## R2B — UI inicial de proveedores y recursos
 
 La vista `CostCatalogView` consume `provider_cost_suppliers`, `provider_cost_items`, `provider_cost_categories` y `provider_cost_units`. La navegación `cost-catalog` solo se ofrece a provider_company owner/admin/manager/quote_manager; Dashboard vuelve a comprobar el rol para hash directo. Permite CRUD limitado (sin delete físico) de proveedores y recursos; no crea tarifas ni toca clientes/inventario. La preview Vercel para el commit `b276b0a` está READY, pero aún no se ha validado CRUD real con una sesión autenticada. Informe: `docs/ROMAX_R2B_SUPPLIERS_ITEMS_UI_QA.md`.
+
+## R2B/R2C — Estado funcional actualizado
+
+R2B fue confirmado por el usuario: 1 proveedor y 1 recurso reales de prueba guardados desde la preview, ambos pertenecen a ROMAX y su creador tiene rol autorizado. No hay tarifas ni FX configurado.
+
+R2C añade la pestaña de registro de tarifas y configuración FX fechada. El alta queda `pending_review`; proveedor opcional; PEN/USD original; snapshot FX; fuente, tributación y vigencia. No hay migración nueva ni datos persistidos. La compilación de preview está pendiente por `build-rate-limit` de Vercel. Ver `docs/ROMAX_R2C_RATE_ENTRY_DESIGN.md`.
