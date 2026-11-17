@@ -120,3 +120,7 @@ R2A-01 ya fue aplicada en Supabase Cloud y superó sus pruebas transaccionales c
 ## R2A-02 — Estado de implementación
 
 Aplicadas en Supabase Cloud las migraciones `20261117191121_romax_cost_catalog_entities` y `20261117191257_romax_cost_catalog_entities_hardening`. QA PASS: dos proveedores y un recurso creados transaccionalmente; unicidad de RUC/código; `created_by`; aislamiento multiempresa; rollback; prueba owner posterior al hardening. Conteos persistentes ROMAX: 0 proveedores y 0 recursos, intencional. RLS y grants verificados; Security Advisors sin hallazgos nuevos. Quedan avisos `unused_index` en tablas sin volumen. R2A-03 sigue pendiente. Ver `docs/ROMAX_R2A_02_SUPPLIERS_ITEMS_QA.md`.
+
+## R2A-03 — Estado de ejecución
+
+La tabla `provider_cost_rates` y trigger de versionado/aprobación fueron aplicados en Cloud. Migraciones registradas: `20261117193442`, `20261117193538` (guard fix) y `20261117193631` (hardening). QA transaccional PASS con ROLLBACK, cubriendo FX USD/PEN, versión 1 y 2, autoaprobación, inmutabilidad, cierre de vigencia, proveedor alternativo, costo interno, FX ausente, solapamiento y aislamiento multiempresa. Se corrigió durante QA un bug en la comparación de la columna generada `unit_cost_pen`. No hay tarifas ni otros datos comerciales persistentes; no se configuró tipo de cambio ROMAX. Ver `docs/ROMAX_R2A_03_COST_RATES_VERSIONING_QA.md`.
