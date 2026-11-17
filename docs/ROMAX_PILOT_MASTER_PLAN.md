@@ -299,3 +299,11 @@ Siguiente gate: R2A-03 tarifas/versiones/aprobación, sin aplicar hasta cerrar s
 ## R2B — Primera entrega UI: proveedores y recursos (17-nov-2026)
 
 Se añadió `CostCatalogView` y navegación `#cost-catalog`, restringida a organizaciones `provider_company` y roles owner/admin/manager/quote_manager. Permite listar, buscar, crear, editar, activar y desactivar proveedores y recursos; consume categorías/unidades precargadas. No crea clientes, sedes ni contactos; no registra tarifas ni tipo de cambio. Preview Vercel del commit `b276b0a` quedó READY y el check Vercel en GitHub success. No hubo merge ni producción. No se crearon registros reales. **Pendiente:** QA CRUD y RLS en navegador con sesión ROMAX, prueba de rol no autorizado y aislamiento con otro tenant. Informe: `docs/ROMAX_R2B_SUPPLIERS_ITEMS_UI_QA.md`. Tras PASS, R2C tarifas y proveedores asociados.
+
+## R2B cierre y R2C primera implementación (17-nov-2026)
+
+**R2B confirmado PASS por usuario:** vista previa validada y altas reales desde la interfaz comprobadas en Cloud: 1 proveedor activo (Proveedor Test) y 1 recurso activo (Material Test 001, código PR001, MATERIAL/UND), creados por miembro autorizado ROMAX. Tarifas: 0; FX settings: 0. La confirmación cubre navegación, carga y altas; no declara edición/desactivación probadas.
+
+**R2C implementado en código, pendiente de preview/QA:** pestaña Tarifas para alta de costos PEN/USD, proveedor opcional, fuente y referencia, IGV, vigencia y estado inicial pending_review. Añade formulario para configurar FX USD/PEN de ROMAX con valor positivo y fecha, sin inicializar un valor inventado. Cada tarifa conserva snapshot FX y número de versión generado en DB. Documento: `docs/ROMAX_R2C_RATE_ENTRY_DESIGN.md`.
+
+**Bloqueo actual:** Vercel devolvió `build-rate-limit` para el commit que integra R2C; no hay preview READY con esta pestaña. No se hizo retry, merge ni producción. Siguiente gate: esperar disponibilidad de builds, obtener preview y ejecutar QA autenticado antes de cargar tarifas reales.
