@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { CostRatesPanel } from '@/components/provider/CostRatesPanel';
 
 type CatalogRow = {
   id: string;
@@ -49,7 +50,7 @@ interface CatalogQuery extends PromiseLike<QueryResult> {
 }
 const catalogDb = supabase as unknown as { from: (table: string) => CatalogQuery };
 
-type CatalogTab = 'suppliers' | 'items';
+type CatalogTab = 'suppliers' | 'items' | 'rates';
 const canManageCostCatalog = (role: string | undefined) =>
   !!role && ['owner', 'admin', 'manager', 'quote_manager'].includes(role);
 
@@ -232,6 +233,7 @@ export function CostCatalogView() {
       <div className="flex flex-wrap items-center gap-2 border-b pb-3">
         <Button size="sm" variant={tab === 'items' ? 'default' : 'outline'} onClick={() => { setTab('items'); setSearch(''); }}>Recursos</Button>
         <Button size="sm" variant={tab === 'suppliers' ? 'default' : 'outline'} onClick={() => { setTab('suppliers'); setSearch(''); }}>Proveedores</Button>
+        <Button size="sm" variant={tab === 'rates' ? 'default' : 'outline'} onClick={() => { setTab('rates'); setSearch(''); }}>Tarifas</Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -244,7 +246,9 @@ export function CostCatalogView() {
         </Button>
       </div>
 
-      {loading ? <div className="py-12 text-center text-sm text-muted-foreground">Cargando catálogo…</div> : (
+      {tab === 'rates' ? (
+        <CostRatesPanel />
+      ) : loading ? <div className="py-12 text-center text-sm text-muted-foreground">Cargando catálogo…</div> : (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-3">
             {tab === 'items' ? filteredItems.map((item) => (
