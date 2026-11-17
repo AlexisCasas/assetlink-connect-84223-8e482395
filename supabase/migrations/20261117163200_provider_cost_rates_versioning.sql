@@ -506,3 +506,5 @@ COMMENT ON COLUMN public.provider_cost_rates.unit_cost_pen IS
   'Stored generated value using the immutable fx_rate_to_pen snapshot.';
 COMMENT ON COLUMN public.provider_cost_rates.valid_until IS
   'NULL means no expiry. Replacing an overlapping approved version closes the previous validity window.';
+COMMENT ON COLUMN public.provider_cost_rates.tax_rate IS
+  'Percentage points: 18.0000 means 18%, not 0.18. NULL for unknown or not_applicable treatment.';
