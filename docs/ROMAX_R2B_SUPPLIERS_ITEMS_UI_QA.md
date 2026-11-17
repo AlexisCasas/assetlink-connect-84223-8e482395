@@ -38,3 +38,14 @@
 2. Comprobar que un usuario de rol no autorizado no ve el menú y recibe acceso restringido por hash.
 3. Confirmar que otra organización no puede consultar datos ROMAX.
 4. Tras PASS, preparar R2C: registro de tarifas y vinculación opcional con proveedor.
+
+
+## Confirmación funcional del usuario — 17-nov-2026
+
+El usuario confirmó visualmente la vista previa y realizó registros de prueba desde la interfaz. Se verificó directamente en Supabase Cloud:
+- Proveedores ROMAX: 1 registro activo, **Proveedor Test** (razón social Test Comercial SAC).
+- Recursos ROMAX: 1 registro activo, **Material Test 001**, código `PR001`, categoría `MATERIAL`, unidad `UND`.
+- Ambos registros tienen `created_by` asociado a una membresía activa con rol autorizado en ROMAX.
+- Tarifas ROMAX: 0; no se crearon tarifas durante esta prueba.
+
+**Resultado:** R2B PASS para navegación, carga de datos y altas de proveedor/recurso desde la vista previa. Las pruebas específicas de edición y desactivación no se declaran ejecutadas en esta confirmación.
