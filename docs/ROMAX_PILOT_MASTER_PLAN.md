@@ -270,6 +270,6 @@ Se prepararon tres migraciones:
 - R2-M2: proveedores y recursos tenant-scoped.
 - R2-M3: tarifas, versiones, FX snapshot, vigencias, estados y aprobación.
 
-Se añadió prueba pgTAP con 34 aserciones para categorías/unidades, roles, aislamiento multiempresa, proveedores múltiples, costos internos, unidad, FX, versionado, cierre de vigencia, aprobación/rechazo e inmutabilidad. El workflow local existente está fijado a Supabase CLI 2.79.0 y ejecuta stack desechable + suite pgTAP cuando se abre PR con cambios en `supabase/**`.
+Se añadió prueba pgTAP con 38 aserciones para categorías/unidades, roles, aislamiento multiempresa, proveedores múltiples, costos internos, unidad, FX, versionado, cierre de vigencia, aprobación/rechazo e inmutabilidad. El workflow local existente está fijado a Supabase CLI 2.79.0 y ejecuta stack desechable + suite pgTAP cuando se abre PR con cambios en `supabase/**`.
 
 **Estado:** implementación preparada en rama; CI pendiente. No se ejecutó localmente porque esta sesión no dispone de Supabase CLI ni acceso de red para instalarlo. No se aplicaron migraciones a Supabase Cloud, no se insertaron datos, no se modificó el cotizador ni se desplegó Vercel. Proyecto OneFacility identificado por MCP: `hplchnsseylngjopgbtl`; verificar el link remoto antes de cualquier aplicación, ya que el identificador local de `supabase/config.toml` es distinto. Informe: `docs/ROMAX_R2A_IMPLEMENTATION_QA.md`.
