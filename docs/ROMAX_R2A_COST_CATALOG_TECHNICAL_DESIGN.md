@@ -58,7 +58,7 @@ Crea:
 Reglas:
 - Estados draft, pending_review, approved, rejected, archived.
 - Versión asignada en trigger bajo advisory transaction lock; unicidad por organización/recurso/proveedor/versión, considerando proveedor NULL como una serie.
-- USD exige FX positivo y fecha; PEN exige FX 1 y source not_required.
+- USD con `organization_default` toma automáticamente FX, fecha y referencia de settings y falla si no hay configuración fechada; USD manual exige FX positivo y fecha; PEN exige FX 1 y source not_required.
 - Una tarifa approved requiere reviewed_by y reviewed_at.
 - La transición a approved/rejected registra al usuario y hora.
 - La misma persona puede registrar y aprobar si posee rol autorizado.
