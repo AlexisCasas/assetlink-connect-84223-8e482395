@@ -2,7 +2,7 @@
 -- Synthetic tenants and rates are discarded with ROLLBACK.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(34);
+SELECT plan(38);
 
 CREATE FUNCTION pg_temp.as_user(p_user uuid)
 RETURNS void
@@ -13,7 +13,8 @@ $$;
 
 INSERT INTO auth.users (id, email) VALUES
   ('e8100000-0000-0000-0000-000000000001', 'r2-owner-a@test.invalid'),
-  ('e8100000-0000-0000-0000-000000000002', 'r2-owner-b@test.invalid');
+  ('e8100000-0000-0000-0000-000000000002', 'r2-owner-b@test.invalid'),
+  ('e8100000-0000-0000-0000-000000000003', 'r2-viewer-a@test.invalid');
 
 INSERT INTO public.organizations (id, name, organization_type, status) VALUES
   ('e8200000-0000-0000-0000-000000000001', 'R2 Provider A', 'provider_company', 'active'),
@@ -25,7 +26,10 @@ INSERT INTO public.organization_members (id, organization_id, user_id, role, is_
    'e8100000-0000-0000-0000-000000000001', 'manager', true),
   ('e8300000-0000-0000-0000-000000000002',
    'e8200000-0000-0000-0000-000000000002',
-   'e8100000-0000-0000-0000-000000000002', 'manager', true);
+   'e8100000-0000-0000-0000-000000000002', 'manager', true),
+  ('e8300000-0000-0000-0000-000000000003',
+   'e8200000-0000-0000-0000-000000000001',
+   'e8100000-0000-0000-0000-000000000003', 'viewer', true);
 
 -- Provider B fixtures are inserted as the migration-test owner.
 INSERT INTO public.provider_cost_suppliers
@@ -61,6 +65,14 @@ SELECT ok(
 SELECT ok(
   NOT has_table_privilege('anon', 'public.provider_cost_rates', 'SELECT'),
   'anonymous role cannot read cost rates'
+);
+SELECT ok(
+  NOT has_table_privilege('authenticated', 'public.provider_cost_suppliers', 'DELETE'),
+  'authenticated users cannot hard-delete suppliers'
+);
+SELECT ok(
+  NOT has_table_privilege('authenticated', 'public.provider_cost_rates', 'DELETE'),
+  'authenticated users cannot hard-delete cost rates'
 );
 
 INSERT INTO public.provider_cost_settings (
@@ -437,7 +449,7 @@ SELECT is(
 );
 
 SELECT throws_ok(
-  $$
+  $
     INSERT INTO public.provider_cost_rates (
       organization_id, cost_item_id, supplier_id, unit_code, currency_code,
       unit_cost_original, fx_source, tax_treatment, source_type,
@@ -450,10 +462,25 @@ SELECT throws_ok(
       'M', 'USD', 10, 'organization_default', 'unknown',
       'supplier_quote', 'R2A-TEST-B-NO-FX', '2026-11-17'
     )
-  $$,
+  $,
   '23514',
   NULL,
   'USD approval preparation fails closed without a configured default FX rate'
+);
+
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('e8100000-0000-0000-0000-000000000003');
+
+SELECT is(
+  (SELECT count(*)::int FROM public.provider_cost_suppliers),
+  0,
+  'viewer role cannot read internal suppliers'
+);
+SELECT is(
+  (SELECT count(*)::int FROM public.provider_cost_rates),
+  0,
+  'viewer role cannot read internal cost rates'
 );
 
 SELECT * FROM finish();
