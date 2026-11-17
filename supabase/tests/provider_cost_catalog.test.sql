@@ -206,6 +206,12 @@ SELECT is(
   '2026-11-30'::date,
   'approving a new version closes the previous overlapping validity window'
 );
+SELECT ok(
+  (SELECT review_note LIKE 'Vigencia cerrada automáticamente%'
+   FROM public.provider_cost_rates
+   WHERE source_reference = 'R2A-TEST-A1-V1'),
+  'automatic validity closure records its audit reason'
+);
 
 INSERT INTO public.provider_cost_rates (
   organization_id, cost_item_id, unit_code, currency_code,
