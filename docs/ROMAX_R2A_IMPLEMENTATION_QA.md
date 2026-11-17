@@ -29,7 +29,7 @@
 
 ## QA preparado
 
-Prueba: `supabase/tests/provider_cost_catalog.test.sql` (33 aserciones pgTAP).
+Prueba: `supabase/tests/provider_cost_catalog.test.sql` (34 aserciones pgTAP).
 
 Cubre:
 - Catálogos de referencia y acceso anon.
