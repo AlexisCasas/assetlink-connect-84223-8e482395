@@ -58,7 +58,11 @@ ALTER TABLE public.provider_cost_suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.provider_cost_items ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON public.provider_cost_suppliers,public.provider_cost_items FROM PUBLIC,anon,authenticated;
-GRANT SELECT,INSERT,UPDATE ON public.provider_cost_suppliers,public.provider_cost_items TO authenticated;
+GRANT SELECT ON public.provider_cost_suppliers,public.provider_cost_items TO authenticated;
+GRANT INSERT (organization_id,display_name,legal_name,tax_id,email,phone,notes,is_active) ON public.provider_cost_suppliers TO authenticated;
+GRANT UPDATE (display_name,legal_name,tax_id,email,phone,notes,is_active) ON public.provider_cost_suppliers TO authenticated;
+GRANT INSERT (organization_id,code,name,description,category_code,default_unit_code,technical_specification,is_active) ON public.provider_cost_items TO authenticated;
+GRANT UPDATE (code,name,description,category_code,default_unit_code,technical_specification,is_active) ON public.provider_cost_items TO authenticated;
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.provider_cost_suppliers,public.provider_cost_items TO service_role;
 
 CREATE POLICY provider_cost_suppliers_read ON public.provider_cost_suppliers
