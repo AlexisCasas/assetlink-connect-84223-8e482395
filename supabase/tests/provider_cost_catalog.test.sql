@@ -135,6 +135,14 @@ WHERE i.organization_id = 'e8200000-0000-0000-0000-000000000001'
   AND i.code = 'CABLE-NH80'
   AND s.display_name = 'Supplier A1';
 
+UPDATE public.provider_cost_rates
+SET status = 'pending_review'
+WHERE source_reference = 'R2A-TEST-A1-V1';
+
+UPDATE public.provider_cost_rates
+SET status = 'approved'
+WHERE source_reference = 'R2A-TEST-A1-V1';
+
 SELECT is(
   (SELECT fx_rate_to_pen FROM public.provider_cost_rates
    WHERE source_reference = 'R2A-TEST-A1-V1'),
@@ -361,11 +369,11 @@ SELECT is(
   'new USD rate uses the updated default FX snapshot'
 );
 SELECT throws_ok(
-  $
+  $throws$
     UPDATE public.provider_cost_rates
     SET unit_code = 'UND'
     WHERE source_reference = 'R2A-TEST-A1-V3'
-  $,
+  $throws$,
   '23514',
   NULL,
   'draft rate cannot change to a unit that differs from its resource'
