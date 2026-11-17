@@ -131,8 +131,8 @@ export function CostRatesPanel() {
     setLoading(true);
     try {
       const [itemResult, supplierResult, unitResult, settingResult, rateResult] = await Promise.all([
-        catalogDb.from('provider_cost_items').select('*').eq('organization_id', organizationId).eq('is_active', true).order('name'),
-        catalogDb.from('provider_cost_suppliers').select('*').eq('organization_id', organizationId).eq('is_active', true).order('display_name'),
+        catalogDb.from('provider_cost_items').select('*').eq('organization_id', organizationId).order('name'),
+        catalogDb.from('provider_cost_suppliers').select('*').eq('organization_id', organizationId).order('display_name'),
         catalogDb.from('provider_cost_units').select('code,name,dimension').eq('is_active', true).order('name'),
         catalogDb.from('provider_cost_settings').select('*').eq('organization_id', organizationId),
         catalogDb.from('provider_cost_rates').select('*').eq('organization_id', organizationId).order('created_at', { ascending: false }),
@@ -156,10 +156,10 @@ export function CostRatesPanel() {
       }
       setForm((current) => ({
         ...current,
-        cost_item_id: current.cost_item_id || loadedItems[0]?.id || '',
+        cost_item_id: current.cost_item_id || loadedItems.find((item) => item.is_active)?.id || '',
         unit_code: current.cost_item_id
           ? current.unit_code
-          : loadedItems[0]?.default_unit_code || 'UND',
+          : loadedItems.find((item) => item.is_active)?.default_unit_code || 'UND',
         fx_mode: loadedSettings?.default_usd_pen_rate ? 'default' : 'manual',
       }));
     } catch (error) {
@@ -171,13 +171,15 @@ export function CostRatesPanel() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
+  const activeItems = useMemo(() => items.filter((item) => item.is_active), [items]);
+  const activeSuppliers = useMemo(() => suppliers.filter((supplier) => supplier.is_active), [suppliers]);
   const selectedItem = useMemo(
-    () => items.find((item) => item.id === form.cost_item_id) ?? null,
-    [items, form.cost_item_id],
+    () => activeItems.find((item) => item.id === form.cost_item_id) ?? null,
+    [activeItems, form.cost_item_id],
   );
   const selectedSupplier = useMemo(
-    () => suppliers.find((supplier) => supplier.id === form.supplier_id) ?? null,
-    [suppliers, form.supplier_id],
+    () => activeSuppliers.find((supplier) => supplier.id === form.supplier_id) ?? null,
+    [activeSuppliers, form.supplier_id],
   );
   const defaultFxReady = settings?.default_usd_pen_rate !== null
     && settings?.default_usd_pen_rate !== undefined
@@ -363,10 +365,10 @@ export function CostRatesPanel() {
             <CardDescription>Se guarda como pendiente de revisión. Para corregir un precio se crea una nueva versión; no se sobrescribe una tarifa aprobada.</CardDescription>
           </CardHeader>
           <CardContent>
-            {items.length === 0 ? <p className="text-sm text-muted-foreground">Primero registra al menos un recurso en la pestaña Recursos.</p> : (
+            {activeItems.length === 0 ? <p className="text-sm text-muted-foreground">Primero registra al menos un recurso activo en la pestaña Recursos.</p> : (
               <form className="space-y-3" onSubmit={saveRate}>
-                <div className="space-y-1.5"><Label htmlFor="rate-item">Recurso *</Label><select id="rate-item" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.cost_item_id} onChange={(event) => { const item = items.find((row) => row.id === event.target.value); setForm({ ...form, cost_item_id: event.target.value, unit_code: item?.default_unit_code ?? 'UND' }); }} required>{items.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` · ${item.code}` : ''}</option>)}</select></div>
-                <div className="space-y-1.5"><Label htmlFor="rate-supplier">Proveedor</Label><select id="rate-supplier" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.supplier_id} onChange={(event) => setForm({ ...form, supplier_id: event.target.value })}><option value="">Costo interno / sin proveedor</option>{suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.display_name}</option>)}</select></div>
+                <div className="space-y-1.5"><Label htmlFor="rate-item">Recurso *</Label><select id="rate-item" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.cost_item_id} onChange={(event) => { const item = items.find((row) => row.id === event.target.value); setForm({ ...form, cost_item_id: event.target.value, unit_code: item?.default_unit_code ?? 'UND' }); }} required>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` · ${item.code}` : ''}</option>)}</select></div>
+                <div className="space-y-1.5"><Label htmlFor="rate-supplier">Proveedor</Label><select id="rate-supplier" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.supplier_id} onChange={(event) => setForm({ ...form, supplier_id: event.target.value })}><option value="">Costo interno / sin proveedor</option>{activeSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.display_name}</option>)}</select></div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5"><Label htmlFor="rate-unit">Unidad *</Label><select id="rate-unit" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.unit_code} onChange={(event) => setForm({ ...form, unit_code: event.target.value })}>{units.map((unit) => <option key={unit.code} value={unit.code}>{unit.code}</option>)}</select></div>
                   <div className="space-y-1.5"><Label htmlFor="rate-currency">Moneda *</Label><select id="rate-currency" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.currency_code} onChange={(event) => setForm({ ...form, currency_code: event.target.value as 'PEN' | 'USD', fx_mode: defaultFxReady ? 'default' : 'manual' })}><option value="PEN">PEN · Soles</option><option value="USD">USD · Dólares</option></select></div>
