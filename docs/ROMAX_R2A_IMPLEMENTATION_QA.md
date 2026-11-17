@@ -29,7 +29,7 @@
 
 ## QA preparado
 
-Prueba: `supabase/tests/provider_cost_catalog.test.sql` (34 aserciones pgTAP).
+Prueba: `supabase/tests/provider_cost_catalog.test.sql` (38 aserciones pgTAP).
 
 Cubre:
 - Catálogos de referencia y acceso anon.
@@ -42,7 +42,8 @@ Cubre:
 - Aprobación por el mismo usuario y rechazo con motivo.
 - Inmutabilidad de tarifas aprobadas.
 - Snapshot FX estable ante cambios de configuración.
-- Lectura aislada entre dos organizaciones.
+- Lectura aislada entre dos organizaciones y denegación al rol viewer.
+- Denegación de hard delete para authenticated.
 - Bloqueo de USD cuando no existe tipo de cambio predeterminado.
 
 El workflow existente `.github/workflows/9c6-b1-isolated-db-qa.yml` se activa con cambios en `supabase/**` y ejecuta `supabase start` + `supabase test db` en stack local desechable. Está fijado a Supabase CLI **2.79.0**. Se conserva esa versión; el changelog de Supabase registra un breaking change de CLI v3 el 4-nov-2026 (local por defecto y confirmación para cambios hosted).
