@@ -115,3 +115,8 @@ Archivo: `supabase/tests/romax_r2a_cost_catalog.test.sql` (pgTAP, transacción c
 R2A-01 ya fue aplicada en Supabase Cloud y superó sus pruebas transaccionales con ROLLBACK. Se registraron las versiones `20261117185721_romax_cost_catalog_foundation` y `20261117185936_romax_cost_catalog_foundation_hardening`. Resultado: 8 categorías, 13 unidades, RLS/grants comprobados, cero filas de configuración creadas y ningún tipo de cambio ficticio. Los dos hallazgos RLS de rendimiento y la FK sin índice fueron corregidos; queda un aviso `unused_index` esperado por tabla vacía. Informe: `docs/ROMAX_R2A_01_FOUNDATION_QA.md`.
 
 **Estado actualizado:** R2A-01 PASS; R2A-02 y R2A-03 siguen sin aplicar. El test pgTAP de 21 aserciones global no se ejecutó porque pgTAP no está instalado en Cloud; las pruebas de esta primera migración fueron transaccionales directas y se revirtieron.
+
+
+## R2A-02 — Estado de implementación
+
+Aplicadas en Supabase Cloud las migraciones `20261117191121_romax_cost_catalog_entities` y `20261117191257_romax_cost_catalog_entities_hardening`. QA PASS: dos proveedores y un recurso creados transaccionalmente; unicidad de RUC/código; `created_by`; aislamiento multiempresa; rollback; prueba owner posterior al hardening. Conteos persistentes ROMAX: 0 proveedores y 0 recursos, intencional. RLS y grants verificados; Security Advisors sin hallazgos nuevos. Quedan avisos `unused_index` en tablas sin volumen. R2A-03 sigue pendiente. Ver `docs/ROMAX_R2A_02_SUPPLIERS_ITEMS_QA.md`.
