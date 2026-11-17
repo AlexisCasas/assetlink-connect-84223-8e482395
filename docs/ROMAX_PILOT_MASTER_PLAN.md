@@ -259,3 +259,19 @@ Se cotejaron visualmente los tres PDF restantes **4080 Makro Arequipa 2, 5076 Ca
 ## Cierre de excepción documental RMX-2026-2217 — 16-nov-2026
 
 Por confirmación y autorización expresa del usuario, la línea **CISTERNA DE AGUA** se corrigió en Supabase Cloud a cantidad 40 M3, unitario equivalente **S/ 53.75** y parcial **S/ 2,150**, conciliando con el subtotal 4.2 de materiales. La fila y el componente quedaron `extracted_unverified`. El PDF fuente conserva visiblemente S/ 45 / S/ 1,800; esa diferencia se registra en la procedencia de la línea, y el original no se modifica. QA: 40 × 53.75 = 2,150; línea = componente materiales; componentes 4.1–4.4 = neto S/ 3,360. La excepción queda cerrada por decisión del usuario, sin aprobar el valor como tarifa comercial vigente. Evidencia: `docs/ROMAX_R1D2E_CLASSIC_BATCH1_QA.md`.
+
+
+## R2A — Catálogo independiente de costos: contrato técnico e implementación preparada (17-nov-2026)
+
+Decisiones aprobadas por ROMAX: fuentes mixtas (proveedores y costos internos); costo separado de precio de venta; revisión humana antes de activar; mano de obra por hora/jornada; vigencia sin vencimiento obligatorio; múltiples proveedores por recurso; conservar PEN/USD original y registrar conversión a PEN con FX documentado. El FX USD/PEN predeterminado será configurable por organización y no se inicializa con un valor inventado.
+
+**Diseño simplificado:** se reutilizan `commercial_clients`, `commercial_client_sites` y `commercial_client_contacts`; no se duplican clientes. No se reutilizan `materials`/inventario ni el histórico de cotizaciones como tarifario. El proveedor es opcional en tarifas internas. Categorías/unidades son globales y predefinidas. La fuente y revisión se guardan en la tarifa, sin tabla separada de documentos/workflow en esta primera etapa. La utilidad e impuestos permanecen fuera del catálogo de recursos.
+
+**Implementación preparada en rama `feature/romax-r2a-cost-catalog`:**
+1. `20261117130000_romax_cost_catalog_foundation.sql`: categorías, unidades y configuración económica por organización.
+2. `20261117130100_romax_cost_catalog_entities.sql`: proveedores y recursos.
+3. `20261117130200_romax_cost_rates_versioning.sql`: tarifas, snapshot PEN, versionado concurrente, revisión, vigencia y RLS.
+
+Test pgTAP preparado: `supabase/tests/romax_r2a_cost_catalog.test.sql` (21 aserciones; solo base local/desechable). Documento técnico: `docs/ROMAX_R2A_COST_CATALOG_TECHNICAL_DESIGN.md`.
+
+**Estado honesto:** SQL y test escritos y sometidos a revisión estática inicial; pgTAP, aplicación de migraciones en local, advisors y CI todavía no ejecutados. No se aplicó nada en Supabase Cloud, no se crearon registros de negocio y no se desplegó Vercel. Los gates previos a Cloud son: ejecutar las tres migraciones en base desechable, correr las 21 pruebas, resolver fallos, ejecutar advisors y revisar PR. Se requiere autorización separada para aplicar a Supabase Cloud.
