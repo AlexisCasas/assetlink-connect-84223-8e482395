@@ -146,7 +146,7 @@ CREATE POLICY provider_cost_rates_update ON public.provider_cost_rates
  FOR UPDATE TO authenticated
  USING (
   public.has_organization_role(organization_id,ARRAY['owner','admin','manager','quote_manager']::public.organization_member_role[])
-  AND status IN ('draft','pending_review','rejected')
+  AND status IN ('draft','pending_review','rejected','approved')
  )
  WITH CHECK (
   public.has_organization_role(organization_id,ARRAY['owner','admin','manager','quote_manager']::public.organization_member_role[])
