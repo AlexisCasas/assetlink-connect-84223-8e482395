@@ -32,17 +32,17 @@ SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('b2100000-0000-0000-0000-000000000001');
 INSERT INTO public.provider_cost_settings(organization_id,default_usd_pen_rate,fx_source,fx_date)
  VALUES ('b2200000-0000-0000-0000-000000000001',3.75,'manual',current_date);
-INSERT INTO public.provider_cost_suppliers(id,organization_id,display_name,created_by)
+INSERT INTO public.provider_cost_suppliers(id,organization_id,display_name)
  VALUES ('b2300000-0000-0000-0000-000000000001','b2200000-0000-0000-0000-000000000001','Proveedor A','b2100000-0000-0000-0000-000000000001'),
         ('b2300000-0000-0000-0000-000000000002','b2200000-0000-0000-0000-000000000001','Proveedor B','b2100000-0000-0000-0000-000000000001');
-INSERT INTO public.provider_cost_items(id,organization_id,code,name,category_code,default_unit_code,created_by)
+INSERT INTO public.provider_cost_items(id,organization_id,code,name,category_code,default_unit_code)
  VALUES ('b2400000-0000-0000-0000-000000000001','b2200000-0000-0000-0000-000000000001','MAT-001','Cable NH-80','MATERIAL','M','b2100000-0000-0000-0000-000000000001');
-SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status,created_by)
- VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000001','M','USD',100,3.75,'manual',current_date,'unknown','supplier_quote',current_date,'pending_review','b2100000-0000-0000-0000-000000000001')$$,'owner can register sourced USD rate');
+SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status)
+ VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000001','M','USD',100,3.75,'manual',current_date,'unknown','supplier_quote',current_date ,'pending_review')$$,'owner can register sourced USD rate');
 SELECT is((SELECT unit_cost_pen FROM public.provider_cost_rates WHERE supplier_id='b2300000-0000-0000-0000-000000000001'),375.00::numeric,'PEN snapshot generated');
 SELECT is((SELECT version_number FROM public.provider_cost_rates WHERE supplier_id='b2300000-0000-0000-0000-000000000001'),1,'first version auto-numbered');
 SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status,created_by)
- VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000002','M','PEN',9.2,1,'not_required',NULL,'unknown','manual',current_date,'draft','b2100000-0000-0000-0000-000000000001')$$,'same item accepts another supplier');
+ VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000002','M','PEN',9.2,1,'not_required',NULL,'unknown','manual',current_date ,'draft')$$,'same item accepts another supplier');
 SELECT throws_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status,created_by)
  VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000002','M','USD',10,3.75,'manual',NULL,'unknown','manual',current_date,'draft','b2100000-0000-0000-0000-000000000001')$$,'23514',NULL,'USD requires dated FX snapshot');
 UPDATE public.provider_cost_rates SET status='approved' WHERE supplier_id='b2300000-0000-0000-0000-000000000001';
@@ -51,7 +51,7 @@ SELECT is((SELECT reviewed_by FROM public.provider_cost_rates WHERE supplier_id=
 SELECT throws_ok($$UPDATE public.provider_cost_rates SET unit_cost_original=110 WHERE supplier_id='b2300000-0000-0000-0000-000000000001'$$,'P0001',NULL,'approved price is immutable');
 UPDATE public.provider_cost_rates SET valid_until=current_date WHERE supplier_id='b2300000-0000-0000-0000-000000000001';
 SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status,created_by)
- VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000001','M','PEN',9.1,1,'not_required',NULL,'unknown','supplier_quote',current_date+1,'pending_review','b2100000-0000-0000-0000-000000000001')$$,'new version after validity closure');
+ VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000001','M','PEN',9.1,1,'not_required',NULL,'unknown','supplier_quote',current_date+1 ,'pending_review')$$,'new version after validity closure');
 SELECT is((SELECT max(version_number) FROM public.provider_cost_rates WHERE supplier_id='b2300000-0000-0000-0000-000000000001'),2,'second version numbered');
 SELECT pg_temp.as_user('b2100000-0000-0000-0000-000000000003');
 SELECT is((SELECT count(*) FROM public.provider_cost_rates),2::bigint,'same-tenant viewer can read rates');
