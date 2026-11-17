@@ -282,3 +282,10 @@ Test pgTAP preparado: `supabase/tests/romax_r2a_cost_catalog.test.sql` (21 aserc
 **R2A-01 PASS:** aplicadas en Supabase Cloud `20261117185721_romax_cost_catalog_foundation` y hardening `20261117185936_romax_cost_catalog_foundation_hardening`. Resultado 8 categorías, 13 unidades, RLS/grants verificados, FX no configurado y 0 filas settings persistentes. Pruebas transaccionales owner/actualización/aislamiento externo con ROLLBACK PASS. Advisors sin hallazgos de seguridad nuevos en las tablas R2A; los dos avisos de initplan y la FK sin índice se corrigieron. Queda un aviso de índice aún no usado, esperado por la tabla vacía. No se modificó el inventario ni cotizaciones existentes. Informe: `docs/ROMAX_R2A_01_FOUNDATION_QA.md`.
 
 Siguiente paso: R2A-02 proveedores y recursos, con ejecución y pruebas independientes. R2A-03 no se aplica hasta cerrar R2A-02.
+
+
+## R2A-02 — Proveedores y recursos (17-nov-2026)
+
+**PASS:** aplicadas en Supabase Cloud `20261117191121_romax_cost_catalog_entities` y `20261117191257_romax_cost_catalog_entities_hardening`. Creadas `provider_cost_suppliers` y `provider_cost_items`, con RLS, políticas por organización, RUC/código únicos por organización, proveedor opcional en costos internos y sin hard delete desde authenticated. QA transaccional owner: altas de dos proveedores y un recurso; duplicados de RUC/código rechazados; `created_by` automático; usuario de otro tenant sin lectura; rollback y recuento posterior 0/0. Tras hardening, alta owner + rollback PASS. Advisors Security sin hallazgos nuevos; Performance conserva solo avisos `unused_index` esperados en tablas vacías. No se modificaron clientes, inventario ni cotizaciones. Informe: `docs/ROMAX_R2A_02_SUPPLIERS_ITEMS_QA.md`.
+
+Siguiente gate: R2A-03 tarifas/versiones/aprobación, sin aplicar hasta cerrar su revisión y autorización.
