@@ -129,7 +129,7 @@ CREATE TABLE public.provider_cost_rates (
     ),
 
   CONSTRAINT provider_cost_rates_rejection_note_check
-    CHECK (status <> 'rejected' OR length(btrim(review_note)) > 0),
+    CHECK (status <> 'rejected' OR (review_note IS NOT NULL AND length(btrim(review_note)) > 0)),
 
   CONSTRAINT provider_cost_rates_source_reference_check
     CHECK (source_reference IS NULL OR length(btrim(source_reference)) > 0),
