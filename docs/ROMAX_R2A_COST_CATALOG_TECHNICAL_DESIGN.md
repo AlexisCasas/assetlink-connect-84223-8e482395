@@ -124,3 +124,7 @@ Aplicadas en Supabase Cloud las migraciones `20261117191121_romax_cost_catalog_e
 ## R2A-03 — Estado de ejecución
 
 La tabla `provider_cost_rates` y trigger de versionado/aprobación fueron aplicados en Cloud. Migraciones registradas: `20261117193442`, `20261117193538` (guard fix) y `20261117193631` (hardening). QA transaccional PASS con ROLLBACK, cubriendo FX USD/PEN, versión 1 y 2, autoaprobación, inmutabilidad, cierre de vigencia, proveedor alternativo, costo interno, FX ausente, solapamiento y aislamiento multiempresa. Se corrigió durante QA un bug en la comparación de la columna generada `unit_cost_pen`. No hay tarifas ni otros datos comerciales persistentes; no se configuró tipo de cambio ROMAX. Ver `docs/ROMAX_R2A_03_COST_RATES_VERSIONING_QA.md`.
+
+## R2B — UI inicial de proveedores y recursos
+
+La vista `CostCatalogView` consume `provider_cost_suppliers`, `provider_cost_items`, `provider_cost_categories` y `provider_cost_units`. La navegación `cost-catalog` solo se ofrece a provider_company owner/admin/manager/quote_manager; Dashboard vuelve a comprobar el rol para hash directo. Permite CRUD limitado (sin delete físico) de proveedores y recursos; no crea tarifas ni toca clientes/inventario. La preview Vercel para el commit `b276b0a` está READY, pero aún no se ha validado CRUD real con una sesión autenticada. Informe: `docs/ROMAX_R2B_SUPPLIERS_ITEMS_UI_QA.md`.
