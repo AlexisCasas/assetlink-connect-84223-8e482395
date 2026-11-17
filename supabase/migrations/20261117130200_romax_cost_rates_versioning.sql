@@ -7,7 +7,7 @@ CREATE TABLE public.provider_cost_rates (
  organization_id uuid NOT NULL,
  cost_item_id uuid NOT NULL,
  supplier_id uuid,
- version_number integer NOT NULL CHECK (version_number>0),
+ version_number integer NOT NULL DEFAULT 0 CHECK (version_number>0),
  unit_code text NOT NULL REFERENCES public.provider_cost_units(code) ON DELETE RESTRICT,
  currency_code text NOT NULL CHECK (currency_code IN ('PEN','USD')),
  unit_cost_original numeric(18,6) NOT NULL CHECK (unit_cost_original>=0),
@@ -66,7 +66,29 @@ DECLARE
  v_overlap boolean;
 BEGIN
  IF TG_OP='UPDATE' AND OLD.status='approved' THEN
-  RAISE EXCEPTION 'Approved cost rates are immutable; create a new version';
+  -- An approved rate is immutable except for closing its validity window or
+  -- archiving it. This is required before approving a replacement version.
+  IF (to_jsonb(NEW) - ARRAY['valid_until','status','updated_at','review_note'])
+     IS DISTINCT FROM
+     (to_jsonb(OLD) - ARRAY['valid_until','status','updated_at','review_note'])
+     OR NEW.status NOT IN ('approved','archived')
+  THEN
+   RAISE EXCEPTION 'Approved cost rate is immutable; only validity closure or archival is allowed';
+  END IF;
+  IF NEW.status='archived' AND NEW.valid_until IS NULL THEN
+   RAISE EXCEPTION 'Close the validity window before archiving an approved rate';
+  END IF;
+ END IF;
+
+ IF TG_OP='INSERT' AND NEW.version_number=0 THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+    NEW.organization_id::text || ':' || NEW.cost_item_id::text || ':' || coalesce(NEW.supplier_id::text,'internal'),0
+  ));
+  SELECT coalesce(max(r.version_number),0)+1 INTO NEW.version_number
+  FROM public.provider_cost_rates r
+  WHERE r.organization_id=NEW.organization_id
+   AND r.cost_item_id=NEW.cost_item_id
+   AND r.supplier_id IS NOT DISTINCT FROM NEW.supplier_id;
  END IF;
 
  IF TG_OP='UPDATE' AND NEW.status IS DISTINCT FROM OLD.status AND NEW.status='approved' THEN
