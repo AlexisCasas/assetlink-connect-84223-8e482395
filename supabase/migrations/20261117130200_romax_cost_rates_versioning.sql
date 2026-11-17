@@ -104,8 +104,12 @@ BEGIN
  END IF;
 
  IF NEW.currency_code='USD' AND NEW.fx_source='organization_default' THEN
+  SELECT s.default_usd_pen_rate,s.fx_date,s.fx_reference
+   INTO NEW.fx_rate_to_pen,NEW.fx_date,NEW.fx_reference
+  FROM public.provider_cost_settings s
+  WHERE s.organization_id=NEW.organization_id;
   IF NEW.fx_date IS NULL OR NEW.fx_rate_to_pen IS NULL THEN
-   RAISE EXCEPTION 'USD rates require a dated FX snapshot';
+   RAISE EXCEPTION 'Organization default USD/PEN rate is not configured with a date';
   END IF;
  END IF;
 
