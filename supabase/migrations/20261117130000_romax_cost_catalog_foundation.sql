@@ -68,7 +68,7 @@ CREATE TABLE public.provider_cost_settings (
  fx_source text,
  fx_date date,
  fx_reference text,
- updated_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+ updated_by uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE RESTRICT,
  updated_at timestamptz NOT NULL DEFAULT now(),
  CONSTRAINT provider_cost_settings_fx_positive CHECK (default_usd_pen_rate IS NULL OR default_usd_pen_rate > 0),
  CONSTRAINT provider_cost_settings_fx_metadata CHECK (
@@ -88,11 +88,12 @@ CREATE POLICY provider_cost_settings_insert ON public.provider_cost_settings
  FOR INSERT TO authenticated WITH CHECK (
    public.has_organization_role(organization_id,ARRAY['owner','admin','manager']::public.organization_member_role[])
    AND EXISTS (SELECT 1 FROM public.organizations o WHERE o.id=organization_id AND o.organization_type='provider_company' AND o.status='active')
+   AND updated_by=auth.uid()
  );
 CREATE POLICY provider_cost_settings_update ON public.provider_cost_settings
  FOR UPDATE TO authenticated
  USING (public.has_organization_role(organization_id,ARRAY['owner','admin','manager']::public.organization_member_role[]))
- WITH CHECK (public.has_organization_role(organization_id,ARRAY['owner','admin','manager']::public.organization_member_role[]));
+ WITH CHECK (public.has_organization_role(organization_id,ARRAY['owner','admin','manager']::public.organization_member_role[]) AND updated_by=auth.uid());
 
 CREATE TRIGGER provider_cost_settings_updated_at
  BEFORE UPDATE ON public.provider_cost_settings
