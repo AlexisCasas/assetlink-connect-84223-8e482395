@@ -245,7 +245,7 @@ export function CostRatesPanel() {
         organization_id: organizationId,
         cost_item_id: selectedItem.id,
         supplier_id: selectedSupplier?.id ?? null,
-        unit_code: form.unit_code,
+        unit_code: selectedItem.default_unit_code,
         currency_code: form.currency_code,
         unit_cost_original: original,
         fx_rate_to_pen: isUsd
@@ -370,7 +370,7 @@ export function CostRatesPanel() {
                 <div className="space-y-1.5"><Label htmlFor="rate-item">Recurso *</Label><select id="rate-item" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.cost_item_id} onChange={(event) => { const item = items.find((row) => row.id === event.target.value); setForm({ ...form, cost_item_id: event.target.value, unit_code: item?.default_unit_code ?? 'UND' }); }} required>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` · ${item.code}` : ''}</option>)}</select></div>
                 <div className="space-y-1.5"><Label htmlFor="rate-supplier">Proveedor</Label><select id="rate-supplier" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.supplier_id} onChange={(event) => setForm({ ...form, supplier_id: event.target.value })}><option value="">Costo interno / sin proveedor</option>{activeSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.display_name}</option>)}</select></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label htmlFor="rate-unit">Unidad *</Label><select id="rate-unit" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.unit_code} onChange={(event) => setForm({ ...form, unit_code: event.target.value })}>{units.map((unit) => <option key={unit.code} value={unit.code}>{unit.code}</option>)}</select></div>
+                  <div className="space-y-1.5"><Label>Unidad del recurso</Label><div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm">{selectedItem.default_unit_code}</div><p className="text-xs text-muted-foreground">La tarifa conserva la unidad base del recurso; no se realizan conversiones automáticas.</p></div>
                   <div className="space-y-1.5"><Label htmlFor="rate-currency">Moneda *</Label><select id="rate-currency" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.currency_code} onChange={(event) => setForm({ ...form, currency_code: event.target.value as 'PEN' | 'USD', fx_mode: defaultFxReady ? 'default' : 'manual' })}><option value="PEN">PEN · Soles</option><option value="USD">USD · Dólares</option></select></div>
                 </div>
                 <div className="space-y-1.5"><Label htmlFor="rate-original-cost">Costo unitario *</Label><Input id="rate-original-cost" type="number" min="0" step="0.000001" value={form.unit_cost_original} onChange={(event) => setForm({ ...form, unit_cost_original: event.target.value })} required /></div>
