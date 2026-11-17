@@ -259,3 +259,17 @@ Se cotejaron visualmente los tres PDF restantes **4080 Makro Arequipa 2, 5076 Ca
 ## Cierre de excepción documental RMX-2026-2217 — 16-nov-2026
 
 Por confirmación y autorización expresa del usuario, la línea **CISTERNA DE AGUA** se corrigió en Supabase Cloud a cantidad 40 M3, unitario equivalente **S/ 53.75** y parcial **S/ 2,150**, conciliando con el subtotal 4.2 de materiales. La fila y el componente quedaron `extracted_unverified`. El PDF fuente conserva visiblemente S/ 45 / S/ 1,800; esa diferencia se registra en la procedencia de la línea, y el original no se modifica. QA: 40 × 53.75 = 2,150; línea = componente materiales; componentes 4.1–4.4 = neto S/ 3,360. La excepción queda cerrada por decisión del usuario, sin aprobar el valor como tarifa comercial vigente. Evidencia: `docs/ROMAX_R1D2E_CLASSIC_BATCH1_QA.md`.
+
+
+## R2A — Contrato técnico aprobado e implementación preparada (17-nov-2026)
+
+Se documentó el contrato técnico de catálogo independiente de costos y se creó la rama `feature/romax-r2-cost-catalog-20261117`. Decisiones: fuentes mixtas (proveedores y costos internos); costo interno y precio de venta separados; aprobación humana con autoaprobación por un usuario autorizado; vigencia sin vencimiento permitida; varios proveedores por recurso; moneda original PEN/USD y snapshot de tipo de cambio con conversión a PEN. Se reutilizan los clientes, sedes y contactos existentes. El catálogo no se vincula a clientes y no modifica inventario ni histórico.
+
+Se prepararon tres migraciones:
+- R2-M1: categorías globales, unidades normalizadas y configuración PEN/USD por organización.
+- R2-M2: proveedores y recursos tenant-scoped.
+- R2-M3: tarifas, versiones, FX snapshot, vigencias, estados y aprobación.
+
+Se añadió prueba pgTAP con 33 aserciones para categorías/unidades, roles, aislamiento multiempresa, proveedores múltiples, costos internos, unidad, FX, versionado, cierre de vigencia, aprobación/rechazo e inmutabilidad. El workflow local existente está fijado a Supabase CLI 2.79.0 y ejecuta stack desechable + suite pgTAP cuando se abre PR con cambios en `supabase/**`.
+
+**Estado:** implementación preparada en rama; CI pendiente. No se ejecutó localmente porque esta sesión no dispone de Supabase CLI ni acceso de red para instalarlo. No se aplicaron migraciones a Supabase Cloud, no se insertaron datos, no se modificó el cotizador ni se desplegó Vercel. Proyecto OneFacility identificado por MCP: `hplchnsseylngjopgbtl`; verificar el link remoto antes de cualquier aplicación, ya que el identificador local de `supabase/config.toml` es distinto. Informe: `docs/ROMAX_R2A_IMPLEMENTATION_QA.md`.
