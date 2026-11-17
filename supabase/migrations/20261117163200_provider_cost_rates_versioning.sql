@@ -275,13 +275,12 @@ AS $$
 DECLARE
   v_previous record;
   v_lock_key bigint;
+  v_item_unit text;
 BEGIN
   IF NEW.organization_id IS DISTINCT FROM OLD.organization_id
      OR NEW.id IS DISTINCT FROM OLD.id
      OR NEW.cost_item_id IS DISTINCT FROM OLD.cost_item_id
-        AND OLD.status <> 'draft'
      OR NEW.supplier_id IS DISTINCT FROM OLD.supplier_id
-        AND OLD.status <> 'draft'
      OR NEW.version_number IS DISTINCT FROM OLD.version_number
      OR NEW.created_by IS DISTINCT FROM OLD.created_by THEN
     RAISE EXCEPTION 'Rate identity and version are immutable'
@@ -291,6 +290,17 @@ BEGIN
   IF OLD.status = 'draft' THEN
     IF NEW.status NOT IN ('draft', 'pending_review') THEN
       RAISE EXCEPTION 'Draft rates may only remain draft or be submitted for review'
+        USING ERRCODE = '23514';
+    END IF;
+
+    SELECT i.default_unit_code
+      INTO v_item_unit
+    FROM public.provider_cost_items i
+    WHERE i.organization_id = NEW.organization_id
+      AND i.id = NEW.cost_item_id;
+
+    IF v_item_unit IS NULL OR NEW.unit_code <> v_item_unit THEN
+      RAISE EXCEPTION 'Rate unit must match the cost item default unit'
         USING ERRCODE = '23514';
     END IF;
 
