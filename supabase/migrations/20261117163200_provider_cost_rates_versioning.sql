@@ -311,9 +311,9 @@ BEGIN
   END IF;
 
   IF OLD.status = 'pending_review' THEN
-    IF (to_jsonb(NEW) - ARRAY['status', 'review_note', 'reviewed_by', 'reviewed_at', 'updated_at'])
+    IF (to_jsonb(NEW) - ARRAY['status', 'review_note', 'reviewed_by', 'reviewed_at', 'updated_at', 'unit_cost_pen'])
        IS DISTINCT FROM
-       (to_jsonb(OLD) - ARRAY['status', 'review_note', 'reviewed_by', 'reviewed_at', 'updated_at']) THEN
+       (to_jsonb(OLD) - ARRAY['status', 'review_note', 'reviewed_by', 'reviewed_at', 'updated_at', 'unit_cost_pen']) THEN
       RAISE EXCEPTION 'Submitted rates are read-only; create a new version to change cost data'
         USING ERRCODE = '23514';
     END IF;
@@ -380,9 +380,9 @@ BEGIN
 
   IF OLD.status = 'approved' THEN
     IF NEW.status = 'archived' THEN
-      IF (to_jsonb(NEW) - ARRAY['status', 'review_note', 'updated_at'])
+      IF (to_jsonb(NEW) - ARRAY['status', 'review_note', 'updated_at', 'unit_cost_pen'])
          IS DISTINCT FROM
-         (to_jsonb(OLD) - ARRAY['status', 'review_note', 'updated_at'])
+         (to_jsonb(OLD) - ARRAY['status', 'review_note', 'updated_at', 'unit_cost_pen'])
          OR length(btrim(COALESCE(NEW.review_note, ''))) = 0 THEN
         RAISE EXCEPTION 'Archiving an approved rate requires a reason and cannot change its economic values'
           USING ERRCODE = '23514';
@@ -392,9 +392,9 @@ BEGIN
     END IF;
 
     IF NEW.status <> 'approved'
-       OR (to_jsonb(NEW) - ARRAY['valid_until', 'review_note', 'updated_at'])
+       OR (to_jsonb(NEW) - ARRAY['valid_until', 'review_note', 'updated_at', 'unit_cost_pen'])
           IS DISTINCT FROM
-          (to_jsonb(OLD) - ARRAY['valid_until', 'review_note', 'updated_at'])
+          (to_jsonb(OLD) - ARRAY['valid_until', 'review_note', 'updated_at', 'unit_cost_pen'])
        OR length(btrim(COALESCE(NEW.review_note, ''))) = 0 THEN
       RAISE EXCEPTION 'Approved rates are immutable; shortening validity requires an audit reason'
         USING ERRCODE = '23514';
