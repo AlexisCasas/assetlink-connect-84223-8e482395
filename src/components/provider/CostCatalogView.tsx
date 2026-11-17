@@ -236,15 +236,17 @@ export function CostCatalogView() {
         <Button size="sm" variant={tab === 'rates' ? 'default' : 'outline'} onClick={() => { setTab('rates'); setSearch(''); }}>Tarifas</Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-56 flex-1">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-9" placeholder={tab === 'items' ? 'Buscar recursos...' : 'Buscar proveedores...'} />
+      {tab !== 'rates' && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-56 flex-1">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-9" placeholder={tab === 'items' ? 'Buscar recursos...' : 'Buscar proveedores...'} />
+          </div>
+          <Button size="sm" variant={showInactive ? 'secondary' : 'outline'} onClick={() => setShowInactive((value) => !value)}>
+            {showInactive ? 'Ocultar inactivos' : 'Mostrar inactivos'}
+          </Button>
         </div>
-        <Button size="sm" variant={showInactive ? 'secondary' : 'outline'} onClick={() => setShowInactive((value) => !value)}>
-          {showInactive ? 'Ocultar inactivos' : 'Mostrar inactivos'}
-        </Button>
-      </div>
+      )}
 
       {tab === 'rates' ? (
         <CostRatesPanel />
