@@ -46,7 +46,7 @@ Catálogo global, administrado por migraciones y de solo lectura para usuarios:
 La utilidad y los impuestos no son recursos ni categorías de costo.
 
 ### provider_cost_units
-Catálogo global y normalizado: UND, M, M2, M3, KG, H, DIA, JOR, GLB, VIAJE, LT, GAL y ROLLO. Los alias conocidos se normalizan a un código canónico. No se convierten unidades automáticamente.
+Catálogo global y normalizado: UND, M, M2, M3, KG, H, DIA, JOR, GLB, VIAJE, LT, GAL y ROLLO. Los alias inequívocos se normalizan a un código canónico. La abreviatura ML es ambigua (metro lineal/mililitro) y queda fuera de la normalización automática; requiere confirmación. No se convierten unidades automáticamente.
 
 ### provider_cost_settings
 Una fila por organización ROMAX, creada al configurar por primera vez:
