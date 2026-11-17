@@ -345,7 +345,8 @@ BEGIN
         END IF;
 
         UPDATE public.provider_cost_rates
-        SET valid_until = NEW.valid_from - 1
+        SET valid_until = NEW.valid_from - 1,
+            review_note = 'Vigencia cerrada automáticamente al aprobar versión ' || NEW.version_number::text
         WHERE id = v_previous.id;
       END LOOP;
 
@@ -381,10 +382,11 @@ BEGIN
     END IF;
 
     IF NEW.status <> 'approved'
-       OR (to_jsonb(NEW) - ARRAY['valid_until', 'updated_at'])
+       OR (to_jsonb(NEW) - ARRAY['valid_until', 'review_note', 'updated_at'])
           IS DISTINCT FROM
-          (to_jsonb(OLD) - ARRAY['valid_until', 'updated_at']) THEN
-      RAISE EXCEPTION 'Approved rates are immutable; only their validity may be shortened'
+          (to_jsonb(OLD) - ARRAY['valid_until', 'review_note', 'updated_at'])
+       OR length(btrim(COALESCE(NEW.review_note, ''))) = 0 THEN
+      RAISE EXCEPTION 'Approved rates are immutable; shortening validity requires an audit reason'
         USING ERRCODE = '23514';
     END IF;
 
