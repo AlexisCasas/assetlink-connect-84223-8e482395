@@ -1,7 +1,7 @@
 -- R4-A.1 regression: isolated Supabase stack ONLY; all fixtures are rolled back.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(30);
+SELECT plan(32);
 CREATE FUNCTION pg_temp.r4a1_as_user(p_id uuid) RETURNS void LANGUAGE sql AS $$
   SELECT pg_catalog.set_config('request.jwt.claim.sub',coalesce(p_id::text,''),true);
 $$;
@@ -54,6 +54,17 @@ SELECT is((SELECT created_new FROM pg_temp.save_r4a1('  Montaje de dos equipos  
   '[{"item_type":"labor","description":" Técnico ","quantity":2,"unit_code":"JORNADA"},
     {"item_type":"equipment","description":"Ventilador","quantity":2,"unit_code":"UND"}]'::jsonb)),false,'order and whitespace cannot create a duplicate');
 SELECT is((SELECT count(*) FROM public.romax_opportunity_analyses),1::bigint,'canonical no-op still has only V1');
+
+SELECT lives_ok($legacy$
+  SELECT * FROM public.romax_save_opportunity_analysis_v1(
+    'd6300000-0000-0000-0000-000000000001',
+    'Instalación de ventiladores', 'Montaje de dos equipos',
+    '["Confirmar medidas"]'::jsonb,'[]'::jsonb,'["Acceso"]'::jsonb,
+    '[{"item_type":"equipment","description":"Ventilador","quantity":2,"unit_code":"UND"},
+      {"item_type":"labor","description":"Técnico","quantity":2,"unit_code":"JORNADA"}]'::jsonb
+  )
+$legacy$,'legacy v1 can still save identical content without error');
+SELECT is((SELECT count(*) FROM public.romax_opportunity_analyses),1::bigint,'legacy v1 no-op does not create another version');
 
 SELECT lives_ok($save$
   SELECT * FROM pg_temp.save_r4a1('Montaje actualizado',
