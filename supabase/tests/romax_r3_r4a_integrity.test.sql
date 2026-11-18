@@ -2,7 +2,7 @@
 -- Every synthetic record and role claim is discarded by ROLLBACK.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(28);
+SELECT plan(32);
 CREATE FUNCTION pg_temp.romax_as_user(p_id uuid) RETURNS void
 LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claim.sub',coalesce(p_id::text,''),true);
@@ -27,6 +27,15 @@ SELECT has_table('public','romax_opportunity_analysis_items','analysis items tab
 SELECT ok(NOT has_table_privilege('anon','public.romax_opportunities','SELECT'), 'anonymous cannot read opportunities');
 SELECT ok(NOT has_table_privilege('anon','public.romax_opportunity_analyses','SELECT'), 'anonymous cannot read analyses');
 SELECT ok(NOT has_table_privilege('authenticated','public.romax_opportunity_analyses','DELETE'), 'no hard-delete of analyses');
+SELECT ok(has_column_privilege('authenticated','public.romax_opportunities','status','UPDATE'),
+  'authorized editor can update opportunity status');
+SELECT ok(NOT has_column_privilege('authenticated','public.romax_opportunities','organization_id','UPDATE'),
+  'editor cannot reassign opportunity tenant');
+SELECT ok(has_column_privilege('authenticated','public.romax_opportunity_analyses','status','UPDATE'),
+  'save RPC can supersede a previous analysis');
+SELECT ok(NOT has_column_privilege('authenticated','public.romax_opportunity_analyses','created_by','UPDATE'),
+  'editor cannot rewrite analysis creator');
+
 SELECT ok(NOT has_function_privilege('anon','public.romax_save_opportunity_analysis_v1(uuid,text,text,jsonb,jsonb,jsonb,jsonb)','EXECUTE'), 'anonymous cannot call save RPC');
 SELECT ok(has_function_privilege('authenticated','public.romax_save_opportunity_analysis_v1(uuid,text,text,jsonb,jsonb,jsonb,jsonb)','EXECUTE'), 'authenticated role can call guarded RPC');
 
