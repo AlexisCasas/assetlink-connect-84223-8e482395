@@ -113,6 +113,15 @@ const OpportunityAnalysisView = ({ opportunityId }: Props) => {
           technical_specification: row.technical_specification ?? '',
           suggested_cost_item_id: row.suggested_cost_item_id ?? '',
         })));
+      } else {
+        // Clear the previous opportunity's draft when navigating to an
+        // opportunity without an analysis (the component can remain mounted).
+        setRequestedService('');
+        setScope('');
+        setMissingInformation('');
+        setTechnicalConsiderations('');
+        setRisks('');
+        setItems([emptyItem()]);
       }
     } catch (error) {
       toast({ title: 'No se pudo cargar el análisis', description: error instanceof Error ? error.message : 'Error inesperado.', variant: 'destructive' });
@@ -131,51 +140,38 @@ const OpportunityAnalysisView = ({ opportunityId }: Props) => {
 
   const saveAnalysis = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!authorized || !organizationId || !opportunityId) return;
+    if (!authorized || !organizationId || !opportunityId || saving) return;
     if (!requestedService.trim() && !scope.trim() && validItems.length === 0) {
       toast({ title: 'Falta información', description: 'Registra al menos el servicio solicitado, el alcance o una partida.', variant: 'destructive' });
       return;
     }
     setSaving(true);
     try {
-      const nextVersion = (latestAnalysis?.version_number ?? 0) + 1;
-      const { data: analysis, error: analysisError } = await db.from('romax_opportunity_analyses').insert({
-        organization_id: organizationId,
-        opportunity_id: opportunityId,
-        version_number: nextVersion,
-        status: 'draft',
-        source_type: 'manual',
-        requested_service: requestedService.trim() || null,
-        scope_of_work: scope.trim() || null,
-        missing_information: missingInformation.split('\n').map((value) => value.trim()).filter(Boolean),
-        technical_considerations: technicalConsiderations.split('\n').map((value) => value.trim()).filter(Boolean),
-        risks: risks.split('\n').map((value) => value.trim()).filter(Boolean),
-      }).select('id,version_number,status,source_type,requested_service,scope_of_work,missing_information,technical_considerations,risks').single();
-      if (analysisError || !analysis) throw new Error(analysisError?.message ?? 'No se pudo crear la versión de análisis.');
-
-      if (validItems.length) {
-        const { error: itemsError } = await db.from('romax_opportunity_analysis_items').insert(validItems.map((item) => ({
-          organization_id: organizationId,
-          analysis_id: analysis.id,
+      // A single SECURITY INVOKER RPC saves the analysis and its items, then
+      // supersedes the previous version in the same transaction. No partial
+      // versions are possible when an item fails validation.
+      const { data, error } = await db.rpc('romax_save_opportunity_analysis_v1', {
+        p_opportunity_id: opportunityId,
+        p_requested_service: requestedService.trim() || null,
+        p_scope_of_work: scope.trim() || null,
+        p_missing_information: missingInformation.split('\n').map((value) => value.trim()).filter(Boolean),
+        p_technical_considerations: technicalConsiderations.split('\n').map((value) => value.trim()).filter(Boolean),
+        p_risks: risks.split('\n').map((value) => value.trim()).filter(Boolean),
+        p_items: validItems.map((item) => ({
           item_type: item.item_type,
           description: item.description.trim(),
-          quantity: item.quantity ? Number(item.quantity) : null,
+          quantity: item.quantity.trim() ? Number(item.quantity) : null,
           unit_code: item.unit_code.trim() || null,
           technical_specification: item.technical_specification.trim() || null,
           suggested_cost_item_id: item.suggested_cost_item_id || null,
-        })));
-        if (itemsError) throw new Error(itemsError.message);
+        })),
+      });
+      if (error) throw new Error(error.message);
+      const savedVersion = Array.isArray(data) ? data[0]?.version_number : null;
+      if (!Number.isInteger(savedVersion) || savedVersion < 1) {
+        throw new Error('El servidor no confirmó la versión del análisis.');
       }
-
-      if (latestAnalysis?.id) {
-        const { error: supersedeError } = await db.from('romax_opportunity_analyses')
-          .update({ status: 'superseded' })
-          .eq('id', latestAnalysis.id)
-          .eq('organization_id', organizationId);
-        if (supersedeError) throw new Error(supersedeError.message);
-      }
-
-      toast({ title: 'Análisis guardado', description: `Versión ${nextVersion} creada como borrador.` });
+      toast({ title: 'Análisis guardado', description: `Versión ${savedVersion} creada como borrador.` });
       await loadData();
     } catch (error) {
       toast({ title: 'No se pudo guardar el análisis', description: error instanceof Error ? error.message : 'Error inesperado.', variant: 'destructive' });
