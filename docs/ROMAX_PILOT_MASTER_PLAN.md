@@ -330,3 +330,16 @@ El check de Vercel del PR #120 está fallando con `upgradeToPro=build-rate-limit
 3. Iniciar **R3 — bandeja de oportunidades** con modelo propio de ROMAX.
 4. Después conectar Gmail con OAuth mínimo y deduplicación.
 5. Construir el primer vertical slice R4: oportunidad → análisis → antecedentes → costos → borrador de cotización.
+
+
+## R3 — Estado de implementación · 18-nov-2026
+
+**Backend PASS:** se migraron `romax_opportunities` y `romax_opportunity_attachments` a Supabase Cloud OneFacility, con RLS, deduplicación por message/thread/attachment ID y validaciones de tenant. Las funciones auxiliares quedaron con `search_path=public`.
+
+**Frontend implementado en rama:** `#opportunities` ya dispone de bandeja, búsqueda, filtro de estado y entrada manual temporal. Cliente, sede y contacto se seleccionan desde los maestros comerciales existentes.
+
+**Sin Gmail todavía:** el cliente aún no confirmó el buzón. La conexión OAuth queda como siguiente paso condicionado a esas credenciales. No se desplegó Vercel.
+
+**QA controlado:** 0 oportunidades y 0 adjuntos persistentes en Cloud; no se usaron registros temporales para las pruebas estructurales. QA de navegador queda pendiente de ejecución manual.
+
+**Siguiente incremento recomendado:** completar QA visual/manual de `#opportunities` y después avanzar con R4-A — análisis técnico de la oportunidad — sin esperar la integración Gmail. Cuando exista el buzón, R3 podrá conectarse sobre este modelo sin rediseñar la base.
