@@ -1,7 +1,7 @@
 # ROMAX R3 — Bandeja de oportunidades y entrada Gmail
 
 **Fecha:** 18-nov-2026  
-**Estado:** diseño preparado; sin conexión Gmail ni migración Cloud.
+**Estado:** modelo R3 migrado a Supabase Cloud y bandeja manual implementada; Gmail aún no conectado.
 
 ## Objetivo
 
@@ -133,3 +133,14 @@ Después:
 5. Probar deduplicación por message/thread.
 6. Probar lectura de PDF/XLSX/DOCX/imágenes.
 7. Recién después habilitar sincronización automática.
+
+
+## Implementación actual
+
+El modelo `romax_opportunities` y `romax_opportunity_attachments` ya está en Supabase Cloud con RLS, deduplicación preparada y validación de integridad entre tenant/cliente/sede/contacto.
+
+La interfaz `#opportunities` ya está implementada en GitHub. Mientras el cliente no confirme el buzón, permite una **entrada manual temporal** para probar el flujo sin depender de Gmail.
+
+Esto no sustituye la integración Gmail: el origen manual queda separado mediante `source_system='manual'`.
+
+La conexión Gmail queda bloqueada únicamente por la ausencia del buzón/credenciales del cliente.
