@@ -40,7 +40,7 @@ import {
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'quote-history' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'managed-work-orders' | 'managed-reports' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin' | 'users' | 'facility-management') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'quote-history' | 'cost-catalog' | 'opportunities' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'managed-work-orders' | 'managed-reports' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin' | 'users' | 'facility-management') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -123,6 +123,7 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   // subcontractor_company. userRole === 'proveedor' alone is not enough —
   // AuthContext still maps facility_manager to it for legacy compatibility.
   const isProviderMarketplaceOrg = isProviderFacingOrganizationType(currentOrganization?.organizationType);
+  const canManageCostCatalog = currentOrganization?.organizationType === 'provider_company' && !!currentMembership?.isActive && ['owner', 'admin', 'manager', 'quote_manager'].includes(currentMembership.role);
   // Fase 1 · Punto 9C.1: delegated operation for a facility_manager org —
   // only when at least one OPERATIONAL client (assigned + active) grants the
   // permission AND the user's FM role allows it. Never just because a
@@ -490,6 +491,28 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               {!collapsed && 'Solicitudes Públicas'}
             </Button>
             </>
+            )}
+
+            {canManageCostCatalog && (
+              <Button
+                variant={currentView === 'cost-catalog' ? 'default' : 'ghost'}
+                className={cn('w-full justify-start', collapsed && 'justify-center px-2')}
+                onClick={() => onViewChange?.('cost-catalog')}
+              >
+                <Boxes className={cn('h-4 w-4', !collapsed && 'mr-2')} />
+                {!collapsed && 'Catálogo de costos'}
+              </Button>
+            )}
+
+            {canManageCostCatalog && (
+              <Button
+                variant={currentView === 'opportunities' ? 'default' : 'ghost'}
+                className={cn('w-full justify-start', collapsed && 'justify-center px-2')}
+                onClick={() => onViewChange?.('opportunities')}
+              >
+                <Briefcase className={cn('h-4 w-4', !collapsed && 'mr-2')} />
+                {!collapsed && 'Oportunidades'}
+              </Button>
             )}
 
             {currentOrganization?.organizationType === 'provider_company' && !!currentMembership?.isActive && (

@@ -12,6 +12,9 @@ export type DashboardView =
   | 'drafts'
   | 'public-requests'
   | 'quote-history'
+  | 'cost-catalog'
+  | 'opportunities'
+  | 'opportunity-analysis'
   | 'profile'
   | 'notifications'
   | 'approved-providers'
@@ -32,7 +35,7 @@ export type DashboardView =
   | 'facility-management';
 
 export const ALL_DASHBOARD_VIEWS: DashboardView[] = [
-  'dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'quote-history', 'profile', 'notifications',
+  'dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'quote-history', 'cost-catalog', 'opportunities', 'opportunity-analysis', 'profile', 'notifications',
   'approved-providers', 'branches', 'work-orders', 'managed-work-orders', 'managed-reports', 'my-work-orders', 'inventory', 'efficiency',
   'criticality', 'inspections', 'preventive-maintenance', 'backlog', 'contact', 'admin', 'users',
   'facility-management',
@@ -43,6 +46,7 @@ export interface EntityNavigationTarget {
   organizationId?: string;
   requestId?: string;
   quoteId?: string;
+  opportunityId?: string;
   workOrderId?: string;
   activityId?: string;
   inspectionPlanId?: string;
@@ -74,6 +78,7 @@ const QUERY_KEYS = {
   organizationId: 'org',
   requestId: 'request',
   quoteId: 'quote',
+  opportunityId: 'opportunity',
   workOrderId: 'workOrder',
   activityId: 'activity',
   inspectionPlanId: 'plan',

@@ -6,6 +6,9 @@ import { RequestList } from '@/components/requests/RequestList';
 import { DraftList } from '@/components/requests/DraftList';
 import { ProviderRequestList } from '@/components/requests/ProviderRequestList';
 import { CommercialQuoteHistoryView } from '@/components/provider/CommercialQuoteHistoryView';
+import { CostCatalogView } from '@/components/provider/CostCatalogView';
+import OpportunitiesView from '@/components/provider/OpportunitiesView';
+import OpportunityAnalysisView from '@/components/provider/OpportunityAnalysisView';
 import { DashboardMetricsCards } from '@/components/dashboard/DashboardMetricsCards';
 import { TrafficLightSummaryCard } from '@/components/dashboard/TrafficLightSummaryCard';
 import { OrganizationProfile } from '@/components/organization/OrganizationProfile';
@@ -160,6 +163,42 @@ const Dashboard = () => {
       case 'public-requests':
         if (!isProviderFacingOrganizationType(currentOrganization?.organizationType)) return <ProviderFacingAccessDenied />;
         return <PublicRequestList />;
+      case 'opportunity-analysis':
+        if (currentOrganization?.organizationType !== 'provider_company' || !currentMembership?.isActive
+            || currentMembership.organizationId !== currentOrganization.id
+            || !['owner', 'admin', 'manager', 'quote_manager'].includes(currentMembership.role)) {
+          return (
+            <div className="flex h-full items-center justify-center p-6">
+              <p className="text-sm text-muted-foreground">El análisis de oportunidades está disponible solo para usuarios autorizados de organizaciones proveedoras.</p>
+            </div>
+          );
+        }
+        return <OpportunityAnalysisView opportunityId={focus.opportunityId} />;
+      case 'opportunities':
+        // R3: commercial opportunity inbox. Gmail is not connected yet; the first version also permits controlled manual intake for QA.
+        if (currentOrganization?.organizationType !== 'provider_company' || !currentMembership?.isActive
+            || currentMembership.organizationId !== currentOrganization.id
+            || !['owner', 'admin', 'manager', 'quote_manager'].includes(currentMembership.role)) {
+          return (
+            <div className="flex h-full items-center justify-center p-6">
+              <p className="text-sm text-muted-foreground">La bandeja de oportunidades está disponible solo para usuarios autorizados de organizaciones proveedoras.</p>
+            </div>
+          );
+        }
+        return <OpportunitiesView />;
+      case 'cost-catalog':
+        // R2B: provider-owned cost catalog. Direct hash navigation is subject
+        // to the same organization and role gate as the sidebar; RLS rechecks.
+        if (currentOrganization?.organizationType !== 'provider_company' || !currentMembership?.isActive
+            || currentMembership.organizationId !== currentOrganization.id
+            || !['owner', 'admin', 'manager', 'quote_manager'].includes(currentMembership.role)) {
+          return (
+            <div className="flex h-full items-center justify-center p-6">
+              <p className="text-sm text-muted-foreground">El catálogo de costos está disponible solo para usuarios autorizados de organizaciones proveedoras.</p>
+            </div>
+          );
+        }
+        return <CostCatalogView />;
       case 'quote-history':
         // R1-E: provider-owned commercial history. Never serve it to client,
         // facility_manager, subcontractor or platform_admin orgs via hash.

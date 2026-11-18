@@ -259,3 +259,105 @@ Se cotejaron visualmente los tres PDF restantes **4080 Makro Arequipa 2, 5076 Ca
 ## Cierre de excepción documental RMX-2026-2217 — 16-nov-2026
 
 Por confirmación y autorización expresa del usuario, la línea **CISTERNA DE AGUA** se corrigió en Supabase Cloud a cantidad 40 M3, unitario equivalente **S/ 53.75** y parcial **S/ 2,150**, conciliando con el subtotal 4.2 de materiales. La fila y el componente quedaron `extracted_unverified`. El PDF fuente conserva visiblemente S/ 45 / S/ 1,800; esa diferencia se registra en la procedencia de la línea, y el original no se modifica. QA: 40 × 53.75 = 2,150; línea = componente materiales; componentes 4.1–4.4 = neto S/ 3,360. La excepción queda cerrada por decisión del usuario, sin aprobar el valor como tarifa comercial vigente. Evidencia: `docs/ROMAX_R1D2E_CLASSIC_BATCH1_QA.md`.
+
+
+## R2A — Catálogo independiente de costos: contrato técnico e implementación preparada (17-nov-2026)
+
+Decisiones aprobadas por ROMAX: fuentes mixtas (proveedores y costos internos); costo separado de precio de venta; revisión humana antes de activar; mano de obra por hora/jornada; vigencia sin vencimiento obligatorio; múltiples proveedores por recurso; conservar PEN/USD original y registrar conversión a PEN con FX documentado. El FX USD/PEN predeterminado será configurable por organización y no se inicializa con un valor inventado.
+
+**Diseño simplificado:** se reutilizan `commercial_clients`, `commercial_client_sites` y `commercial_client_contacts`; no se duplican clientes. No se reutilizan `materials`/inventario ni el histórico de cotizaciones como tarifario. El proveedor es opcional en tarifas internas. Categorías/unidades son globales y predefinidas. La fuente y revisión se guardan en la tarifa, sin tabla separada de documentos/workflow en esta primera etapa. La utilidad e impuestos permanecen fuera del catálogo de recursos.
+
+**Implementación preparada en rama `feature/romax-r2a-cost-catalog`:**
+1. `20261117130000_romax_cost_catalog_foundation.sql`: categorías, unidades y configuración económica por organización.
+2. `20261117130100_romax_cost_catalog_entities.sql`: proveedores y recursos.
+3. `20261117130200_romax_cost_rates_versioning.sql`: tarifas, snapshot PEN, versionado concurrente, revisión, vigencia y RLS.
+
+Test pgTAP preparado: `supabase/tests/romax_r2a_cost_catalog.test.sql` (21 aserciones; solo base local/desechable). Documento técnico: `docs/ROMAX_R2A_COST_CATALOG_TECHNICAL_DESIGN.md`.
+
+**Estado honesto:** SQL y test escritos y sometidos a revisión estática inicial; pgTAP, aplicación de migraciones en local, advisors y CI todavía no ejecutados. No se aplicó nada en Supabase Cloud, no se crearon registros de negocio y no se desplegó Vercel. Los gates previos a Cloud son: ejecutar las tres migraciones en base desechable, correr las 21 pruebas, resolver fallos, ejecutar advisors y revisar PR. Se requiere autorización separada para aplicar a Supabase Cloud.
+
+
+## R2A — Ejecución controlada migración 1 (17-nov-2026)
+
+**R2A-01 PASS:** aplicadas en Supabase Cloud `20261117185721_romax_cost_catalog_foundation` y hardening `20261117185936_romax_cost_catalog_foundation_hardening`. Resultado 8 categorías, 13 unidades, RLS/grants verificados, FX no configurado y 0 filas settings persistentes. Pruebas transaccionales owner/actualización/aislamiento externo con ROLLBACK PASS. Advisors sin hallazgos de seguridad nuevos en las tablas R2A; los dos avisos de initplan y la FK sin índice se corrigieron. Queda un aviso de índice aún no usado, esperado por la tabla vacía. No se modificó el inventario ni cotizaciones existentes. Informe: `docs/ROMAX_R2A_01_FOUNDATION_QA.md`.
+
+Siguiente paso: R2A-02 proveedores y recursos, con ejecución y pruebas independientes. R2A-03 no se aplica hasta cerrar R2A-02.
+
+
+## R2A-02 — Proveedores y recursos (17-nov-2026)
+
+**PASS:** aplicadas en Supabase Cloud `20261117191121_romax_cost_catalog_entities` y `20261117191257_romax_cost_catalog_entities_hardening`. Creadas `provider_cost_suppliers` y `provider_cost_items`, con RLS, políticas por organización, RUC/código únicos por organización, proveedor opcional en costos internos y sin hard delete desde authenticated. QA transaccional owner: altas de dos proveedores y un recurso; duplicados de RUC/código rechazados; `created_by` automático; usuario de otro tenant sin lectura; rollback y recuento posterior 0/0. Tras hardening, alta owner + rollback PASS. Advisors Security sin hallazgos nuevos; Performance conserva solo avisos `unused_index` esperados en tablas vacías. No se modificaron clientes, inventario ni cotizaciones. Informe: `docs/ROMAX_R2A_02_SUPPLIERS_ITEMS_QA.md`.
+
+Siguiente gate: R2A-03 tarifas/versiones/aprobación, sin aplicar hasta cerrar su revisión y autorización.
+
+## R2A-03 — Tarifas y versiones (17-nov-2026)
+
+**PASS:** aplicadas en Supabase Cloud `20261117193442_romax_cost_rates_versioning`, `20261117193538_romax_cost_rates_guard_fix` y `20261117193631_romax_cost_rates_hardening`. Incluye tarifas, moneda original, snapshot FX a PEN, fuente, tratamiento tributario, versionado automático por serie recurso/proveedor, estados y aprobación básica, inmutabilidad tras aprobar y prevención de vigencias superpuestas. QA transaccional con rollback PASS: USD 100 × 3.75 = PEN 375; versión 1/2; autoaprobación auditada; edición de precio aprobado rechazada; cierre de vigencia y nueva versión permitidos; proveedor alternativo y costo interno sin proveedor; USD sin FX fechado rechazado; solapamiento rechazado; otro tenant sin lectura. Se detectó y corrigió un defecto del trigger que impedía cerrar vigencia por comparar la columna generada `unit_cost_pen`. Tras hardening, smoke insert owner PASS. Cero tarifas/proveedores/recursos/settings persistentes para ROMAX. Security Advisors sin hallazgos nuevos; performance sin nuevos FKs faltantes ni initplan, tres avisos unused_index esperables por tabla vacía. Informe: `docs/ROMAX_R2A_03_COST_RATES_VERSIONING_QA.md`.
+
+**R2A completo:** migraciones 01, 02 y 03 aplicadas y probadas por separado. Siguiente trabajo: R2B interfaz y primeros datos reales bajo aprobación; R2C importación de fuentes; R2D revisión/flujo; R2E motor económico; R2F QA e integración futura con cotizador. No se modificó Vercel ni se integró aún el cotizador.
+
+## R2B — Primera entrega UI: proveedores y recursos (17-nov-2026)
+
+Se añadió `CostCatalogView` y navegación `#cost-catalog`, restringida a organizaciones `provider_company` y roles owner/admin/manager/quote_manager. Permite listar, buscar, crear, editar, activar y desactivar proveedores y recursos; consume categorías/unidades precargadas. No crea clientes, sedes ni contactos; no registra tarifas ni tipo de cambio. Preview Vercel del commit `b276b0a` quedó READY y el check Vercel en GitHub success. No hubo merge ni producción. No se crearon registros reales. **Pendiente:** QA CRUD y RLS en navegador con sesión ROMAX, prueba de rol no autorizado y aislamiento con otro tenant. Informe: `docs/ROMAX_R2B_SUPPLIERS_ITEMS_UI_QA.md`. Tras PASS, R2C tarifas y proveedores asociados.
+
+## R2B cierre y R2C primera implementación (17-nov-2026)
+
+**R2B confirmado PASS por usuario:** vista previa validada y altas reales desde la interfaz comprobadas en Cloud: 1 proveedor activo (Proveedor Test) y 1 recurso activo (Material Test 001, código PR001, MATERIAL/UND), creados por miembro autorizado ROMAX. Tarifas: 0; FX settings: 0. La confirmación cubre navegación, carga y altas; no declara edición/desactivación probadas.
+
+**R2C implementado en código, pendiente de preview/QA:** pestaña Tarifas para alta de costos PEN/USD, proveedor opcional, fuente y referencia, IGV, vigencia y estado inicial pending_review. Añade formulario para configurar FX USD/PEN de ROMAX con valor positivo y fecha, sin inicializar un valor inventado. Cada tarifa conserva snapshot FX y número de versión generado en DB. Documento: `docs/ROMAX_R2C_RATE_ENTRY_DESIGN.md`.
+
+**Bloqueo actual:** Vercel devolvió `build-rate-limit` para el commit que integra R2C; no hay preview READY con esta pestaña. No se hizo retry, merge ni producción. Siguiente gate: esperar disponibilidad de builds, obtener preview y ejecutar QA autenticado antes de cargar tarifas reales.
+
+## Estado maestro actualizado — 18-nov-2026
+
+### R1-D — Histórico
+La extracción estructural del piloto quedó en **25/25 documentos (100 %)**, con **186 partidas, 93 secciones y 109 componentes**. Los datos estructurados permanecen `extracted_unverified`: son referencia histórica y no tarifario vigente. Quedan como gates separados el QA visual real de usuario, certificación de sesión/RLS y cierre de cualquier advertencia documental pendiente.
+
+### R2 — Catálogo independiente de costos
+R2A quedó completo en Supabase Cloud: foundation, proveedores/recursos y tarifas/versionado/revisión. R2B tiene UI y datos de prueba. R2C incorporó comparación de hasta cuatro alternativas y un seed controlado de **35 recursos normalizados** derivados del piloto, sin copiar precios históricos como tarifas.
+
+Actualmente ROMAX tiene **36 recursos** en el catálogo (35 del seed + 1 recurso de prueba) y **2 tarifas de prueba**, ambas `pending_review`. No se han creado tarifas a partir de los precios de las 25 cotizaciones.
+
+### R2D — Revisión de tarifas
+Se implementó la bandeja de revisión en `CostRatesPanel`: aprobación/rechazo explícito, motivo obligatorio al rechazar y visualización de los datos que deben revisarse. Documento QA: `docs/ROMAX_R2D_RATE_REVIEW_QA.md`.
+
+### Bloqueo operativo actual
+El check de Vercel del PR #120 está fallando con `upgradeToPro=build-rate-limit`, por lo que el nuevo commit no puede obtener todavía un preview. Esto bloquea **QA visual**, no el desarrollo ni la revisión del código. No se ha hecho merge ni producción.
+
+### Siguiente ruta de alto valor
+1. Cerrar R2D con QA visual cuando haya preview.
+2. Completar el mínimo útil de recursos de mano de obra y servicios/costos claramente normalizables, sin inventar tarifas.
+3. Iniciar **R3 — bandeja de oportunidades** con modelo propio de ROMAX.
+4. Después conectar Gmail con OAuth mínimo y deduplicación.
+5. Construir el primer vertical slice R4: oportunidad → análisis → antecedentes → costos → borrador de cotización.
+
+
+## R3 — Estado de implementación · 18-nov-2026
+
+**Backend PASS:** se migraron `romax_opportunities` y `romax_opportunity_attachments` a Supabase Cloud OneFacility, con RLS, deduplicación por message/thread/attachment ID y validaciones de tenant. Las funciones auxiliares quedaron con `search_path=public`.
+
+**Frontend implementado en rama:** `#opportunities` ya dispone de bandeja, búsqueda, filtro de estado y entrada manual temporal. Cliente, sede y contacto se seleccionan desde los maestros comerciales existentes.
+
+**Sin Gmail todavía:** el cliente aún no confirmó el buzón. La conexión OAuth queda como siguiente paso condicionado a esas credenciales. No se desplegó Vercel.
+
+**QA controlado:** 0 oportunidades y 0 adjuntos persistentes en Cloud; no se usaron registros temporales para las pruebas estructurales. QA de navegador queda pendiente de ejecución manual.
+
+**Siguiente incremento recomendado:** completar QA visual/manual de `#opportunities` y después avanzar con R4-A — análisis técnico de la oportunidad — sin esperar la integración Gmail. Cuando exista el buzón, R3 podrá conectarse sobre este modelo sin rediseñar la base.
+
+
+## R4-A — Estado de implementación · 18-nov-2026
+
+Se avanzó R4-A sin depender de Gmail: 
+
+- `romax_opportunity_analyses` versiona el análisis técnico.
+- `romax_opportunity_analysis_items` estructura servicios, materiales, equipos, mano de obra, movilización y otros.
+- El análisis permite cantidades/unidades/especificaciones y puede sugerir un recurso de R2, pero **no contiene precios, costos ni márgenes**.
+- Se implementó el editor manual `#opportunity-analysis?opportunity=<uuid>` y el botón **Analizar** desde la bandeja R3.
+- La versión anterior queda `superseded` al guardar una nueva versión.
+- QA estructural Cloud PASS; QA navegador pendiente.
+
+### Próximo orden
+1. QA manual de R3 + R4-A usando una oportunidad de prueba creada desde la interfaz.
+2. R4-B: comparación/recuperación de antecedentes de las 25 cotizaciones.
+3. R4-C: vincular partidas aprobadas con R2 y ejecutar cálculo económico determinístico.
+4. Gmail se integra cuando el cliente entregue el buzón, sin bloquear R4.
