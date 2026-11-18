@@ -54,7 +54,7 @@ SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_it
  VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000001','M','PEN',9.1,1,'not_required',NULL,'unknown','supplier_quote',current_date+1 ,'pending_review')$$,'new version after validity closure');
 SELECT is((SELECT max(version_number) FROM public.provider_cost_rates WHERE supplier_id='b2300000-0000-0000-0000-000000000001'),2,'second version numbered');
 SELECT pg_temp.as_user('b2100000-0000-0000-0000-000000000003');
-SELECT is((SELECT count(*) FROM public.provider_cost_rates),2::bigint,'same-tenant viewer can read rates');
+SELECT is((SELECT count(*) FROM public.provider_cost_rates),3::bigint,'same-tenant viewer can read all three rates');
 SELECT throws_ok($$INSERT INTO public.provider_cost_items(organization_id,name,category_code,default_unit_code)
  VALUES ('b2200000-0000-0000-0000-000000000001','Forbidden','MATERIAL','M')$$,'42501',NULL,'viewer cannot create cost item');
 SELECT pg_temp.as_user('b2100000-0000-0000-0000-000000000002');
