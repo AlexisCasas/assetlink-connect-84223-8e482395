@@ -13,6 +13,7 @@ export type DashboardView =
   | 'public-requests'
   | 'quote-history'
   | 'cost-catalog'
+  | 'opportunities'
   | 'profile'
   | 'notifications'
   | 'approved-providers'
@@ -33,7 +34,7 @@ export type DashboardView =
   | 'facility-management';
 
 export const ALL_DASHBOARD_VIEWS: DashboardView[] = [
-  'dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'quote-history', 'cost-catalog', 'profile', 'notifications',
+  'dashboard', 'assets', 'requests', 'drafts', 'public-requests', 'quote-history', 'cost-catalog', 'opportunities', 'profile', 'notifications',
   'approved-providers', 'branches', 'work-orders', 'managed-work-orders', 'managed-reports', 'my-work-orders', 'inventory', 'efficiency',
   'criticality', 'inspections', 'preventive-maintenance', 'backlog', 'contact', 'admin', 'users',
   'facility-management',
