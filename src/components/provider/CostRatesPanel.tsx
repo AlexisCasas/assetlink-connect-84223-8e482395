@@ -127,7 +127,8 @@ export function CostRatesPanel() {
   const [form, setForm] = useState<RateForm>(newRateForm());
   const [fxRateForm, setFxRateForm] = useState({ rate: '', date: '', reference: '' });
   const [selectedRateIds, setSelectedRateIds] = useState<string[]>([]);
-  const [reviewingRateId, setReviewingRateId] = useState<string | null>(null);
+  const [rejectingRateId, setRejectingRateId] = useState<string | null>(null);
+  const [savingReviewRateId, setSavingReviewRateId] = useState<string | null>(null);
   const [reviewNote, setReviewNote] = useState('');
 
   const loadData = useCallback(async () => {
@@ -309,20 +310,22 @@ export function CostRatesPanel() {
       toast.error('Para rechazar una tarifa registra el motivo de revisión.');
       return;
     }
-    setReviewingRateId(rate.id);
+    setSavingReviewRateId(rate.id);
     try {
-      const { error } = await catalogDb.from('provider_cost_rates').update({
+      const { data, error } = await catalogDb.from('provider_cost_rates').update({
         status: decision,
         review_note: note || null,
-      }).eq('id', rate.id).eq('organization_id', organizationId);
+      }).eq('id', rate.id).eq('organization_id', organizationId).eq('status', 'pending_review').select('id');
       if (error) throw new Error(error.message);
+      if (!Array.isArray(data) || data.length !== 1) throw new Error('La tarifa ya fue revisada o no tienes permisos para actualizarla. Actualiza la lista.');
       toast.success(decision === 'approved' ? 'Tarifa aprobada.' : 'Tarifa rechazada y devuelta a revisión.');
       setReviewNote('');
+      setRejectingRateId(null);
       await loadData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo actualizar la revisión de la tarifa.');
     } finally {
-      setReviewingRateId(null);
+      setSavingReviewRateId(null);
     }
   };
 
@@ -357,7 +360,8 @@ export function CostRatesPanel() {
             {pendingRates.map((rate) => {
               const item = items.find((row) => row.id === rate.cost_item_id);
               const supplier = suppliers.find((row) => row.id === rate.supplier_id);
-              const isReviewing = reviewingRateId === rate.id;
+              const isSaving = savingReviewRateId === rate.id;
+              const isRejecting = rejectingRateId === rate.id;
               return (
                 <div key={rate.id} className="rounded-md border bg-background p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -367,20 +371,20 @@ export function CostRatesPanel() {
                       <p className="mt-1 text-xs text-muted-foreground">Fuente: {sourceLabels[rate.source_type] ?? rate.source_type}{rate.source_reference ? ' · ' + rate.source_reference : ''} · Vigencia: {dateLabel(rate.valid_from)} – {dateLabel(rate.valid_until)}</p>
                     </div>
                     <div className="flex shrink-0 gap-2">
-                      <Button type="button" size="sm" onClick={() => void reviewRate(rate, 'approved')} disabled={isReviewing}>
+                      <Button type="button" size="sm" onClick={() => void reviewRate(rate, 'approved')} disabled={!!savingReviewRateId}>
                         <CheckCircle2 className="mr-1.5 h-4 w-4" />Aprobar
                       </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => { setReviewingRateId(rate.id); setReviewNote(''); }} disabled={isReviewing}>
+                      <Button type="button" size="sm" variant="outline" onClick={() => { setRejectingRateId(rate.id); setReviewNote(''); }} disabled={!!savingReviewRateId}>
                         <XCircle className="mr-1.5 h-4 w-4" />Rechazar
                       </Button>
                     </div>
                   </div>
-                  {reviewingRateId === rate.id && (
+                  {isRejecting && (
                     <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
                       <Textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} rows={2} placeholder="Motivo de rechazo o nota de revisión" aria-label="Motivo de rechazo o nota de revisión" />
                       <div className="flex items-end gap-2">
-                        <Button type="button" variant="destructive" onClick={() => void reviewRate(rate, 'rejected')} disabled={isReviewing || !reviewNote.trim()}>Confirmar rechazo</Button>
-                        <Button type="button" variant="ghost" onClick={() => { setReviewingRateId(null); setReviewNote(''); }} disabled={isReviewing}>Cancelar</Button>
+                        <Button type="button" variant="destructive" onClick={() => void reviewRate(rate, 'rejected')} disabled={isSaving || !reviewNote.trim()}>Confirmar rechazo</Button>
+                        <Button type="button" variant="ghost" onClick={() => { setRejectingRateId(null); setReviewNote(''); }} disabled={!!savingReviewRateId}>Cancelar</Button>
                       </div>
                     </div>
                   )}
