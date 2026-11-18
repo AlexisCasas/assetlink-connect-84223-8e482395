@@ -5,15 +5,15 @@
 
 ## Resultado
 
-Se cargaron **34 recursos normalizados** en `provider_cost_items` para ROMAX.
+Se cargaron **35 recursos normalizados** en `provider_cost_items` para ROMAX.
 
-- 33 materiales.
+- 34 materiales.
 - 1 equipo.
 - 0 tarifas nuevas.
 - 0 proveedores nuevos.
 - 0 modificaciones al histórico comercial.
 
-El catálogo pasó de 2 registros previos (1 recurso de prueba + 1 registro previo existente según el estado anterior) a **36 registros totales** en la organización.
+El catálogo pasó de 1 registro previo de prueba a **36 registros totales** en la organización. en la organización.
 
 ## Criterio de selección
 
@@ -53,7 +53,7 @@ El histórico comercial permanece separado del catálogo de costos.
 
 ## Próximo paso
 
-1. Revisar visualmente los 34 recursos cargados.
+1. Revisar visualmente los 35 recursos cargados.
 2. Completar una segunda tanda con servicios claramente normalizables.
 3. Resolver las unidades históricas que todavía no tienen equivalente canónico, solo si existe una decisión funcional.
 4. Crear tarifas únicamente desde fuentes de costo reales.
