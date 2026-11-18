@@ -125,6 +125,7 @@ export function CostRatesPanel() {
   const [savingFx, setSavingFx] = useState(false);
   const [form, setForm] = useState<RateForm>(newRateForm());
   const [fxRateForm, setFxRateForm] = useState({ rate: '', date: '', reference: '' });
+  const [selectedRateIds, setSelectedRateIds] = useState<string[]>([]);
 
   const loadData = useCallback(async () => {
     if (!organizationId || !canManage) return;
@@ -181,6 +182,24 @@ export function CostRatesPanel() {
     () => activeSuppliers.find((supplier) => supplier.id === form.supplier_id) ?? null,
     [activeSuppliers, form.supplier_id],
   );
+  const selectedRates = useMemo(() => rates.filter((rate) => selectedRateIds.includes(rate.id)), [rates, selectedRateIds]);
+  const selectedRateItem = selectedRates.length > 0 ? items.find((item) => item.id === selectedRates[0].cost_item_id) ?? null : null;
+  const comparisonMinPen = selectedRates.length > 0 ? Math.min(...selectedRates.map((rate) => Number(rate.unit_cost_pen))) : null;
+  const toggleComparison = (rate: Rate) => {
+    if (selectedRateIds.includes(rate.id)) {
+      setSelectedRateIds((current) => current.filter((id) => id !== rate.id));
+      return;
+    }
+    if (selectedRates.length >= 4) {
+      toast.info('Puedes comparar hasta 4 alternativas a la vez.');
+      return;
+    }
+    if (selectedRates.length > 0 && selectedRates.some((selected) => selected.cost_item_id !== rate.cost_item_id)) {
+      toast.info('La comparación debe hacerse entre alternativas del mismo recurso.');
+      return;
+    }
+    setSelectedRateIds((current) => [...current, rate.id]);
+  };
   const defaultFxReady = settings?.default_usd_pen_rate !== null
     && settings?.default_usd_pen_rate !== undefined
     && !!settings.fx_date;
@@ -290,10 +309,51 @@ export function CostRatesPanel() {
           <h2 className="text-lg font-semibold">Tarifas registradas</h2>
           <p className="text-sm text-muted-foreground">Registra costos de proveedores o costos internos. Cada alta crea una nueva versión y conserva su fuente.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void loadData()} disabled={loading}>
-          <RefreshCw className="mr-2 h-4 w-4" />Actualizar
-        </Button>
+        <div className="flex items-center gap-2">
+          {selectedRates.length > 0 && <Button variant="ghost" size="sm" onClick={() => setSelectedRateIds([])}>Limpiar comparación</Button>}
+          <Button variant="outline" size="sm" onClick={() => void loadData()} disabled={loading}>
+            <RefreshCw className="mr-2 h-4 w-4" />Actualizar
+          </Button>
+        </div>
       </div>
+
+      {selectedRates.length >= 2 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Comparar alternativas</CardTitle>
+            <CardDescription>
+              {selectedRateItem?.name ?? 'Recurso'} · {selectedRates.length} alternativas. El menor equivalente PEN se muestra solo como referencia; la selección final también debe considerar proveedor, vigencia, fuente, impuestos y estado de revisión.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <div className="min-w-[760px] grid gap-2" style={{ gridTemplateColumns: 'repeat(' + selectedRates.length + ', minmax(0, 1fr))' }}>
+              {selectedRates.map((rate) => {
+                const supplier = suppliers.find((row) => row.id === rate.supplier_id);
+                const isLowest = comparisonMinPen !== null && Number(rate.unit_cost_pen) === comparisonMinPen;
+                return (
+                  <div key={rate.id} className="rounded-md border p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-medium">{supplier?.display_name ?? (rate.supplier_id ? 'Proveedor no disponible' : 'Costo interno')}</p>
+                        <p className="text-xs text-muted-foreground">v{rate.version_number} · {statusLabels[rate.status] ?? rate.status}</p>
+                      </div>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => toggleComparison(rate)}>Quitar</Button>
+                    </div>
+                    <div className="mt-3 space-y-1 text-sm">
+                      <p><span className="text-muted-foreground">Original:</span> {money(Number(rate.unit_cost_original), rate.currency_code)}</p>
+                      <p className={isLowest ? 'font-semibold' : ''}><span className="text-muted-foreground">Equivalente:</span> {money(Number(rate.unit_cost_pen), 'PEN')}{isLowest ? ' · menor' : ''}</p>
+                      <p><span className="text-muted-foreground">Unidad:</span> {rate.unit_code}</p>
+                      <p><span className="text-muted-foreground">Vigencia:</span> {dateLabel(rate.valid_from)} – {dateLabel(rate.valid_until)}</p>
+                      <p><span className="text-muted-foreground">Fuente:</span> {sourceLabels[rate.source_type] ?? rate.source_type}</p>
+                      {rate.currency_code === 'USD' && <p><span className="text-muted-foreground">FX:</span> {Number(rate.fx_rate_to_pen).toFixed(4)} · {dateLabel(rate.fx_date)}</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -339,7 +399,12 @@ export function CostRatesPanel() {
                       <p className="font-medium">{item?.name ?? 'Recurso no disponible'} <span className="text-xs text-muted-foreground">v{rate.version_number}</span></p>
                       <p className="text-xs text-muted-foreground">{supplier?.display_name ?? (rate.supplier_id ? 'Proveedor inactivo/no disponible' : 'Costo interno')}</p>
                     </div>
-                    <Badge variant={rate.status === 'approved' ? 'default' : rate.status === 'rejected' ? 'destructive' : 'secondary'}>{statusLabels[rate.status] ?? rate.status}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" size="sm" variant={selectedRateIds.includes(rate.id) ? 'secondary' : 'outline'} onClick={() => toggleComparison(rate)}>
+                        {selectedRateIds.includes(rate.id) ? 'En comparación' : 'Comparar'}
+                      </Button>
+                      <Badge variant={rate.status === 'approved' ? 'default' : rate.status === 'rejected' ? 'destructive' : 'secondary'}>{statusLabels[rate.status] ?? rate.status}</Badge>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 rounded-md bg-muted/40 p-3 sm:grid-cols-3">
                     <div><p className="text-xs text-muted-foreground">Costo original</p><p className="font-semibold">{money(Number(rate.unit_cost_original), rate.currency_code)}</p></div>
