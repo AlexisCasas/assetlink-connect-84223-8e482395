@@ -22,10 +22,6 @@ SELECT ok(NOT has_function_privilege('anon','public.romax_save_opportunity_analy
 SELECT ok(has_function_privilege('authenticated','public.romax_save_opportunity_analysis_v2(uuid,text,text,jsonb,jsonb,jsonb,jsonb)','EXECUTE'),'authenticated can call v2');
 SELECT ok((SELECT NOT prosecdef FROM pg_proc WHERE oid='public.romax_save_opportunity_analysis_v2(uuid,text,text,jsonb,jsonb,jsonb,jsonb)'::regprocedure),'v2 is security invoker');
 
-SET LOCAL ROLE authenticated;
-SELECT pg_temp.r4a1_as_user('d6100000-0000-0000-0000-000000000001');
-INSERT INTO public.romax_opportunities(id,organization_id,subject,source_system)
-VALUES ('d6300000-0000-0000-0000-000000000001','d6200000-0000-0000-0000-0000000000a1','R4A1 idempotency QA','manual');
 CREATE FUNCTION pg_temp.save_r4a1(p_scope text, p_items jsonb, p_considerations jsonb DEFAULT '[]'::jsonb)
 RETURNS TABLE(analysis_id uuid,version_number integer,created_new boolean)
 LANGUAGE sql SECURITY INVOKER AS $fn$
@@ -35,6 +31,12 @@ LANGUAGE sql SECURITY INVOKER AS $fn$
    '["Confirmar medidas"]'::jsonb,p_considerations,'["Acceso"]'::jsonb,p_items
  );
 $fn$;
+
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.r4a1_as_user('d6100000-0000-0000-0000-000000000001');
+INSERT INTO public.romax_opportunities(id,organization_id,subject,source_system)
+VALUES ('d6300000-0000-0000-0000-000000000001','d6200000-0000-0000-0000-0000000000a1','R4A1 idempotency QA','manual');
+
 
 SELECT lives_ok($save$
   SELECT * FROM pg_temp.save_r4a1('Montaje de dos equipos',
