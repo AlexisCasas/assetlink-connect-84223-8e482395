@@ -41,6 +41,27 @@ REVOKE DELETE ON TABLE public.romax_opportunities,
   public.romax_opportunity_analyses,
   public.romax_opportunity_analysis_items FROM authenticated;
 
+-- Protect tenant linkage, origin identifiers, creator, and version audit from
+-- client-side reassignment. R4-A changes produce a new version, never an
+-- in-place rewrite of a prior analysis or its items.
+REVOKE UPDATE ON TABLE public.romax_opportunities,
+  public.romax_opportunity_attachments,
+  public.romax_opportunity_analyses,
+  public.romax_opportunity_analysis_items FROM authenticated;
+
+GRANT UPDATE (
+  status, classification, classification_confidence, classification_reason,
+  commercial_client_id, commercial_site_id, commercial_contact_id,
+  match_status, match_notes, suggested_match, subject, sender_email,
+  received_at, snippet, internal_notes
+) ON TABLE public.romax_opportunities TO authenticated;
+GRANT UPDATE (
+  processing_status, error_message, storage_path, checksum_sha256,
+  filename, mime_type, size_bytes
+) ON TABLE public.romax_opportunity_attachments TO authenticated;
+GRANT UPDATE (status)
+  ON TABLE public.romax_opportunity_analyses TO authenticated;
+
 -- Gmail attachment identifiers are scoped to a message. Message+attachment
 -- is the idempotency key, not an attachment ID on its own.
 DROP INDEX IF EXISTS public.romax_opportunity_attachments_gmail_uidx;
