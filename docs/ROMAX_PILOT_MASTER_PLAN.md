@@ -343,3 +343,21 @@ El check de Vercel del PR #120 está fallando con `upgradeToPro=build-rate-limit
 **QA controlado:** 0 oportunidades y 0 adjuntos persistentes en Cloud; no se usaron registros temporales para las pruebas estructurales. QA de navegador queda pendiente de ejecución manual.
 
 **Siguiente incremento recomendado:** completar QA visual/manual de `#opportunities` y después avanzar con R4-A — análisis técnico de la oportunidad — sin esperar la integración Gmail. Cuando exista el buzón, R3 podrá conectarse sobre este modelo sin rediseñar la base.
+
+
+## R4-A — Estado de implementación · 18-nov-2026
+
+Se avanzó R4-A sin depender de Gmail: 
+
+- `romax_opportunity_analyses` versiona el análisis técnico.
+- `romax_opportunity_analysis_items` estructura servicios, materiales, equipos, mano de obra, movilización y otros.
+- El análisis permite cantidades/unidades/especificaciones y puede sugerir un recurso de R2, pero **no contiene precios, costos ni márgenes**.
+- Se implementó el editor manual `#opportunity-analysis?opportunity=<uuid>` y el botón **Analizar** desde la bandeja R3.
+- La versión anterior queda `superseded` al guardar una nueva versión.
+- QA estructural Cloud PASS; QA navegador pendiente.
+
+### Próximo orden
+1. QA manual de R3 + R4-A usando una oportunidad de prueba creada desde la interfaz.
+2. R4-B: comparación/recuperación de antecedentes de las 25 cotizaciones.
+3. R4-C: vincular partidas aprobadas con R2 y ejecutar cálculo económico determinístico.
+4. Gmail se integra cuando el cliente entregue el buzón, sin bloquear R4.
