@@ -104,7 +104,8 @@ $dupe$,'23505',NULL,'same message and attachment cannot duplicate');
 SELECT throws_ok($invalid$
  INSERT INTO public.romax_opportunities(organization_id,subject,commercial_site_id)
  VALUES('c6200000-0000-0000-0000-0000000000a1','Invalid orphan site','c6400000-0000-0000-0000-000000000001')
-$invalid$,'23514',NULL,'site cannot be linked without client');
+-- The BEFORE INSERT tenant-link guard rejects first (P0001) before CHECK.
+$invalid$,'P0001',NULL,'site cannot be linked without client');
 
 SELECT pg_temp.romax_as_user('c6100000-0000-0000-0000-000000000002');
 SELECT is((SELECT count(*) FROM public.romax_opportunities),0::bigint,'viewer cannot read commercial opportunities');
