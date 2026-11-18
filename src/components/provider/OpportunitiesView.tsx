@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BriefcaseBusiness, Plus, RefreshCw, Search, Paperclip } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { navigateToEntity } from '@/lib/entityNavigation';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -247,7 +248,12 @@ const OpportunitiesView = () => {
                       {clientName(opportunity.commercial_client_id)} · {siteName(opportunity.commercial_site_id)} · {contactName(opportunity.commercial_contact_id)}
                     </p>
                   </div>
-                  <Badge variant="secondary">{matchLabels[opportunity.match_status] ?? opportunity.match_status}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{matchLabels[opportunity.match_status] ?? opportunity.match_status}</Badge>
+                    <Button size="sm" variant="outline" onClick={() => navigateToEntity({ view: 'opportunity-analysis', opportunityId: opportunity.id })}>
+                      Analizar
+                    </Button>
+                  </div>
                 </div>
                 <div className="grid gap-2 text-sm sm:grid-cols-2">
                   <p><span className="text-muted-foreground">Origen:</span> {opportunity.source_system === 'gmail' ? 'Gmail' : 'Manual'}</p>
