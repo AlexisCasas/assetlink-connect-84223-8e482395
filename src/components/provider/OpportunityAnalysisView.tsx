@@ -6,6 +6,7 @@ import { navigateToEntity } from '@/lib/entityNavigation';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { OpportunityAnalysisHistory } from '@/components/provider/OpportunityAnalysisHistory';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +16,7 @@ type Props = { opportunityId?: string };
 
 type Opportunity = {
   id: string;
+  status: string;
   subject: string | null;
   sender_email: string | null;
   commercial_client_id: string | null;
@@ -79,13 +81,14 @@ const OpportunityAnalysisView = ({ opportunityId }: Props) => {
   const [items, setItems] = useState<AnalysisItem[]>([emptyItem()]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [historyReload, setHistoryReload] = useState(0);
 
   const loadData = useCallback(async () => {
     if (!organizationId || !authorized || !opportunityId) return;
     setLoading(true);
     try {
       const [opportunityResult, resourceResult, analysisResult] = await Promise.all([
-        db.from('romax_opportunities').select('id,subject,sender_email,commercial_client_id,commercial_site_id').eq('id', opportunityId).eq('organization_id', organizationId).maybeSingle(),
+        db.from('romax_opportunities').select('id,status,subject,sender_email,commercial_client_id,commercial_site_id').eq('id', opportunityId).eq('organization_id', organizationId).maybeSingle(),
         db.from('provider_cost_items').select('id,name,default_unit_code,category_code').eq('organization_id', organizationId).eq('is_active', true).order('name'),
         db.from('romax_opportunity_analyses').select('*').eq('opportunity_id', opportunityId).eq('organization_id', organizationId).order('version_number', { ascending: false }).limit(1).maybeSingle(),
       ]);
@@ -150,7 +153,7 @@ const OpportunityAnalysisView = ({ opportunityId }: Props) => {
       // A single SECURITY INVOKER RPC saves the analysis and its items, then
       // supersedes the previous version in the same transaction. No partial
       // versions are possible when an item fails validation.
-      const { data, error } = await db.rpc('romax_save_opportunity_analysis_v1', {
+      const { data, error } = await db.rpc('romax_save_opportunity_analysis_v2', {
         p_opportunity_id: opportunityId,
         p_requested_service: requestedService.trim() || null,
         p_scope_of_work: scope.trim() || null,
@@ -171,7 +174,11 @@ const OpportunityAnalysisView = ({ opportunityId }: Props) => {
       if (!Number.isInteger(savedVersion) || savedVersion < 1) {
         throw new Error('El servidor no confirmó la versión del análisis.');
       }
-      toast({ title: 'Análisis guardado', description: `Versión ${savedVersion} creada como borrador.` });
+      const createdNew = data[0]?.created_new === true;
+      toast(createdNew
+        ? { title: 'Análisis guardado', description: `Versión ${savedVersion} creada como borrador.` }
+        : { title: 'Sin cambios', description: `La versión ${savedVersion} sigue vigente. No se creó otra versión.` });
+      setHistoryReload((value) => value + 1);
       await loadData();
     } catch (error) {
       toast({ title: 'No se pudo guardar el análisis', description: error instanceof Error ? error.message : 'Error inesperado.', variant: 'destructive' });
@@ -199,7 +206,11 @@ const OpportunityAnalysisView = ({ opportunityId }: Props) => {
           <Button variant="ghost" className="mb-2 px-0" onClick={() => navigateToEntity({ view: 'opportunities' })}>
             <ArrowLeft className="mr-2 h-4 w-4" />Volver a oportunidades
           </Button>
-          <h1 className="text-2xl font-semibold tracking-tight">Análisis técnico</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Análisis técnico</h1>
+            {latestAnalysis && <Badge variant="default">Versión {latestAnalysis.version_number} · {latestAnalysis.status === 'draft' ? 'Borrador vigente' : latestAnalysis.status === 'ready_for_review' ? 'En revisión' : 'Histórica'}</Badge>}
+            {opportunity?.status && <Badge variant="outline">Oportunidad: {opportunity.status === 'in_analysis' ? 'En análisis' : opportunity.status === 'new' ? 'Nueva' : opportunity.status}</Badge>}
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">{opportunity?.subject || 'Solicitud sin asunto'} · {opportunity?.sender_email || 'Remitente no informado'}</p>
         </div>
         <Button variant="outline" onClick={() => void loadData()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Actualizar</Button>
@@ -209,7 +220,7 @@ const OpportunityAnalysisView = ({ opportunityId }: Props) => {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">1. Entender la solicitud</CardTitle>
-            <CardDescription>Esta capa describe qué se está solicitando. Todavía no calcula costos ni precios.</CardDescription>
+            <CardDescription>Esta capa describe qué se está solicitando. Todavía no calcula costos ni precios. Guardar sin cambios no crea otra versión.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <div className="space-y-1.5"><Label htmlFor="analysis-service">Servicio solicitado</Label><Input id="analysis-service" value={requestedService} onChange={(event) => setRequestedService(event.target.value)} placeholder="Ej. instalación de ventiladores industriales" /></div>
@@ -251,6 +262,7 @@ const OpportunityAnalysisView = ({ opportunityId }: Props) => {
           <Button type="submit" disabled={saving || loading}><Save className="mr-2 h-4 w-4" />{saving ? 'Guardando…' : 'Guardar análisis'}</Button>
         </div>
       </form>
+      <OpportunityAnalysisHistory organizationId={organizationId} opportunityId={opportunityId} refreshKey={historyReload} />
     </div>
   );
 };
