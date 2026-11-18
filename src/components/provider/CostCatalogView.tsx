@@ -139,8 +139,9 @@ export function CostCatalogView() {
       const query = editingSupplierId
         ? catalogDb.from('provider_cost_suppliers').update(payload).eq('id', editingSupplierId).eq('organization_id', organizationId)
         : catalogDb.from('provider_cost_suppliers').insert({ organization_id: organizationId, ...payload });
-      const { error } = await query;
+      const { data, error } = await (editingSupplierId ? query.select('id') : query);
       if (error) throw new Error(error.message);
+      if (editingSupplierId && (!Array.isArray(data) || data.length !== 1)) throw new Error('El proveedor no pudo actualizarse. Verifica permisos y vuelve a cargar.');
       toast.success(editingSupplierId ? 'Proveedor actualizado.' : 'Proveedor registrado.');
       resetSupplierForm();
       await loadCatalog();
@@ -167,8 +168,9 @@ export function CostCatalogView() {
       const query = editingItemId
         ? catalogDb.from('provider_cost_items').update(payload).eq('id', editingItemId).eq('organization_id', organizationId)
         : catalogDb.from('provider_cost_items').insert({ organization_id: organizationId, ...payload });
-      const { error } = await query;
+      const { data, error } = await (editingItemId ? query.select('id') : query);
       if (error) throw new Error(error.message);
+      if (editingItemId && (!Array.isArray(data) || data.length !== 1)) throw new Error('El recurso no pudo actualizarse. Verifica permisos y vuelve a cargar.');
       toast.success(editingItemId ? 'Recurso actualizado.' : 'Recurso registrado.');
       resetItemForm();
       await loadCatalog();
@@ -183,9 +185,10 @@ export function CostCatalogView() {
     if (!authorized || !organizationId) return;
     const table = kind === 'suppliers' ? 'provider_cost_suppliers' : 'provider_cost_items';
     try {
-      const { error } = await catalogDb.from(table).update({ is_active: !row.is_active })
-        .eq('id', row.id).eq('organization_id', organizationId);
+      const { data, error } = await catalogDb.from(table).update({ is_active: !row.is_active })
+        .eq('id', row.id).eq('organization_id', organizationId).select('id');
       if (error) throw new Error(error.message);
+      if (!Array.isArray(data) || data.length !== 1) throw new Error('No se actualizó el estado. Verifica tus permisos y vuelve a cargar.');
       toast.success(row.is_active ? 'Registro desactivado.' : 'Registro activado.');
       await loadCatalog();
     } catch (error) {
