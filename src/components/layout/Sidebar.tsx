@@ -40,7 +40,7 @@ import {
 
 interface SidebarProps {
   className?: string;
-  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'quote-history' | 'cost-catalog' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'managed-work-orders' | 'managed-reports' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin' | 'users' | 'facility-management') => void;
+  onViewChange?: (view: 'dashboard' | 'assets' | 'requests' | 'drafts' | 'public-requests' | 'quote-history' | 'cost-catalog' | 'opportunities' | 'profile' | 'notifications' | 'contact' | 'approved-providers' | 'branches' | 'work-orders' | 'managed-work-orders' | 'managed-reports' | 'my-work-orders' | 'inventory' | 'efficiency' | 'criticality' | 'inspections' | 'preventive-maintenance' | 'backlog' | 'admin' | 'users' | 'facility-management') => void;
   currentView?: string;
   userRole?: UserRole;
 }
@@ -501,6 +501,17 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
               >
                 <Boxes className={cn('h-4 w-4', !collapsed && 'mr-2')} />
                 {!collapsed && 'Catálogo de costos'}
+              </Button>
+            )}
+
+            {canManageCostCatalog && (
+              <Button
+                variant={currentView === 'opportunities' ? 'default' : 'ghost'}
+                className={cn('w-full justify-start', collapsed && 'justify-center px-2')}
+                onClick={() => onViewChange?.('opportunities')}
+              >
+                <Briefcase className={cn('h-4 w-4', !collapsed && 'mr-2')} />
+                {!collapsed && 'Oportunidades'}
               </Button>
             )}
 
