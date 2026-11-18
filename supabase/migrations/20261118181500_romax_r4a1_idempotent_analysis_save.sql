@@ -171,3 +171,33 @@ REVOKE ALL ON FUNCTION public.romax_save_opportunity_analysis_v2(
 GRANT EXECUTE ON FUNCTION public.romax_save_opportunity_analysis_v2(
   uuid, text, text, jsonb, jsonb, jsonb, jsonb
 ) TO authenticated;
+
+-- Preserve the original RPC contract while routing legacy callers through
+-- the same atomic no-op guard. Otherwise old previews could still create V4.
+CREATE OR REPLACE FUNCTION public.romax_save_opportunity_analysis_v1(
+  p_opportunity_id uuid,
+  p_requested_service text,
+  p_scope_of_work text,
+  p_missing_information jsonb,
+  p_technical_considerations jsonb,
+  p_risks jsonb,
+  p_items jsonb
+)
+RETURNS TABLE(analysis_id uuid, version_number integer)
+LANGUAGE sql
+SECURITY INVOKER
+SET search_path = ''
+AS $wrapper$
+  SELECT result.analysis_id, result.version_number
+  FROM public.romax_save_opportunity_analysis_v2(
+    p_opportunity_id, p_requested_service, p_scope_of_work,
+    p_missing_information, p_technical_considerations, p_risks, p_items
+  ) AS result;
+$wrapper$;
+
+REVOKE ALL ON FUNCTION public.romax_save_opportunity_analysis_v1(
+  uuid, text, text, jsonb, jsonb, jsonb, jsonb
+) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.romax_save_opportunity_analysis_v1(
+  uuid, text, text, jsonb, jsonb, jsonb, jsonb
+) TO authenticated;
