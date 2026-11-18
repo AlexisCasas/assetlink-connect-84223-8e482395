@@ -49,6 +49,17 @@ CREATE UNIQUE INDEX romax_opportunity_attachments_gmail_uidx
   WHERE source_system = 'gmail'
     AND source_message_id IS NOT NULL AND source_attachment_id IS NOT NULL;
 
+-- Audit the actor of manually created opportunities by default, while
+-- retaining the authenticated-actor checks enforced by the INSERT policy.
+ALTER TABLE public.romax_opportunities
+  ALTER COLUMN created_by SET DEFAULT auth.uid();
+
+-- A site/contact cannot be confirmed without a commercial client.
+ALTER TABLE public.romax_opportunities
+  ADD CONSTRAINT romax_opportunities_linked_client_required_chk
+  CHECK (commercial_client_id IS NOT NULL
+    OR (commercial_site_id IS NULL AND commercial_contact_id IS NULL));
+
 -- Persist a complete manual technical analysis as one database transaction.
 -- The caller's RLS is preserved (SECURITY INVOKER), with no service_role.
 CREATE OR REPLACE FUNCTION public.romax_save_opportunity_analysis_v1(
