@@ -307,3 +307,26 @@ Se añadió `CostCatalogView` y navegación `#cost-catalog`, restringida a organ
 **R2C implementado en código, pendiente de preview/QA:** pestaña Tarifas para alta de costos PEN/USD, proveedor opcional, fuente y referencia, IGV, vigencia y estado inicial pending_review. Añade formulario para configurar FX USD/PEN de ROMAX con valor positivo y fecha, sin inicializar un valor inventado. Cada tarifa conserva snapshot FX y número de versión generado en DB. Documento: `docs/ROMAX_R2C_RATE_ENTRY_DESIGN.md`.
 
 **Bloqueo actual:** Vercel devolvió `build-rate-limit` para el commit que integra R2C; no hay preview READY con esta pestaña. No se hizo retry, merge ni producción. Siguiente gate: esperar disponibilidad de builds, obtener preview y ejecutar QA autenticado antes de cargar tarifas reales.
+
+## Estado maestro actualizado — 18-nov-2026
+
+### R1-D — Histórico
+La extracción estructural del piloto quedó en **25/25 documentos (100 %)**, con **186 partidas, 93 secciones y 109 componentes**. Los datos estructurados permanecen `extracted_unverified`: son referencia histórica y no tarifario vigente. Quedan como gates separados el QA visual real de usuario, certificación de sesión/RLS y cierre de cualquier advertencia documental pendiente.
+
+### R2 — Catálogo independiente de costos
+R2A quedó completo en Supabase Cloud: foundation, proveedores/recursos y tarifas/versionado/revisión. R2B tiene UI y datos de prueba. R2C incorporó comparación de hasta cuatro alternativas y un seed controlado de **35 recursos normalizados** derivados del piloto, sin copiar precios históricos como tarifas.
+
+Actualmente ROMAX tiene **36 recursos** en el catálogo (35 del seed + 1 recurso de prueba) y **2 tarifas de prueba**, ambas `pending_review`. No se han creado tarifas a partir de los precios de las 25 cotizaciones.
+
+### R2D — Revisión de tarifas
+Se implementó la bandeja de revisión en `CostRatesPanel`: aprobación/rechazo explícito, motivo obligatorio al rechazar y visualización de los datos que deben revisarse. Documento QA: `docs/ROMAX_R2D_RATE_REVIEW_QA.md`.
+
+### Bloqueo operativo actual
+El check de Vercel del PR #120 está fallando con `upgradeToPro=build-rate-limit`, por lo que el nuevo commit no puede obtener todavía un preview. Esto bloquea **QA visual**, no el desarrollo ni la revisión del código. No se ha hecho merge ni producción.
+
+### Siguiente ruta de alto valor
+1. Cerrar R2D con QA visual cuando haya preview.
+2. Completar el mínimo útil de recursos de mano de obra y servicios/costos claramente normalizables, sin inventar tarifas.
+3. Iniciar **R3 — bandeja de oportunidades** con modelo propio de ROMAX.
+4. Después conectar Gmail con OAuth mínimo y deduplicación.
+5. Construir el primer vertical slice R4: oportunidad → análisis → antecedentes → costos → borrador de cotización.
