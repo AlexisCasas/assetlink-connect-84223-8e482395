@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Calculator, CalendarDays, CheckCircle2, RefreshCw, Save, Wallet } from 'lucide-react';
+import { Calculator, CheckCircle2, RefreshCw, Save, Wallet, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -52,6 +52,7 @@ type Rate = {
   valid_from: string;
   valid_until: string | null;
   status: string;
+  review_note: string | null;
   created_at: string;
 };
 type RateForm = {
@@ -126,6 +127,8 @@ export function CostRatesPanel() {
   const [form, setForm] = useState<RateForm>(newRateForm());
   const [fxRateForm, setFxRateForm] = useState({ rate: '', date: '', reference: '' });
   const [selectedRateIds, setSelectedRateIds] = useState<string[]>([]);
+  const [reviewingRateId, setReviewingRateId] = useState<string | null>(null);
+  const [reviewNote, setReviewNote] = useState('');
 
   const loadData = useCallback(async () => {
     if (!organizationId || !canManage) return;
@@ -183,6 +186,7 @@ export function CostRatesPanel() {
     [activeSuppliers, form.supplier_id],
   );
   const selectedRates = useMemo(() => rates.filter((rate) => selectedRateIds.includes(rate.id)), [rates, selectedRateIds]);
+  const pendingRates = useMemo(() => rates.filter((rate) => rate.status === 'pending_review'), [rates]);
   const selectedRateItem = selectedRates.length > 0 ? items.find((item) => item.id === selectedRates[0].cost_item_id) ?? null : null;
   const comparisonMinPen = selectedRates.length > 0 ? Math.min(...selectedRates.map((rate) => Number(rate.unit_cost_pen))) : null;
   const toggleComparison = (rate: Rate) => {
@@ -298,6 +302,30 @@ export function CostRatesPanel() {
     }
   };
 
+  const reviewRate = async (rate: Rate, decision: 'approved' | 'rejected') => {
+    if (!canManage || !organizationId) return;
+    const note = reviewNote.trim();
+    if (decision === 'rejected' && !note) {
+      toast.error('Para rechazar una tarifa registra el motivo de revisión.');
+      return;
+    }
+    setReviewingRateId(rate.id);
+    try {
+      const { error } = await catalogDb.from('provider_cost_rates').update({
+        status: decision,
+        review_note: note || null,
+      }).eq('id', rate.id).eq('organization_id', organizationId);
+      if (error) throw new Error(error.message);
+      toast.success(decision === 'approved' ? 'Tarifa aprobada.' : 'Tarifa rechazada y devuelta a revisión.');
+      setReviewNote('');
+      await loadData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo actualizar la revisión de la tarifa.');
+    } finally {
+      setReviewingRateId(null);
+    }
+  };
+
   if (!canManage) {
     return <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">No tienes permisos para consultar el catálogo de tarifas de esta organización.</CardContent></Card>;
   }
@@ -316,6 +344,52 @@ export function CostRatesPanel() {
           </Button>
         </div>
       </div>
+
+      {pendingRates.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/40">
+          <CardHeader>
+            <CardTitle className="text-base">Tarifas pendientes de revisión</CardTitle>
+            <CardDescription>
+              Estas tarifas todavía no deben considerarse costos aprobados para una cotización. Revisa fuente, vigencia, unidad, moneda y tratamiento de IGV antes de activarlas.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pendingRates.map((rate) => {
+              const item = items.find((row) => row.id === rate.cost_item_id);
+              const supplier = suppliers.find((row) => row.id === rate.supplier_id);
+              const isReviewing = reviewingRateId === rate.id;
+              return (
+                <div key={rate.id} className="rounded-md border bg-background p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{item?.name ?? 'Recurso no disponible'} <span className="text-xs text-muted-foreground">v{rate.version_number}</span></p>
+                      <p className="text-xs text-muted-foreground">{supplier?.display_name ?? (rate.supplier_id ? 'Proveedor no disponible' : 'Costo interno')} · {money(Number(rate.unit_cost_original), rate.currency_code)} / {rate.unit_code} · {money(Number(rate.unit_cost_pen), 'PEN')}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Fuente: {sourceLabels[rate.source_type] ?? rate.source_type}{rate.source_reference ? ' · ' + rate.source_reference : ''} · Vigencia: {dateLabel(rate.valid_from)} – {dateLabel(rate.valid_until)}</p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <Button type="button" size="sm" onClick={() => void reviewRate(rate, 'approved')} disabled={isReviewing}>
+                        <CheckCircle2 className="mr-1.5 h-4 w-4" />Aprobar
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => { setReviewingRateId(rate.id); setReviewNote(''); }} disabled={isReviewing}>
+                        <XCircle className="mr-1.5 h-4 w-4" />Rechazar
+                      </Button>
+                    </div>
+                  </div>
+                  {reviewingRateId === rate.id && (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <Textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} rows={2} placeholder="Motivo de rechazo o nota de revisión" aria-label="Motivo de rechazo o nota de revisión" />
+                      <div className="flex items-end gap-2">
+                        <Button type="button" variant="destructive" onClick={() => void reviewRate(rate, 'rejected')} disabled={isReviewing || !reviewNote.trim()}>Confirmar rechazo</Button>
+                        <Button type="button" variant="ghost" onClick={() => { setReviewingRateId(null); setReviewNote(''); }} disabled={isReviewing}>Cancelar</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {selectedRates.length >= 2 && (
         <Card>
@@ -418,6 +492,7 @@ export function CostRatesPanel() {
                     {rate.tax_treatment !== 'unknown' && <span>IGV: {rate.tax_treatment === 'inclusive' ? 'incluido' : rate.tax_treatment === 'exclusive' ? 'no incluido' : 'no aplica'}{rate.tax_rate !== null ? ` (${rate.tax_rate}%)` : ''}</span>}
                   </div>
                   {rate.source_reference && <p className="text-xs text-muted-foreground">Referencia: {rate.source_reference}</p>}
+                  {rate.review_note && <p className="text-xs text-muted-foreground">Nota de revisión: {rate.review_note}</p>}
                 </CardContent>
               </Card>
             );
