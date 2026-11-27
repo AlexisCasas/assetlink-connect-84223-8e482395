@@ -63,3 +63,7 @@ Owner/admin conceden y revocan capacidades a miembros activos. No se modifica el
 
 ## Próximo paso
 Completar la asignación explícita de capacidades (owner/admin) y habilitar un segundo miembro validador en ROMAX antes de continuar con R2-E2.2. La importación de precios/históricos y la activación comercial siguen siendo fases separadas.
+
+## Actualización vigente — 27-nov-2026
+
+Cadena #122/#123/#126/#127/#128 homologada, mergeada y desplegada; migraciones canónicas en Cloud, CI integral y complementaria PASS. #129 desplegado en a5483db. Usuario decide mantener solo propietario actual, sin segundo usuario ni perfiles nuevos. El trigger sigue bloqueando la auto-validación; pendiente diseño R2-E2.1B para compatibilizar operación de owner único con auditoría, RLS y permisos explícitos. No se ha aplicado excepción ni concedido capacidades en este cierre. QA comercial real pendiente. Ver [plan maestro actualizado](ROMAX_PILOT_MASTER_PLAN.md). Las observaciones anteriores son históricas, no gates actuales de merge.

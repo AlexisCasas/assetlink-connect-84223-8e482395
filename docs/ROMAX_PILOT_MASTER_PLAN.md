@@ -1,6 +1,6 @@
 # One Facility — Plan maestro y continuidad del piloto ROMAX
 
-**Actualizado:** 14-nov-2026 · **Responsable funcional:** equipo ROMAX / One Facility · **Objetivo:** agilizar y ordenar la cotización de servicios de ROMAX sin obligar a sus clientes a usar el portal.
+**Actualizado:** 27-nov-2026 · **Responsable funcional:** equipo ROMAX / One Facility · **Objetivo:** agilizar y ordenar la cotización de servicios de ROMAX sin obligar a sus clientes a usar el portal.
 
 > Este archivo es el punto de reanudación cuando se agote el contexto del chat. Leer primero este plan, luego la documentación de la fase activa y verificar estado real en GitHub/Supabase antes de ejecutar cambios. Las fechas y estados se deben actualizar con evidencia, no por inferencia.
 
@@ -378,3 +378,40 @@ Cloud conserva 2 tarifas, 1 proveedor y 1 configuración FX; 0 concesiones inici
 Los heads independientes de PR #122/#123 aún usan nombres de migración antiguos; PR #128 alinea los archivos con versiones Cloud 20261127063621 y 20261127063641. Reconciliar la cadena antes de merge/deploy y no ejecutar db push desde ramas intermedias.
 
 No se importaron precios/históricos, no se cambiaron concesiones reales, no se hizo merge y no hubo despliegue productivo.
+
+
+## Estado vigente y ruta crítica — 27-nov-2026 (sustituye estados pendientes históricos)
+
+**Cierre HOM-01–04:** #122, #123, #126, #127 y #128 integrados en `3f9d22f`, candidato `c51a091` CI PASS, 0 diferencias funcionales. Cuatro migraciones canónicas Cloud ya registradas: 20261127063621, 20261127063641, 20261127154749, 20261127155628. No reejecutar las versiones antiguas. Regresión complementaria 5/5 PASS. Vercel desplegado manualmente.
+
+**Cierre QA-01:** T01–T05/T07–T08 PASS por usuario; T06 inicialmente FAIL (detalle fuera de la tabla). #129 corrige detalle inline, expansión única y diseño adaptable, preserva campos originales de Excel. CI 5/5 PASS, QA visual correctivo confirmado por usuario y merge `a5483dbd5d6fca208add8224953ae5efc5963bb5`. Producción READY, dominio one-facility.vercel.app, deployment dpl_8B7CxzubNgfdijrurUrEDksVErVs. Rollback frontend anterior: dpl_DRZ6dZjspc1C2jaXx1e3SHyTXEnb. Sin escrituras Cloud, usuarios, importaciones ni grants nuevos en este cierre. Auto-deploy productivo sigue deshabilitado. TypeScript tolera solo baseline heredado de Index.tsx. QA móvil no fue reportado por separado.
+
+**Decisión operativa del usuario:** mantener únicamente el propietario actual de ROMAX; no crear perfiles ni incorporar segundo usuario por ahora. El código vigente todavía impide que un creador valide/rechace su propia tarifa, incluso siendo owner. El QA comercial no está cerrado. Antes de validar costos nuevos, diseñar R2-E2.1B (nombre propuesto): mecanismo explícito, limitado a ROMAX/owner activo, para registrar y revisar con una sola cuenta, con confirmación y auditoría; conservar RLS, permisos explícitos, inmutabilidad, historial y separación por defecto para otras organizaciones. No activar automáticamente ni cambiar Cloud sin autorización. La política de aprobación de precios R2-E2.5 debe alinearse con esta decisión, sin aprobación automática por IA. No bloquear el diseño de parámetros mientras se resuelve el flujo operativo.
+
+### Ruta crítica actualizada (orden propuesto para revisión)
+
+| Incremento | Estado | Entregable / gate |
+|---|---|---|
+| R0 / R1-A/B/C | Base operativa; excepciones pendientes | Reutilizar maestros; resolver solo excepciones necesarias para el piloto (H16 y filas ambiguas sin inventar vínculos) |
+| R1-D / R1-E | 25/25 históricos estructurados; extracción no equivale a certificación comercial | Revisar advertencias y QA de consulta; usar como referencia, nunca tarifa vigente |
+| R2A–D / R2-E0 | Base de costos y compatibilidad implementada | Mantener módulos existentes y probar regresiones |
+| R2-E1.1–E1.5 | Catálogo preliminar cargado y UI productiva, QA-01 cerrado | 772 recursos documentados, 779 identidades, 43 pendientes; resolver equivalencias/unidades necesarias antes de usar sus partidas; no fusionar por similitud ni asumir subfamilia |
+| R2-E2.1B | Pendiente de diseño y QA | Operación con owner único; probar permisos, alta, revisión, auditoría, denegaciones cross-tenant; sin nuevos perfiles |
+| R2-E2.2 A–F | Pendiente | Parámetros IGV/FII versionados, bandas, excepciones, función determinista, UI reglas y CI; IGV inicial 18%, vigencia 180 días, alerta 30 días, bandas 30/30/20/15%; validar límites y redondeos |
+| R2-E2.3 | Pendiente | Conciliar proveedores y 273 antecedentes históricos de mercado con procedencia, append-only e idempotencia; conservar vigencia histórica 120 días; no inventar datos |
+| R2-E2.4 | Pendiente | Confirmar PEN de matriz, cargar 245 costos candidatos pendientes; 534 sin costo quedan sin tarifa; revisar coincidencias, fechas, impuesto y vigencia; aprobar explícitamente solo costos aptos |
+| R2-E2.5 | Pendiente | Versionar precio de venta separado del costo; propuesta, revisión humana y trazabilidad de reglas/override; política owner único a definir |
+| R2-E2.6 | Pendiente | UI comercial y alertas (10% exige base comparativa aprobada), excepciones FII sin sustento quedan pendientes |
+| R2-E2.7 | Pendiente | Elegibilidad para cotizar: recurso homologado, unidad compatible, costo vigente validado y precio/regla aprobados; bloqueo explícito si falta dato |
+| R3 / R4-A / R4-A.1 | Entrada manual, análisis y versión idempotente desplegados | Reutilizar flujo actual; análisis no contiene precios; IA efectiva aún pendiente |
+| R4-B | Pendiente; puede avanzar en paralelo con R2-E2 | Buscar y vincular antecedentes de 25 cotizaciones, mostrando fuente, alcance y diferencias; no copiar importes |
+| R4-C | Pendiente; depende R2-E2.7 | Motor de presupuesto por partida: cantidades/unidades, costo, precio, mano de obra, equipos, servicios, movilización, subtotal, IGV, total y snapshots de fuente/regla |
+| R4-D | Pendiente | Borrador editable con listado de servicios, materiales/consumibles, aclaraciones técnicas, resumen económico y consideraciones; versionado |
+| R4-E | Pendiente | IA asistida para extraer alcance, sugerir partidas y antecedentes, señalar faltantes; motor determinista calcula; revisión humana |
+| R6 | Pendiente | Plantilla oficial, revisión, PDF y emisión manual con trazabilidad; no envío automático sin política |
+| R3 Gmail | Paralelo, pendiente de buzón/OAuth | Captura y deduplicación de correo/adjuntos, sin bloquear el primer piloto manual |
+| R5 | Backlog complementario | Visitas, fotos, medidas, especialidades, horas y observaciones |
+
+**Primer hito demostrable:** oportunidad manual → análisis versionado → antecedentes → recursos/costos válidos → cálculo determinista → borrador editable → revisión/PDF. Luego Gmail automatiza entrada y R4-E asiste preparación. Si se incorpora IA antes de emisión, probar su salida con el mismo flujo manual. No convertir el catálogo en un ERP ni exigir completar los 779 materiales para probar un caso acotado. Los recursos sin costo no se cotizan a cero. Mano de obra/equipos/servicios deben tener fuentes válidas cuando correspondan. El usuario realiza QA navegador y decisiones de negocio; asistente implementa PR, CI, verificación Cloud read-only y despliegues/migraciones con autorización separada.
+
+**Siguiente acción:** preparar contrato técnico R2-E2.1B y R2-E2.2, revisar alcance y aprobar antes de modificar políticas/migraciones. El primer caso económico piloto puede usar un subconjunto validado. No iniciar importación de precios/históricos ni conceder permisos reales en este cierre.

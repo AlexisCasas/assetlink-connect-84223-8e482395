@@ -28,3 +28,8 @@ All queries are scoped by the active organization ID and rely on existing Supaba
 
 ## QA
 A dedicated workflow `.github/workflows/romax-r2e1-5-ui-qa.yml` runs TypeScript no-new-diagnostics, ESLint on the two affected components, and Vite production build. The TypeScript check tolerates only the three pre-existing unchanged diagnostics in `src/pages/Index.tsx`.
+
+
+## QA-01 / correctivo T06 — 27-nov-2026
+
+Usuario reportó T01–T05/T07–T08 PASS, T06 FAIL. PR #129 movió detalle inmediatamente debajo de la fila, toggle único, campos originales Excel y diseño adaptable. CI 5/5 PASS: run 46061062570 específico y regresiones 46061062229/46061062268/46061062266/46061062278. Usuario confirmó que ya se muestra; QA-01 cerrado según reporte, validación móvil no detallada. Merge a5483db; Vercel production READY dpl_8B7CxzubNgfdijrurUrEDksVErVs. Sin cambios SQL ni datos comerciales. Ver [PR #129](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/pull/129) y [plan maestro actualizado](ROMAX_PILOT_MASTER_PLAN.md).

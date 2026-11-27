@@ -68,3 +68,8 @@ FII no es margen porcentual. IGV inicial 18%; vigencia predeterminada 180 días;
 - Usuarios reales de logística y líder comercial incorporados antes de conceder capacidades.
 - Para R2-E2.1: CI/pgTAP, advisors, RLS cross-tenant y QA Cloud controlado completados. Para R2-E2.2+: repetir gates antes de cada aplicación.
 - Sin carga de precios/históricos, merge o despliegue productivo sin autorizaciones separadas.
+
+
+## Actualización vigente — 27-nov-2026
+
+PR #128 y toda la cadena HOM-04 ya integrados y desplegados; #129 corrige catálogo técnico en producción. Decisión usuario: operar con propietario único, sin segundo usuario ni nuevo perfil. La auto-validación sigue prohibida por el trigger vigente; antes del QA comercial diseñar un ajuste R2-E2.1B limitado al owner activo ROMAX con auditoría, sin relajar controles de otras organizaciones; no implementado. Revisar también la política de R2-E2.5, manteniendo revisión humana explícita. E2.2–E2.7 pendientes; cifras fuente y fórmulas originales se mantienen. Confirmar moneda PEN, base de alerta 10%, tratamiento tributario y excepciones antes de activar/importar. Ver [plan maestro actualizado](ROMAX_PILOT_MASTER_PLAN.md). Esta sección sustituye estados de Draft/no despliegue y el requisito de segundo usuario como próximo paso operativo, no modifica las reglas SQL actuales.

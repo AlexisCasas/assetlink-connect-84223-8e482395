@@ -150,3 +150,8 @@ R2-E2.1 implementado, revisado y aplicado en Supabase Cloud OneFacility. El PR #
 Cloud conserva 2 tarifas, 1 proveedor y 1 configuración FX; no se crearon concesiones automáticas ni se importaron precios/históricos. ROMAX solo tiene un owner activo; hace falta añadir un segundo miembro para asignarle `market_cost.validate`. Las dos tarifas previas (una approved y otra rejected) fueron revisadas por su creador antes de la regla nueva y no se modificaron.
 
 No merge, no importación económica y no despliegue productivo. Los PRs #122/#123 deben alinear sus ramas con las versiones de migración ya aplicadas antes de completar el merge de la cadena.
+
+
+## Actualización vigente — 27-nov-2026
+
+HOM-01–04 cerrados; catálogo técnico y R2-E2.1 productivos, correctivo visual #129 mergeado y desplegado en a5483db (QA-01 8/8 según usuario, CI 5/5). La etapa de aprobación comercial continúa pendiente: propietario único, sin nuevos perfiles, y el guard de autoaprobación aún bloquea sus propias tarifas. No se han importado costos/históricos de mercado. La ruta crítica detallada y sus gates se mantienen en [Plan maestro, estado vigente](ROMAX_PILOT_MASTER_PLAN.md#estado-vigente-y-ruta-crítica--27-nov-2026-sustituye-estados-pendientes-históricos). Secuencia: R2-E2.1B (resolver operación owner único) → E2.2–E2.7 → R4-C → R4-D → R4-E → R6; R4-B en paralelo; R3 Gmail y R5 no bloquean el piloto manual. R4-A/A.1 y oportunidades manuales ya desplegados. IA sugiere, One calcula, propietario revisa; sin aprobación ni envío automático. Esta actualización prevalece sobre estados históricos anteriores.
