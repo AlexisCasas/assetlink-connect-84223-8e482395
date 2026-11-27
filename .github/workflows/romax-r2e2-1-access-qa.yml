@@ -112,7 +112,7 @@ jobs:
           const r2e21Test=read('supabase/tests/romax_r2e2_1_pricing_access.test.sql');
           assert.match(r2aTest,/SELECT plan\(22\);/);
           assert.match(r2e21Test,/SELECT plan\(38\);/);
-          assert.doesNotMatch(r2aTest+r2e21Test,/SELECT\\s+(?:throws_ok|lives_ok)\\(\\$(?!\\$)/);
+          assert.doesNotMatch(r2aTest+r2e21Test,/SELECT\s+(?:throws_ok|lives_ok)\(\$(?!\$)/);
           assert.match(migration,/CREATE TABLE public\.provider_pricing_access_grants/);
           assert.match(migration,/market_cost\.read/);
           assert.match(migration,/market_cost\.manage/);
