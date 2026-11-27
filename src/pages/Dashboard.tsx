@@ -165,8 +165,7 @@ const Dashboard = () => {
         return <PublicRequestList />;
       case 'opportunity-analysis':
         if (currentOrganization?.organizationType !== 'provider_company' || !currentMembership?.isActive
-            || currentMembership.organizationId !== currentOrganization.id
-            || !['owner', 'admin', 'manager', 'quote_manager'].includes(currentMembership.role)) {
+            || currentMembership.organizationId !== currentOrganization.id) {
           return (
             <div className="flex h-full items-center justify-center p-6">
               <p className="text-sm text-muted-foreground">El análisis de oportunidades está disponible solo para usuarios autorizados de organizaciones proveedoras.</p>
@@ -187,11 +186,10 @@ const Dashboard = () => {
         }
         return <OpportunitiesView />;
       case 'cost-catalog':
-        // R2B: provider-owned cost catalog. Direct hash navigation is subject
-        // to the same organization and role gate as the sidebar; RLS rechecks.
+        // R2-E2.1: every active provider member may open the catalog shell;
+        // sensitive cost/supplier data and mutations are independently gated by RLS capabilities.
         if (currentOrganization?.organizationType !== 'provider_company' || !currentMembership?.isActive
-            || currentMembership.organizationId !== currentOrganization.id
-            || !['owner', 'admin', 'manager', 'quote_manager'].includes(currentMembership.role)) {
+            || currentMembership.organizationId !== currentOrganization.id) {
           return (
             <div className="flex h-full items-center justify-center p-6">
               <p className="text-sm text-muted-foreground">El catálogo de costos está disponible solo para usuarios autorizados de organizaciones proveedoras.</p>
