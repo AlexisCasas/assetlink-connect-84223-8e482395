@@ -448,3 +448,6 @@ Primera página revisada en solo lectura: 12 conversaciones; 6 hilos comerciales
 
 ## R3-GMAIL.2.1 — correctivo en desarrollo
 PR independiente para reenvíos, alias @romaxfm.com y ampliaciones de plazo con historial y validación de día de semana en America/Lima. Casos Cassinelli Piura, Makro ventas3, UTP Lima Sur, UTP Chiclayo y UTP Piura. Sin escrituras ni despliegue; pendiente CI.
+
+
+R3-GMAIL.2.1 incluye exclusión de soporte Suplayer, reconocimiento de solicitudes que dicen propuesta sin “cotización” literal y separación de coordinación SST/ingreso como operación. Pendiente CI final.

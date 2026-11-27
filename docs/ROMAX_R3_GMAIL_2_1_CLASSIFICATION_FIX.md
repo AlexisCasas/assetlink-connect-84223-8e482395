@@ -11,3 +11,6 @@
 Cassinelli Piura (original + forward), Makro (ventas3 alias), UTP Lima Sur (28/11 12:00 extension from 10/11 12:00), UTP Chiclayo (27/11 -> 30/11), UTP Piura (viernes 26/11 conflict), quoted/internal mail.
 ## Límites
 No leer body.data ni descargar adjuntos. No escribir Gmail, oportunidades, labels ni tablas. Sin migración ni secretos. No merge ni deploy hasta CI y QA.
+
+
+Ajustes QA adicionales: excluir el hilo de soporte/notificaciones Suplayer como no comercial; reconocer solicitudes que dicen propuesta sin exigir “propuesta económica”; tratar solicitudes de documentos SST/ingreso como coordinación operativa cuando no contienen una petición de cotización. El parser reconoce días con acento (sábado/miércoles) y horas precedidas por guion.

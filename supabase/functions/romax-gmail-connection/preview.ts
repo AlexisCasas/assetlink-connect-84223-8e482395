@@ -19,7 +19,7 @@ const isSent=(m:Message)=>m.labelIds?.includes('SENT')===true||isInternal(m);
 const isExcluded=(m:Message)=>m.labelIds?.some(l=>['SPAM','TRASH','DRAFT'].includes(l))===true;
 function forwardedSender(m:Message):string|null {
   const text=clean(m.snippet,1200);
-  const matches=[...text.matchAll(/(?:^|\n)\s*(?:De|From):[^\n<]{0,180}<([^>\s]+@[^>\s]+)>/gi)];
+  const matches=[...text.matchAll(/(?:De|From):\s*[^<]{0,180}<([^>\s]+@[^>\s]+)>/gi)];
   for(const match of matches){const email=match[1].toLowerCase();if(!email.endsWith('@romaxfm.com'))return email;}
   return null;
 }
@@ -33,16 +33,17 @@ function attachments(m:Message) {
   }
   walk(m.payload,0); return out;
 }
-const quote=/\b(cotizacion|cotizar|presupuesto|licitacion|propuesta economica|rfq|solicitud de oferta)\b/;
+const quote=/\b(cotizacion|cotizar|presupuesto|licitacion|propuesta(?: economica)?|rfq|solicitud de oferta)\b/;
 const adjust=/\b(reajuste|reajustar|mejora de precio|mejorar el precio|descuento|actualizar (?:la )?(?:cotizacion|propuesta))\b/;
 const follow=/\b(recordatorio|seguimiento|prorroga|ampliacion (?:de |del )?plazo|se (?:extiende|amplia|prorroga) (?:el )?plazo|extiende plazo|amplia plazo|nuevo plazo|nueva fecha|fecha limite|reprogramacion)\b/;
-const support=/\\b(suplayer|suplayers|notificaciones? de invitaciones|incidencia de correo|soporte de plataforma)\\b/;\nconst operation=/\b(orden de compra|orden de servicio|acta de conformidad|factura|coordinacion de visita|inicio de trabajos|ejecucion de trabajos|documentos? sst|ingreso a tienda)\b/;
+const support=/\b(suplayer|suplayers|notificaciones? de invitaciones|incidencia de correo|soporte de plataforma)\b/;
+const operation=/\b(orden de compra|orden de servicio|acta de conformidad|factura|coordinacion de visita|inicio de trabajos|ejecucion de trabajos|documentos? sst|ingreso a tienda)\b/;
 const requestQuote=/\b(solicit(?:a|amos|ud|ar|an)|requerimiento|invitacion|favor|agradeceremos|necesitamos|convocatoria|cotizar)\b/;
 const sentQuote=/\b(adjuntamos|adjunto|enviamos|remitimos|compartimos|se adjunta|se envia)\b.{0,120}\b(cotizacion|propuesta|presupuesto)\b|\b(cotizacion|propuesta|presupuesto)\b.{0,120}\b(adjunta|enviada|remitida)\b/;
 const references=(s:string)=>Array.from(new Set((s.toUpperCase().match(/\bSC[-\s]?\d{4,}(?:-\d{4})?\b/g)??[]).map(x=>x.replace(/\s+/g,'-'))));
 const rmxReference=(s:string)=>s.toUpperCase().match(/\bRMX[-\s]?\d{4}[-\s]?\d{3,}\b/)?.[0].replace(/\s+/g,'-')??null;
 const weekdayIndex:Record<string,number>={domingo:0,lunes:1,martes:2,miercoles:3,jueves:4,viernes:5,sabado:6};
-const datePattern=/\b(?:(lunes|martes|miercoles|jueves|viernes|s[aá]bado|domingo)\s+)?(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?\b/gi;
+const datePattern=/\b(?:(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s+)?(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?\b/gi;
 const deadlineCue=/(?:plazo|deadline|fecha\s+limite|fecha\s+de\s+envio\s+de\s+propuesta|envio\s+de\s+propuesta|entrega\s+de\s+propuesta|se\s+extiende|se\s+amplia|prorroga|hasta\s+(?:el\s+)?(?:dia\s+)?)/i;
 export function parseDeadlineEvents(messages:{snippet?:string;internalDate?:string}[]):DeadlineEvent[] {
   const found:DeadlineEvent[]=[];
@@ -59,7 +60,7 @@ export function parseDeadlineEvents(messages:{snippet?:string;internalDate?:stri
       const valid=candidate.getUTCFullYear()===year&&candidate.getUTCMonth()===month-1&&candidate.getUTCDate()===day;
       const weekday=match[1]?norm(match[1]):null;
       const weekdayMismatch=!!weekday&&valid&&candidate.getUTCDay()!==weekdayIndex[weekday];
-      const timeMatch=after.match(/^\s*(?:a\s+las?\s*)?(\d{1,2})(?::(\d{2}))?\s*(a\.?\s*m\.?|p\.?\s*m\.?)/i);
+      const timeMatch=after.match(/^[\s–—-]*(?:a\s+las?\s*)?(\d{1,2})(?::(\d{2}))?\s*(a\.?\s*m\.?|p\.?\s*m\.?)/i);
       let time:string|null=null,datetime:string|null=null;
       if(timeMatch){
         let hour=Number(timeMatch[1]);const minute=Number(timeMatch[2]??0),meridiem=norm(timeMatch[3]).replace(/\s/g,'').replace(/\./g,'');
@@ -68,7 +69,7 @@ export function parseDeadlineEvents(messages:{snippet?:string;internalDate?:stri
       const status:DeadlineEvent['status']=valid&&!weekdayMismatch?'confirmed':'ambiguous';
       const date=valid&&!weekdayMismatch?candidate.toISOString().slice(0,10):null;
       if(date&&time)datetime=date+'T'+time+':00-05:00';
-      const kind:/se\s+extiende|se\s+amplia|prorroga|nuevo\s+plazo|amplia\s+plazo|extiende\s+plazo/i.test(nearBefore)?'extension':'stated';
+      const kind:DeadlineEvent['kind']=/se\s+extiende|se\s+amplia|prorroga|nuevo\s+plazo|amplia\s+plazo|extiende\s+plazo/i.test(nearBefore)?'extension':'stated';
       const raw=clean(text.slice(Math.max(0,index-65),Math.min(text.length,index+full.length+35)),180);
       const event:DeadlineEvent={raw,date,time,datetime,timezone:'America/Lima',status,kind,weekday:match[1]??null};
       if(!found.some(x=>x.date===event.date&&x.time===event.time&&x.kind===event.kind))found.push(event);
@@ -96,11 +97,12 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const deadlineEvents=parseDeadlineEvents(deadlineMessages);
   let category:Category='other',reason='No se detectó una solicitud comercial explícita.';
   if(!sourceMessages.length){category='quoted';reason='Cotización enviada desde un alias interno de ROMAX; no es una nueva solicitud.';}
+  else if(support.test(text+' '+norm(context))){category='other';reason='Comunicación de soporte o notificaciones de una plataforma; no es una solicitud comercial.';}
   else if(refs.length>1){category='review';reason='Hay varias referencias de solicitud en la conversación.';}
   else if(adjust.test(text)){category='adjustment';reason='Se detectó una petición de ajuste comercial.';}
   else if(sentEvidence&&quote.test(norm(context))){category='quoted';reason='Existe una cotización posterior enviada por ROMAX; verificar antes de descartar.';}
   else if(follow.test(text)||deadlineEvents.some(e=>e.kind==='extension')){category='follow_up';reason='Se detectó una actualización o ampliación de plazo de una solicitud.';}
-  else if(operation.test(text)&&!requestQuote.test(text)){category='operational';reason='Parece una coordinación operativa o documento de compra.';}
+  else if(operation.test(text)&&!quote.test(text)){category='operational';reason='Parece una coordinación operativa o documento de compra.';}
   else if(quote.test(text+' '+norm(context))&&requestQuote.test(text+' '+norm(context))&&!operation.test(text)){category='quote_request';reason='El asunto o extracto contiene una petición de cotización.';}
   else if(quote.test(text+' '+norm(context))||operation.test(text)){category='review';reason='Hay indicios comerciales, pero el extracto no permite distinguir el caso con seguridad.';}
   const attachmentMessages=sourceMessages.length?sourceMessages:quoteReplies;

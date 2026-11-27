@@ -67,3 +67,14 @@ Deno.test('failed page does not return a silently incomplete result',async()=>{
   const mock:typeof fetch=async(input)=>String(input).includes('/threads?')?Response.json({threads:[{id:'one'}]}):new Response('',{status:403});
   let rejected=false;try{await readPreview(mock,'synthetic',from,to);}catch{rejected=true;}assert(rejected);
 });
+
+Deno.test('platform support notifications are not commercial opportunities',()=>{
+  const c=classify([msg('support','Consulta sobre notificaciones de invitaciones y asignación de servicios – Plataforma Supplayer','Invitaciones a cotizar: notificaciones sobre nuevas solicitudes. Solicitamos revisar la cuenta.')]);
+  assert(c?.category==='other');
+});
+Deno.test('proposal-only requests and SST execution updates are distinguished',()=>{
+  const request=classify([msg('request','CASS Trujillo Larco - Mantenimiento de letrero luminoso','Favor apoyo con el envío de su propuesta de acuerdo al TDR.')]);
+  const operational=classify([msg('ops','HMC SJL Jardines - Observaciones PRE ITSE','Se solicita enviar los documentos SST para ingreso a tienda e inicio de trabajo el lunes 30.')]);
+  assert(request?.category==='quote_request');
+  assert(operational?.category==='operational');
+});
