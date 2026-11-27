@@ -14,3 +14,6 @@ No leer body.data ni descargar adjuntos. No escribir Gmail, oportunidades, label
 
 
 Ajustes QA adicionales: excluir el hilo de soporte/notificaciones Suplayer como no comercial; reconocer solicitudes que dicen propuesta sin exigir “propuesta económica”; tratar solicitudes de documentos SST/ingreso como coordinación operativa cuando no contienen una petición de cotización. El parser reconoce días con acento (sábado/miércoles) y horas precedidas por guion.
+
+
+Fechas soportadas: dd/mm, dd.mm, dd/mm/yyyy y yyyy-mm-dd. La fecha se normaliza solo si es válida y el día de semana coincide cuando el correo lo indica. Las horas AM/PM se normalizan a America/Lima (UTC-05:00). Los mensajes de soporte Suplayer se excluyen y las solicitudes con “propuesta” se reconocen aunque no repitan la palabra “cotización”.

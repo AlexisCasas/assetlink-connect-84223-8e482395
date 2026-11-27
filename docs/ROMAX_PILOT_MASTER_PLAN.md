@@ -451,3 +451,6 @@ PR independiente para reenvíos, alias @romaxfm.com y ampliaciones de plazo con 
 
 
 R3-GMAIL.2.1 incluye exclusión de soporte Suplayer, reconocimiento de solicitudes que dicen propuesta sin “cotización” literal y separación de coordinación SST/ingreso como operación. Pendiente CI final.
+
+
+R3-GMAIL.2.1: parser de plazos ampliado a fechas ISO yyyy-mm-dd, además de dd/mm y dd.mm; mantiene validación de día de semana y zona America/Lima. El PR sigue Draft hasta que la última ejecución de CI confirme el head definitivo.
