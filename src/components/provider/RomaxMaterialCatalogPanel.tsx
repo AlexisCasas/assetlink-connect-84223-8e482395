@@ -67,8 +67,7 @@ export function RomaxMaterialCatalogPanel() {
   const authorized = currentOrganization?.organizationType === 'provider_company'
     && currentMembership?.isActive
     && currentMembership.organizationId === organizationId
-    && !!currentMembership.role
-    && ['owner', 'admin', 'manager', 'quote_manager'].includes(currentMembership.role);
+    && !!currentMembership.role;
 
   const [items, setItems] = useState<MaterialItem[]>([]);
   const [families, setFamilies] = useState<Family[]>([]);

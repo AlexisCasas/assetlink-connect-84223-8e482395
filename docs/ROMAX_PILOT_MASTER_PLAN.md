@@ -363,10 +363,18 @@ Se avanzó R4-A sin depender de Gmail:
 4. Gmail se integra cuando el cliente entregue el buzón, sin bloquear R4.
 
 
-## 9. R2-E1.5 y transición a R2-E2 (27-nov-2026)
+## 10. R2-E2.1 — Seguridad y permisos comerciales (27-nov-2026)
 
-R2-E1.5: QA visual del usuario confirmado para los cinco puntos; PR #126 tiene TypeScript, ESLint y build Vite en PASS y Preview Ready. El PR permanece abierto/stacked; no se declara merge ni producción.
+R2-E2.1 implementado y aplicado en Supabase Cloud OneFacility. PR #128 abierto en Draft; no merge ni despliegue productivo.
 
-R2-E2 — Gestión comercial de precios: diseño documentado en \`docs/ROMAX_R2E2_COMMERCIAL_PRICING_DESIGN.md\`. Hallazgos de fuente: 273 históricos / 245 códigos; 245 costos de mercado y 534 sin costo; las 779 decisiones comerciales siguen pendientes y no hay aprobador en la matriz. El FII/IGV se calcula determinísticamente según el Excel. El primer subincremento debe cerrar la brecha RLS que permite a todos los miembros leer \`provider_cost_rates\` y \`provider_cost_suppliers\`.
+Capacidades por usuario/organización: `market_cost.read`, `market_cost.manage`, `market_cost.validate` y `pricing_rules.manage`; `commercial_price.*` queda reservado para R2-E2.5. RLS restringe costos/proveedores; owner/admin administran concesiones auditables con revocación irreversible. Creador no puede aprobar/rechazar su propio costo. INSERT requiere membresía activa. `service_role` no puede DELETE/TRUNCATE la tabla de auditoría.
 
-La fuente comercial privada, importes, nombres/RUC de proveedores y referencias documentales no se publican en GitHub. No importar precios ni históricos hasta implementar permisos, aprobación y versionamiento.
+Migraciones aplicadas: `20261127154749_romax_r2e2_1_pricing_access_security` y `20261127155628_romax_r2e2_1_service_role_privilege_hardening`.
+
+CI integral PASS: 37 archivos pgTAP / 2,882 aserciones; R2A 22/22 y R2-E2.1 46/46. TypeScript (sin diagnósticos nuevos; baseline heredado de Index.tsx), ESLint, contrato de seguridad y Vite PASS. PR run https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46029672570; push run https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46029661761.
+
+Cloud conserva 2 tarifas, 1 proveedor y 1 configuración FX; 0 concesiones iniciales. ROMAX tiene un único owner activo y las dos tarifas existentes (una approved y una rejected) fueron revisadas por su mismo creador antes de la nueva regla; se preservaron sin alterarlas. Agregar un segundo miembro activo y asignar `market_cost.validate` antes de futuras aprobaciones.
+
+Los heads independientes de PR #122/#123 aún usan nombres de migración antiguos; PR #128 alinea los archivos con versiones Cloud 20261127063621 y 20261127063641. Reconciliar la cadena antes de merge/deploy y no ejecutar db push desde ramas intermedias.
+
+No se importaron precios/históricos, no se cambiaron concesiones reales, no se hizo merge y no hubo despliegue productivo.

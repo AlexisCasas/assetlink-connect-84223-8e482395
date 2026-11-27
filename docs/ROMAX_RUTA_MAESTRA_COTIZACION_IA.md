@@ -135,16 +135,18 @@ El proyecto debe considerarse exitoso cuando una solicitud real pueda recorrer e
 - intervención humana antes de la emisión cuando corresponda.
 
 
-## 9. R2-E2 — Gestión comercial de precios (27-nov-2026)
+## 10. R2-E2.1 — Seguridad y permisos (27-nov-2026)
 
-Después del catálogo técnico, R2-E2 convierte los costos de mercado en precios ROMAX gobernados:
-1. RLS y capacidades por usuario para logística y líder comercial.
-2. Parámetros versionados de IGV, FII y vigencias.
-3. Histórico de mercado append-only (273 antecedentes).
-4. Costos actuales con validación logística (245 con costo; 534 sin costo).
-5. Propuestas de precio ROMAX con aprobación comercial y versiones inmutables.
-6. Interfaz de revisión y elegibilidad para el cotizador.
+R2-E2.1 implementado, revisado y aplicado en Supabase Cloud OneFacility. El PR #128 permanece abierto y en Draft.
 
-El costo de adquisición y el precio de venta son entidades separadas. La IA no fija importes ni aprueba: propone contexto; el motor determinista calcula y las personas autorizadas validan.
+- Capacidades por usuario: `market_cost.read`, `market_cost.manage`, `market_cost.validate`, `pricing_rules.manage`.
+- Owner/admin administran concesiones; revocación irreversible y auditada. Las capacidades comerciales de precio de venta quedan reservadas.
+- RLS limita costos de adquisición y proveedores; el creador no puede aprobar/rechazar su propio costo. Las operaciones de inserción exigen membresía activa.
+- La tabla de auditoría no permite DELETE/TRUNCATE al service_role.
+- Migraciones aplicadas: `20261127154749_romax_r2e2_1_pricing_access_security` y `20261127155628_romax_r2e2_1_service_role_privilege_hardening`.
+- CI: 37 archivos pgTAP / 2,882 aserciones; R2A 22/22, R2-E2.1 46/46; TypeScript, ESLint, contrato estático y Vite PASS.
+- Evidencias: [PR run](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46029672570) y [push run](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46029661761).
 
-Ver \`docs/ROMAX_R2E2_COMMERCIAL_PRICING_DESIGN.md\` para los hallazgos, fórmulas, permisos y gates. La carga económica queda bloqueada hasta resolver seguridad y confirmaciones de moneda/roles.
+Cloud conserva 2 tarifas, 1 proveedor y 1 configuración FX; no se crearon concesiones automáticas ni se importaron precios/históricos. ROMAX solo tiene un owner activo; hace falta añadir un segundo miembro para asignarle `market_cost.validate`. Las dos tarifas previas (una approved y otra rejected) fueron revisadas por su creador antes de la regla nueva y no se modificaron.
+
+No merge, no importación económica y no despliegue productivo. Los PRs #122/#123 deben alinear sus ramas con las versiones de migración ya aplicadas antes de completar el merge de la cadena.
