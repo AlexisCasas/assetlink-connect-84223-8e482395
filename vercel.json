@@ -13,7 +13,8 @@
       "feature/romax-r2e1-5-material-catalog-ui": false,
       "docs/romax-r2e2-commercial-pricing-design": false,
       "feature/romax-r2e2-1-pricing-access-security": false,
-      "productization/mvp": false
+      "productization/mvp": false,
+      "fix/romax-inline-material-details-20261127": false
     }
   }
 }
