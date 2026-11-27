@@ -36,13 +36,13 @@ function attachments(m:Message) {
 const quote=/\b(cotizacion|cotizar|presupuesto|licitacion|propuesta economica|rfq|solicitud de oferta)\b/;
 const adjust=/\b(reajuste|reajustar|mejora de precio|mejorar el precio|descuento|actualizar (?:la )?(?:cotizacion|propuesta))\b/;
 const follow=/\b(recordatorio|seguimiento|prorroga|ampliacion (?:de |del )?plazo|se (?:extiende|amplia|prorroga) (?:el )?plazo|extiende plazo|amplia plazo|nuevo plazo|nueva fecha|fecha limite|reprogramacion)\b/;
-const operation=/\b(orden de compra|orden de servicio|acta de conformidad|factura|coordinacion de visita|inicio de trabajos|ejecucion de trabajos|documentos? sst|ingreso a tienda)\b/;
+const support=/\\b(suplayer|suplayers|notificaciones? de invitaciones|incidencia de correo|soporte de plataforma)\\b/;\nconst operation=/\b(orden de compra|orden de servicio|acta de conformidad|factura|coordinacion de visita|inicio de trabajos|ejecucion de trabajos|documentos? sst|ingreso a tienda)\b/;
 const requestQuote=/\b(solicit(?:a|amos|ud|ar|an)|requerimiento|invitacion|favor|agradeceremos|necesitamos|convocatoria|cotizar)\b/;
 const sentQuote=/\b(adjuntamos|adjunto|enviamos|remitimos|compartimos|se adjunta|se envia)\b.{0,120}\b(cotizacion|propuesta|presupuesto)\b|\b(cotizacion|propuesta|presupuesto)\b.{0,120}\b(adjunta|enviada|remitida)\b/;
 const references=(s:string)=>Array.from(new Set((s.toUpperCase().match(/\bSC[-\s]?\d{4,}(?:-\d{4})?\b/g)??[]).map(x=>x.replace(/\s+/g,'-'))));
 const rmxReference=(s:string)=>s.toUpperCase().match(/\bRMX[-\s]?\d{4}[-\s]?\d{3,}\b/)?.[0].replace(/\s+/g,'-')??null;
 const weekdayIndex:Record<string,number>={domingo:0,lunes:1,martes:2,miercoles:3,jueves:4,viernes:5,sabado:6};
-const datePattern=/\b(?:(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\s+)?(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?\b/gi;
+const datePattern=/\b(?:(lunes|martes|miercoles|jueves|viernes|s[aá]bado|domingo)\s+)?(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?\b/gi;
 const deadlineCue=/(?:plazo|deadline|fecha\s+limite|fecha\s+de\s+envio\s+de\s+propuesta|envio\s+de\s+propuesta|entrega\s+de\s+propuesta|se\s+extiende|se\s+amplia|prorroga|hasta\s+(?:el\s+)?(?:dia\s+)?)/i;
 export function parseDeadlineEvents(messages:{snippet?:string;internalDate?:string}[]):DeadlineEvent[] {
   const found:DeadlineEvent[]=[];
@@ -71,7 +71,7 @@ export function parseDeadlineEvents(messages:{snippet?:string;internalDate?:stri
       const kind:/se\s+extiende|se\s+amplia|prorroga|nuevo\s+plazo|amplia\s+plazo|extiende\s+plazo/i.test(nearBefore)?'extension':'stated';
       const raw=clean(text.slice(Math.max(0,index-65),Math.min(text.length,index+full.length+35)),180);
       const event:DeadlineEvent={raw,date,time,datetime,timezone:'America/Lima',status,kind,weekday:match[1]??null};
-      if(!found.some(x=>x.date===event.date&&x.time===event.time&&x.raw===event.raw))found.push(event);
+      if(!found.some(x=>x.date===event.date&&x.time===event.time&&x.kind===event.kind))found.push(event);
     }
   }
   return found;
@@ -106,7 +106,7 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const attachmentMessages=sourceMessages.length?sourceMessages:quoteReplies;
   const allAttachments=Array.from(new Map(attachmentMessages.flatMap(attachments).map(x=>[x.name+'\0'+x.mime,x])).values()).slice(0,50);
   const currentDeadline=[...deadlineEvents].reverse().find(e=>e.kind==='extension')??deadlineEvents[deadlineEvents.length-1]??null;
-  const reference=refs.length===1?refs[0]:rmxReference(context);
+  const reference=refs.length===1?refs[0]:rmxReference(context+' '+subject+' '+snippet);
   return {thread_id:thread.id,message_id:m.id!,subject:subject||'Sin asunto',sender:forwardedSender(m)??sender,received_at:new Date(Number(m.internalDate)).toISOString(),snippet,category,reason,reference,deadline_hint:currentDeadline?.raw??null,deadline_events:deadlineEvents,message_count:messages.length,attachments:allAttachments};
 }
 export async function readPreview(request:typeof fetch,token:string,from:number,to:number,pageToken?:string) {
