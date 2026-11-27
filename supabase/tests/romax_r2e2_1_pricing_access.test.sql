@@ -114,7 +114,7 @@ SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000002');
 SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'deactivated logistics member cannot read rates despite a retained grant');
 SELECT is((SELECT count(*) FROM public.provider_cost_suppliers WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'deactivated logistics member cannot read suppliers despite a retained grant');
-SELECT throws_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','UND','PEN',17,1,'not_required',NULL,'unknown','manual',current_date,'draft')$,'P0001',NULL,'deactivated logistics member cannot insert rates despite a retained grant');
+SELECT throws_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','UND','PEN',17,1,'not_required',NULL,'unknown','manual',current_date,'draft')$$,'P0001',NULL,'deactivated logistics member cannot insert rates despite a retained grant');
 SELECT throws_ok($$INSERT INTO public.provider_cost_suppliers(organization_id,display_name) VALUES ('e2200000-0000-0000-0000-000000000001','Inactive member supplier')$$,'42501',NULL,'deactivated logistics member cannot insert suppliers despite a retained grant');
 
 
