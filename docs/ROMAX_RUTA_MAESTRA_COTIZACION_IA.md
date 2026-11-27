@@ -137,26 +137,16 @@ El proyecto debe considerarse exitoso cuando una solicitud real pueda recorrer e
 
 ## 10. R2-E2.1 — Seguridad y permisos (27-nov-2026)
 
-Antes de cargar precios se implementa una capa de capacidades explícitas por usuario. Logística puede registrar costos con `market_cost.manage`; un validador distinto puede aprobar/rechazar con `market_cost.validate`; `market_cost.read` permite solo consulta; `pricing_rules.manage` gobierna la configuración FX. Owner/admin administran concesiones. La UI no sustituye RLS.
+R2-E2.1 implementado, revisado y aplicado en Supabase Cloud OneFacility. El PR #128 permanece abierto y en Draft.
 
-El costo de adquisición no se muestra a miembros sin capacidad, aunque intenten consultar directamente la API. El precio de venta ROMAX permanece separado y sus capacidades quedan reservadas hasta R2-E2.5. PR #128 contiene migración, pgTAP, UI y CI. Cloud apply, carga económica, merge y producción quedan fuera de esta autorización.
+- Capacidades por usuario: `market_cost.read`, `market_cost.manage`, `market_cost.validate`, `pricing_rules.manage`.
+- Owner/admin administran concesiones; revocación irreversible y auditada. Las capacidades comerciales de precio de venta quedan reservadas.
+- RLS limita costos de adquisición y proveedores; el creador no puede aprobar/rechazar su propio costo. Las operaciones de inserción exigen membresía activa.
+- La tabla de auditoría no permite DELETE/TRUNCATE al service_role.
+- Migraciones aplicadas: `20261127154749_romax_r2e2_1_pricing_access_security` y `20261127155628_romax_r2e2_1_service_role_privilege_hardening`.
+- CI: 37 archivos pgTAP / 2,882 aserciones; R2A 22/22, R2-E2.1 46/46; TypeScript, ESLint, contrato estático y Vite PASS.
+- Evidencias: [PR run](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46029672570) y [push run](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46029661761).
 
-## CI integral — PASS (27-nov-2026)
+Cloud conserva 2 tarifas, 1 proveedor y 1 configuración FX; no se crearon concesiones automáticas ni se importaron precios/históricos. ROMAX solo tiene un owner activo; hace falta añadir un segundo miembro para asignarle `market_cost.validate`. Las dos tarifas previas (una approved y otra rejected) fueron revisadas por su creador antes de la regla nueva y no se modificaron.
 
-Ejecución verificada en el PR #128 y en el push de la rama, ambos sobre el commit `2a9074404c98b4205af3397524538e8506bf7c0d`.
-
-- GitHub Actions PR run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46023394263
-- GitHub Actions push run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46023382222
-- Supabase aislado/no vinculado a Cloud: cadena completa de migraciones y 37 archivos pgTAP, 2,874 aserciones; `Result: PASS`.
-- Regresión R2A: 22/22 aserciones.
-- R2-E2.1 multiempresa: 38/38 aserciones.
-- Frontend: TypeScript sin diagnósticos nuevos (se mantiene la línea base heredada de Index.tsx), ESLint, contrato estático de seguridad y Vite build: PASS.
-- El stack local desechable se detuvo con `supabase stop --no-backup`: PASS.
-
-Correcciones que quedaron cubiertas por el CI:
-1. Sintaxis de dollar-quoting en pruebas pgTAP.
-2. Identidad del usuario creador del costo en el fixture multiempresa.
-3. Prueba de denegación de concesiones por un usuario no admin, diferenciando el guard de procedencia de la política RLS.
-4. Preflight con planes explícitos de 22 y 38 pruebas y control estático para evitar dollar-quoting mal formado.
-
-**Alcance no ejecutado:** no se aplicó la migración en Supabase Cloud, no se cambiaron concesiones reales, no se importaron precios ni históricos, no se hizo merge y no se desplegó a producción. El PR #128 permanece abierto y en Draft para revisión.
+No merge, no importación económica y no despliegue productivo. Los PRs #122/#123 deben alinear sus ramas con las versiones de migración ya aplicadas antes de completar el merge de la cadena.

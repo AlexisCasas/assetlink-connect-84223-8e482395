@@ -1,6 +1,6 @@
 # ROMAX R2-E2 — Gestión comercial de precios
 
-**Estado:** D01-D12 aprobadas; R2-E2.1 implementado en PR #128; CI integral PASS (27-nov-2026), revisión final pendiente.  
+**Estado:** D01-D12 aprobadas; R2-E2.1 aplicado en Supabase Cloud con CI integral PASS (27-nov-2026). PR #128 permanece abierto y en Draft; sin importación económica, merge ni producción.  
 **Fecha:** 27-nov-2026.  
 **Privacidad:** no se publican importes, proveedores, RUC, referencias documentales ni filas privadas del Excel.
 
@@ -43,25 +43,15 @@ FII no es margen porcentual. IGV inicial 18%; vigencia predeterminada 180 días;
 - No se aplicó migración Cloud ni se modificaron los dos rates existentes.
 
 
-## CI integral — PASS (27-nov-2026)
-
-Ejecución verificada en el PR #128 y en el push de la rama, ambos sobre el commit `2a9074404c98b4205af3397524538e8506bf7c0d`.
-
-- GitHub Actions PR run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46023394263
-- GitHub Actions push run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46023382222
-- Supabase aislado/no vinculado a Cloud: cadena completa de migraciones y 37 archivos pgTAP, 2,874 aserciones; `Result: PASS`.
-- Regresión R2A: 22/22 aserciones.
-- R2-E2.1 multiempresa: 38/38 aserciones.
-- Frontend: TypeScript sin diagnósticos nuevos (se mantiene la línea base heredada de Index.tsx), ESLint, contrato estático de seguridad y Vite build: PASS.
-- El stack local desechable se detuvo con `supabase stop --no-backup`: PASS.
-
-Correcciones que quedaron cubiertas por el CI:
-1. Sintaxis de dollar-quoting en pruebas pgTAP.
-2. Identidad del usuario creador del costo en el fixture multiempresa.
-3. Prueba de denegación de concesiones por un usuario no admin, diferenciando el guard de procedencia de la política RLS.
-4. Preflight con planes explícitos de 22 y 38 pruebas y control estático para evitar dollar-quoting mal formado.
-
-**Alcance no ejecutado:** no se aplicó la migración en Supabase Cloud, no se cambiaron concesiones reales, no se importaron precios ni históricos, no se hizo merge y no se desplegó a producción. El PR #128 permanece abierto y en Draft para revisión.
+## R2-E2.1 — CI y Cloud
+- PR run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46029672570
+- Push run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46029661761
+- 37 archivos pgTAP / 2,882 aserciones; R2A 22/22 y R2-E2.1 46/46. Frontend TypeScript, ESLint, contrato estático y Vite PASS.
+- Migraciones Cloud aplicadas: `20261127154749_romax_r2e2_1_pricing_access_security` y `20261127155628_romax_r2e2_1_service_role_privilege_hardening`.
+- Se preservaron 2 tarifas, 1 proveedor y 1 configuración FX. Concesiones iniciales: 0; no se importaron precios/históricos.
+- El owner ROMAX es el único miembro activo; añadir un segundo miembro con `market_cost.validate` antes de aprobar nuevos costos.
+- Security Advisor sin incremento frente a la línea base. Performance Advisor sin FK nuevas sin índice tras el hardening.
+- PR #128 sigue Draft, sin merge ni despliegue productivo.
 
 ## Próximos incrementos
 1. R2-E2.1: permisos y RLS (PR #128).
