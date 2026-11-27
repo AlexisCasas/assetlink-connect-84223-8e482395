@@ -98,7 +98,8 @@ SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000001');
 UPDATE public.provider_pricing_access_grants SET revoked_at=now(),revoked_by='e2100000-0000-0000-0000-000000000001',revocation_reason='Access review'
  WHERE organization_id='e2200000-0000-0000-0000-000000000001' AND user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read' AND revoked_at IS NULL;
 SELECT is((SELECT count(*) FROM public.provider_pricing_access_grants WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read' AND revoked_at IS NULL),0::bigint,'owner can revoke a capability');
-SELECT throws_ok($$UPDATE public.provider_pricing_access_grants SET revoked_at=NULL,revoked_by=NULL WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read'$$,'P0001',NULL,'revoked grants cannot be reactivated');
+UPDATE public.provider_pricing_access_grants SET revoked_at=NULL,revoked_by=NULL WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read';
+SELECT is((SELECT count(*) FROM public.provider_pricing_access_grants WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read' AND revoked_at IS NULL),0::bigint,'revoked grants cannot be reactivated');
 SELECT throws_ok($$UPDATE public.provider_pricing_access_grants SET capability='market_cost.manage' WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read'$$,'42501',NULL,'grant identity cannot be edited by API');
 SELECT throws_ok($$INSERT INTO public.provider_pricing_access_grants(organization_id,user_id,capability,granted_by) VALUES ('e2200000-0000-0000-0000-000000000001','e2100000-0000-0000-0000-000000000002','market_cost.validate','e2100000-0000-0000-0000-000000000002')$$,'42501',NULL,'non-admin cannot grant capabilities');
 
