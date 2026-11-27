@@ -52,7 +52,7 @@ export function parseDeadlineEvents(messages:{snippet?:string;internalDate?:stri
     const text=clean(message.snippet,1200),baseYear=new Date(Number(message.internalDate)).getUTCFullYear()||new Date().getUTCFullYear();
     datePattern.lastIndex=0;isoDatePattern.lastIndex=0;
     const dateMatches=[
-      ...Array.from(text.matchAll(datePattern),match=>({index:match.index??0,full:match[0],weekday:matchedWeekday,day:Number(match[2]),month:Number(match[3]),yearRaw:match[4]})),
+      ...Array.from(text.matchAll(datePattern),match=>({index:match.index??0,full:match[0],weekday:match[1]??null,day:Number(match[2]),month:Number(match[3]),yearRaw:match[4]})),
       ...Array.from(text.matchAll(isoDatePattern),match=>({index:match.index??0,full:match[0],weekday:null,day:Number(match[3]),month:Number(match[2]),yearRaw:match[1]})),
     ].sort((a,b)=>a.index-b.index);
     for(const match of dateMatches){
@@ -77,7 +77,7 @@ export function parseDeadlineEvents(messages:{snippet?:string;internalDate?:stri
       if(date&&time)datetime=date+'T'+time+':00-05:00';
       const kind:DeadlineEvent['kind']=/se\s+extiende|se\s+amplia|prorroga|nuevo\s+plazo|amplia\s+plazo|extiende\s+plazo/i.test(nearBefore)?'extension':'stated';
       const raw=clean(text.slice(Math.max(0,index-65),Math.min(text.length,index+full.length+35)),180);
-      const event:DeadlineEvent={raw,date,time,datetime,timezone:'America/Lima',status,kind,weekday:match[1]??null};
+      const event:DeadlineEvent={raw,date,time,datetime,timezone:'America/Lima',status,kind,weekday:matchedWeekday};
       if(!found.some(x=>x.date===event.date&&x.time===event.time&&x.kind===event.kind))found.push(event);
     }
   }
