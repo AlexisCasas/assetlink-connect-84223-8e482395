@@ -27,3 +27,13 @@ El plazo indicado en una solicitud inicial no se clasifica como seguimiento: sol
 - CORS restringido al alias exacto de Vercel Preview de la rama `feature/romax-r3-gmail-2-1`; sin secretos nuevos. Lee el refresh token cifrado existente solo en memoria para pedir un access token y consultar Gmail read-only.
 - Vercel usa `VITE_ROMAX_GMAIL_FUNCTION_NAME=romax-gmail-connection-qa` solo para Preview y solo para esta rama. Producción no recibe esta variable y conserva el nombre productivo por defecto.
 - No merge, no deploy de función productiva, no cambio de alias productivo, no SQL ni persistencia de resultados.
+
+
+## Despliegue QA aislado — 27-nov-2026
+- `romax-gmail-connection-qa` desplegada en Supabase OneFacility, v1 ACTIVE, `verify_jwt=true`.
+- QA allowlist: `status` y `preview` únicamente; las acciones `start`, `complete`, `verify`, `disconnect` se rechazan con 403. El origen CORS está fijado al alias Preview de esta rama.
+- Vercel env `VITE_ROMAX_GMAIL_FUNCTION_NAME=romax-gmail-connection-qa` creado solo para target Preview y branch `feature/romax-r3-gmail-2-1`; producción no recibe la variable y conserva el fallback `romax-gmail-connection`.
+- Preview deployment `dpl_BvA48BQqJMJqduv7LUYnZuheoGt1` READY en commit `8cbfca1`; el bundle contiene el nombre QA.
+- CI del commit `8cbfca1`: 10/10 check-runs success; Edge Deno 22/22 PASS; frontend y suites SQL aisladas PASS.
+- Producción intacta: función productiva `romax-gmail-connection` v2 ACTIVE, Vercel producción sigue en `9117364a`. Sin migraciones, secretos nuevos, escrituras, importaciones o cambios Gmail.
+- Pendiente QA manual del propietario: iniciar sesión en Preview y ejecutar sincronización con los hilos auditados. No fusionar hasta revisar el resultado.

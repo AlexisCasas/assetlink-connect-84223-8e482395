@@ -458,3 +458,7 @@ R3-GMAIL.2.1: parser de plazos ampliado a fechas ISO yyyy-mm-dd, además de dd/m
 
 ## R3-GMAIL.2.1 — QA aislado autorizado
 Se crea `romax-gmail-connection-qa` con allowlist `status/preview` y CORS restringido al alias Vercel Preview de `feature/romax-r3-gmail-2-1`. Vercel Preview de esa rama invoca QA mediante `VITE_ROMAX_GMAIL_FUNCTION_NAME`; producción mantiene la función productiva por defecto. Sin merge, cambios en producción, SQL, importación o modificaciones Gmail. Validar login de propietario y correos auditados antes de autorizar R3-GMAIL.3.
+
+
+## QA aislado R3-GMAIL.2.1 — 27-nov-2026
+Autorizado y desplegado `romax-gmail-connection-qa` v1 ACTIVE (`verify_jwt=true`), con allowlist `status/preview`. Vercel Preview de `feature/romax-r3-gmail-2-1` tiene override branch-scoped `VITE_ROMAX_GMAIL_FUNCTION_NAME`; bundle verificado. CI commit 8cbfca1 10/10 PASS, 22 pruebas Deno. Producción Edge v2 y Vercel `9117364a` sin cambios. Falta login manual del propietario en preview y primera sincronización real. No merge, no importación ni SQL.
