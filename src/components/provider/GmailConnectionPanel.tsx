@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const GMAIL_ATTEMPT_KEY = 'romax-gmail-oauth-attempt-v1';
+const GMAIL_FUNCTION_NAME = import.meta.env.VITE_ROMAX_GMAIL_FUNCTION_NAME || 'romax-gmail-connection';
 type DeadlineEvent = { raw:string; date:string|null; time:string|null; datetime:string|null; timezone:'America/Lima'; status:'confirmed'|'ambiguous'; kind:'extension'|'stated'; weekday:string|null };
 type Candidate = { thread_id:string; subject:string; sender:string; received_at:string; snippet:string; category:string; reason:string; reference:string|null; deadline_hint:string|null; deadline_events?:DeadlineEvent[]; message_count:number; attachments:{name:string;mime:string;supported:boolean}[]; existing_status?:string|null };
 type Preview = { window_start:string; window_end:string; candidates:Candidate[]; scanned:number; estimate:number|null; next_cursor:string|null };
 const labels:Record<string,string>={quote_request:'Nueva solicitud candidata',follow_up:'Actualización / seguimiento',adjustment:'Reajuste',quoted:'Posiblemente cotizada',operational:'Operativa',other:'Otros',review:'Requiere revisión'};
 type Result = { status?: string; mailbox?: string; authorization_url?: string; state?: string; verified?: boolean; error?: string } & Partial<Preview>;
 export async function gmailConnection(organizationId: string, action: string, extra: Record<string,string> = {}): Promise<Result> {
-  const { data, error } = await supabase.functions.invoke('romax-gmail-connection', { body: { ...extra, organization_id:organizationId, action } });
+  const { data, error } = await supabase.functions.invoke(GMAIL_FUNCTION_NAME, { body: { ...extra, organization_id:organizationId, action } });
   if (error || !data || data.error) throw new Error('No se pudo completar la operación. Comprueba la configuración o vuelve a conectar.');
   return data as Result;
 }

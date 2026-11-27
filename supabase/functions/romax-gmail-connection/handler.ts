@@ -54,7 +54,7 @@ async function verifyMailbox(config: Config, accessToken: string, request: typeo
   if (typeof data.emailAddress !== 'string' || data.emailAddress.trim().toLowerCase() !== config.mailbox) throw new SafeError(403,'Selecciona exclusivamente el buzón comercial autorizado');
 }
 type Dependencies = { authenticate: (req: Request) => Promise<{id:string}>; service: () => Db; request: typeof fetch; readEnv: typeof env };
-export function createHandler(deps: Dependencies = { authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv:env }) {
+export function createHandler(deps: Dependencies = { authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv:env }, allowedActions?: ReadonlySet<string>) {
   const { request, readEnv } = deps;
   return async (req: Request): Promise<Response> => {
   const configuredOrigin = readEnv('ROMAX_GMAIL_APP_ORIGIN');
@@ -68,6 +68,7 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
     const config = configuration(readEnv);
     const body = await req.json();
     if (!body || body.organization_id !== config.organization) throw new SafeError(403,'Acceso restringido');
+    if (allowedActions && (typeof body.action !== 'string' || !allowedActions.has(body.action))) throw new SafeError(403,'Acción no habilitada en este entorno');
     const db = deps.service();
     await assertOwner(db,config.organization,user.id);
     const organization = config.organization;
@@ -195,4 +196,13 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
     return reply({error:'No se pudo completar la operación de Gmail'},503);
   }
   };
+}
+
+
+// Isolated Preview-only entrypoint. This origin is the stable Vercel branch alias;
+// no OAuth lifecycle or write actions are exposed from this function.
+export const QA_APP_ORIGIN = 'https://one-facility-git-feature-romax-r3-29c35c-alexiscasasrs-projects.vercel.app';
+export function createQaHandler() {
+  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? QA_APP_ORIGIN : env(name);
+  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview']));
 }

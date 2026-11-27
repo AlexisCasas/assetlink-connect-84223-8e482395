@@ -454,3 +454,7 @@ R3-GMAIL.2.1 incluye exclusión de soporte Suplayer, reconocimiento de solicitud
 
 
 R3-GMAIL.2.1: parser de plazos ampliado a fechas ISO yyyy-mm-dd, además de dd/mm y dd.mm; mantiene validación de día de semana y zona America/Lima. El PR sigue Draft hasta que la última ejecución de CI confirme el head definitivo.
+
+
+## R3-GMAIL.2.1 — QA aislado autorizado
+Se crea `romax-gmail-connection-qa` con allowlist `status/preview` y CORS restringido al alias Vercel Preview de `feature/romax-r3-gmail-2-1`. Vercel Preview de esa rama invoca QA mediante `VITE_ROMAX_GMAIL_FUNCTION_NAME`; producción mantiene la función productiva por defecto. Sin merge, cambios en producción, SQL, importación o modificaciones Gmail. Validar login de propietario y correos auditados antes de autorizar R3-GMAIL.3.

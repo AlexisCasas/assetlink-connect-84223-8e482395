@@ -19,3 +19,11 @@ Ajustes QA adicionales: excluir el hilo de soporte/notificaciones Suplayer como 
 Fechas soportadas: dd/mm, dd.mm, dd/mm/yyyy y yyyy-mm-dd. La fecha se normaliza solo si es válida y el día de semana coincide cuando el correo lo indica. Las horas AM/PM se normalizan a America/Lima (UTC-05:00). Los mensajes de soporte Suplayer se excluyen y las solicitudes con “propuesta” se reconocen aunque no repitan la palabra “cotización”.
 
 El plazo indicado en una solicitud inicial no se clasifica como seguimiento: solo se marca seguimiento cuando hay lenguaje de ampliación, prórroga, recordatorio, nueva fecha o reprogramación.
+
+
+## Aislamiento QA en Supabase y Vercel Preview
+- Function independiente `romax-gmail-connection-qa`, con allowlist estricta `status` y `preview`; `start`, `complete`, `verify` y `disconnect` responden 403.
+- Reutiliza autenticación Supabase y verifica propietario activo ROMAX. No incluye endpoint de importación.
+- CORS restringido al alias exacto de Vercel Preview de la rama `feature/romax-r3-gmail-2-1`; sin secretos nuevos. Lee el refresh token cifrado existente solo en memoria para pedir un access token y consultar Gmail read-only.
+- Vercel usa `VITE_ROMAX_GMAIL_FUNCTION_NAME=romax-gmail-connection-qa` solo para Preview y solo para esta rama. Producción no recibe esta variable y conserva el nombre productivo por defecto.
+- No merge, no deploy de función productiva, no cambio de alias productivo, no SQL ni persistencia de resultados.
