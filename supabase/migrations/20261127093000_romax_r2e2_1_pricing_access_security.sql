@@ -40,7 +40,8 @@ CREATE INDEX provider_pricing_access_grants_granted_by_idx
 
 ALTER TABLE public.provider_pricing_access_grants ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.provider_pricing_access_grants FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT ON public.provider_pricing_access_grants TO authenticated;
+GRANT SELECT ON public.provider_pricing_access_grants TO authenticated;
+GRANT INSERT (organization_id,user_id,capability,granted_by) ON public.provider_pricing_access_grants TO authenticated;
 GRANT UPDATE (revoked_at,revoked_by,revocation_reason) ON public.provider_pricing_access_grants TO authenticated;
 GRANT ALL ON public.provider_pricing_access_grants TO service_role;
 
