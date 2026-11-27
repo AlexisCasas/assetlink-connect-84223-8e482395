@@ -23,7 +23,7 @@ jobs:
         with:
           deno-version: v2.4.5
       - run: deno check --node-modules-dir=none supabase/functions/romax-gmail-connection/index.ts
-      - run: deno test --node-modules-dir=none supabase/functions/romax-gmail-connection/crypto.test.ts supabase/functions/romax-gmail-connection/handler.test.ts
+      - run: deno test --node-modules-dir=none supabase/functions/romax-gmail-connection/crypto.test.ts supabase/functions/romax-gmail-connection/handler.test.ts supabase/functions/romax-gmail-connection/preview.test.ts
   database:
     runs-on: ubuntu-latest
     timeout-minutes: 50

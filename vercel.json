@@ -15,7 +15,8 @@
       "feature/romax-r2e2-1-pricing-access-security": false,
       "productization/mvp": false,
       "fix/romax-inline-material-details-20261127": false,
-      "feature/romax-r3-gmail-oauth": false
+      "feature/romax-r3-gmail-oauth": false,
+      "feature/romax-r3-gmail-preview": false
     }
   },
   "headers": [

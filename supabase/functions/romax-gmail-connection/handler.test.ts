@@ -4,7 +4,7 @@ const organization='11111111-1111-4111-8111-111111111111', origin='https://examp
 type Row=Record<string,unknown>;
 function assert(value:unknown, label='Assertion failed') { if(!value) throw new Error(label); }
 function fixture() {
-  let row:Row|null=null, profile=mailbox, scope=READ_SCOPE, exchangeCount=0, revokeCount=0;
+  let row:Row|null=null, profile=mailbox, scope=READ_SCOPE, exchangeCount=0, revokeCount=0, threadReads=0;
   const owners=new Set(['owner','owner2']);
   const variables:Record<string,string>={ROMAX_GMAIL_ORGANIZATION_ID:organization,ROMAX_GMAIL_EXPECTED_EMAIL:mailbox,ROMAX_GMAIL_APP_ORIGIN:origin,ROMAX_GMAIL_CLIENT_ID:'synthetic-client',ROMAX_GMAIL_CLIENT_SECRET:'synthetic-secret',ROMAX_GMAIL_ENCRYPTION_KEY:btoa('k'.repeat(32))};
   class Query {
@@ -15,12 +15,18 @@ function fixture() {
     eq(key:string,value:unknown){this.filters.push(r=>r[key]===value);return this;}
     is(key:string,value:unknown){this.filters.push(r=>r[key]===value);return this;}
     gt(key:string,value:string){this.filters.push(r=>String(r[key])>value);return this;}
+    in(key:string,values:unknown[]){this.filters.push(r=>values.includes(r[key]));return this;}
     limit(){return this;}
     update(values:Row){this.changes=values;return this;}
     upsert(values:Row){if(!row) row={...values,status:'disconnected',attempt_hash:null,attempt_expires_at:null};return Promise.resolve({data:null,error:null});}
     private execute(single:boolean){
       if(this.name==='organization_members'){
         const data=[...owners].map(user_id=>({id:user_id,organization_id:organization,user_id,role:'owner',is_active:true,'organizations.organization_type':'provider_company','organizations.status':'active'})).filter(r=>this.filters.every(f=>f(r)));
+        return {data,error:null};
+      }
+      if(this.name==='romax_opportunities'){
+        assert(!this.changes,'Preview must not write opportunities');
+        const data=[{organization_id:organization,source_system:'gmail',source_thread_id:'thread1',status:'in_analysis'},{organization_id:'another',source_system:'gmail',source_thread_id:'thread2',status:'quoted'}].filter(r=>this.filters.every(f=>f(r)));
         return {data,error:null};
       }
       if(!row || !this.filters.every(f=>f(row!)))return {data:single?null:[],error:null};
@@ -42,6 +48,13 @@ function fixture() {
       return Response.json({access_token:'access',scope});
     }
     if(url==='https://gmail.googleapis.com/gmail/v1/users/me/profile')return Response.json({emailAddress:profile});
+    if(url.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/threads')){
+      assert(init?.method==='GET');
+      const u=new URL(url);threadReads++;
+      if(u.pathname.endsWith('/threads'))return Response.json(u.searchParams.has('pageToken')?{threads:[{id:'thread2'}]}:{threads:[{id:'thread1'}],nextPageToken:'opaque-page'});
+      const id=u.pathname.split('/').pop();
+      return Response.json({id,messages:[{id:'msg'+id,internalDate:String(Date.now()-60000),labelIds:['INBOX'],snippet:'Solicitamos cotizar',payload:{headers:[{name:'Subject',value:'Solicitud de cotización'},{name:'From',value:'client@example.test'}]}}]});
+    }
     if(url==='https://oauth2.googleapis.com/revoke'){revokeCount++;assert(values.get('token')==='refresh-secret');return new Response('',{status:200});}
     throw new Error('Unexpected outbound request');
   };
@@ -50,7 +63,7 @@ function fixture() {
     const response=await handler(new Request(origin+'/function',{method:'POST',headers:{Origin:requestOrigin,Authorization:user?'Bearer '+user:'','Content-Type':'application/json'},body:JSON.stringify({action,organization_id:organization,...extra})}));
     return {code:response.status,body:await response.json()};
   };
-  return {call,get row(){return row;},get exchanges(){return exchangeCount;},get revokes(){return revokeCount;},setProfile:(v:string)=>{profile=v;},setScope:(v:string)=>{scope=v;},expire:()=>{if(row)row.attempt_expires_at=new Date(Date.now()-1000).toISOString();},deactivate:(v:string)=>owners.delete(v)};
+  return {call,get row(){return row;},get exchanges(){return exchangeCount;},get revokes(){return revokeCount;},get threadReads(){return threadReads;},setProfile:(v:string)=>{profile=v;},setScope:(v:string)=>{scope=v;},expire:()=>{if(row)row.attempt_expires_at=new Date(Date.now()-1000).toISOString();},deactivate:(v:string)=>owners.delete(v)};
 }
 Deno.test('rejects missing authentication, wrong origin, tenant and non-owner',async()=>{
   const f=fixture();
@@ -89,4 +102,25 @@ Deno.test('wrong mailbox, excess scope and deactivated owner cannot connect',asy
   assert((await f.call('complete',{state:start.body.state,code:'code'})).code===409 && f.row?.status==='disconnected');
   f.setScope(READ_SCOPE);start=await f.call('start');f.deactivate('owner');
   assert((await f.call('complete',{state:start.body.state,code:'code'})).code===403 && f.row?.refresh_ciphertext===null);
+});
+
+Deno.test('preview is read-only, tenant-bound, paginated and requires live connection',async()=>{
+  const f=fixture();
+  assert((await f.call('preview')).code===409&&f.threadReads===0);
+  assert((await f.call('preview',{},'outsider')).code===403&&f.threadReads===0);
+  const start=await f.call('start');
+  assert((await f.call('complete',{state:start.body.state,code:'code'})).code===200);
+  const before=JSON.stringify(f.row);
+  const p=await f.call('preview');
+  assert(p.code===200&&p.body.candidates.length===1&&p.body.candidates[0].existing_status==='in_analysis');
+  assert(p.body.next_cursor&&!p.body.next_cursor.includes('opaque-page'));
+  assert(JSON.stringify(f.row)===before,'preview must not mutate connection');
+  const reads=f.threadReads;
+  assert((await f.call('preview',{cursor:p.body.next_cursor},'owner2')).code===400);
+  assert((await f.call('preview',{cursor:'invalid'})).code===400&&f.threadReads===reads);
+  const next=await f.call('preview',{cursor:p.body.next_cursor});
+  assert(next.code===200&&next.body.candidates[0].thread_id==='thread2'&&next.body.candidates[0].existing_status===null);
+  assert(next.body.window_start===p.body.window_start&&next.body.window_end===p.body.window_end&&!next.body.next_cursor);
+  assert(JSON.stringify(f.row)===before);
+  await f.call('disconnect');assert((await f.call('preview',{cursor:p.body.next_cursor})).code===409);
 });
