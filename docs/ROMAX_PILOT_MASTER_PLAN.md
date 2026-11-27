@@ -444,3 +444,7 @@ Nota de observabilidad: los 4 POST 200 y 3 OPTIONS 204 observados en la ventana 
 
 ## Auditoría inicial R3-GMAIL.2 — 27-nov-2026
 Primera página revisada en solo lectura: 12 conversaciones; 6 hilos comerciales (5 solicitudes + 1 actualización), 4 cotizadas/operativas, 2 falsos positivos. Se identificaron errores de clasificación en reenvíos, alias internos y ampliaciones de plazo. No se importaron correos. NO GO importación hasta corregir clasificador, validar fechas America/Lima y revisar páginas siguientes. Ver [auditoría anonimizada](ROMAX_R3_GMAIL_2_FIRST_PAGE_AUDIT.md).
+
+
+## R3-GMAIL.2.1 — correctivo en desarrollo
+PR independiente para reenvíos, alias @romaxfm.com y ampliaciones de plazo con historial y validación de día de semana en America/Lima. Casos Cassinelli Piura, Makro ventas3, UTP Lima Sur, UTP Chiclayo y UTP Piura. Sin escrituras ni despliegue; pendiente CI.

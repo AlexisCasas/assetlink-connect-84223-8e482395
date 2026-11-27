@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const GMAIL_ATTEMPT_KEY = 'romax-gmail-oauth-attempt-v1';
-type Candidate = { thread_id:string; subject:string; sender:string; received_at:string; snippet:string; category:string; reason:string; reference:string|null; deadline_hint:string|null; message_count:number; attachments:{name:string;mime:string;supported:boolean}[]; existing_status?:string|null };
+type DeadlineEvent = { raw:string; date:string|null; time:string|null; datetime:string|null; timezone:'America/Lima'; status:'confirmed'|'ambiguous'; kind:'extension'|'stated'; weekday:string|null };
+type Candidate = { thread_id:string; subject:string; sender:string; received_at:string; snippet:string; category:string; reason:string; reference:string|null; deadline_hint:string|null; deadline_events?:DeadlineEvent[]; message_count:number; attachments:{name:string;mime:string;supported:boolean}[]; existing_status?:string|null };
 type Preview = { window_start:string; window_end:string; candidates:Candidate[]; scanned:number; estimate:number|null; next_cursor:string|null };
 const labels:Record<string,string>={quote_request:'Nueva solicitud candidata',follow_up:'Actualización / seguimiento',adjustment:'Reajuste',quoted:'Posiblemente cotizada',operational:'Operativa',other:'Otros',review:'Requiere revisión'};
 type Result = { status?: string; mailbox?: string; authorization_url?: string; state?: string; verified?: boolean; error?: string } & Partial<Preview>;
@@ -87,7 +88,7 @@ export default function GmailConnectionPanel({ organizationId }: { organizationI
           <p>{c.reason}</p>
           {c.existing_status&&<p className="font-medium">Ya existe una oportunidad Gmail ({c.existing_status}). No duplicar.</p>}
           {c.reference&&<p>Referencia: {c.reference}</p>}
-          {c.deadline_hint&&<p>Plazo mencionado (sin confirmar): {c.deadline_hint}</p>}
+          {c.deadline_events?.length ? <div className="space-y-1"><p className="font-medium">Historial de plazos:</p>{c.deadline_events.map((event,i)=><p key={i} className="text-xs">{event.kind==='extension'?'Ampliación':'Plazo indicado'}: {event.raw} {event.status==='ambiguous'?'· Fecha por confirmar':`· ${event.date??''}${event.time?` ${event.time}`:''} (${event.timezone})`}</p>)}</div> : c.deadline_hint&&<p>Plazo mencionado (sin confirmar): {c.deadline_hint}</p>}
           {c.snippet&&<p className="rounded-md bg-muted/50 p-2">{c.snippet}</p>}
           {c.attachments.length>0&&<details><summary className="cursor-pointer">{c.attachments.length} adjuntos identificados</summary><ul className="mt-1 list-disc pl-5">{c.attachments.map((x,i)=><li key={i}>{x.name} · {x.supported?'Tipo previsto':'Otro tipo'}</li>)}</ul></details>}
         </article>)}
