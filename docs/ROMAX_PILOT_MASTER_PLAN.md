@@ -440,3 +440,7 @@ PR #131 integrado y desplegado. CI 6/6 PASS. Edge Function v2 ACTIVE con vista p
 
 
 Nota de observabilidad: los 4 POST 200 y 3 OPTIONS 204 observados en la ventana consultada correspondían a llamadas anteriores a la versión 2. Desde la actualización de la Edge Function (21:44:14 UTC) no se registran invocaciones nuevas; por tanto, la vista previa queda desplegada pero aún requiere la primera sincronización manual del propietario para confirmar el recorrido real.
+
+
+## Auditoría inicial R3-GMAIL.2 — 27-nov-2026
+Primera página revisada en solo lectura: 12 conversaciones; 6 hilos comerciales (5 solicitudes + 1 actualización), 4 cotizadas/operativas, 2 falsos positivos. Se identificaron errores de clasificación en reenvíos, alias internos y ampliaciones de plazo. No se importaron correos. NO GO importación hasta corregir clasificador, validar fechas America/Lima y revisar páginas siguientes. Ver [auditoría anonimizada](ROMAX_R3_GMAIL_2_FIRST_PAGE_AUDIT.md).
