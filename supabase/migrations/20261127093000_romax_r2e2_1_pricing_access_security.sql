@@ -32,9 +32,6 @@ CREATE TABLE public.provider_pricing_access_grants (
 CREATE UNIQUE INDEX provider_pricing_access_grants_active_unique
  ON public.provider_pricing_access_grants(organization_id,user_id,capability)
  WHERE revoked_at IS NULL;
-CREATE INDEX provider_pricing_access_grants_user_lookup
- ON public.provider_pricing_access_grants(organization_id,user_id,capability)
- WHERE revoked_at IS NULL;
 CREATE INDEX provider_pricing_access_grants_granted_by_idx
  ON public.provider_pricing_access_grants(granted_by);
 
