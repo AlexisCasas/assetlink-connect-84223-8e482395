@@ -344,20 +344,7 @@ export function RomaxMaterialCatalogPanel() {
             <Button size="sm" variant="outline" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page <= 1}><ChevronLeft className="mr-1 h-4 w-4" />Anterior</Button>
             <Button size="sm" variant="outline" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={page >= totalPages}>Siguiente<ChevronRight className="ml-1 h-4 w-4" /></Button>
           </div>
-          {selectedItem && (
-            <Card>
-              <CardHeader><CardTitle className="text-base">{selectedItem.name}</CardTitle><CardDescription>{selectedItem.code ?? 'Sin código'} · {selectedItem.default_unit_code}</CardDescription></CardHeader>
-              <CardContent className="grid gap-4 text-sm sm:grid-cols-2">
-                <div><p className="text-xs text-muted-foreground">Descripción</p><p>{selectedItem.description || 'Sin descripción'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Especificación técnica</p><p>{selectedItem.technical_specification || 'Sin especificación registrada'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Familia / subfamilia</p><p>{selectedItem.material_family_id ? familyById.get(selectedItem.material_family_id)?.name ?? 'No encontrada' : 'Sin familia'} / {selectedItem.material_subfamily_id ? subfamilyById.get(selectedItem.material_subfamily_id)?.name ?? 'No encontrada' : 'Pendiente de asignación'}</p></div>
-                <div><p className="text-xs text-muted-foreground">Identidad del Excel</p><p>{selectedSource ? selectedSource.source_code + ' · unidad original ' + selectedSource.source_unit : 'Sin vínculo de origen'}</p></div>
-                {selectedSource && <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Clasificación original</p><p>{selectedSource.source_family || 'Sin familia de origen'} / {selectedSource.source_subfamily || 'Sin subfamilia de origen'}</p>{selectedSource.source_specification && <p className="mt-1 text-xs text-muted-foreground">{selectedSource.source_specification}</p>}{selectedSource.source_brand && <p className="mt-1 text-xs text-muted-foreground">Marca: {selectedSource.source_brand}</p>}</div>}
-                <div><p className="text-xs text-muted-foreground">Vinculación de origen</p><Badge variant={selectedSource?.mapping_status === 'confirmed' ? 'secondary' : 'outline'}>{selectedSource?.mapping_status === 'confirmed' ? 'Identidad vinculada' : 'Sin vínculo confirmado'}</Badge></div>
-                <div><p className="text-xs text-muted-foreground">Aprobación comercial</p><p className="text-muted-foreground">No evaluada en esta fase. Este estado técnico no habilita el recurso para cotizar.</p></div>
-              </CardContent>
-            </Card>
-          )}
+
         </>
       ) : (
         <Card>
