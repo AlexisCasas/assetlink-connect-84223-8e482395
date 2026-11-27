@@ -138,7 +138,8 @@ DROP POLICY provider_cost_rates_insert ON public.provider_cost_rates;
 CREATE POLICY provider_cost_rates_insert
  ON public.provider_cost_rates FOR INSERT TO authenticated
  WITH CHECK (
-  EXISTS (
+  public.is_organization_member(organization_id)
+  AND EXISTS (
    SELECT 1 FROM public.provider_pricing_access_grants g
    WHERE g.organization_id=provider_cost_rates.organization_id
     AND g.user_id=(SELECT auth.uid())
@@ -198,7 +199,8 @@ DROP POLICY provider_cost_suppliers_insert ON public.provider_cost_suppliers;
 CREATE POLICY provider_cost_suppliers_insert
  ON public.provider_cost_suppliers FOR INSERT TO authenticated
  WITH CHECK (
-  EXISTS (
+  public.is_organization_member(organization_id)
+  AND EXISTS (
    SELECT 1 FROM public.provider_pricing_access_grants g
    WHERE g.organization_id=provider_cost_suppliers.organization_id
     AND g.user_id=(SELECT auth.uid())
@@ -242,7 +244,8 @@ DROP POLICY provider_cost_settings_insert ON public.provider_cost_settings;
 CREATE POLICY provider_cost_settings_insert
  ON public.provider_cost_settings FOR INSERT TO authenticated
  WITH CHECK (
-  EXISTS (
+  public.is_organization_member(organization_id)
+  AND EXISTS (
    SELECT 1 FROM public.provider_pricing_access_grants g
    WHERE g.organization_id=provider_cost_settings.organization_id
     AND g.user_id=(SELECT auth.uid())

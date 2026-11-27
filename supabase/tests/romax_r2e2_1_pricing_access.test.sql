@@ -1,7 +1,7 @@
 -- R2-E2.1 pricing access/RLS regression. LOCAL/DISPOSABLE DATABASE ONLY.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(38);
+SELECT plan(43);
 CREATE FUNCTION pg_temp.as_user(p_id uuid) RETURNS void LANGUAGE sql AS $$
  SELECT set_config('request.jwt.claim.sub',coalesce(p_id::text,''),true);
 $$;
@@ -103,7 +103,30 @@ SELECT is((SELECT count(*) FROM public.provider_pricing_access_grants WHERE user
 UPDATE public.provider_pricing_access_grants SET revoked_at=NULL,revoked_by=NULL WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read';
 SELECT is((SELECT count(*) FROM public.provider_pricing_access_grants WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read' AND revoked_at IS NULL),0::bigint,'revoked grants cannot be reactivated');
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000002');
-SELECT throws_ok($$INSERT INTO public.provider_pricing_access_grants(organization_id,user_id,capability,granted_by) VALUES ('e2200000-0000-0000-0000-000000000001','e2100000-0000-0000-0000-000000000002','market_cost.validate','e2100000-0000-0000-0000-000000000002')$$,'42501',NULL,'non-admin cannot grant capabilities');
+SELECT throws_ok($INSERT INTO public.provider_pricing_access_grants(organization_id,user_id,capability,granted_by) VALUES ('e2200000-0000-0000-0000-000000000001','e2100000-0000-0000-0000-000000000002','market_cost.validate','e2100000-0000-0000-0000-000000000002')$,'42501',NULL,'non-admin cannot grant capabilities');
+
+-- A previously granted capability must not outlive active organization membership.
+RESET ROLE;
+UPDATE public.organization_members SET is_active=false
+ WHERE organization_id='e2200000-0000-0000-0000-000000000001'
+  AND user_id='e2100000-0000-0000-0000-000000000002';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000002');
+SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'deactivated logistics member cannot read rates despite a retained grant');
+SELECT is((SELECT count(*) FROM public.provider_cost_suppliers WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'deactivated logistics member cannot read suppliers despite a retained grant');
+SELECT throws_ok($INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','UND','PEN',17,1,'not_required',NULL,'unknown','manual',current_date,'draft')$,'42501',NULL,'deactivated logistics member cannot insert rates despite a retained grant');
+SELECT throws_ok($INSERT INTO public.provider_cost_suppliers(organization_id,display_name) VALUES ('e2200000-0000-0000-0000-000000000001','Inactive member supplier')$,'42501',NULL,'deactivated logistics member cannot insert suppliers despite a retained grant');
+
+SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000007');
+INSERT INTO public.provider_pricing_access_grants(organization_id,user_id,capability,granted_by)
+ VALUES ('e2200000-0000-0000-0000-000000000002','e2100000-0000-0000-0000-000000000007','pricing_rules.manage','e2100000-0000-0000-0000-000000000007');
+RESET ROLE;
+UPDATE public.organization_members SET is_active=false
+ WHERE organization_id='e2200000-0000-0000-0000-000000000002'
+  AND user_id='e2100000-0000-0000-0000-000000000007';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000007');
+SELECT throws_ok($INSERT INTO public.provider_cost_settings(organization_id,default_usd_pen_rate,fx_source,fx_date,updated_by) VALUES ('e2200000-0000-0000-0000-000000000002',3.75,'manual',current_date,'e2100000-0000-0000-0000-000000000007')$,'42501',NULL,'deactivated member cannot insert FX settings despite a retained grant');
 
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000004');
 SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'revoked market_cost.read no longer exposes rates');
