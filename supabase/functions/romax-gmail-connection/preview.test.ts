@@ -34,7 +34,8 @@ Deno.test('ROMAX aliases count as sent even without Gmail SENT label',()=>{
 Deno.test('deadline extension preserves original and updated dates in Lima timezone',()=>{
   const update=msg('u','RV: UTP Lima Sur servicio de gasfitería SC-0000153027-2026','Se extiende plazo para entrega de propuesta hasta el día de mañana Sábado 28.11 a las 12pm. Deadline para envío de propuestas Martes 10/11 – 12 pm.',1000,['INBOX'],'','Elisa <ealvis@utp.edu.pe>');
   const c=classify([update]);
-  assert(c?.category==='follow_up'&&c.deadline_events.length===2);
+  if(!c)throw new Error('Expected a classified deadline update');
+  assert(c.category==='follow_up'&&c.deadline_events.length===2);
   assert(c.deadline_events[0].kind==='extension'&&c.deadline_events[0].date==='2026-11-28'&&c.deadline_events[0].time==='12:00'&&c.deadline_events[0].datetime==='2026-11-28T12:00:00-05:00');
   assert(c.deadline_events[1].kind==='stated'&&c.deadline_events[1].date==='2026-11-10'&&c.deadline_events[1].time==='12:00');
   assert(c.deadline_hint===c.deadline_events[0].raw);
