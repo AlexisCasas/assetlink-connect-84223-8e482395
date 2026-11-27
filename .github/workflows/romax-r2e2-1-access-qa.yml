@@ -124,9 +124,9 @@ jobs:
           assert.match(migration,/OLD\.created_by=\(SELECT auth\.uid\(\)\)/);
           assert.match(migration,/provider_cost_rates_read/);
           assert.match(migration,/provider_cost_suppliers_read/);
-          assert.match(migration,/CREATE POLICY provider_cost_rates_insert[\\s\\S]*?public\\.is_organization_member/);
-          assert.match(migration,/CREATE POLICY provider_cost_suppliers_insert[\\s\\S]*?public\\.is_organization_member/);
-          assert.match(migration,/CREATE POLICY provider_cost_settings_insert[\\s\\S]*?public\\.is_organization_member/);
+          assert.match(migration,/CREATE POLICY provider_cost_rates_insert[\s\S]*?public\.is_organization_member/);
+          assert.match(migration,/CREATE POLICY provider_cost_suppliers_insert[\s\S]*?public\.is_organization_member/);
+          assert.match(migration,/CREATE POLICY provider_cost_settings_insert[\s\S]*?public\.is_organization_member/);
           assert.match(migration,/pricing_rules\.manage/);
           assert.doesNotMatch(migration,/SECURITY DEFINER/i);
           assert.match(rates,/capabilities\.includes\('market_cost\.manage'\)/);
