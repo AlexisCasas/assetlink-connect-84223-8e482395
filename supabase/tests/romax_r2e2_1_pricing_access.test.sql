@@ -117,6 +117,16 @@ SELECT is((SELECT count(*) FROM public.provider_cost_suppliers WHERE organizatio
 SELECT throws_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','UND','PEN',17,1,'not_required',NULL,'unknown','manual',current_date,'draft')$$,'42501',NULL,'deactivated logistics member cannot insert rates despite a retained grant');
 SELECT throws_ok($$INSERT INTO public.provider_cost_suppliers(organization_id,display_name) VALUES ('e2200000-0000-0000-0000-000000000001','Inactive member supplier')$$,'42501',NULL,'deactivated logistics member cannot insert suppliers despite a retained grant');
 
+
+
+SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000004');
+SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'revoked market_cost.read no longer exposes rates');
+SELECT is((SELECT count(*) FROM public.provider_pricing_access_grants WHERE user_id='e2100000-0000-0000-0000-000000000004'),1::bigint,'member can still see own revoked grant audit');
+
+SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000007');
+SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'other tenant cannot read ROMAX costs');
+SELECT is((SELECT count(*) FROM public.provider_cost_suppliers WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'other tenant cannot read ROMAX suppliers');
+
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000007');
 INSERT INTO public.provider_pricing_access_grants(organization_id,user_id,capability,granted_by)
  VALUES ('e2200000-0000-0000-0000-000000000002','e2100000-0000-0000-0000-000000000007','pricing_rules.manage','e2100000-0000-0000-0000-000000000007');
@@ -126,15 +136,7 @@ UPDATE public.organization_members SET is_active=false
   AND user_id='e2100000-0000-0000-0000-000000000007';
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000007');
-SELECT throws_ok($$INSERT INTO public.provider_cost_settings(organization_id,default_usd_pen_rate,fx_source,fx_date,updated_by) VALUES ('e2200000-0000-0000-0000-000000000002',3.75,'manual',current_date,'e2100000-0000-0000-0000-000000000007')$$,'42501',NULL,'deactivated member cannot insert FX settings despite a retained grant');
-
-SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000004');
-SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'revoked market_cost.read no longer exposes rates');
-SELECT is((SELECT count(*) FROM public.provider_pricing_access_grants WHERE user_id='e2100000-0000-0000-0000-000000000004'),1::bigint,'member can still see own revoked grant audit');
-
-SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000007');
-SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'other tenant cannot read ROMAX costs');
-SELECT is((SELECT count(*) FROM public.provider_cost_suppliers WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'other tenant cannot read ROMAX suppliers');
+SELECT throws_ok($INSERT INTO public.provider_cost_settings(organization_id,default_usd_pen_rate,fx_source,fx_date,updated_by) VALUES ('e2200000-0000-0000-0000-000000000002',3.75,'manual',current_date,'e2100000-0000-0000-0000-000000000007')$,'42501',NULL,'deactivated member cannot insert FX settings despite a retained grant');
 
 SELECT * FROM finish();
 ROLLBACK;
