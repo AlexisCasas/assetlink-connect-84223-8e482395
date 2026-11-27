@@ -38,10 +38,10 @@ Owner/admin conceden y revocan capacidades a miembros activos. No se modifica el
 
 ## CI integral — PASS (27-nov-2026)
 
-Ejecución verificada en el PR #128 y en el push de la rama, ambos sobre el commit `81e290251e32a9b8bdcadf5c7867fbaa40c991d0`.
+Ejecución verificada en el PR #128 y en el push de la rama, ambos sobre el commit `2a9074404c98b4205af3397524538e8506bf7c0d`.
 
-- GitHub Actions PR run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46022798672
-- GitHub Actions push run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46022789784
+- GitHub Actions PR run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46023394263
+- GitHub Actions push run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46023382222
 - Supabase aislado/no vinculado a Cloud: cadena completa de migraciones y 37 archivos pgTAP, 2,874 aserciones; `Result: PASS`.
 - Regresión R2A: 22/22 aserciones.
 - R2-E2.1 multiempresa: 38/38 aserciones.
