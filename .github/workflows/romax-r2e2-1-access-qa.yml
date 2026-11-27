@@ -109,7 +109,7 @@ jobs:
           import { readFileSync } from 'node:fs';
           const read=p=>readFileSync(p,'utf8');
           const migration=read('supabase/migrations/20261127154749_romax_r2e2_1_pricing_access_security.sql');
-          const privilegeHardening=read('supabase/migrations/20261127160000_romax_r2e2_1_service_role_privilege_hardening.sql');
+          const privilegeHardening=read('supabase/migrations/20261127155628_romax_r2e2_1_service_role_privilege_hardening.sql');
           const rates=read('src/components/provider/CostRatesPanel.tsx');
           const access=read('src/components/provider/PricingAccessPanel.tsx');
           const catalog=read('src/components/provider/CostCatalogView.tsx');
