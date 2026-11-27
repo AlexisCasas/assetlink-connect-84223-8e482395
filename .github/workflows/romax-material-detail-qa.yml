@@ -47,14 +47,14 @@ jobs:
           import assert from 'node:assert/strict';
           import { readFileSync } from 'node:fs';
           const diagnostics = readFileSync('/tmp/romax-material-detail-tsc.log', 'utf8')
-            .split('\n').filter((line) => /error TS\\d+:/.test(line));
+            .split('\\n').filter((line) => line.includes('error TS'));
           const expected = [
-            /^src\\/pages\\/Index\\.tsx\\(42,24\\): error TS2322:/,
-            /^src\\/pages\\/Index\\.tsx\\(43,26\\): error TS2322:/,
-            /^src\\/pages\\/Index\\.tsx\\(59,26\\): error TS2322:/,
+            'src/pages/Index.tsx(42,24): error TS2322:',
+            'src/pages/Index.tsx(43,26): error TS2322:',
+            'src/pages/Index.tsx(59,26): error TS2322:',
           ];
           assert.equal(diagnostics.length, expected.length, 'Unexpected TypeScript diagnostics');
-          expected.forEach((pattern, index) => assert.match(diagnostics[index], pattern));
+          expected.forEach((prefix, index) => assert.ok(diagnostics[index].startsWith(prefix), diagnostics[index]));
           console.log('ROMAX_MATERIAL_DETAIL_TYPESCRIPT=PASS (only unchanged Index.tsx baseline)');
           JS
       - name: Inline detail and original source contract
