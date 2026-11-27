@@ -43,9 +43,9 @@ jobs:
           test ! -f supabase/.temp/project-ref || { echo "NO_GO: linked Supabase project"; exit 1; }
           supabase --version
           docker --version
-          test -f supabase/migrations/20261127093000_romax_r2e2_1_pricing_access_security.sql
+          test -f supabase/migrations/20261127154749_romax_r2e2_1_pricing_access_security.sql
           test -f supabase/tests/romax_r2e2_1_pricing_access.test.sql
-          grep -q 'SELECT plan(43);' supabase/tests/romax_r2e2_1_pricing_access.test.sql
+          grep -q 'SELECT plan(44);' supabase/tests/romax_r2e2_1_pricing_access.test.sql
           grep -q '^ROLLBACK;' supabase/tests/romax_r2e2_1_pricing_access.test.sql
       - name: Start disposable unlinked Supabase
         run: supabase start
@@ -108,7 +108,8 @@ jobs:
           import assert from 'node:assert/strict';
           import { readFileSync } from 'node:fs';
           const read=p=>readFileSync(p,'utf8');
-          const migration=read('supabase/migrations/20261127093000_romax_r2e2_1_pricing_access_security.sql');
+          const migration=read('supabase/migrations/20261127154749_romax_r2e2_1_pricing_access_security.sql');
+          const privilegeHardening=read('supabase/migrations/20261127160000_romax_r2e2_1_service_role_privilege_hardening.sql');
           const rates=read('src/components/provider/CostRatesPanel.tsx');
           const access=read('src/components/provider/PricingAccessPanel.tsx');
           const catalog=read('src/components/provider/CostCatalogView.tsx');
@@ -129,6 +130,7 @@ jobs:
           assert.match(migration,/CREATE POLICY provider_cost_settings_insert[\s\S]*?public\.is_organization_member/);
           assert.match(migration,/pricing_rules\.manage/);
           assert.doesNotMatch(migration,/SECURITY DEFINER/i);
+          assert.match(privilegeHardening,/REVOKE ALL ON TABLE public\\.provider_pricing_access_grants FROM service_role/);
           assert.match(rates,/capabilities\.includes\('market_cost\.manage'\)/);
           assert.match(rates,/capabilities\.includes\('market_cost\.validate'\)/);
           assert.match(access,/revocation_reason/);

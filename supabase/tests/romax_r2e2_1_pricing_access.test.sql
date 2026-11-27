@@ -1,7 +1,7 @@
 -- R2-E2.1 pricing access/RLS regression. LOCAL/DISPOSABLE DATABASE ONLY.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(43);
+SELECT plan(44);
 CREATE FUNCTION pg_temp.as_user(p_id uuid) RETURNS void LANGUAGE sql AS $$
  SELECT set_config('request.jwt.claim.sub',coalesce(p_id::text,''),true);
 $$;
@@ -33,6 +33,7 @@ SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid='public.provider_pricin
 SELECT ok(NOT has_table_privilege('anon','public.provider_pricing_access_grants','SELECT'),'anon cannot inspect grants');
 SELECT ok(NOT has_table_privilege('authenticated','public.provider_pricing_access_grants','DELETE'),'authenticated cannot delete grant history');
 SELECT ok(NOT has_table_privilege('service_role','public.provider_pricing_access_grants','DELETE'),'service role cannot hard-delete grant audit');
+SELECT ok(NOT has_table_privilege('service_role','public.provider_pricing_access_grants','TRUNCATE'),'service role cannot truncate grant audit');
 SELECT ok(NOT has_column_privilege('authenticated','public.provider_pricing_access_grants','granted_at','INSERT'),'authenticated cannot forge grant timestamps');
 SELECT ok(NOT has_column_privilege('authenticated','public.provider_pricing_access_grants','revoked_at','INSERT'),'authenticated cannot create pre-revoked grants');
 SELECT ok(NOT has_table_privilege('authenticated','public.provider_cost_rates','DELETE'),'authenticated cannot hard-delete rates');
