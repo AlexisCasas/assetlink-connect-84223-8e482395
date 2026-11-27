@@ -38,7 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           test ! -f supabase/.temp/project-ref
-          test -f supabase/migrations/20261127202747_romax_r3_gmail_connection.sql
+          test -f supabase/migrations/20261127205522_romax_r3_gmail_connection.sql
           test -f supabase/tests/romax_r3_gmail_connection.test.sql
           supabase --version
       - run: supabase start
