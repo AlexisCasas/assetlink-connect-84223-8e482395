@@ -47,7 +47,7 @@ jobs:
           import assert from 'node:assert/strict';
           import { readFileSync } from 'node:fs';
           const diagnostics = readFileSync('/tmp/romax-material-detail-tsc.log', 'utf8')
-            .split('\\n').filter((line) => line.includes('error TS'));
+            .split('\n').filter((line) => line.includes('error TS'));
           const expected = [
             'src/pages/Index.tsx(42,24): error TS2322:',
             'src/pages/Index.tsx(43,26): error TS2322:',
