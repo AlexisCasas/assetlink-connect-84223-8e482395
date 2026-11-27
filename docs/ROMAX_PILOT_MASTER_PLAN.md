@@ -415,3 +415,8 @@ No se importaron precios/históricos, no se cambiaron concesiones reales, no se 
 **Primer hito demostrable:** oportunidad manual → análisis versionado → antecedentes → recursos/costos válidos → cálculo determinista → borrador editable → revisión/PDF. Luego Gmail automatiza entrada y R4-E asiste preparación. Si se incorpora IA antes de emisión, probar su salida con el mismo flujo manual. No convertir el catálogo en un ERP ni exigir completar los 779 materiales para probar un caso acotado. Los recursos sin costo no se cotizan a cero. Mano de obra/equipos/servicios deben tener fuentes válidas cuando correspondan. El usuario realiza QA navegador y decisiones de negocio; asistente implementa PR, CI, verificación Cloud read-only y despliegues/migraciones con autorización separada.
 
 **Siguiente acción:** preparar contrato técnico R2-E2.1B y R2-E2.2, revisar alcance y aprobar antes de modificar políticas/migraciones. El primer caso económico piloto puede usar un subconjunto validado. No iniciar importación de precios/históricos ni conceder permisos reales en este cierre.
+
+
+## R3-GMAIL — evaluación inicial 27-nov-2026
+
+Se adelanta entrada de solicitudes en paralelo a R2-E2, por decisión del usuario. Conector Gmail de ChatGPT confirmado; OAuth propio de One Facility pendiente. Evaluación de muestra real completada sin escrituras ni cambios al buzón; oportunidades Gmail=0, adjuntos=0. Próximo incremento R3-GMAIL.1, conexión de aplicación y contrato seguro de captura, seguido de preview manual e importación idempotente con revisión. Ver [evaluación y plan](ROMAX_R3_GMAIL_INTAKE_EVALUATION.md). No publicar contenido del correo en el repositorio público.
