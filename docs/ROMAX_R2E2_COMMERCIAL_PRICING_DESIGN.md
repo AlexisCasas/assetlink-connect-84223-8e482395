@@ -39,8 +39,8 @@ FII no es margen porcentual. IGV inicial 18%; vigencia predeterminada 180 días;
 - Registrar costos requiere `market_cost.manage`; validar requiere `market_cost.validate`; el creador no puede aprobar/rechazar su propio costo.
 - FX settings requiere `pricing_rules.manage`.
 - La interfaz del catálogo y el panel de permisos respetan las mismas capacidades; RLS es el control efectivo.
-- pgTAP multiempresa, regresión R2A adaptada y workflow CI completo. Estado CI pendiente de evidencia.
-- No se aplicó migración Cloud ni se modificaron los dos rates existentes.
+- pgTAP multiempresa, regresión R2A adaptada y workflow CI completo: PASS (2,882 aserciones).
+- Migraciones R2-E2.1 y hardening de privilegios aplicados en Supabase Cloud. Se preservaron los dos rates existentes sin cambios; no se importaron precios/históricos ni se asignaron concesiones reales.
 
 
 ## R2-E2.1 — CI y Cloud
@@ -54,7 +54,7 @@ FII no es margen porcentual. IGV inicial 18%; vigencia predeterminada 180 días;
 - PR #128 sigue Draft, sin merge ni despliegue productivo.
 
 ## Próximos incrementos
-1. R2-E2.1: permisos y RLS (PR #128).
+1. R2-E2.1: seguridad y permisos aplicados en Cloud; PR #128 permanece Draft hasta integrar la cadena de PRs #122–#127.
 2. R2-E2.2: parámetros versionados IGV/FII, excepciones y fórmula determinista.
 3. R2-E2.3: conciliar proveedores e importar 273 históricos append-only.
 4. R2-E2.4: registrar 245 costos de mercado como pendientes de validación; 534 sin costo quedan sin tarifa.
@@ -66,5 +66,5 @@ FII no es margen porcentual. IGV inicial 18%; vigencia predeterminada 180 días;
 - Moneda de la matriz confirmada como PEN antes de importar.
 - Base de comparación del 10% definida antes de activar alertas.
 - Usuarios reales de logística y líder comercial incorporados antes de conceder capacidades.
-- CI/pgTAP, advisors, RLS cross-tenant y QA Cloud controlado antes de aplicar.
+- Para R2-E2.1: CI/pgTAP, advisors, RLS cross-tenant y QA Cloud controlado completados. Para R2-E2.2+: repetir gates antes de cada aplicación.
 - Sin carga de precios/históricos, merge o despliegue productivo sin autorizaciones separadas.
