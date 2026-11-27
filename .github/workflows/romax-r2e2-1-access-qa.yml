@@ -45,7 +45,7 @@ jobs:
           docker --version
           test -f supabase/migrations/20261127093000_romax_r2e2_1_pricing_access_security.sql
           test -f supabase/tests/romax_r2e2_1_pricing_access.test.sql
-          grep -q 'SELECT plan(38);' supabase/tests/romax_r2e2_1_pricing_access.test.sql
+          grep -q 'SELECT plan(43);' supabase/tests/romax_r2e2_1_pricing_access.test.sql
           grep -q '^ROLLBACK;' supabase/tests/romax_r2e2_1_pricing_access.test.sql
       - name: Start disposable unlinked Supabase
         run: supabase start
