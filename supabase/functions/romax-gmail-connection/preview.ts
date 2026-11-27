@@ -35,7 +35,7 @@ function attachments(m:Message) {
 }
 const quote=/\b(cotizacion|cotizar|presupuesto|licitacion|propuesta(?: economica)?|rfq|solicitud de oferta)\b/;
 const adjust=/\b(reajuste|reajustar|mejora de precio|mejorar el precio|descuento|actualizar (?:la )?(?:cotizacion|propuesta))\b/;
-const follow=/\b(recordatorio|seguimiento|prorroga|ampliacion (?:de |del )?plazo|se (?:extiende|amplia|prorroga) (?:el )?plazo|extiende plazo|amplia plazo|nuevo plazo|nueva fecha|fecha limite|reprogramacion)\b/;
+const follow=/\b(recordatorio|seguimiento|prorroga|ampliacion (?:de |del )?plazo|se (?:extiende|amplia|prorroga) (?:el )?plazo|extiende plazo|amplia plazo|nuevo plazo|nueva fecha|reprogramacion)\b/;
 const support=/\b(suplayer|suplayers|notificaciones? de invitaciones|incidencia de correo|soporte de plataforma)\b/;
 const operation=/\b(orden de compra|orden de servicio|acta de conformidad|factura|coordinacion de visita|inicio de trabajos|ejecucion de trabajos|documentos? sst|ingreso a tienda)\b/;
 const requestQuote=/\b(solicit(?:a|amos|ud|ar|an)|requerimiento|invitacion|favor|agradeceremos|necesitamos|convocatoria|cotizar)\b/;

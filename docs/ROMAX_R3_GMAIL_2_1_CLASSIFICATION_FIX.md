@@ -17,3 +17,5 @@ Ajustes QA adicionales: excluir el hilo de soporte/notificaciones Suplayer como 
 
 
 Fechas soportadas: dd/mm, dd.mm, dd/mm/yyyy y yyyy-mm-dd. La fecha se normaliza solo si es válida y el día de semana coincide cuando el correo lo indica. Las horas AM/PM se normalizan a America/Lima (UTC-05:00). Los mensajes de soporte Suplayer se excluyen y las solicitudes con “propuesta” se reconocen aunque no repitan la palabra “cotización”.
+
+El plazo indicado en una solicitud inicial no se clasifica como seguimiento: solo se marca seguimiento cuando hay lenguaje de ampliación, prórroga, recordatorio, nueva fecha o reprogramación.

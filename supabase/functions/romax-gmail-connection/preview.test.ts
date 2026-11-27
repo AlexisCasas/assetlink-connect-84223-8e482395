@@ -84,3 +84,8 @@ Deno.test('ISO proposal deadline is normalized to Lima local date',()=>{
   const events=parseDeadlineEvents([{snippet:'Fecha de envío de propuesta: 2026-12-01',internalDate:String(to)}]);
   assert(events.length===1&&events[0].date==='2026-12-01'&&events[0].status==='confirmed');
 });
+
+Deno.test('an original request with a stated deadline is not misclassified as a follow-up',()=>{
+  const c=classify([msg('new','SC-0000154401-2026 UTP Chiclayo','Estimado proveedor, lo invitamos a cotizar. Fecha límite para envío de propuestas: 27/11/2026')]);
+  assert(c?.category==='quote_request'&&c.deadline_events.length===1&&c.deadline_events[0].kind==='stated');
+});
