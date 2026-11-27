@@ -437,3 +437,6 @@ R3-GMAIL.1 cerrado, QA real 8/8, conexión confirmada en Cloud y CI final 6/6. R
 ## Cierre R3-GMAIL.2 — 27-nov-2026
 
 PR #131 integrado y desplegado. CI 6/6 PASS. Edge Function v2 ACTIVE con vista previa de Gmail, Vercel producción READY en commit 9117364. R3-GMAIL.2 habilita lectura manual paginada de siete días y clasificación preliminar; no persiste oportunidades ni descarga adjuntos. El buzón `ventas@romaxfm.com` continúa conectado y el contador de oportunidades Gmail sigue en 0. QA real de sincronización en navegador queda a cargo del propietario; después se decide el cierre funcional y R3-GMAIL.3 (confirmación/importación idempotente).
+
+
+Nota de observabilidad: los 4 POST 200 y 3 OPTIONS 204 observados en la ventana consultada correspondían a llamadas anteriores a la versión 2. Desde la actualización de la Edge Function (21:44:14 UTC) no se registran invocaciones nuevas; por tanto, la vista previa queda desplegada pero aún requiere la primera sincronización manual del propietario para confirmar el recorrido real.
