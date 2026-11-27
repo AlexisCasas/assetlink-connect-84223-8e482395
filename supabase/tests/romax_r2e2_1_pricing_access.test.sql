@@ -136,7 +136,7 @@ UPDATE public.organization_members SET is_active=false
   AND user_id='e2100000-0000-0000-0000-000000000007';
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000007');
-SELECT throws_ok($INSERT INTO public.provider_cost_settings(organization_id,default_usd_pen_rate,fx_source,fx_date,updated_by) VALUES ('e2200000-0000-0000-0000-000000000002',3.75,'manual',current_date,'e2100000-0000-0000-0000-000000000007')$,'42501',NULL,'deactivated member cannot insert FX settings despite a retained grant');
+SELECT throws_ok($$INSERT INTO public.provider_cost_settings(organization_id,default_usd_pen_rate,fx_source,fx_date,updated_by) VALUES ('e2200000-0000-0000-0000-000000000002',3.75,'manual',current_date,'e2100000-0000-0000-0000-000000000007')$$,'42501',NULL,'deactivated member cannot insert FX settings despite a retained grant');
 
 SELECT * FROM finish();
 ROLLBACK;
