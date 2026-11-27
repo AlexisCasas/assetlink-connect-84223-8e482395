@@ -130,7 +130,7 @@ jobs:
           assert.match(migration,/CREATE POLICY provider_cost_settings_insert[\s\S]*?public\.is_organization_member/);
           assert.match(migration,/pricing_rules\.manage/);
           assert.doesNotMatch(migration,/SECURITY DEFINER/i);
-          assert.match(privilegeHardening,/REVOKE ALL ON TABLE public\\.provider_pricing_access_grants FROM service_role/);
+          assert.match(privilegeHardening,/REVOKE ALL ON TABLE public\.provider_pricing_access_grants FROM service_role/);
           assert.match(rates,/capabilities\.includes\('market_cost\.manage'\)/);
           assert.match(rates,/capabilities\.includes\('market_cost\.validate'\)/);
           assert.match(access,/revocation_reason/);
