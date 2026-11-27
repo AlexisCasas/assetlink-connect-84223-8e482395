@@ -79,3 +79,8 @@ Deno.test('proposal-only requests and SST execution updates are distinguished',(
   assert(request?.category==='quote_request');
   assert(operational?.category==='operational');
 });
+
+Deno.test('ISO proposal deadline is normalized to Lima local date',()=>{
+  const events=parseDeadlineEvents([{snippet:'Fecha de envío de propuesta: 2026-12-01',internalDate:String(to)}]);
+  assert(events.length===1&&events[0].date==='2026-12-01'&&events[0].status==='confirmed');
+});

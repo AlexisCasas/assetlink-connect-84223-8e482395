@@ -44,21 +44,27 @@ const references=(s:string)=>Array.from(new Set((s.toUpperCase().match(/\bSC[-\s
 const rmxReference=(s:string)=>s.toUpperCase().match(/\bRMX[-\s]?\d{4}[-\s]?\d{3,}\b/)?.[0].replace(/\s+/g,'-')??null;
 const weekdayIndex:Record<string,number>={domingo:0,lunes:1,martes:2,miercoles:3,jueves:4,viernes:5,sabado:6};
 const datePattern=/\b(?:(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s+)?(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?\b/gi;
+const isoDatePattern=/\b(\d{4})-(\d{2})-(\d{2})\b/g;
 const deadlineCue=/(?:plazo|deadline|fecha\s+limite|fecha\s+de\s+envio\s+de\s+propuesta|envio\s+de\s+propuesta|entrega\s+de\s+propuesta|se\s+extiende|se\s+amplia|prorroga|hasta\s+(?:el\s+)?(?:dia\s+)?)/i;
 export function parseDeadlineEvents(messages:{snippet?:string;internalDate?:string}[]):DeadlineEvent[] {
   const found:DeadlineEvent[]=[];
   for(const message of messages){
     const text=clean(message.snippet,1200),baseYear=new Date(Number(message.internalDate)).getUTCFullYear()||new Date().getUTCFullYear();
-    datePattern.lastIndex=0;
-    for(const match of text.matchAll(datePattern)){
-      const index=match.index??0,full=match[0],before=text.slice(Math.max(0,index-120),index),after=text.slice(index+full.length,index+55);
+    datePattern.lastIndex=0;isoDatePattern.lastIndex=0;
+    const dateMatches=[
+      ...Array.from(text.matchAll(datePattern),match=>({index:match.index??0,full:match[0],weekday:matchedWeekday,day:Number(match[2]),month:Number(match[3]),yearRaw:match[4]})),
+      ...Array.from(text.matchAll(isoDatePattern),match=>({index:match.index??0,full:match[0],weekday:null,day:Number(match[3]),month:Number(match[2]),yearRaw:match[1]})),
+    ].sort((a,b)=>a.index-b.index);
+    for(const match of dateMatches){
+      const {index,full,weekday:matchedWeekday,day,month,yearRaw}=match,before=text.slice(Math.max(0,index-120),index),after=text.slice(index+full.length,index+55);
       if(!deadlineCue.test(norm(before))&&!/^\s*(?:a\s+las?\s*)?\d{1,2}(?::\d{2})?\s*(?:a\.?\s*m\.?|p\.?\s*m\.?)/i.test(after))continue;
       const nearBefore=norm(before.slice(-85));
       if(/fecha\s+de\s+visita|visita\s+tecnica/.test(nearBefore)&&!/(plazo|deadline|entrega|envio|vencimiento)/.test(nearBefore.slice(-45)))continue;
-      const day=Number(match[2]),month=Number(match[3]),yearRaw=match[4],year=yearRaw?(Number(yearRaw)<100?2000+Number(yearRaw):Number(yearRaw)):baseYear;
+      const baseYear=new Date(Number(message.internalDate)).getUTCFullYear()||new Date().getUTCFullYear();
+      const year=yearRaw?(Number(yearRaw)<100?2000+Number(yearRaw):Number(yearRaw)):baseYear;
       const candidate=new Date(Date.UTC(year,month-1,day));
       const valid=candidate.getUTCFullYear()===year&&candidate.getUTCMonth()===month-1&&candidate.getUTCDate()===day;
-      const weekday=match[1]?norm(match[1]):null;
+      const weekday=matchedWeekday?norm(matchedWeekday):null;
       const weekdayMismatch=!!weekday&&valid&&candidate.getUTCDay()!==weekdayIndex[weekday];
       const timeMatch=after.match(/^[\s–—-]*(?:a\s+las?\s*)?(\d{1,2})(?::(\d{2}))?\s*(a\.?\s*m\.?|p\.?\s*m\.?)/i);
       let time:string|null=null,datetime:string|null=null;
