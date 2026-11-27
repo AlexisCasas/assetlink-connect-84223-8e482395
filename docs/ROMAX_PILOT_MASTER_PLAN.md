@@ -432,3 +432,8 @@ Activación autorizada 27-nov-2026: MCP aplicó el SQL idéntico y asignó versi
 
 ## R3-GMAIL.2 — 27-nov-2026
 R3-GMAIL.1 cerrado, QA real 8/8, conexión confirmada en Cloud y CI final 6/6. R3-GMAIL.2 candidato: lectura manual paginada de 168 horas, clasificación preliminar y vista temporal, sin escrituras ni adjuntos descargados. Ver [contrato](ROMAX_R3_GMAIL_2_PREVIEW.md). R3-GMAIL.3 confirmación/importación y .4 procesamiento pendientes.
+
+
+## Cierre R3-GMAIL.2 — 27-nov-2026
+
+PR #131 integrado y desplegado. CI 6/6 PASS. Edge Function v2 ACTIVE con vista previa de Gmail, Vercel producción READY en commit 9117364. R3-GMAIL.2 habilita lectura manual paginada de siete días y clasificación preliminar; no persiste oportunidades ni descarga adjuntos. El buzón `ventas@romaxfm.com` continúa conectado y el contador de oportunidades Gmail sigue en 0. QA real de sincronización en navegador queda a cargo del propietario; después se decide el cierre funcional y R3-GMAIL.3 (confirmación/importación idempotente).
