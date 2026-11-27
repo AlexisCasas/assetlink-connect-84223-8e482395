@@ -133,3 +133,20 @@ El proyecto debe considerarse exitoso cuando una solicitud real pueda recorrer e
 - cálculos consistentes;
 - estructura comercial ROMAX;
 - intervención humana antes de la emisión cuando corresponda.
+
+
+## 10. R2-E2.1 — Seguridad y permisos (27-nov-2026)
+
+R2-E2.1 implementado, revisado y aplicado en Supabase Cloud OneFacility. El PR #128 permanece abierto y en Draft.
+
+- Capacidades por usuario: `market_cost.read`, `market_cost.manage`, `market_cost.validate`, `pricing_rules.manage`.
+- Owner/admin administran concesiones; revocación irreversible y auditada. Las capacidades comerciales de precio de venta quedan reservadas.
+- RLS limita costos de adquisición y proveedores; el creador no puede aprobar/rechazar su propio costo. Las operaciones de inserción exigen membresía activa.
+- La tabla de auditoría no permite DELETE/TRUNCATE al service_role.
+- Migraciones aplicadas: `20261127154749_romax_r2e2_1_pricing_access_security` y `20261127155628_romax_r2e2_1_service_role_privilege_hardening`.
+- CI: 37 archivos pgTAP / 2,882 aserciones; R2A 22/22, R2-E2.1 46/46; TypeScript, ESLint, contrato estático y Vite PASS.
+- Evidencias: [PR run](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46029672570) y [push run](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46029661761).
+
+Cloud conserva 2 tarifas, 1 proveedor y 1 configuración FX; no se crearon concesiones automáticas ni se importaron precios/históricos. ROMAX solo tiene un owner activo; hace falta añadir un segundo miembro para asignarle `market_cost.validate`. Las dos tarifas previas (una approved y otra rejected) fueron revisadas por su creador antes de la regla nueva y no se modificaron.
+
+No merge, no importación económica y no despliegue productivo. Los PRs #122/#123 deben alinear sus ramas con las versiones de migración ya aplicadas antes de completar el merge de la cadena.
