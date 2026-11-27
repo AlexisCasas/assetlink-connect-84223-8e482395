@@ -117,7 +117,7 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const attachmentMessages=sourceMessages.length?sourceMessages:quoteReplies;
   const allAttachments=Array.from(new Map(attachmentMessages.flatMap(attachments).map(x=>[x.name+'\0'+x.mime,x])).values()).slice(0,50);
   const currentDeadline=[...deadlineEvents].reverse().find(e=>e.kind==='extension')??deadlineEvents[deadlineEvents.length-1]??null;
-  const reference=refs.length===1?refs[0]:rmxReference(context+' '+subject+' '+snippet);
+  const reference=refs.length===1?refs[0]:rmxReference(context+' '+subject+' '+snippet+' '+allAttachments.map(x=>x.name).join(' '));
   return {thread_id:thread.id,message_id:m.id!,subject:subject||'Sin asunto',sender:forwardedSender(m)??sender,received_at:new Date(Number(m.internalDate)).toISOString(),snippet,category,reason,reference,deadline_hint:currentDeadline?.raw??null,deadline_events:deadlineEvents,message_count:messages.length,attachments:allAttachments};
 }
 export async function readPreview(request:typeof fetch,token:string,from:number,to:number,pageToken?:string) {
