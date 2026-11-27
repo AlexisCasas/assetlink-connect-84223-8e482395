@@ -3,6 +3,10 @@ name: "ROMAX R2-E2.1 pricing access security QA"
 on:
   push:
     branches: ["feature/romax-r2e2-1-pricing-access-security"]
+    paths:
+      - "supabase/**"
+      - "src/**"
+      - ".github/workflows/romax-r2e2-1-access-qa.yml"
   pull_request:
     branches: ["docs/romax-r2e2-commercial-pricing-design"]
     paths:

@@ -137,6 +137,26 @@ El proyecto debe considerarse exitoso cuando una solicitud real pueda recorrer e
 
 ## 10. R2-E2.1 — Seguridad y permisos (27-nov-2026)
 
-Antes de cargar precios se implementa una capa de capacidades explícitas por usuario. Logística puede registrar costos con \`market_cost.manage\`; un validador distinto puede aprobar/rechazar con \`market_cost.validate\`; \`market_cost.read\` permite solo consulta; \`pricing_rules.manage\` gobierna la configuración FX. Owner/admin administran concesiones. La UI no sustituye RLS.
+Antes de cargar precios se implementa una capa de capacidades explícitas por usuario. Logística puede registrar costos con `market_cost.manage`; un validador distinto puede aprobar/rechazar con `market_cost.validate`; `market_cost.read` permite solo consulta; `pricing_rules.manage` gobierna la configuración FX. Owner/admin administran concesiones. La UI no sustituye RLS.
 
 El costo de adquisición no se muestra a miembros sin capacidad, aunque intenten consultar directamente la API. El precio de venta ROMAX permanece separado y sus capacidades quedan reservadas hasta R2-E2.5. PR #128 contiene migración, pgTAP, UI y CI. Cloud apply, carga económica, merge y producción quedan fuera de esta autorización.
+
+## CI integral — PASS (27-nov-2026)
+
+Ejecución verificada en el PR #128 y en el push de la rama, ambos sobre el commit `81e290251e32a9b8bdcadf5c7867fbaa40c991d0`.
+
+- GitHub Actions PR run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46022798672
+- GitHub Actions push run: https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46022789784
+- Supabase aislado/no vinculado a Cloud: cadena completa de migraciones y 37 archivos pgTAP, 2,874 aserciones; `Result: PASS`.
+- Regresión R2A: 22/22 aserciones.
+- R2-E2.1 multiempresa: 38/38 aserciones.
+- Frontend: TypeScript sin diagnósticos nuevos (se mantiene la línea base heredada de Index.tsx), ESLint, contrato estático de seguridad y Vite build: PASS.
+- El stack local desechable se detuvo con `supabase stop --no-backup`: PASS.
+
+Correcciones que quedaron cubiertas por el CI:
+1. Sintaxis de dollar-quoting en pruebas pgTAP.
+2. Identidad del usuario creador del costo en el fixture multiempresa.
+3. Prueba de denegación de concesiones por un usuario no admin, diferenciando el guard de procedencia de la política RLS.
+4. Preflight con planes explícitos de 22 y 38 pruebas y control estático para evitar dollar-quoting mal formado.
+
+**Alcance no ejecutado:** no se aplicó la migración en Supabase Cloud, no se cambiaron concesiones reales, no se importaron precios ni históricos, no se hizo merge y no se desplegó a producción. El PR #128 permanece abierto y en Draft para revisión.
