@@ -361,12 +361,3 @@ Se avanzó R4-A sin depender de Gmail:
 2. R4-B: comparación/recuperación de antecedentes de las 25 cotizaciones.
 3. R4-C: vincular partidas aprobadas con R2 y ejecutar cálculo económico determinístico.
 4. Gmail se integra cuando el cliente entregue el buzón, sin bloquear R4.
-
-
-## 9. R2-E1.5 y transición a R2-E2 (27-nov-2026)
-
-R2-E1.5: QA visual del usuario confirmado para los cinco puntos; PR #126 tiene TypeScript, ESLint y build Vite en PASS y Preview Ready. El PR permanece abierto/stacked; no se declara merge ni producción.
-
-R2-E2 — Gestión comercial de precios: diseño documentado en \`docs/ROMAX_R2E2_COMMERCIAL_PRICING_DESIGN.md\`. Hallazgos de fuente: 273 históricos / 245 códigos; 245 costos de mercado y 534 sin costo; las 779 decisiones comerciales siguen pendientes y no hay aprobador en la matriz. El FII/IGV se calcula determinísticamente según el Excel. El primer subincremento debe cerrar la brecha RLS que permite a todos los miembros leer \`provider_cost_rates\` y \`provider_cost_suppliers\`.
-
-La fuente comercial privada, importes, nombres/RUC de proveedores y referencias documentales no se publican en GitHub. No importar precios ni históricos hasta implementar permisos, aprobación y versionamiento.
