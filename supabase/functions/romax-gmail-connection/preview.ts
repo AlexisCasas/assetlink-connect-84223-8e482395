@@ -19,6 +19,7 @@ const isSent=(m:Message)=>m.labelIds?.includes('SENT')===true||isInternal(m);
 const isExcluded=(m:Message)=>m.labelIds?.some(l=>['SPAM','TRASH','DRAFT'].includes(l))===true;
 function forwardedSender(m:Message):string|null {
   const text=clean(m.snippet,1200);
+  if(!/(?:forwarded message|begin forwarded message|mensaje reenviado)/i.test(text))return null;
   const matches=[...text.matchAll(/(?:De|From):\s*[^<]{0,180}<([^>\s]+@[^>\s]+)>/gi)];
   for(const match of matches){const email=match[1].toLowerCase();if(!email.endsWith('@romaxfm.com'))return email;}
   return null;

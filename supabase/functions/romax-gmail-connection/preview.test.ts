@@ -89,3 +89,9 @@ Deno.test('an original request with a stated deadline is not misclassified as a 
   const c=classify([msg('new','SC-0000154401-2026 UTP Chiclayo','Estimado proveedor, lo invitamos a cotizar. Fecha límite para envío de propuestas: 27/11/2026')]);
   assert(c?.category==='quote_request'&&c.deadline_events.length===1&&c.deadline_events[0].kind==='stated');
 });
+
+Deno.test('quoted client history inside an internal quote is not mistaken for a forwarded request',()=>{
+  const alias=msg('alias','COTIZACION ROMAX - CASSINELLI','Se adjunta la cotización solicitada. De: Cliente <cliente@cassinelli.com>',1000,['INBOX'],'RMX-2026-7269.pdf','Ventas 3 ROMAX <ventas3@romaxfm.com>');
+  const c=classify([alias]);
+  assert(c?.category==='quoted'&&c.reference==='RMX-2026-7269');
+});
