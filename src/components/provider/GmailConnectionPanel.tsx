@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const GMAIL_ATTEMPT_KEY = 'romax-gmail-oauth-attempt-v1';
 const GMAIL_FUNCTION_NAME = import.meta.env.VITE_ROMAX_GMAIL_FUNCTION_NAME || 'romax-gmail-connection';
+const GMAIL_QA_MODE = GMAIL_FUNCTION_NAME === 'romax-gmail-connection-qa';
 type DeadlineEvent = { raw:string; date:string|null; time:string|null; datetime:string|null; timezone:'America/Lima'; status:'confirmed'|'ambiguous'; kind:'extension'|'stated'; weekday:string|null };
 type Candidate = { thread_id:string; subject:string; sender:string; received_at:string; snippet:string; category:string; reason:string; reference:string|null; deadline_hint:string|null; deadline_events?:DeadlineEvent[]; message_count:number; attachments:{name:string;mime:string;supported:boolean}[]; existing_status?:string|null };
 type Preview = { window_start:string; window_end:string; candidates:Candidate[]; scanned:number; estimate:number|null; next_cursor:string|null };
@@ -67,12 +68,13 @@ export default function GmailConnectionPanel({ organizationId }: { organizationI
     <CardContent className="space-y-3">
       <p className="text-sm text-muted-foreground">{connected ? mailbox : status==='unavailable' ? 'Conexión no disponible o pendiente de configuración.' : status==='revoking' ? 'Revocación pendiente.' : status==='loading' ? 'Verificando conexión…' : 'Conecta el buzón comercial autorizado.'}</p>
       <div className="flex flex-wrap gap-2">
-        {['disconnected','pending'].includes(status) && <Button disabled={busy} onClick={()=>void perform('start')}>Conectar Gmail</Button>}
-        {connected && <Button variant="outline" disabled={busy} onClick={()=>void perform('verify')}>Verificar conexión</Button>}
-        {['connected','pending','revoking'].includes(status) && <Button variant="outline" disabled={busy} onClick={()=>{if(window.confirm('¿Desconectar Gmail?')) void perform('disconnect');}}>Desconectar</Button>}
+        {!GMAIL_QA_MODE && ['disconnected','pending'].includes(status) && <Button disabled={busy} onClick={()=>void perform('start')}>Conectar Gmail</Button>}
+        {!GMAIL_QA_MODE && connected && <Button variant="outline" disabled={busy} onClick={()=>void perform('verify')}>Verificar conexión</Button>}
+        {!GMAIL_QA_MODE && ['connected','pending','revoking'].includes(status) && <Button variant="outline" disabled={busy} onClick={()=>{if(window.confirm('¿Desconectar Gmail?')) void perform('disconnect');}}>Desconectar</Button>}
         <Button variant="outline" disabled={busy} onClick={()=>void load()}>Actualizar estado</Button>
         <Button disabled={busy||!connected} onClick={()=>void sync()}>{busy?'Procesando…':'Sincronizar Gmail'}</Button>
       </div>
+      {GMAIL_QA_MODE && <p className="text-xs text-muted-foreground">Entorno QA aislado: solo permite consultar el estado y previsualizar Gmail. La conexión y desconexión están deshabilitadas.</p>}
       {message && <p role="status" className="text-sm">{message}</p>}
       <p className="text-xs text-muted-foreground">Solo lectura de los últimos siete días. Clasificación preliminar; no se crean oportunidades ni se descargan adjuntos.</p>
       {connected&&preview&&<section className="space-y-3 border-t pt-4">

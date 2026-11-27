@@ -37,3 +37,5 @@ El plazo indicado en una solicitud inicial no se clasifica como seguimiento: sol
 - CI del commit `8cbfca1`: 10/10 check-runs success; Edge Deno 22/22 PASS; frontend y suites SQL aisladas PASS.
 - Producción intacta: función productiva `romax-gmail-connection` v2 ACTIVE, Vercel producción sigue en `9117364a`. Sin migraciones, secretos nuevos, escrituras, importaciones o cambios Gmail.
 - Pendiente QA manual del propietario: iniciar sesión en Preview y ejecutar sincronización con los hilos auditados. No fusionar hasta revisar el resultado.
+
+La interfaz Vercel Preview en modo QA oculta Conectar, Verificar y Desconectar; solo muestra Actualizar estado y Sincronizar Gmail, coincidiendo con la allowlist de la función QA.
