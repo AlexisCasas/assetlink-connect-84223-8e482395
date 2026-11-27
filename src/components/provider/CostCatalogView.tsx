@@ -75,7 +75,7 @@ export function CostCatalogView() {
     && currentMembership.organizationId === organizationId
     && ['owner', 'admin'].includes(currentMembership.role);
 
-  const [tab, setTab] = useState<CatalogTab>('items');
+  const [tab, setTab] = useState<CatalogTab>(canManageCostCatalog(currentMembership?.role) ? 'items' : 'technical');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [items, setItems] = useState<CostItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -88,10 +88,6 @@ export function CostCatalogView() {
   const [itemForm, setItemForm] = useState(emptyItem);
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [pricingGrants, setPricingGrants] = useState<{ capability: string; revoked_at: string | null }[]>([]);
-  const [accessLoaded, setAccessLoaded] = useState(false);
-  const canReadMarketCosts = pricingGrants.some((grant) => !grant.revoked_at && ['market_cost.read', 'market_cost.manage', 'market_cost.validate'].includes(grant.capability));
-  const canManageMarketCosts = pricingGrants.some((grant) => !grant.revoked_at && grant.capability === 'market_cost.manage');
   const [pricingGrants, setPricingGrants] = useState<{ capability: string; revoked_at: string | null }[]>([]);
   const [accessLoaded, setAccessLoaded] = useState(false);
   const canReadMarketCosts = pricingGrants.some((grant) => !grant.revoked_at && ['market_cost.read', 'market_cost.manage', 'market_cost.validate'].includes(grant.capability));
@@ -228,6 +224,12 @@ export function CostCatalogView() {
     }
   };
 
+  useEffect(() => {
+    if (!canManageCostCatalog(currentMembership?.role) && tab === 'items') setTab('technical');
+    if (!canReadMarketCosts && (tab === 'suppliers' || tab === 'rates')) setTab('technical');
+    if (!canAdminPricingAccess && tab === 'access') setTab('technical');
+  }, [currentMembership?.role, canReadMarketCosts, canAdminPricingAccess, tab]);
+
   if (!authorized) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center p-6">
@@ -238,18 +240,6 @@ export function CostCatalogView() {
       </div>
     );
   }
-
-  useEffect(() => {
-    if (!canManageCostCatalog(currentMembership?.role) && tab === 'items') setTab('technical');
-    if (!canReadMarketCosts && (tab === 'suppliers' || tab === 'rates')) setTab('technical');
-    if (!canAdminPricingAccess && tab === 'access') setTab('technical');
-  }, [currentMembership?.role, canReadMarketCosts, canAdminPricingAccess, tab]);
-
-  useEffect(() => {
-    if (!canManageCostCatalog(currentMembership?.role) && tab === 'items') setTab('technical');
-    if (!canReadMarketCosts && (tab === 'suppliers' || tab === 'rates')) setTab('technical');
-    if (!canAdminPricingAccess && tab === 'access') setTab('technical');
-  }, [currentMembership?.role, canReadMarketCosts, canAdminPricingAccess, tab]);
 
   const activeSuppliers = suppliers.filter((row) => row.is_active).length;
   const activeItems = items.filter((row) => row.is_active).length;
@@ -267,10 +257,10 @@ export function CostCatalogView() {
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Card><CardContent className="flex items-center gap-3 p-4">
+        {canReadMarketCosts && <Card><CardContent className="flex items-center gap-3 p-4">
           <div className="rounded-lg bg-muted p-3"><Truck className="h-5 w-5" /></div>
           <div><p className="text-sm text-muted-foreground">Proveedores activos</p><p className="text-2xl font-semibold">{activeSuppliers}</p></div>
-        </CardContent></Card>
+        </CardContent></Card>}
         <Card><CardContent className="flex items-center gap-3 p-4">
           <div className="rounded-lg bg-muted p-3"><Box className="h-5 w-5" /></div>
           <div><p className="text-sm text-muted-foreground">Recursos activos</p><p className="text-2xl font-semibold">{activeItems}</p></div>
