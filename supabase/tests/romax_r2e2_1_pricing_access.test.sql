@@ -32,6 +32,7 @@ SELECT has_table('public','provider_pricing_access_grants','capability grants ta
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid='public.provider_pricing_access_grants'::regclass),'grant table has RLS');
 SELECT ok(NOT has_table_privilege('anon','public.provider_pricing_access_grants','SELECT'),'anon cannot inspect grants');
 SELECT ok(NOT has_table_privilege('authenticated','public.provider_pricing_access_grants','DELETE'),'authenticated cannot delete grant history');
+SELECT ok(NOT has_table_privilege('service_role','public.provider_pricing_access_grants','DELETE'),'service role cannot hard-delete grant audit');
 SELECT ok(NOT has_column_privilege('authenticated','public.provider_pricing_access_grants','granted_at','INSERT'),'authenticated cannot forge grant timestamps');
 SELECT ok(NOT has_column_privilege('authenticated','public.provider_pricing_access_grants','revoked_at','INSERT'),'authenticated cannot create pre-revoked grants');
 SELECT ok(NOT has_table_privilege('authenticated','public.provider_cost_rates','DELETE'),'authenticated cannot hard-delete rates');

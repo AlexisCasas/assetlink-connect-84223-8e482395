@@ -43,7 +43,8 @@ REVOKE ALL ON public.provider_pricing_access_grants FROM PUBLIC, anon, authentic
 GRANT SELECT ON public.provider_pricing_access_grants TO authenticated;
 GRANT INSERT (organization_id,user_id,capability,granted_by) ON public.provider_pricing_access_grants TO authenticated;
 GRANT UPDATE (revoked_at,revoked_by,revocation_reason) ON public.provider_pricing_access_grants TO authenticated;
-GRANT ALL ON public.provider_pricing_access_grants TO service_role;
+GRANT SELECT, INSERT, UPDATE ON public.provider_pricing_access_grants TO service_role;
+REVOKE DELETE ON public.provider_pricing_access_grants FROM service_role;
 
 CREATE POLICY provider_pricing_access_grants_read
  ON public.provider_pricing_access_grants FOR SELECT TO authenticated
