@@ -135,6 +135,7 @@ Deno.serve(async req => {
         return reply({status:'disconnected'});
       }
       if (row.status !== 'connected' && row.status !== 'revoking') throw new SafeError(409,'Hay una conexión en curso');
+      if (row.status === 'revoking' && Date.now() - Date.parse(row.updated_at) < 60000) throw new SafeError(409,'Revocación en curso; vuelve a consultar el estado');
       // No new OAuth attempt is allowed while revoking. Retrying revocation is safe.
       const locked = await db.from(table).update({status:'revoking',updated_at:now()}).eq('organization_id',organization).eq('status',row.status).eq('updated_at',row.updated_at).select('updated_at').maybeSingle();
       if (locked.error || !locked.data) throw new SafeError(409,'La conexión cambió; vuelve a intentar');
