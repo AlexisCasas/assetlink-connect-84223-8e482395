@@ -361,3 +361,12 @@ Se avanzó R4-A sin depender de Gmail:
 2. R4-B: comparación/recuperación de antecedentes de las 25 cotizaciones.
 3. R4-C: vincular partidas aprobadas con R2 y ejecutar cálculo económico determinístico.
 4. Gmail se integra cuando el cliente entregue el buzón, sin bloquear R4.
+
+
+## 10. R2-E2.1 — Seguridad y permisos comerciales (27-nov-2026)
+
+Implementación propuesta en PR #128: capacidades por usuario y organización en \`provider_pricing_access_grants\`, con auditoría de concesión y revocación irreversible. Capacidades activas: \`market_cost.read\`, \`market_cost.manage\`, \`market_cost.validate\` y \`pricing_rules.manage\`. Las capacidades \`commercial_price.*\` quedan reservadas para R2-E2.5.
+
+RLS de \`provider_cost_rates\` y \`provider_cost_suppliers\` deja de permitir lectura a cualquier miembro y exige capacidad explícita. \`provider_cost_settings\` exige \`pricing_rules.manage\` para insertar/actualizar. El creador de un costo no puede aprobar/rechazar su propio registro. UI de permisos disponible solo para owner/admin; el catálogo técnico sigue siendo de solo lectura para miembros activos.
+
+Se actualizó el test R2A para reflejar el modelo de dos personas y se agregó pgTAP multiempresa para concesiones, revocaciones, permisos, costos, proveedores, FX y aislamiento. CI pendiente de ejecución en PR #128. **No aplicado en Supabase Cloud; sin importación económica, merge ni despliegue productivo.**

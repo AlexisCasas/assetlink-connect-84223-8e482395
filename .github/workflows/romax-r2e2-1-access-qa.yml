@@ -1,0 +1,128 @@
+name: "ROMAX R2-E2.1 pricing access security QA"
+
+on:
+  push:
+    branches: ["feature/romax-r2e2-1-pricing-access-security"]
+  pull_request:
+    branches: ["docs/romax-r2e2-commercial-pricing-design"]
+    paths:
+      - "supabase/**"
+      - "src/components/provider/**"
+      - "src/components/layout/Sidebar.tsx"
+      - "src/pages/Dashboard.tsx"
+      - ".github/workflows/romax-r2e2-1-access-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: romax-r2e2-1-access-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-database:
+    name: "All Supabase migrations and pgTAP (disposable database)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: supabase/setup-cli@v1
+        with:
+          version: "2.79.0"
+      - name: Verify isolated context
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -f supabase/.temp/project-ref || { echo "NO_GO: linked Supabase project"; exit 1; }
+          supabase --version
+          docker --version
+          test -f supabase/migrations/20261127093000_romax_r2e2_1_pricing_access_security.sql
+          test -f supabase/tests/romax_r2e2_1_pricing_access.test.sql
+          grep -q 'SELECT no_plan();' supabase/tests/romax_r2e2_1_pricing_access.test.sql
+          grep -q '^ROLLBACK;' supabase/tests/romax_r2e2_1_pricing_access.test.sql
+      - name: Start disposable unlinked Supabase
+        run: supabase start
+      - name: Run complete migration chain and all pgTAP suites
+        run: supabase test db
+      - name: Stop and discard local database
+        if: always()
+        run: supabase stop --no-backup
+
+  frontend:
+    name: "Pricing access UI TypeScript, ESLint and Vite"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: TypeScript no new diagnostics (unchanged inherited Index baseline only)
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.app.json > /tmp/romax-r2e2-1-tsc.log 2>&1
+          result=$?
+          set -e
+          if [ "$result" -eq 0 ]; then echo "R2E2_1_TYPESCRIPT=PASS"; exit 0; fi
+          cat /tmp/romax-r2e2-1-tsc.log
+          test "$(git hash-object src/pages/Index.tsx)" = "c1cac2b37bfb357c16d5f821cd9cbda067c5429b" ||
+            { echo "NO_GO: modified inherited TypeScript baseline"; exit 1; }
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const diagnostics = readFileSync('/tmp/romax-r2e2-1-tsc.log','utf8').split('\n').filter(x=>/error TS\d+:/.test(x));
+          const expected = [
+            /^src\/pages\/Index\.tsx\(42,24\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(43,26\): error TS2322:/,
+            /^src\/pages\/Index\.tsx\(59,26\): error TS2322:/,
+          ];
+          assert.equal(diagnostics.length, expected.length, 'Unexpected TypeScript diagnostics');
+          for (let i=0;i<expected.length;i++) assert.match(diagnostics[i],expected[i]);
+          console.log("R2E2_1_TYPESCRIPT=PASS (only unchanged inherited Index.tsx diagnostics)");
+          JS
+      - name: ESLint changed pricing access components
+        run: |
+          npx eslint \
+            src/components/provider/CostCatalogView.tsx \
+            src/components/provider/CostRatesPanel.tsx \
+            src/components/provider/RomaxMaterialCatalogPanel.tsx \
+            src/components/provider/PricingAccessPanel.tsx \
+            src/components/provider/PricingRulesPanel.tsx \
+            src/components/layout/Sidebar.tsx \
+            src/pages/Dashboard.tsx
+      - name: Source security contract
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const read=p=>readFileSync(p,'utf8');
+          const migration=read('supabase/migrations/20261127093000_romax_r2e2_1_pricing_access_security.sql');
+          const rates=read('src/components/provider/CostRatesPanel.tsx');
+          const access=read('src/components/provider/PricingAccessPanel.tsx');
+          const catalog=read('src/components/provider/CostCatalogView.tsx');
+          assert.match(migration,/CREATE TABLE public\.provider_pricing_access_grants/);
+          assert.match(migration,/market_cost\.read/);
+          assert.match(migration,/market_cost\.manage/);
+          assert.match(migration,/market_cost\.validate/);
+          assert.match(migration,/OLD\.created_by=\(SELECT auth\.uid\(\)\)/);
+          assert.match(migration,/provider_cost_rates_read/);
+          assert.match(migration,/provider_cost_suppliers_read/);
+          assert.match(migration,/pricing_rules\.manage/);
+          assert.doesNotMatch(migration,/SECURITY DEFINER/i);
+          assert.match(rates,/capabilities\.includes\('market_cost\.manage'\)/);
+          assert.match(rates,/capabilities\.includes\('market_cost\.validate'\)/);
+          assert.match(access,/revocation_reason/);
+          assert.match(catalog,/PricingAccessPanel/);
+          assert.match(catalog,/PricingRulesPanel/);
+          console.log('R2E2_1_SOURCE_SECURITY_CONTRACT=PASS');
+          JS
+      - name: Vite production build
+        run: npm run build

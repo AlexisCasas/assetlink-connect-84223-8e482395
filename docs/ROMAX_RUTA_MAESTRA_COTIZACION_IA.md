@@ -133,3 +133,10 @@ El proyecto debe considerarse exitoso cuando una solicitud real pueda recorrer e
 - cálculos consistentes;
 - estructura comercial ROMAX;
 - intervención humana antes de la emisión cuando corresponda.
+
+
+## 10. R2-E2.1 — Seguridad y permisos (27-nov-2026)
+
+Antes de cargar precios se implementa una capa de capacidades explícitas por usuario. Logística puede registrar costos con \`market_cost.manage\`; un validador distinto puede aprobar/rechazar con \`market_cost.validate\`; \`market_cost.read\` permite solo consulta; \`pricing_rules.manage\` gobierna la configuración FX. Owner/admin administran concesiones. La UI no sustituye RLS.
+
+El costo de adquisición no se muestra a miembros sin capacidad, aunque intenten consultar directamente la API. El precio de venta ROMAX permanece separado y sus capacidades quedan reservadas hasta R2-E2.5. PR #128 contiene migración, pgTAP, UI y CI. Cloud apply, carga económica, merge y producción quedan fuera de esta autorización.
