@@ -420,3 +420,11 @@ No se importaron precios/históricos, no se cambiaron concesiones reales, no se 
 ## R3-GMAIL — evaluación inicial 27-nov-2026
 
 Se adelanta entrada de solicitudes en paralelo a R2-E2, por decisión del usuario. Conector Gmail de ChatGPT confirmado; OAuth propio de One Facility pendiente. Evaluación de muestra real completada sin escrituras ni cambios al buzón; oportunidades Gmail=0, adjuntos=0. Próximo incremento R3-GMAIL.1, conexión de aplicación y contrato seguro de captura, seguido de preview manual e importación idempotente con revisión. Ver [evaluación y plan](ROMAX_R3_GMAIL_INTAKE_EVALUATION.md). No publicar contenido del correo en el repositorio público.
+
+
+## R3-GMAIL.1 — candidato OAuth (27-nov-2026)
+
+PR #130 Draft: panel propietario, callback OAuth autenticado, alcance gmail.readonly, state/PKCE, verificación de buzón, cifrado AES-GCM y desconexión; migración canónica generada por CLI en CI desechable y pgTAP de ACL. Sin Cloud, merge, envío ni importación. CI de servidor simulado 6/6 y primer ensayo de base 2,894 aserciones PASS; revalidar head definitivo y ejecutar QA OAuth real antes de R3-GMAIL.2. Configuración Google Cloud/Edge Secrets pendiente. Ver [contrato y pasos](ROMAX_R3_GMAIL_1_OAUTH.md). El alcance confirmado es siete días, sync manual, revisión owner, clasificación, adjuntos PDF/XLSX/DOCX en incrementos posteriores.
+
+
+Activación autorizada 27-nov-2026: MCP aplicó el SQL idéntico y asignó versión Cloud 20261127205522. Se renombra archivo Git sin cambiar blob; no reejecutar versión original 20261127202747. Tabla vacía, RLS habilitado, anon/authenticated sin lectura, service_role con lectura. Edge Function activa v1; QA OAuth real pendiente.

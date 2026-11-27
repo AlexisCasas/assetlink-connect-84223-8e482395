@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import GmailConnectionPanel from './GmailConnectionPanel';
 
 type Opportunity = {
   id: string;
@@ -207,6 +208,8 @@ const OpportunitiesView = () => {
         </Button>
       </header>
 
+      {currentMembership?.role === 'owner' && organizationId === 'a76fb740-78cf-4ed5-97dd-1e1e24fcab68' && <GmailConnectionPanel key={organizationId} organizationId={organizationId} />}
+
       <div className="grid gap-3 sm:grid-cols-3">
         <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Nuevas</p><p className="text-2xl font-semibold">{opportunities.filter((row) => row.status === 'new').length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">En análisis</p><p className="text-2xl font-semibold">{opportunities.filter((row) => row.status === 'in_analysis').length}</p></CardContent></Card>
@@ -232,7 +235,7 @@ const OpportunitiesView = () => {
             <Card><CardContent className="p-8 text-center">
               <BriefcaseBusiness className="mx-auto mb-2 h-7 w-7 text-muted-foreground" />
               <p className="font-medium">Todavía no hay oportunidades.</p>
-              <p className="mt-1 text-sm text-muted-foreground">Mientras se define el buzón de Gmail, puedes registrar una solicitud manual para probar el flujo.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Puedes registrar una solicitud manual mientras se habilita la importación de Gmail.</p>
             </CardContent></Card>
           ) : visibleOpportunities.map((opportunity) => (
             <Card key={opportunity.id}>
