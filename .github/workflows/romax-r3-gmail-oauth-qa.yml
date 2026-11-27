@@ -34,17 +34,13 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: "2.79.0"
-      - name: Generate migration in disposable checkout only
+      - name: Verify isolated context and canonical migration
         run: |
           set -euo pipefail
           test ! -f supabase/.temp/project-ref
-          supabase migration new --help
-          supabase migration new romax_r3_gmail_connection
-          file="$(find supabase/migrations -maxdepth 1 -name '*_romax_r3_gmail_connection.sql')"
-          test -n "$file"
-          cp supabase/staged-migrations/romax_r3_gmail_connection.sql "$file"
-          cp supabase/staged-migrations/romax_r3_gmail_connection.test.sql supabase/tests/romax_r3_gmail_connection.test.sql
-          echo "GENERATED_MIGRATION=$file"
+          test -f supabase/migrations/20261127202747_romax_r3_gmail_connection.sql
+          test -f supabase/tests/romax_r3_gmail_connection.test.sql
+          supabase --version
       - run: supabase start
       - run: supabase test db
       - if: always()
