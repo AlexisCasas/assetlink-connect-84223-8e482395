@@ -54,7 +54,7 @@ SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_it
  VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000002','M','PEN',9.2,1,'not_required',NULL,'unknown','manual',current_date ,'draft')$$,'same item accepts another supplier');
 SELECT throws_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status)
  VALUES ('b2200000-0000-0000-0000-000000000001','b2400000-0000-0000-0000-000000000001','b2300000-0000-0000-0000-000000000002','M','USD',10,3.75,'manual',NULL,'unknown','manual',current_date ,'draft')$$,'23514',NULL,'USD requires dated FX snapshot');
-SELECT throws_ok($UPDATE public.provider_cost_rates SET status='approved' WHERE supplier_id='b2300000-0000-0000-0000-000000000001'$,'P0001',NULL,'creator cannot approve own cost rate');
+SELECT throws_ok($$UPDATE public.provider_cost_rates SET status='approved' WHERE supplier_id='b2300000-0000-0000-0000-000000000001'$$,'P0001',NULL,'creator cannot approve own cost rate');
 SELECT pg_temp.as_user('b2100000-0000-0000-0000-000000000004');
 UPDATE public.provider_cost_rates SET status='approved' WHERE supplier_id='b2300000-0000-0000-0000-000000000001';
 SELECT is((SELECT status FROM public.provider_cost_rates WHERE supplier_id='b2300000-0000-0000-0000-000000000001'),'approved','separate validator can approve rate');

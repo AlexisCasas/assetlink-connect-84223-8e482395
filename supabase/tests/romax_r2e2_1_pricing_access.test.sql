@@ -62,7 +62,8 @@ INSERT INTO public.provider_cost_suppliers(id,organization_id,display_name)
 INSERT INTO public.provider_cost_items(id,organization_id,code,name,category_code,default_unit_code)
  VALUES ('e2400000-0000-0000-0000-000000000001','e2200000-0000-0000-0000-000000000001','E21-ITEM-01','Synthetic material','MATERIAL','UND');
 
-SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_source,tax_treatment,source_type,valid_from,status) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','e2300000-0000-0000-0000-000000000001','UND','USD',100,'organization_default','unknown','supplier_quote',current_date,'pending_review')$$,'market_cost.manage can create a pending rate');
+SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000002');
+SELECT lives_ok($INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_source,tax_treatment,source_type,valid_from,status) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','e2300000-0000-0000-0000-000000000001','UND','USD',100,'organization_default','unknown','supplier_quote',current_date,'pending_review')$,'market_cost.manage can create a pending rate');
 
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000005');
 SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'member without capability cannot read rates');
@@ -95,7 +96,7 @@ SELECT is((SELECT default_usd_pen_rate FROM public.provider_cost_settings WHERE 
 SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'pricing_rules.manage alone does not expose market costs');
 
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000001');
-SELECT throws_ok($UPDATE public.provider_pricing_access_grants SET capability='market_cost.manage' WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read'$,'42501',NULL,'grant identity cannot be edited by API');
+SELECT throws_ok($$UPDATE public.provider_pricing_access_grants SET capability='market_cost.manage' WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read'$$,'42501',NULL,'grant identity cannot be edited by API');
 UPDATE public.provider_pricing_access_grants SET revoked_at=now(),revoked_by='e2100000-0000-0000-0000-000000000001',revocation_reason='Access review'
  WHERE organization_id='e2200000-0000-0000-0000-000000000001' AND user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read' AND revoked_at IS NULL;
 SELECT is((SELECT count(*) FROM public.provider_pricing_access_grants WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read' AND revoked_at IS NULL),0::bigint,'owner can revoke a capability');
