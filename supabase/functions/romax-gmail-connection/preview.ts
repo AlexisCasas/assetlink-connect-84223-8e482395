@@ -43,7 +43,7 @@ const sentQuote=/\b(adjuntamos|adjunto|enviamos|remitimos|compartimos|se adjunta
 const references=(s:string)=>Array.from(new Set((s.toUpperCase().match(/\bSC[-\s]?\d{4,}(?:-\d{4})?\b/g)??[]).map(x=>x.replace(/\s+/g,'-'))));
 const rmxReference=(s:string)=>s.toUpperCase().match(/\bRMX[-\s]?\d{4}[-\s]?\d{3,}\b/)?.[0].replace(/\s+/g,'-')??null;
 const weekdayIndex:Record<string,number>={domingo:0,lunes:1,martes:2,miercoles:3,jueves:4,viernes:5,sabado:6};
-const datePattern=/\b(?:(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s+)?(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?\b/gi;
+const datePattern=/(?<![\d-])\b(?:(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s+)?(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?\b/gi;
 const isoDatePattern=/\b(\d{4})-(\d{2})-(\d{2})\b/g;
 const deadlineCue=/(?:plazo|deadline|fecha\s+limite|fecha\s+de\s+envio\s+de\s+propuesta|envio\s+de\s+propuesta|entrega\s+de\s+propuesta|se\s+extiende|se\s+amplia|prorroga|hasta\s+(?:el\s+)?(?:dia\s+)?)/i;
 export function parseDeadlineEvents(messages:{snippet?:string;internalDate?:string}[]):DeadlineEvent[] {
