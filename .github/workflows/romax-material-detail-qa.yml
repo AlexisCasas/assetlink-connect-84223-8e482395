@@ -1,0 +1,95 @@
+name: "ROMAX inline material detail UI QA"
+
+on:
+  pull_request:
+    branches: ["productization/mvp"]
+    paths:
+      - "src/components/provider/RomaxMaterialCatalogPanel.tsx"
+      - ".github/workflows/romax-material-detail-qa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: romax-material-detail-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: "Inline detail TypeScript, source contract, ESLint and Vite"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: TypeScript - no new diagnostics
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit -p tsconfig.app.json --pretty false > /tmp/romax-material-detail-tsc.log 2>&1
+          result=$?
+          set -e
+          if [ "$result" -eq 0 ]; then
+            echo "ROMAX_MATERIAL_DETAIL_TYPESCRIPT=PASS"
+            exit 0
+          fi
+          cat /tmp/romax-material-detail-tsc.log
+          test "$(git hash-object src/pages/Index.tsx)" = "c1cac2b37bfb357c16d5f821cd9cbda067c5429b" ||
+            { echo "NO_GO: inherited TypeScript baseline changed"; exit 1; }
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const diagnostics = readFileSync('/tmp/romax-material-detail-tsc.log', 'utf8')
+            .split('\n').filter((line) => line.includes('error TS'));
+          const expected = [
+            'src/pages/Index.tsx(42,24): error TS2322:',
+            'src/pages/Index.tsx(43,26): error TS2322:',
+            'src/pages/Index.tsx(59,26): error TS2322:',
+          ];
+          assert.equal(diagnostics.length, expected.length, 'Unexpected TypeScript diagnostics');
+          expected.forEach((prefix, index) => assert.ok(diagnostics[index].startsWith(prefix), diagnostics[index]));
+          console.log('ROMAX_MATERIAL_DETAIL_TYPESCRIPT=PASS (only unchanged Index.tsx baseline)');
+          JS
+      - name: Inline detail and original source contract
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const source = readFileSync('src/components/provider/RomaxMaterialCatalogPanel.tsx', 'utf8');
+          const mapStart = source.indexOf('{pageRows.map((item) => {');
+          const fragmentStart = source.indexOf('<Fragment key={item.id}>', mapStart);
+          const mainRowEnd = source.indexOf('</tr>', fragmentStart);
+          const detailRow = source.indexOf('{isExpanded && (', mainRowEnd);
+          const fragmentEnd = source.indexOf('</Fragment>', detailRow);
+          assert.ok(mapStart >= 0 && fragmentStart > mapStart, 'Each material must have a keyed fragment');
+          assert.ok(mainRowEnd > fragmentStart && detailRow > mainRowEnd && fragmentEnd > detailRow,
+            'Expanded detail row must be rendered immediately after its material row');
+          assert.ok(source.includes('const isExpanded = selectedItemId === item.id;'),
+            'Only the selected material may be expanded');
+          assert.ok(source.includes('aria-expanded={isExpanded}') && source.includes('aria-controls={`material-details-${item.id}`}'),
+            'Expand/collapse control must expose its state accessibly');
+          assert.ok(source.includes('grid grid-cols-1 gap-x-6 gap-y-4 text-sm sm:grid-cols-2'),
+            'Detail content must use a mobile-first responsive grid');
+          assert.ok(source.includes('min-w-0 rounded-lg border bg-card p-4')
+            && source.includes('break-words [overflow-wrap:anywhere]'),
+            'Detail content must prevent long source values from overflowing on small screens');
+          for (const field of ['source?.source_code', 'source?.source_name', 'source?.source_unit',
+            'source.source_family', 'source.source_subfamily', 'source.source_specification',
+            'source.source_brand', 'source?.mapping_status']) {
+            assert.ok(source.includes(field), `Original Excel field missing: ${field}`);
+          }
+          assert.ok(source.includes('setSelectedItemId((current) => current === item.id ? null : item.id)'),
+            'The existing single-item toggle behavior must be preserved');
+          console.log('ROMAX_MATERIAL_DETAIL_SOURCE_CONTRACT=PASS');
+          JS
+      - name: ESLint catalog detail
+        run: npx eslint src/components/provider/RomaxMaterialCatalogPanel.tsx
+      - name: Production build
+        run: npm run build
