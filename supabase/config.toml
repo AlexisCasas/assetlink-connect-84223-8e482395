@@ -52,3 +52,7 @@ content_path = "./supabase/templates/invite.html"
 [auth.email.template.magic_link]
 subject = "Tu acceso a One Facility"
 content_path = "./supabase/templates/magic_link.html"
+
+# Auth is verified against Supabase Auth by the function on every request.
+[functions.romax-gmail-connection]
+verify_jwt = false

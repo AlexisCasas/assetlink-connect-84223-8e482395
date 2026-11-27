@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import AcceptInvitation from "./pages/AcceptInvitation";
+import GmailCallback from "./pages/GmailCallback";
 import { supabaseConfigurationError } from "@/lib/env";
 
 const queryClient = new QueryClient();
@@ -118,6 +119,7 @@ const App = () => supabaseConfigurationError ? <EnvironmentConfigurationError />
                 AcceptInvitation itself redirects to /login (preserving this
                 same path via resolveSafeLoginReturnTarget) when signed out. */}
             <Route path="/invitations/accept" element={<AcceptInvitation />} />
+            <Route path="/gmail/callback" element={<GmailCallback />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

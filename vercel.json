@@ -14,7 +14,23 @@
       "docs/romax-r2e2-commercial-pricing-design": false,
       "feature/romax-r2e2-1-pricing-access-security": false,
       "productization/mvp": false,
-      "fix/romax-inline-material-details-20261127": false
+      "fix/romax-inline-material-details-20261127": false,
+      "feature/romax-r3-gmail-oauth": false
     }
-  }
+  },
+  "headers": [
+    {
+      "source": "/gmail/callback",
+      "headers": [
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
+  ]
 }

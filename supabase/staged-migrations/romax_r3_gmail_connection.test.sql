@@ -1,0 +1,16 @@
+BEGIN;
+SELECT plan(12);
+SELECT has_table('public','romax_gmail_connections','connection table exists');
+SELECT ok((select relrowsecurity from pg_class where oid='public.romax_gmail_connections'::regclass),'RLS enabled');
+SELECT ok(not has_table_privilege('anon','public.romax_gmail_connections','SELECT'),'anon cannot read');
+SELECT ok(not has_table_privilege('authenticated','public.romax_gmail_connections','SELECT'),'authenticated cannot read tokens');
+SELECT ok(not has_table_privilege('authenticated','public.romax_gmail_connections','INSERT'),'authenticated cannot insert');
+SELECT ok(not has_table_privilege('authenticated','public.romax_gmail_connections','UPDATE'),'authenticated cannot update');
+SELECT ok(not has_table_privilege('authenticated','public.romax_gmail_connections','DELETE'),'authenticated cannot delete');
+SELECT ok(has_table_privilege('service_role','public.romax_gmail_connections','SELECT'),'server can read');
+SELECT ok(has_table_privilege('service_role','public.romax_gmail_connections','INSERT'),'server can insert');
+SELECT ok(has_table_privilege('service_role','public.romax_gmail_connections','UPDATE'),'server can update');
+SELECT ok(not has_table_privilege('service_role','public.romax_gmail_connections','DELETE'),'server cannot delete');
+SELECT ok(not has_table_privilege('service_role','public.romax_gmail_connections','TRUNCATE'),'server cannot truncate');
+SELECT * FROM finish();
+ROLLBACK;
