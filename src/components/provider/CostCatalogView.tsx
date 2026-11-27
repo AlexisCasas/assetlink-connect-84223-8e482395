@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CostRatesPanel } from '@/components/provider/CostRatesPanel';
+import { RomaxMaterialCatalogPanel } from '@/components/provider/RomaxMaterialCatalogPanel';
 
 type CatalogRow = {
   id: string;
@@ -50,7 +51,7 @@ interface CatalogQuery extends PromiseLike<QueryResult> {
 }
 const catalogDb = supabase as unknown as { from: (table: string) => CatalogQuery };
 
-type CatalogTab = 'suppliers' | 'items' | 'rates';
+type CatalogTab = 'suppliers' | 'items' | 'rates' | 'technical';
 const canManageCostCatalog = (role: string | undefined) =>
   !!role && ['owner', 'admin', 'manager', 'quote_manager'].includes(role);
 
@@ -235,11 +236,12 @@ export function CostCatalogView() {
 
       <div className="flex flex-wrap items-center gap-2 border-b pb-3">
         <Button size="sm" variant={tab === 'items' ? 'default' : 'outline'} onClick={() => { setTab('items'); setSearch(''); }}>Recursos</Button>
+        <Button size="sm" variant={tab === 'technical' ? 'default' : 'outline'} onClick={() => { setTab('technical'); setSearch(''); }}>Catálogo técnico</Button>
         <Button size="sm" variant={tab === 'suppliers' ? 'default' : 'outline'} onClick={() => { setTab('suppliers'); setSearch(''); }}>Proveedores</Button>
         <Button size="sm" variant={tab === 'rates' ? 'default' : 'outline'} onClick={() => { setTab('rates'); setSearch(''); }}>Tarifas</Button>
       </div>
 
-      {tab !== 'rates' && (
+      {(tab === 'items' || tab === 'suppliers') && (
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-56 flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -251,7 +253,9 @@ export function CostCatalogView() {
         </div>
       )}
 
-      {tab === 'rates' ? (
+      {tab === 'technical' ? (
+        <RomaxMaterialCatalogPanel />
+      ) : tab === 'rates' ? (
         <CostRatesPanel />
       ) : loading ? <div className="py-12 text-center text-sm text-muted-foreground">Cargando catálogo…</div> : (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
