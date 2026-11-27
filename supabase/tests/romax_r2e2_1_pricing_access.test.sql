@@ -1,7 +1,7 @@
 -- R2-E2.1 pricing access/RLS regression. LOCAL/DISPOSABLE DATABASE ONLY.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(44);
+SELECT plan(46);
 CREATE FUNCTION pg_temp.as_user(p_id uuid) RETURNS void LANGUAGE sql AS $$
  SELECT set_config('request.jwt.claim.sub',coalesce(p_id::text,''),true);
 $$;
@@ -30,6 +30,8 @@ INSERT INTO public.organization_members(organization_id,user_id,role,is_active) 
 
 SELECT has_table('public','provider_pricing_access_grants','capability grants table exists');
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid='public.provider_pricing_access_grants'::regclass),'grant table has RLS');
+SELECT ok(to_regclass('public.provider_pricing_access_grants_user_idx') IS NOT NULL,'user foreign key has a supporting index');
+SELECT ok(to_regclass('public.provider_pricing_access_grants_revoked_by_idx') IS NOT NULL,'revoked_by foreign key has a supporting index');
 SELECT ok(NOT has_table_privilege('anon','public.provider_pricing_access_grants','SELECT'),'anon cannot inspect grants');
 SELECT ok(NOT has_table_privilege('authenticated','public.provider_pricing_access_grants','DELETE'),'authenticated cannot delete grant history');
 SELECT ok(NOT has_table_privilege('service_role','public.provider_pricing_access_grants','DELETE'),'service role cannot hard-delete grant audit');

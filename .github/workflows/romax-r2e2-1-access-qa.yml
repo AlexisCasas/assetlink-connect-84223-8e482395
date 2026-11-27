@@ -45,7 +45,7 @@ jobs:
           docker --version
           test -f supabase/migrations/20261127154749_romax_r2e2_1_pricing_access_security.sql
           test -f supabase/tests/romax_r2e2_1_pricing_access.test.sql
-          grep -q 'SELECT plan(44);' supabase/tests/romax_r2e2_1_pricing_access.test.sql
+          grep -q 'SELECT plan(46);' supabase/tests/romax_r2e2_1_pricing_access.test.sql
           grep -q '^ROLLBACK;' supabase/tests/romax_r2e2_1_pricing_access.test.sql
       - name: Start disposable unlinked Supabase
         run: supabase start
@@ -116,7 +116,7 @@ jobs:
           const r2aTest=read('supabase/tests/romax_r2a_cost_catalog.test.sql');
           const r2e21Test=read('supabase/tests/romax_r2e2_1_pricing_access.test.sql');
           assert.match(r2aTest,/SELECT plan\(22\);/);
-          assert.match(r2e21Test,/SELECT plan\(44\);/);
+          assert.match(r2e21Test,/SELECT plan\(46\);/);
           assert.doesNotMatch(r2aTest+r2e21Test,/SELECT\s+(?:throws_ok|lives_ok)\(\$(?!\$)/);
           assert.match(migration,/CREATE TABLE public\.provider_pricing_access_grants/);
           assert.match(migration,/market_cost\.read/);
@@ -131,6 +131,8 @@ jobs:
           assert.match(migration,/pricing_rules\.manage/);
           assert.doesNotMatch(migration,/SECURITY DEFINER/i);
           assert.match(privilegeHardening,/REVOKE ALL ON TABLE public\.provider_pricing_access_grants FROM service_role/);
+          assert.match(privilegeHardening,/CREATE INDEX IF NOT EXISTS provider_pricing_access_grants_user_idx/);
+          assert.match(privilegeHardening,/CREATE INDEX IF NOT EXISTS provider_pricing_access_grants_revoked_by_idx/);
           assert.match(rates,/capabilities\.includes\('market_cost\.manage'\)/);
           assert.match(rates,/capabilities\.includes\('market_cost\.validate'\)/);
           assert.match(access,/revocation_reason/);
