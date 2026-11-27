@@ -93,6 +93,7 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const refs=references(context);
   const latestSourceAt=Number(m.internalDate);
   const sentEvidence=quoteReplies.some(x=>Number(x.internalDate)>latestSourceAt);
+  const unresolvedInternalReply=internal.some(x=>Number(x.internalDate)>latestSourceAt&&!forwardedSender(x));
   const deadlineMessages=sourceMessages.length?sourceMessages:quoteReplies;
   const deadlineEvents=parseDeadlineEvents(deadlineMessages);
   let category:Category='other',reason='No se detectó una solicitud comercial explícita.';
@@ -101,6 +102,7 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   else if(refs.length>1){category='review';reason='Hay varias referencias de solicitud en la conversación.';}
   else if(adjust.test(text)){category='adjustment';reason='Se detectó una petición de ajuste comercial.';}
   else if(sentEvidence&&quote.test(norm(context))){category='quoted';reason='Existe una cotización posterior enviada por ROMAX; verificar antes de descartar.';}
+  else if(unresolvedInternalReply&&quote.test(norm(context))){category='review';reason='Hay una respuesta posterior de ROMAX, pero no confirma el envío de una cotización.';}
   else if(follow.test(text)||deadlineEvents.some(e=>e.kind==='extension')){category='follow_up';reason='Se detectó una actualización o ampliación de plazo de una solicitud.';}
   else if(operation.test(text)&&!quote.test(text)){category='operational';reason='Parece una coordinación operativa o documento de compra.';}
   else if(quote.test(text+' '+norm(context))&&requestQuote.test(text+' '+norm(context))&&!operation.test(text)){category='quote_request';reason='El asunto o extracto contiene una petición de cotización.';}
