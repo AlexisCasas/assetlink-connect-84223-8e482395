@@ -165,8 +165,7 @@ const Dashboard = () => {
         return <PublicRequestList />;
       case 'opportunity-analysis':
         if (currentOrganization?.organizationType !== 'provider_company' || !currentMembership?.isActive
-            || currentMembership.organizationId !== currentOrganization.id
-            || !['owner', 'admin', 'manager', 'quote_manager'].includes(currentMembership.role)) {
+            || currentMembership.organizationId !== currentOrganization.id) {
           return (
             <div className="flex h-full items-center justify-center p-6">
               <p className="text-sm text-muted-foreground">El análisis de oportunidades está disponible solo para usuarios autorizados de organizaciones proveedoras.</p>

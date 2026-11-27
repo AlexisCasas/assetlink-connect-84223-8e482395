@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CostRatesPanel } from '@/components/provider/CostRatesPanel';
 import { RomaxMaterialCatalogPanel } from '@/components/provider/RomaxMaterialCatalogPanel';
 import { PricingAccessPanel } from '@/components/provider/PricingAccessPanel';
+import { PricingAccessPanel } from '@/components/provider/PricingAccessPanel';
 
 type CatalogRow = {
   id: string;
@@ -87,6 +88,10 @@ export function CostCatalogView() {
   const [itemForm, setItemForm] = useState(emptyItem);
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [pricingGrants, setPricingGrants] = useState<{ capability: string; revoked_at: string | null }[]>([]);
+  const [accessLoaded, setAccessLoaded] = useState(false);
+  const canReadMarketCosts = pricingGrants.some((grant) => !grant.revoked_at && ['market_cost.read', 'market_cost.manage', 'market_cost.validate'].includes(grant.capability));
+  const canManageMarketCosts = pricingGrants.some((grant) => !grant.revoked_at && grant.capability === 'market_cost.manage');
   const [pricingGrants, setPricingGrants] = useState<{ capability: string; revoked_at: string | null }[]>([]);
   const [accessLoaded, setAccessLoaded] = useState(false);
   const canReadMarketCosts = pricingGrants.some((grant) => !grant.revoked_at && ['market_cost.read', 'market_cost.manage', 'market_cost.validate'].includes(grant.capability));
@@ -240,6 +245,12 @@ export function CostCatalogView() {
     if (!canAdminPricingAccess && tab === 'access') setTab('technical');
   }, [currentMembership?.role, canReadMarketCosts, canAdminPricingAccess, tab]);
 
+  useEffect(() => {
+    if (!canManageCostCatalog(currentMembership?.role) && tab === 'items') setTab('technical');
+    if (!canReadMarketCosts && (tab === 'suppliers' || tab === 'rates')) setTab('technical');
+    if (!canAdminPricingAccess && tab === 'access') setTab('technical');
+  }, [currentMembership?.role, canReadMarketCosts, canAdminPricingAccess, tab]);
+
   const activeSuppliers = suppliers.filter((row) => row.is_active).length;
   const activeItems = items.filter((row) => row.is_active).length;
 
@@ -327,8 +338,8 @@ export function CostCatalogView() {
                     {supplier.notes && <p className="mt-2 text-sm">{supplier.notes}</p>}
                   </div>
                   <div className="flex shrink-0 gap-2">
-                    <Button size="sm" variant="outline" onClick={() => { setSupplierForm({ display_name: supplier.display_name, legal_name: supplier.legal_name ?? '', tax_id: supplier.tax_id ?? '', email: supplier.email ?? '', phone: supplier.phone ?? '', notes: supplier.notes ?? '' }); setEditingSupplierId(supplier.id); setTab('suppliers'); }}><Edit2 className="mr-1 h-3.5 w-3.5" />Editar</Button>
-                    <Button size="sm" variant="ghost" onClick={() => void toggleActive('suppliers', supplier)}>{supplier.is_active ? <Archive className="mr-1 h-3.5 w-3.5" /> : <Check className="mr-1 h-3.5 w-3.5" />}{supplier.is_active ? 'Desactivar' : 'Activar'}</Button>
+                    {canManageMarketCosts && <Button size="sm" variant="outline" onClick={() => { setSupplierForm({ display_name: supplier.display_name, legal_name: supplier.legal_name ?? '', tax_id: supplier.tax_id ?? '', email: supplier.email ?? '', phone: supplier.phone ?? '', notes: supplier.notes ?? '' }); setEditingSupplierId(supplier.id); setTab('suppliers'); }}><Edit2 className="mr-1 h-3.5 w-3.5" />Editar</Button>}
+                    {canManageMarketCosts && <Button size="sm" variant="ghost" onClick={() => void toggleActive('suppliers', supplier)}>{supplier.is_active ? <Archive className="mr-1 h-3.5 w-3.5" /> : <Check className="mr-1 h-3.5 w-3.5" />}{supplier.is_active ? 'Desactivar' : 'Activar'}</Button>}
                   </div>
                 </CardContent>
               </Card>
@@ -337,7 +348,7 @@ export function CostCatalogView() {
             {tab === 'suppliers' && filteredSuppliers.length === 0 && <Card><CardContent className="p-8 text-center"><Building2 className="mx-auto mb-2 h-7 w-7 text-muted-foreground" /><p className="font-medium">Todavía no hay proveedores registrados.</p><p className="mt-1 text-sm text-muted-foreground">Registra un proveedor cuando necesites asociarlo a una tarifa o comparar alternativas.</p></CardContent></Card>}
           </div>
 
-          <Card className="h-fit">
+          {(tab === 'items' ? canManageCostCatalog(currentMembership?.role) : canManageMarketCosts) && <Card className="h-fit">
             <CardHeader>
               <CardTitle className="text-base">{tab === 'items' ? (editingItemId ? 'Editar recurso' : 'Nuevo recurso') : (editingSupplierId ? 'Editar proveedor' : 'Nuevo proveedor')}</CardTitle>
               <CardDescription>{tab === 'items' ? 'El recurso se podrá asociar a uno o varios proveedores más adelante.' : 'El proveedor puede registrarse ahora y asociarse a una tarifa cuando corresponda.'}</CardDescription>
@@ -365,7 +376,7 @@ export function CostCatalogView() {
                 </form>
               )}
             </CardContent>
-          </Card>
+          </Card>}
         </div>
       )}
     </div>

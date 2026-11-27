@@ -123,7 +123,7 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
   // subcontractor_company. userRole === 'proveedor' alone is not enough —
   // AuthContext still maps facility_manager to it for legacy compatibility.
   const isProviderMarketplaceOrg = isProviderFacingOrganizationType(currentOrganization?.organizationType);
-  const canManageCostCatalog = currentOrganization?.organizationType === 'provider_company' && !!currentMembership?.isActive && ['owner', 'admin', 'manager', 'quote_manager'].includes(currentMembership.role);
+  const canViewCostCatalog = currentOrganization?.organizationType === 'provider_company' && !!currentMembership?.isActive && currentMembership.organizationId === currentOrganization.id;
   // Fase 1 · Punto 9C.1: delegated operation for a facility_manager org —
   // only when at least one OPERATIONAL client (assigned + active) grants the
   // permission AND the user's FM role allows it. Never just because a
@@ -493,7 +493,7 @@ export function Sidebar({ className, onViewChange, currentView = 'dashboard', us
             </>
             )}
 
-            {canManageCostCatalog && (
+            {canViewCostCatalog && (
               <Button
                 variant={currentView === 'cost-catalog' ? 'default' : 'ghost'}
                 className={cn('w-full justify-start', collapsed && 'justify-center px-2')}

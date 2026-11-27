@@ -107,14 +107,11 @@ const statusLabels: Record<string, string> = {
 export function CostRatesPanel() {
   const { currentOrganization, currentMembership, user } = useAuth();
   const organizationId = currentOrganization?.id ?? '';
-  const canManage = currentOrganization?.organizationType === 'provider_company'
-    && currentMembership?.isActive
-    && currentMembership.organizationId === organizationId
-    && !!currentMembership.role
-    && ['owner', 'admin', 'manager', 'quote_manager'].includes(currentMembership.role);
-  const canManageFx = !!currentMembership?.isActive
-    && currentMembership.organizationId === organizationId
-    && ['owner', 'admin', 'manager'].includes(currentMembership.role);
+  const [capabilities, setCapabilities] = useState<string[]>([]);
+  const canRead = capabilities.some((capability) => ['market_cost.read', 'market_cost.manage', 'market_cost.validate'].includes(capability));
+  const canManage = capabilities.includes('market_cost.manage');
+  const canValidate = capabilities.includes('market_cost.validate');
+  const canManageFx = capabilities.includes('pricing_rules.manage');
 
   const [items, setItems] = useState<CostItem[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -132,9 +129,26 @@ export function CostRatesPanel() {
   const [reviewNote, setReviewNote] = useState('');
 
   const loadData = useCallback(async () => {
-    if (!organizationId || !canManage) return;
+    if (!organizationId || !currentMembership?.isActive || currentMembership.organizationId !== organizationId || !user?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
+      const accessResult = await catalogDb.from('provider_pricing_access_grants')
+        .select('capability,revoked_at').eq('organization_id', organizationId).eq('user_id', user.id);
+      if (accessResult.error) throw new Error(accessResult.error.message);
+      const activeCapabilities = ((accessResult.data ?? []) as { capability: string; revoked_at: string | null }[])
+        .filter((grant) => !grant.revoked_at).map((grant) => grant.capability);
+      setCapabilities(activeCapabilities);
+      if (!activeCapabilities.some((capability) => ['market_cost.read', 'market_cost.manage', 'market_cost.validate'].includes(capability))) {
+        setItems([]);
+        setSuppliers([]);
+        setUnits([]);
+        setSettings(null);
+        setRates([]);
+        return;
+      }
       const [itemResult, supplierResult, unitResult, settingResult, rateResult] = await Promise.all([
         catalogDb.from('provider_cost_items').select('*').eq('organization_id', organizationId).order('name'),
         catalogDb.from('provider_cost_suppliers').select('*').eq('organization_id', organizationId).order('display_name'),
@@ -172,7 +186,7 @@ export function CostRatesPanel() {
     } finally {
       setLoading(false);
     }
-  }, [organizationId, canManage]);
+  }, [organizationId, currentMembership?.isActive, currentMembership?.organizationId, user?.id]);
 
   useEffect(() => { void loadData(); }, [loadData]);
 
@@ -304,7 +318,7 @@ export function CostRatesPanel() {
   };
 
   const reviewRate = async (rate: Rate, decision: 'approved' | 'rejected') => {
-    if (!canManage || !organizationId) return;
+    if (!canValidate || !organizationId) return;
     const note = reviewNote.trim();
     if (decision === 'rejected' && !note) {
       toast.error('Para rechazar una tarifa registra el motivo de revisión.');
@@ -329,7 +343,7 @@ export function CostRatesPanel() {
     }
   };
 
-  if (!canManage) {
+  if (!canRead) {
     return <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">No tienes permisos para consultar el catálogo de tarifas de esta organización.</CardContent></Card>;
   }
 
@@ -348,7 +362,7 @@ export function CostRatesPanel() {
         </div>
       </div>
 
-      {pendingRates.length > 0 && (
+      {canValidate && pendingRates.length > 0 && (
         <Card className="border-amber-200 bg-amber-50/40">
           <CardHeader>
             <CardTitle className="text-base">Tarifas pendientes de revisión</CardTitle>
@@ -453,7 +467,7 @@ export function CostRatesPanel() {
               <div className="flex items-end"><Button type="submit" className="w-full" disabled={savingFx}><Save className="mr-2 h-4 w-4" />{savingFx ? 'Guardando…' : settings ? 'Actualizar referencia' : 'Guardar referencia'}</Button></div>
             </form>
           ) : (
-            <p className="text-sm text-muted-foreground">Solo owner, admin o manager pueden modificar el tipo de cambio predeterminado.</p>
+            <p className="text-sm text-muted-foreground">Se requiere la capacidad pricing_rules.manage para modificar el tipo de cambio predeterminado.</p>
           )}
         </CardContent>
       </Card>
@@ -509,7 +523,7 @@ export function CostRatesPanel() {
             <CardDescription>Se guarda como pendiente de revisión. Para corregir un precio se crea una nueva versión; no se sobrescribe una tarifa aprobada.</CardDescription>
           </CardHeader>
           <CardContent>
-            {activeItems.length === 0 ? <p className="text-sm text-muted-foreground">Primero registra al menos un recurso activo en la pestaña Recursos.</p> : (
+            {!canManage ? <p className="text-sm text-muted-foreground">Tienes acceso de consulta o validación, pero necesitas la capacidad market_cost.manage para registrar nuevas tarifas.</p> : activeItems.length === 0 ? <p className="text-sm text-muted-foreground">Primero registra al menos un recurso activo en la pestaña Recursos.</p> : (
               <form className="space-y-3" onSubmit={saveRate}>
                 <div className="space-y-1.5"><Label htmlFor="rate-item">Recurso *</Label><select id="rate-item" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.cost_item_id} onChange={(event) => { const item = items.find((row) => row.id === event.target.value); setForm({ ...form, cost_item_id: event.target.value, unit_code: item?.default_unit_code ?? 'UND' }); }} required>{activeItems.map((item) => <option key={item.id} value={item.id}>{item.name}{item.code ? ` · ${item.code}` : ''}</option>)}</select></div>
                 <div className="space-y-1.5"><Label htmlFor="rate-supplier">Proveedor</Label><select id="rate-supplier" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.supplier_id} onChange={(event) => setForm({ ...form, supplier_id: event.target.value })}><option value="">Costo interno / sin proveedor</option>{activeSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.display_name}</option>)}</select></div>
