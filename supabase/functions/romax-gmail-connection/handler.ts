@@ -1,6 +1,8 @@
 import { createServiceClient, getAuthenticatedUser, isUuid } from '../_shared/adminAuth.ts';
 import { randomToken, hashState, pkceChallenge, importKey, seal, unseal, READ_SCOPE, exactScope } from './crypto.ts';
 
+import { DAY_MS, readPreview } from './preview.ts';
+
 const env = (name: string) => Deno.env.get(name) ?? '';
 const table = 'romax_gmail_connections';
 const clearAttempt = { attempt_hash: null, attempt_owner: null, attempt_verifier: null, attempt_expires_at: null };
@@ -121,6 +123,37 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
         await db.from(table).update({status:'disconnected',...clearAttempt,...clearConnection,updated_at:now()}).eq('organization_id',organization).eq('status','exchanging').eq('attempt_hash',hash);
         throw error;
       }
+    }
+    if (body.action === 'preview') {
+      if (!row || row.status !== 'connected' || row.mailbox_email !== config.mailbox) throw new SafeError(409,'No hay una conexión activa');
+      let to = Date.now(), pageToken: string|undefined;
+      const cursorContext = context('preview:'+user.id+':'+row.connected_at);
+      if (body.cursor !== undefined) {
+        if(typeof body.cursor !== 'string' || body.cursor.length>12000) throw new SafeError(400,'Página inválida');
+        try {
+          const cursor=JSON.parse(await unseal(key,body.cursor,cursorContext));
+          if(!Number.isSafeInteger(cursor.to)||cursor.to>Date.now()||Date.now()-cursor.to>15*60*1000||typeof cursor.next!=='string'||!cursor.next||cursor.next.length>=4096) throw new Error('Invalid cursor');
+          to=cursor.to;pageToken=cursor.next;
+        } catch { throw new SafeError(400,'La revisión expiró. Sincroniza nuevamente.'); }
+      }
+      const from=to-7*DAY_MS;
+      const refresh=await unseal(key,row.refresh_ciphertext,context('refresh'));
+      const tokens=await googleToken(config,{grant_type:'refresh_token',refresh_token:refresh},request);
+      if(tokens.scope!==undefined&&!exactScope(tokens.scope))throw new SafeError(409,'Permiso de Google inesperado');
+      await verifyMailbox(config,tokens.access_token,request);
+      let page;
+      try { page=await readPreview(request,tokens.access_token,from,to,pageToken); }
+      catch { throw new SafeError(503,'No se pudo leer esta página de Gmail. Reintenta sin importar datos.'); }
+      await assertOwner(db,organization,user.id);
+      const current=await getRow(db,organization);
+      if(current?.status!=='connected'||current.connected_at!==row.connected_at)throw new SafeError(409,'La conexión cambió');
+      if(page.candidates.length){
+        const existing=await db.from('romax_opportunities').select('source_thread_id,status').eq('organization_id',organization).eq('source_system','gmail').in('source_thread_id',page.candidates.map(x=>x.thread_id));
+        if(existing.error)throw new SafeError(503,'No se pudo comprobar duplicados');
+        for(const candidate of page.candidates)candidate.existing_status=existing.data?.find(x=>x.source_thread_id===candidate.thread_id)?.status??null;
+      }
+      const next_cursor=page.next?await seal(key,JSON.stringify({to,next:page.next}),cursorContext):null;
+      return reply({status:'connected',window_start:new Date(from).toISOString(),window_end:new Date(to).toISOString(),candidates:page.candidates,scanned:page.scanned,estimate:page.estimate,next_cursor});
     }
     if (body.action === 'verify') {
       if (!row || row.status !== 'connected' || row.mailbox_email !== config.mailbox) throw new SafeError(409,'No hay una conexión activa');

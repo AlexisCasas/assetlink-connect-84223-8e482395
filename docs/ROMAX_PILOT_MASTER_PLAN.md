@@ -428,3 +428,7 @@ PR #130 Draft: panel propietario, callback OAuth autenticado, alcance gmail.read
 
 
 Activación autorizada 27-nov-2026: MCP aplicó el SQL idéntico y asignó versión Cloud 20261127205522. Se renombra archivo Git sin cambiar blob; no reejecutar versión original 20261127202747. Tabla vacía, RLS habilitado, anon/authenticated sin lectura, service_role con lectura. Edge Function activa v1; QA OAuth real pendiente.
+
+
+## R3-GMAIL.2 — 27-nov-2026
+R3-GMAIL.1 cerrado, QA real 8/8, conexión confirmada en Cloud y CI final 6/6. R3-GMAIL.2 candidato: lectura manual paginada de 168 horas, clasificación preliminar y vista temporal, sin escrituras ni adjuntos descargados. Ver [contrato](ROMAX_R3_GMAIL_2_PREVIEW.md). R3-GMAIL.3 confirmación/importación y .4 procesamiento pendientes.

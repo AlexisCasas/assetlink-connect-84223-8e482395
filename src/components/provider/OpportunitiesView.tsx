@@ -262,7 +262,7 @@ const OpportunitiesView = () => {
                   <p><span className="text-muted-foreground">Origen:</span> {opportunity.source_system === 'gmail' ? 'Gmail' : 'Manual'}</p>
                   <p><span className="text-muted-foreground">Remitente:</span> {opportunity.sender_email || 'No informado'}</p>
                   <p><span className="text-muted-foreground">Recibido:</span> {opportunity.received_at ? new Date(opportunity.received_at).toLocaleString('es-PE') : 'No informado'}</p>
-                  <p><span className="text-muted-foreground">Adjuntos:</span> <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" />Se mostrarán aquí al conectar Gmail.</span></p>
+                  <p><span className="text-muted-foreground">Adjuntos:</span> <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" />El almacenamiento de adjuntos se habilitará en el siguiente incremento.</span></p>
                 </div>
                 {opportunity.snippet && <p className="rounded-md bg-muted/50 p-3 text-sm">{opportunity.snippet}</p>}
               </CardContent>
@@ -273,7 +273,7 @@ const OpportunitiesView = () => {
         <Card className="h-fit">
           <CardHeader>
             <CardTitle className="text-base">Nueva oportunidad</CardTitle>
-            <CardDescription>Entrada manual temporal para probar R3 mientras se define el buzón de Gmail.</CardDescription>
+            <CardDescription>Registro manual de solicitudes; la bandeja Gmail permite revisar candidatos antes de importarlos.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-3" onSubmit={createOpportunity}>
