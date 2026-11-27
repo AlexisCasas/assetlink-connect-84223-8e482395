@@ -103,7 +103,7 @@ SELECT is((SELECT count(*) FROM public.provider_pricing_access_grants WHERE user
 UPDATE public.provider_pricing_access_grants SET revoked_at=NULL,revoked_by=NULL WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read';
 SELECT is((SELECT count(*) FROM public.provider_pricing_access_grants WHERE user_id='e2100000-0000-0000-0000-000000000004' AND capability='market_cost.read' AND revoked_at IS NULL),0::bigint,'revoked grants cannot be reactivated');
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000002');
-SELECT throws_ok($INSERT INTO public.provider_pricing_access_grants(organization_id,user_id,capability,granted_by) VALUES ('e2200000-0000-0000-0000-000000000001','e2100000-0000-0000-0000-000000000002','market_cost.validate','e2100000-0000-0000-0000-000000000002')$,'42501',NULL,'non-admin cannot grant capabilities');
+SELECT throws_ok($$INSERT INTO public.provider_pricing_access_grants(organization_id,user_id,capability,granted_by) VALUES ('e2200000-0000-0000-0000-000000000001','e2100000-0000-0000-0000-000000000002','market_cost.validate','e2100000-0000-0000-0000-000000000002')$$,'42501',NULL,'non-admin cannot grant capabilities');
 
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000004');
 SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'revoked market_cost.read no longer exposes rates');
