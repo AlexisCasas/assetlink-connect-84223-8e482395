@@ -13,7 +13,7 @@ import { CostRatesPanel } from '@/components/provider/CostRatesPanel';
 import { RomaxMaterialCatalogPanel } from '@/components/provider/RomaxMaterialCatalogPanel';
 import { PricingAccessPanel } from '@/components/provider/PricingAccessPanel';
 import { PricingRulesPanel } from '@/components/provider/PricingRulesPanel';
-import { PricingAccessPanel } from '@/components/provider/PricingAccessPanel';
+
 
 type CatalogRow = {
   id: string;
