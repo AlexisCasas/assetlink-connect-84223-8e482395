@@ -1,7 +1,7 @@
 -- R2-E2.1 pricing access/RLS regression. LOCAL/DISPOSABLE DATABASE ONLY.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT no_plan();
+SELECT plan(38);
 CREATE FUNCTION pg_temp.as_user(p_id uuid) RETURNS void LANGUAGE sql AS $$
  SELECT set_config('request.jwt.claim.sub',coalesce(p_id::text,''),true);
 $$;
@@ -57,27 +57,27 @@ SELECT is((SELECT count(*) FROM public.provider_pricing_access_grants WHERE orga
 
 INSERT INTO public.provider_cost_settings(organization_id,default_usd_pen_rate,fx_source,fx_date,updated_by)
  VALUES ('e2200000-0000-0000-0000-000000000001',3.75,'manual',current_date,'e2100000-0000-0000-0000-000000000001');
-INSERT INTO public.provider_cost_suppliers(id,organization_id,display_name,created_by)
- VALUES ('e2300000-0000-0000-0000-000000000001','e2200000-0000-0000-0000-000000000001','Synthetic supplier','e2100000-0000-0000-0000-000000000001');
-INSERT INTO public.provider_cost_items(id,organization_id,code,name,category_code,default_unit_code,created_by)
- VALUES ('e2400000-0000-0000-0000-000000000001','e2200000-0000-0000-0000-000000000001','E21-ITEM-01','Synthetic material','MATERIAL','UND','e2100000-0000-0000-0000-000000000001');
+INSERT INTO public.provider_cost_suppliers(id,organization_id,display_name)
+ VALUES ('e2300000-0000-0000-0000-000000000001','e2200000-0000-0000-0000-000000000001','Synthetic supplier');
+INSERT INTO public.provider_cost_items(id,organization_id,code,name,category_code,default_unit_code)
+ VALUES ('e2400000-0000-0000-0000-000000000001','e2200000-0000-0000-0000-000000000001','E21-ITEM-01','Synthetic material','MATERIAL','UND');
 
-SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_source,tax_treatment,source_type,valid_from,status,created_by) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','e2300000-0000-0000-0000-000000000001','UND','USD',100,'organization_default','unknown','supplier_quote',current_date,'pending_review','e2100000-0000-0000-0000-000000000002')$$,'market_cost.manage can create a pending rate');
+SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_source,tax_treatment,source_type,valid_from,status) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','e2300000-0000-0000-0000-000000000001','UND','USD',100,'organization_default','unknown','supplier_quote',current_date,'pending_review')$$,'market_cost.manage can create a pending rate');
 
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000005');
 SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'member without capability cannot read rates');
 SELECT is((SELECT count(*) FROM public.provider_cost_suppliers WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'member without capability cannot read suppliers');
 SELECT is((SELECT count(*) FROM public.provider_pricing_access_grants WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'member without grant sees no other users grants');
-SELECT throws_ok($$INSERT INTO public.provider_cost_suppliers(organization_id,display_name,created_by) VALUES ('e2200000-0000-0000-0000-000000000001','Forbidden supplier','e2100000-0000-0000-0000-000000000005')$$,'42501',NULL,'member without market_cost.manage cannot create supplier');
+SELECT throws_ok($$INSERT INTO public.provider_cost_suppliers(organization_id,display_name) VALUES ('e2200000-0000-0000-0000-000000000001','Forbidden supplier')$$,'42501',NULL,'member without market_cost.manage cannot create supplier');
 
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000002');
 SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),1::bigint,'logistics can read rates through manage capability');
 SELECT throws_ok($$UPDATE public.provider_cost_rates SET status='approved' WHERE organization_id='e2200000-0000-0000-0000-000000000001'$$,'P0001',NULL,'market_cost.manage cannot approve a cost rate');
-SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status,created_by) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','UND','PEN',15,1,'not_required',NULL,'unknown','manual',current_date,'draft','e2100000-0000-0000-0000-000000000002')$$,'logistics can register an internal draft');
+SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','UND','PEN',15,1,'not_required',NULL,'unknown','manual',current_date,'draft')$$,'logistics can register an internal draft');
 
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000003');
 SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),2::bigint,'validator can read acquisition costs');
-SELECT throws_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status,created_by) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','UND','PEN',16,1,'not_required',NULL,'unknown','manual',current_date,'draft','e2100000-0000-0000-0000-000000000003')$$,'P0001',NULL,'validator cannot create cost rates');
+SELECT throws_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,unit_code,currency_code,unit_cost_original,fx_rate_to_pen,fx_source,fx_date,tax_treatment,source_type,valid_from,status) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','UND','PEN',16,1,'not_required',NULL,'unknown','manual',current_date,'draft')$$,'P0001',NULL,'validator cannot create cost rates');
 UPDATE public.provider_cost_rates SET status='approved',review_note='Validated by separate user'
  WHERE organization_id='e2200000-0000-0000-0000-000000000001' AND created_by='e2100000-0000-0000-0000-000000000002' AND status='pending_review';
 SELECT is((SELECT status FROM public.provider_cost_rates WHERE created_by='e2100000-0000-0000-0000-000000000002' AND status='approved'),'approved','validator approves another users rate');
@@ -86,7 +86,7 @@ SELECT throws_ok($$UPDATE public.provider_cost_rates SET unit_cost_original=999 
 
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000004');
 SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),2::bigint,'market_cost.read grants read-only access');
-SELECT throws_ok($$INSERT INTO public.provider_cost_suppliers(organization_id,display_name,created_by) VALUES ('e2200000-0000-0000-0000-000000000001','Viewer forbidden','e2100000-0000-0000-0000-000000000004')$$,'42501',NULL,'market_cost.read cannot create suppliers');
+SELECT throws_ok($$INSERT INTO public.provider_cost_suppliers(organization_id,display_name) VALUES ('e2200000-0000-0000-0000-000000000001','Viewer forbidden')$$,'42501',NULL,'market_cost.read cannot create suppliers');
 
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000006');
 UPDATE public.provider_cost_settings SET default_usd_pen_rate=3.80,updated_by='e2100000-0000-0000-0000-000000000006'
