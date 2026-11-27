@@ -63,7 +63,7 @@ INSERT INTO public.provider_cost_items(id,organization_id,code,name,category_cod
  VALUES ('e2400000-0000-0000-0000-000000000001','e2200000-0000-0000-0000-000000000001','E21-ITEM-01','Synthetic material','MATERIAL','UND');
 
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000002');
-SELECT lives_ok($INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_source,tax_treatment,source_type,valid_from,status) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','e2300000-0000-0000-0000-000000000001','UND','USD',100,'organization_default','unknown','supplier_quote',current_date,'pending_review')$,'market_cost.manage can create a pending rate');
+SELECT lives_ok($$INSERT INTO public.provider_cost_rates(organization_id,cost_item_id,supplier_id,unit_code,currency_code,unit_cost_original,fx_source,tax_treatment,source_type,valid_from,status) VALUES ('e2200000-0000-0000-0000-000000000001','e2400000-0000-0000-0000-000000000001','e2300000-0000-0000-0000-000000000001','UND','USD',100,'organization_default','unknown','supplier_quote',current_date,'pending_review')$$,'market_cost.manage can create a pending rate');
 
 SELECT pg_temp.as_user('e2100000-0000-0000-0000-000000000005');
 SELECT is((SELECT count(*) FROM public.provider_cost_rates WHERE organization_id='e2200000-0000-0000-0000-000000000001'),0::bigint,'member without capability cannot read rates');
