@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CostRatesPanel } from '@/components/provider/CostRatesPanel';
 import { RomaxMaterialCatalogPanel } from '@/components/provider/RomaxMaterialCatalogPanel';
 import { PricingAccessPanel } from '@/components/provider/PricingAccessPanel';
+import { PricingRulesPanel } from '@/components/provider/PricingRulesPanel';
 import { PricingAccessPanel } from '@/components/provider/PricingAccessPanel';
 
 type CatalogRow = {
@@ -53,7 +54,7 @@ interface CatalogQuery extends PromiseLike<QueryResult> {
 }
 const catalogDb = supabase as unknown as { from: (table: string) => CatalogQuery };
 
-type CatalogTab = 'suppliers' | 'items' | 'rates' | 'technical' | 'access';
+type CatalogTab = 'suppliers' | 'items' | 'rates' | 'technical' | 'access' | 'rules';
 const canManageCostCatalog = (role: string | undefined) =>
   !!role && ['owner', 'admin', 'manager', 'quote_manager'].includes(role);
 
@@ -92,6 +93,7 @@ export function CostCatalogView() {
   const [accessLoaded, setAccessLoaded] = useState(false);
   const canReadMarketCosts = pricingGrants.some((grant) => !grant.revoked_at && ['market_cost.read', 'market_cost.manage', 'market_cost.validate'].includes(grant.capability));
   const canManageMarketCosts = pricingGrants.some((grant) => !grant.revoked_at && grant.capability === 'market_cost.manage');
+  const canManagePricingRules = pricingGrants.some((grant) => !grant.revoked_at && grant.capability === 'pricing_rules.manage');
 
   const loadPricingAccess = useCallback(async () => {
     if (!organizationId || !authorized) { setAccessLoaded(true); return; }
@@ -228,7 +230,8 @@ export function CostCatalogView() {
     if (!canManageCostCatalog(currentMembership?.role) && tab === 'items') setTab('technical');
     if (!canReadMarketCosts && (tab === 'suppliers' || tab === 'rates')) setTab('technical');
     if (!canAdminPricingAccess && tab === 'access') setTab('technical');
-  }, [currentMembership?.role, canReadMarketCosts, canAdminPricingAccess, tab]);
+    if (!canManagePricingRules && tab === 'rules') setTab('technical');
+  }, [currentMembership?.role, canReadMarketCosts, canAdminPricingAccess, canManagePricingRules, tab]);
 
   if (!authorized) {
     return (
@@ -273,6 +276,7 @@ export function CostCatalogView() {
         {canReadMarketCosts && <Button size="sm" variant={tab === 'suppliers' ? 'default' : 'outline'} onClick={() => { setTab('suppliers'); setSearch(''); }}>Proveedores</Button>}
         {canReadMarketCosts && <Button size="sm" variant={tab === 'rates' ? 'default' : 'outline'} onClick={() => { setTab('rates'); setSearch(''); }}>Tarifas</Button>}
         {canAdminPricingAccess && <Button size="sm" variant={tab === 'access' ? 'default' : 'outline'} onClick={() => { setTab('access'); setSearch(''); }}>Permisos</Button>}
+        {canManagePricingRules && <Button size="sm" variant={tab === 'rules' ? 'default' : 'outline'} onClick={() => { setTab('rules'); setSearch(''); }}>Reglas</Button>}
       </div>
 
       {(tab === 'items' || tab === 'suppliers') && (
@@ -289,6 +293,8 @@ export function CostCatalogView() {
 
       {tab === 'access' ? (
         <PricingAccessPanel onChanged={loadPricingAccess} />
+      ) : tab === 'rules' ? (
+        <PricingRulesPanel />
       ) : tab === 'technical' ? (
         <RomaxMaterialCatalogPanel />
       ) : tab === 'rates' ? (
