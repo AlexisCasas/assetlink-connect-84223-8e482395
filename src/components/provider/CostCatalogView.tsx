@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CostRatesPanel } from '@/components/provider/CostRatesPanel';
 import { RomaxMaterialCatalogPanel } from '@/components/provider/RomaxMaterialCatalogPanel';
+import { PricingAccessPanel } from '@/components/provider/PricingAccessPanel';
 
 type CatalogRow = {
   id: string;
@@ -51,7 +52,7 @@ interface CatalogQuery extends PromiseLike<QueryResult> {
 }
 const catalogDb = supabase as unknown as { from: (table: string) => CatalogQuery };
 
-type CatalogTab = 'suppliers' | 'items' | 'rates' | 'technical';
+type CatalogTab = 'suppliers' | 'items' | 'rates' | 'technical' | 'access';
 const canManageCostCatalog = (role: string | undefined) =>
   !!role && ['owner', 'admin', 'manager', 'quote_manager'].includes(role);
 
@@ -68,8 +69,10 @@ export function CostCatalogView() {
   const organizationId = currentOrganization?.id ?? '';
   const authorized = currentOrganization?.organizationType === 'provider_company'
     && currentMembership?.isActive
+    && currentMembership.organizationId === organizationId;
+  const canAdminPricingAccess = !!currentMembership?.isActive
     && currentMembership.organizationId === organizationId
-    && canManageCostCatalog(currentMembership.role);
+    && ['owner', 'admin'].includes(currentMembership.role);
 
   const [tab, setTab] = useState<CatalogTab>('items');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -84,13 +87,36 @@ export function CostCatalogView() {
   const [itemForm, setItemForm] = useState(emptyItem);
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [pricingGrants, setPricingGrants] = useState<{ capability: string; revoked_at: string | null }[]>([]);
+  const [accessLoaded, setAccessLoaded] = useState(false);
+  const canReadMarketCosts = pricingGrants.some((grant) => !grant.revoked_at && ['market_cost.read', 'market_cost.manage', 'market_cost.validate'].includes(grant.capability));
+  const canManageMarketCosts = pricingGrants.some((grant) => !grant.revoked_at && grant.capability === 'market_cost.manage');
+
+  const loadPricingAccess = useCallback(async () => {
+    if (!organizationId || !authorized) { setAccessLoaded(true); return; }
+    try {
+      const { data, error } = await catalogDb.from('provider_pricing_access_grants')
+        .select('capability,revoked_at').eq('organization_id', organizationId);
+      if (error) throw new Error(error.message);
+      setPricingGrants((data ?? []) as { capability: string; revoked_at: string | null }[]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudieron cargar los permisos de costos.');
+      setPricingGrants([]);
+    } finally {
+      setAccessLoaded(true);
+    }
+  }, [organizationId, authorized]);
+
+  useEffect(() => { void loadPricingAccess(); }, [loadPricingAccess]);
 
   const loadCatalog = useCallback(async () => {
-    if (!organizationId || !authorized) return;
+    if (!organizationId || !authorized || !accessLoaded) return;
     setLoading(true);
     try {
       const [supplierResult, itemResult, categoryResult, unitResult] = await Promise.all([
-        catalogDb.from('provider_cost_suppliers').select('*').eq('organization_id', organizationId).order('display_name'),
+        canReadMarketCosts
+          ? catalogDb.from('provider_cost_suppliers').select('*').eq('organization_id', organizationId).order('display_name')
+          : Promise.resolve({ data: [], error: null }),
         catalogDb.from('provider_cost_items').select('*').eq('organization_id', organizationId).order('name'),
         catalogDb.from('provider_cost_categories').select('code,name,cost_level,sort_order').eq('is_active', true).order('sort_order'),
         catalogDb.from('provider_cost_units').select('code,name,dimension').eq('is_active', true).order('name'),
@@ -107,7 +133,7 @@ export function CostCatalogView() {
     } finally {
       setLoading(false);
     }
-  }, [organizationId, authorized]);
+  }, [organizationId, authorized, accessLoaded, canReadMarketCosts]);
 
   useEffect(() => { void loadCatalog(); }, [loadCatalog]);
 
@@ -126,7 +152,7 @@ export function CostCatalogView() {
 
   const saveSupplier = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!authorized || !organizationId || !supplierForm.display_name.trim()) return;
+    if (!canManageMarketCosts || !organizationId || !supplierForm.display_name.trim()) return;
     setSaving(true);
     try {
       const payload = {
@@ -155,7 +181,7 @@ export function CostCatalogView() {
 
   const saveItem = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!authorized || !organizationId || !itemForm.name.trim()) return;
+    if (!canManageCostCatalog(currentMembership?.role) || !organizationId || !itemForm.name.trim()) return;
     setSaving(true);
     try {
       const payload = {
@@ -183,7 +209,7 @@ export function CostCatalogView() {
   };
 
   const toggleActive = async (kind: CatalogTab, row: Supplier | CostItem) => {
-    if (!authorized || !organizationId) return;
+    if (!organizationId || (kind === 'suppliers' ? !canManageMarketCosts : !canManageCostCatalog(currentMembership?.role))) return;
     const table = kind === 'suppliers' ? 'provider_cost_suppliers' : 'provider_cost_items';
     try {
       const { data, error } = await catalogDb.from(table).update({ is_active: !row.is_active })
@@ -207,6 +233,12 @@ export function CostCatalogView() {
       </div>
     );
   }
+
+  useEffect(() => {
+    if (!canManageCostCatalog(currentMembership?.role) && tab === 'items') setTab('technical');
+    if (!canReadMarketCosts && (tab === 'suppliers' || tab === 'rates')) setTab('technical');
+    if (!canAdminPricingAccess && tab === 'access') setTab('technical');
+  }, [currentMembership?.role, canReadMarketCosts, canAdminPricingAccess, tab]);
 
   const activeSuppliers = suppliers.filter((row) => row.is_active).length;
   const activeItems = items.filter((row) => row.is_active).length;
@@ -235,10 +267,11 @@ export function CostCatalogView() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-b pb-3">
-        <Button size="sm" variant={tab === 'items' ? 'default' : 'outline'} onClick={() => { setTab('items'); setSearch(''); }}>Recursos</Button>
+        {canManageCostCatalog(currentMembership?.role) && <Button size="sm" variant={tab === 'items' ? 'default' : 'outline'} onClick={() => { setTab('items'); setSearch(''); }}>Recursos</Button>}
         <Button size="sm" variant={tab === 'technical' ? 'default' : 'outline'} onClick={() => { setTab('technical'); setSearch(''); }}>Catálogo técnico</Button>
-        <Button size="sm" variant={tab === 'suppliers' ? 'default' : 'outline'} onClick={() => { setTab('suppliers'); setSearch(''); }}>Proveedores</Button>
-        <Button size="sm" variant={tab === 'rates' ? 'default' : 'outline'} onClick={() => { setTab('rates'); setSearch(''); }}>Tarifas</Button>
+        {canReadMarketCosts && <Button size="sm" variant={tab === 'suppliers' ? 'default' : 'outline'} onClick={() => { setTab('suppliers'); setSearch(''); }}>Proveedores</Button>}
+        {canReadMarketCosts && <Button size="sm" variant={tab === 'rates' ? 'default' : 'outline'} onClick={() => { setTab('rates'); setSearch(''); }}>Tarifas</Button>}
+        {canAdminPricingAccess && <Button size="sm" variant={tab === 'access' ? 'default' : 'outline'} onClick={() => { setTab('access'); setSearch(''); }}>Permisos</Button>}
       </div>
 
       {(tab === 'items' || tab === 'suppliers') && (
@@ -253,7 +286,9 @@ export function CostCatalogView() {
         </div>
       )}
 
-      {tab === 'technical' ? (
+      {tab === 'access' ? (
+        <PricingAccessPanel onChanged={loadPricingAccess} />
+      ) : tab === 'technical' ? (
         <RomaxMaterialCatalogPanel />
       ) : tab === 'rates' ? (
         <CostRatesPanel />
