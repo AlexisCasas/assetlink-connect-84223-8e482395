@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Boxes, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, RefreshCw, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -152,8 +152,6 @@ export function RomaxMaterialCatalogPanel() {
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
   const pageRows = filteredItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
-  const selectedSource = selectedItem ? sourceByItemId.get(selectedItem.id) ?? null : null;
   const preliminaryCount = items.filter((item) => item.technical_validation_status === 'preliminary').length;
   const legacyCount = items.filter((item) => item.technical_validation_status === null).length;
 
@@ -246,16 +244,96 @@ export function RomaxMaterialCatalogPanel() {
                 {pageRows.map((item) => {
                   const family = item.material_family_id ? familyById.get(item.material_family_id) : undefined;
                   const subfamily = item.material_subfamily_id ? subfamilyById.get(item.material_subfamily_id) : undefined;
+                  const source = sourceByItemId.get(item.id) ?? null;
+                  const isExpanded = selectedItemId === item.id;
                   return (
-                    <tr key={item.id} className="border-t align-top hover:bg-muted/30">
-                      <td className="px-3 py-3 font-mono text-xs">{item.code ?? '—'}</td>
-                      <td className="px-3 py-3"><p className="font-medium">{item.name}</p>{item.technical_specification && <p className="mt-1 max-w-sm text-xs text-muted-foreground">{item.technical_specification}</p>}</td>
-                      <td className="px-3 py-3"><p>{family?.name ?? 'Sin familia'}</p><p className="text-xs text-muted-foreground">{subfamily?.name ?? 'Sin subfamilia asignada'}</p></td>
-                      <td className="px-3 py-3">{item.default_unit_code}</td>
-                      <td className="px-3 py-3"><Badge variant={statusVariant(item.technical_validation_status)}>{statusLabel(item.technical_validation_status)}</Badge></td>
-                      <td className="px-3 py-3"><Badge variant={item.is_active ? 'default' : 'secondary'}>{item.is_active ? 'Activo' : 'Inactivo'}</Badge></td>
-                      <td className="px-3 py-3"><Button size="sm" variant="ghost" aria-label={selectedItemId === item.id ? 'Ocultar detalle' : 'Ver detalle'} onClick={() => setSelectedItemId((current) => current === item.id ? null : item.id)}><ChevronDown className={'h-4 w-4 transition-transform ' + (selectedItemId === item.id ? 'rotate-180' : '')} /></Button></td>
-                    </tr>
+                    <Fragment key={item.id}>
+                      <tr className="border-t align-top hover:bg-muted/30">
+                        <td className="px-3 py-3 font-mono text-xs">{item.code ?? '—'}</td>
+                        <td className="px-3 py-3"><p className="font-medium">{item.name}</p>{item.technical_specification && <p className="mt-1 max-w-sm text-xs text-muted-foreground">{item.technical_specification}</p>}</td>
+                        <td className="px-3 py-3"><p>{family?.name ?? 'Sin familia'}</p><p className="text-xs text-muted-foreground">{subfamily?.name ?? 'Sin subfamilia asignada'}</p></td>
+                        <td className="px-3 py-3">{item.default_unit_code}</td>
+                        <td className="px-3 py-3"><Badge variant={statusVariant(item.technical_validation_status)}>{statusLabel(item.technical_validation_status)}</Badge></td>
+                        <td className="px-3 py-3"><Badge variant={item.is_active ? 'default' : 'secondary'}>{item.is_active ? 'Activo' : 'Inactivo'}</Badge></td>
+                        <td className="px-3 py-3">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label={isExpanded ? 'Ocultar detalle' : 'Ver detalle'}
+                            aria-expanded={isExpanded}
+                            aria-controls={`material-details-${item.id}`}
+                            onClick={() => setSelectedItemId((current) => current === item.id ? null : item.id)}
+                          >
+                            <ChevronDown className={'h-4 w-4 transition-transform ' + (isExpanded ? 'rotate-180' : '')} />
+                          </Button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="border-t bg-muted/20">
+                          <td colSpan={7} className="px-3 py-4">
+                            <div id={`material-details-${item.id}`} className="w-full min-w-0 rounded-lg border bg-card p-4">
+                              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <h3 className="break-words font-semibold">{item.name}</h3>
+                                  <p className="break-words text-xs text-muted-foreground">{item.code ?? 'Sin código'} · {item.default_unit_code}</p>
+                                </div>
+                                <Badge variant={statusVariant(item.technical_validation_status)}>{statusLabel(item.technical_validation_status)}</Badge>
+                              </div>
+                              <div className="grid grid-cols-1 gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
+                                <div className="min-w-0">
+                                  <p className="text-xs text-muted-foreground">Descripción</p>
+                                  <p className="break-words [overflow-wrap:anywhere]">{item.description || 'Sin descripción'}</p>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-muted-foreground">Especificación técnica</p>
+                                  <p className="break-words [overflow-wrap:anywhere]">{item.technical_specification || 'Sin especificación registrada'}</p>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-muted-foreground">Familia / subfamilia técnica</p>
+                                  <p className="break-words [overflow-wrap:anywhere]">{family?.name ?? 'Sin familia'} / {subfamily?.name ?? 'Sin subfamilia asignada'}</p>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-muted-foreground">Código original del Excel</p>
+                                  <p className="break-words [overflow-wrap:anywhere]">{source?.source_code ?? 'Sin código de origen'}</p>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-muted-foreground">Nombre original del Excel</p>
+                                  <p className="break-words [overflow-wrap:anywhere]">{source?.source_name ?? 'Sin nombre de origen'}</p>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs text-muted-foreground">Unidad original del Excel</p>
+                                  <p className="break-words [overflow-wrap:anywhere]">{source?.source_unit ?? 'Sin unidad de origen'}</p>
+                                </div>
+                                {source && (
+                                  <>
+                                    <div className="min-w-0">
+                                      <p className="text-xs text-muted-foreground">Familia / subfamilia original</p>
+                                      <p className="break-words [overflow-wrap:anywhere]">{source.source_family || 'Sin familia de origen'} / {source.source_subfamily || 'Sin subfamilia de origen'}</p>
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="text-xs text-muted-foreground">Especificación original</p>
+                                      <p className="break-words [overflow-wrap:anywhere]">{source.source_specification || 'Sin especificación original'}</p>
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="text-xs text-muted-foreground">Marca original</p>
+                                      <p className="break-words [overflow-wrap:anywhere]">{source.source_brand || 'Sin marca registrada'}</p>
+                                    </div>
+                                  </>
+                                )}
+                                <div className="min-w-0">
+                                  <p className="text-xs text-muted-foreground">Vinculación de origen</p>
+                                  <Badge variant={source?.mapping_status === 'confirmed' ? 'secondary' : 'outline'}>{source?.mapping_status === 'confirmed' ? 'Identidad vinculada' : 'Sin vínculo confirmado'}</Badge>
+                                </div>
+                                <div className="min-w-0 sm:col-span-2">
+                                  <p className="text-xs text-muted-foreground">Aprobación comercial</p>
+                                  <p className="break-words text-muted-foreground">No evaluada en esta fase. Este estado técnico no habilita el recurso para cotizar.</p>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
                 {pageRows.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">No hay materiales que coincidan con los filtros.</td></tr>}
