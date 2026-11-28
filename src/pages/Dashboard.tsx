@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { createListMemory } from '@/components/provider/romaxRequestList';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { AssetsView } from '@/components/assets/AssetsView';
@@ -44,6 +45,8 @@ const EMPTY_FOCUS: ParsedEntityHash = { view: null };
 const Dashboard = () => {
   const { user, organizations, currentOrganization, currentMembership, setCurrentOrganization } = useAuth();
   const { toast } = useToast();
+  // In-memory view preferences only; discard them on identity/tenant/role change.
+  const opportunityListMemory = useMemo(createListMemory,[user?.id,currentOrganization?.id,currentOrganization?.status,currentMembership?.role,currentMembership?.isActive]);
   const isPlatformAdminOrg = currentOrganization?.organizationType === 'platform_admin';
   const isTechnicianRole = !!currentMembership?.isActive && currentMembership.role === 'technician';
   const [currentView, setCurrentView] = useState<DashboardView>(isPlatformAdminOrg ? 'admin' : 'dashboard');
@@ -184,7 +187,7 @@ const Dashboard = () => {
             </div>
           );
         }
-        return <OpportunitiesView />;
+        return <OpportunitiesView focusOpportunityId={focus.opportunityId} memory={opportunityListMemory} />;
       case 'cost-catalog':
         // R2-E2.1: every active provider member may open the catalog shell;
         // sensitive cost/supplier data and mutations are independently gated by RLS capabilities.

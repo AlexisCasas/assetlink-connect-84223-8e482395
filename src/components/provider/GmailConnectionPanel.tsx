@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Mail } from 'lucide-react';
-import { navigateToEntity } from '@/lib/entityNavigation';
 import { canConfirmGmailImport } from './gmailImportPolicy';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -19,7 +18,7 @@ export async function gmailConnection(organizationId: string, action: string, ex
   if (error || !data || data.error) throw new Error('No se pudo completar la operación. Comprueba la configuración o vuelve a conectar.');
   return data as Result;
 }
-export default function GmailConnectionPanel({ organizationId,onImported }: { organizationId: string; onImported:()=>Promise<void> }) {
+export default function GmailConnectionPanel({ organizationId,onImported,onOpenOpportunity }: { organizationId: string; onImported:()=>Promise<void>; onOpenOpportunity:(id:string)=>void }) {
   const [status,setStatus] = useState('loading');
   const [mailbox,setMailbox] = useState('');
   const [busy,setBusy] = useState(false);
@@ -107,7 +106,7 @@ export default function GmailConnectionPanel({ organizationId,onImported }: { or
           <p>{c.reason}</p>
           {c.existing_status&&<p className="font-medium">Ya existe una oportunidad Gmail ({c.existing_status}). No duplicar.</p>}
           {c.import_policy==='review_required'&&<p className="font-medium">Revisión requerida antes de importar; no crear una oportunidad independiente.</p>}
-          {c.import_policy==='link_existing'&&<div className="flex flex-wrap items-center gap-2"><p className="font-medium">Oportunidad existente; no duplicar.</p>{c.existing_opportunity_id&&<Button size="sm" variant="outline" disabled={busy} onClick={()=>navigateToEntity({view:'opportunity-analysis',opportunityId:c.existing_opportunity_id!})}>Abrir oportunidad</Button>}</div>}
+          {c.import_policy==='link_existing'&&<div className="flex flex-wrap items-center gap-2"><p className="font-medium">Oportunidad existente; no duplicar.</p>{c.existing_opportunity_id&&<Button size="sm" variant="outline" disabled={busy} onClick={()=>onOpenOpportunity(c.existing_opportunity_id!)}>Ver solicitud registrada</Button>}</div>}
           {c.body_limited&&<p className="text-xs">Texto incompleto o limitado. Verificar en Gmail.</p>}
           {c.reference&&<p>Referencia: {c.reference}</p>}
           {c.deadline_events?.length ? <div className="space-y-1"><p className="font-medium">Historial de plazos:</p>{c.deadline_events.map((event,i)=><p key={i} className="text-xs">{event.kind==='extension'?'Actualización de plazo':'Plazo indicado'}: {event.raw} {event.status==='ambiguous'?'· Fecha por confirmar':`· ${event.date??''}${event.time?` ${event.time}`:''} (${event.timezone})`}</p>)}</div> : c.deadline_hint&&<p>Plazo mencionado (sin confirmar): {c.deadline_hint}</p>}
