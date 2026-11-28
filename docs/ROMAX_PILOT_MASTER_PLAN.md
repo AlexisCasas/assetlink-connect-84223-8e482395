@@ -35,7 +35,7 @@
 | R1-D | Histórico de cotizaciones ROMAX 2026 | **R1-D1 PASS:** 25 PDFs importados, 20 clientes vinculados y 5 pendientes; **R1-D2 pendiente** de validación económica | Confirmar importes neto/IGV/bruto, revisar 5 contratantes y reutilización de partidas históricas |
 | R1-E | Pantalla de consulta comercial/histórico | **En desarrollo PR:** ruta #quote-history, filtros cliente/sede/servicio/correlativo/fechas, 15 por página y detalle PDF | QA CI y revisión visual de 15 escenarios; merge/deploy solo tras autorización |
 | R2 | Catálogo independiente de costos de materiales y mano de obra | Pendiente | Fecha de vigencia, unidad, moneda, proveedor y procedencia en cada costo |
-| R3 | Captura Gmail cotizaciones | Pendiente | OAuth, deduplicación, filtro de correos relevantes, oportunidad a nombre de ROMAX |
+| R3 | Captura Gmail cotizaciones | R3-GMAIL.2.2.1 PASS; R3-GMAIL.3 autorizado en GitHub | OAuth, deduplicación, filtro de correos relevantes, oportunidad a nombre de ROMAX |
 | R4 | Cotizador asistido IA | Pendiente | Borrador con referencias verificables, números deterministas y revisión humana |
 | R5 | Visita técnica estructurada | Pendiente | Horas, especialidad, cantidades, material, fotos y observaciones vinculadas al presupuesto |
 | R6 | Gobernanza y plantilla oficial | Pendiente | Políticas ROMAX, aprobaciones internas, exportación/emisión y trazabilidad |
@@ -470,3 +470,11 @@ Implementación en PR #132: lectura temporal de texto MIME en ventana de siete d
 
 ## R3-GMAIL.2.2.1 — correctivo QA
 Corregir detección de cotizaciones de alias ROMAX usando payload MIME completo, extracción de fechas de tablas HTML Outlook y exclusión de promociones con señales de lista + contenido. Incluye regresiones Makro, Cassinelli Trujillo y Samsung. Requiere CI completo y despliegue únicamente de `romax-gmail-connection-qa`; no merge ni cambios en producción.
+
+## Cierre R3-GMAIL.2.2.1 — 28-nov-2026
+
+QA real v3 confirmado por el propietario: Q01–Q08 PASS. CI del código probado 3c66e85: 10/10 checks y 34/34 pruebas Deno PASS. Logs QA v3 HTTP 200/204 corroboran ejecución, no contenido. Al cierre: 0 oportunidades Gmail, 0 adjuntos importados. PR #132 abierto Draft, sin merge. Edge productiva v2 intacta.
+
+## R3-GMAIL.3 — autorización
+
+D01–D12 aprobadas. PR independiente: 3.1 transacción, auditoría, ACL e idempotencia; 3.2 confirmación owner; 3.3 pruebas aisladas. Cloud, QA v4, merge y producción no autorizados. No importar correos reales sin confirmación expresa en la interfaz.
