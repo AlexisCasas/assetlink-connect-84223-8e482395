@@ -12,9 +12,9 @@ INSERT INTO auth.users(id,email) VALUES
  ('c6100000-0000-0000-0000-000000000001','r3-owner@qa.invalid'),
  ('c6100000-0000-0000-0000-000000000002','r3-viewer@qa.invalid'),
  ('c6100000-0000-0000-0000-000000000003','r3-outsider@qa.invalid');
-INSERT INTO public.organizations(id,name,organization_type) VALUES
- ('c6200000-0000-0000-0000-0000000000a1','R3 QA provider A','provider_company'),
- ('c6200000-0000-0000-0000-0000000000b1','R3 QA provider B','provider_company');
+INSERT INTO public.organizations(id,name,organization_type,status) VALUES
+ ('c6200000-0000-0000-0000-0000000000a1','R3 QA provider A','provider_company','active'),
+ ('c6200000-0000-0000-0000-0000000000b1','R3 QA provider B','provider_company','active');
 INSERT INTO public.organization_members(organization_id,user_id,role,is_active) VALUES
  ('c6200000-0000-0000-0000-0000000000a1','c6100000-0000-0000-0000-000000000001','owner',true),
  ('c6200000-0000-0000-0000-0000000000a1','c6100000-0000-0000-0000-000000000002','viewer',true),
@@ -106,7 +106,7 @@ SELECT throws_ok($convert$
  WHERE opportunity_id='c6300000-0000-0000-0000-000000000001' AND source_system='manual'
 $convert$,'42501',NULL,'authenticated owner cannot convert a manual attachment to Gmail');
 RESET ROLE;
-SET LOCAL ROLE service_role;
+-- Trusted low-level fixture tests the existing uniqueness index; service writes now require the guarded registration RPC.
 INSERT INTO public.romax_opportunity_attachments(
  organization_id, opportunity_id, source_system, source_message_id, source_attachment_id, filename
 ) VALUES

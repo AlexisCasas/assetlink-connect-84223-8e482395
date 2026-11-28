@@ -72,6 +72,7 @@ BEGIN
       NEW.source_locator_kind,NEW.source_received_at,NEW.source_direction,NEW.discovered_by,NEW.filename,NEW.mime_type,NEW.created_at)
      OR (OLD.storage_path IS NOT NULL AND OLD.storage_path IS DISTINCT FROM NEW.storage_path)
      OR (OLD.checksum_sha256 IS NOT NULL AND OLD.checksum_sha256 IS DISTINCT FROM NEW.checksum_sha256)
+     OR (OLD.storage_path IS NOT NULL AND OLD.size_bytes IS DISTINCT FROM NEW.size_bytes)
   THEN RAISE EXCEPTION 'Original document identity/content is immutable' USING ERRCODE='42501'; END IF;
   -- No update lifecycle RPC in 4A: future state transitions must be introduced with audited fencing in 4C.
   RETURN NEW;
@@ -95,7 +96,10 @@ FOR EACH ROW EXECUTE FUNCTION romax_docs_private.audit_registration();
 
 -- Keep the exact existing frontend select list and manual metadata INSERT, not unrestricted table access.
 REVOKE ALL ON public.romax_opportunity_attachments FROM PUBLIC,anon,authenticated,service_role;
-REVOKE SELECT(source_message_id,source_attachment_id,storage_path,checksum_sha256,error_message) ON public.romax_opportunity_attachments FROM PUBLIC,anon,authenticated;
+REVOKE ALL (id,organization_id,opportunity_id,source_system,source_message_id,source_attachment_id,filename,mime_type,size_bytes,
+  storage_path,checksum_sha256,processing_status,error_message,created_at,updated_at,source_locator_kind,source_received_at,source_direction,
+  discovered_by,availability_status,scan_status,review_status,restriction_code)
+ON public.romax_opportunity_attachments FROM PUBLIC,anon,authenticated,service_role;
 GRANT SELECT(id,organization_id,opportunity_id,source_system,filename,mime_type,size_bytes,processing_status,created_at,updated_at,
   source_received_at,source_direction,availability_status,scan_status,review_status,restriction_code)
 ON public.romax_opportunity_attachments TO authenticated;
@@ -153,7 +157,7 @@ BEGIN
     v_message:=v_item->>'message_id'; v_locator:=v_item->>'locator'; v_kind:=v_item->>'locator_kind'; v_filename:=v_item->>'filename';
     v_mime:=lower(v_item->>'mime_type'); v_direction:=v_item->>'direction';
     IF v_message !~ '^[A-Za-z0-9_-]{1,128}$' OR v_kind NOT IN ('attachment_id','mime_part')
-       OR (v_kind='attachment_id' AND v_locator !~ '^[A-Za-z0-9_-]{1,2048}$')
+       OR (v_kind='attachment_id' AND (length(v_locator)>2048 OR v_locator !~ '^[A-Za-z0-9_-]+$'))
        OR (v_kind='mime_part' AND (length(v_locator)>128 OR v_locator !~ '^[0-9]+([.][0-9]+)*$'))
        OR length(v_filename) NOT BETWEEN 1 AND 250 OR btrim(v_filename)='' OR v_filename IN ('.','..')
        OR v_filename ~ '[[:cntrl:]]' OR position('/' in v_filename)>0 OR position(chr(92) in v_filename)>0
