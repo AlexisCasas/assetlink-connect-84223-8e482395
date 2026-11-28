@@ -19,6 +19,8 @@ import { collectPages, canViewRequests, createListMemory, dateLabel, emptyFilter
 const emptyForm={subject:'',sender_email:'',received_at:'',snippet:'',classification:'quote_request',commercial_client_id:'',commercial_site_id:'',commercial_contact_id:''};
 type Dataset={opportunities:Opportunity[];clients:Client[];sites:Site[];contacts:Contact[];attachments:Attachment[]};
 type Props={focusOpportunityId?:string;memory?:ListMemory};
+// ROMAX tables are not yet in the generated client types; preserve the existing adapter.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db=supabase as any;
 const ROMAX='a76fb740-78cf-4ed5-97dd-1e1e24fcab68';
 const selectClass='h-10 min-w-0 max-w-full rounded-md border bg-background px-2 text-sm';
@@ -69,8 +71,10 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
       ]);
       if(signal.aborted)return;
       setData({opportunities,clients,sites,contacts,attachments});
+      return true;
     }catch{
-      if(!signal.aborted)setError('No se pudo cargar la lista completa. Actualiza para volver a intentarlo.');
+      if(!signal.aborted){setError('No se pudo cargar la lista completa. Actualiza para volver a intentarlo.');setData(null);}
+      return false;
     }finally{if(!signal.aborted)setLoading(false);}
   },[organizationId]);
   useEffect(()=>{mounted.current=true;void loadData();return ()=>{mounted.current=false;abortRef.current?.abort();};},[loadData]);
@@ -98,10 +102,11 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
     if(!isOpportunityId(id))return;
     rememberScroll();opener.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
     setTab('registered');navigateToEntity({view:'opportunities',opportunityId:id});
+    if(!opportunities.some(o=>o.id===id))void loadData();
   };
   const closeDetail=()=>{navigateToEntity({view:'opportunities'});};
   const openAnalysis=(id:string)=>{rememberScroll();navigateToEntity({view:'opportunity-analysis',opportunityId:id});};
-  const onImported=async()=>{await loadData();if(mounted.current)setNotice('Bandeja actualizada. Los filtros se conservan; si no ves la solicitud, revisa los filtros activos.');};
+  const onImported=async()=>{const ok=await loadData();if(mounted.current)setNotice(ok?'Bandeja actualizada. Los filtros se conservan; si no ves la solicitud, revisa los filtros activos.':'La importación respondió; vuelve a cargar las solicitudes para consultar el resultado.');};
   const createOpportunity=async(event:React.FormEvent<HTMLFormElement>)=>{
     event.preventDefault();
     if(!mounted.current||savingRef.current||!data)return;
@@ -127,7 +132,7 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
   const kpis:[keyof typeof counts,string][]=[['new','Nuevas'],['reviewing','En revisión'],['ready_for_analysis','Listas para análisis'],['in_analysis','En análisis'],['quoted','Cotizadas'],['unmatched','Sin vincular']];
   return <div ref={root} className="min-w-0 space-y-4 p-3 sm:p-6">
     <header className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0"><h1 className="flex items-center gap-2 text-xl font-semibold sm:text-2xl"><BriefcaseBusiness className="h-6 w-6 shrink-0"/>Solicitudes comerciales</h1><p className="mt-1 text-sm text-muted-foreground">Centralizador de oportunidades y cotizaciones.</p></div>
+      <div className="min-w-0"><h1 tabIndex={-1} className="flex items-center gap-2 text-xl font-semibold sm:text-2xl"><BriefcaseBusiness className="h-6 w-6 shrink-0"/>Solicitudes comerciales</h1><p className="mt-1 text-sm text-muted-foreground">Centralizador de oportunidades y cotizaciones.</p></div>
       <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={loading} onClick={()=>void loadData()}><RefreshCw className="mr-2 h-4 w-4"/>Actualizar</Button><Button disabled={!data||!!error} onClick={()=>{resetForm();setManualOpen(true);}}><Plus className="mr-2 h-4 w-4"/>Nueva solicitud</Button></div>
     </header>
     <Tabs value={tab} onValueChange={setTab}>
@@ -156,12 +161,12 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
             {badDates&&<p role="alert" className="text-sm text-destructive">El inicio del rango no puede ser posterior al final.</p>}
           </div>
           {paging.total===0?<Card><CardContent className="p-6 text-center"><p className="font-medium">{opportunities.length?'No hay solicitudes con estos filtros.':'Todavía no hay solicitudes registradas.'}</p><p className="mt-1 text-sm text-muted-foreground">{opportunities.length?'Ajusta los filtros para ampliar la búsqueda.':'Registra una solicitud manual o revisa la bandeja Gmail si tienes autorización.'}</p></CardContent></Card>:<>
-            <div className="hidden overflow-x-auto rounded-lg border lg:block">
-              <table className="w-full table-fixed text-left text-sm"><thead className="border-b bg-muted/50 text-xs text-muted-foreground"><tr>{[['Recepción', 'w-[13%]'],['Solicitud','w-[25%]'],['Cliente / sede','w-[19%]'],['Origen','w-[9%]'],['Estado','w-[13%]'],['Vinculación','w-[12%]'],['Docs.','w-[5%]'],['Acción','w-[9%]']].map(([name,width])=><th key={name} scope="col" className={'p-2 font-medium '+width}>{name}</th>)}</tr></thead><tbody>
+            <div className="hidden overflow-x-auto rounded-lg border xl:block">
+              <table className="w-full table-fixed text-left text-sm"><thead className="border-b bg-muted/50 text-xs text-muted-foreground"><tr>{[['Recepción', 'w-[12%]'],['Solicitud','w-[24%]'],['Cliente / sede','w-[18%]'],['Origen','w-[8%]'],['Estado','w-[12%]'],['Vinculación','w-[11%]'],['Docs.','w-[5%]'],['Acción','w-[10%]']].map(([name,width])=><th key={name} scope="col" className={'p-2 font-medium '+width}>{name}</th>)}</tr></thead><tbody>
                 {paging.rows.map(o=><tr key={o.id} className="border-b align-top last:border-b-0 hover:bg-muted/30"><td className="break-words p-2 text-xs">{dateLabel(o.received_at)}</td><td className="break-words p-2 font-medium">{o.subject||'Solicitud sin asunto'}</td><td className="break-words p-2">{clientName(o.commercial_client_id)}<div className="text-xs text-muted-foreground">{siteName(o.commercial_site_id)}</div></td><td className="p-2">{originName(o.source_system)}</td><td className="break-words p-2">{statusName(o.status)}</td><td className="break-words p-2 text-xs">{matchName(o.match_status)}</td><td className="p-2" title="Documentos registrados, no adjuntos detectados en Gmail">{attachmentCounts.get(o.id)??0}</td><td className="p-2"><Button size="sm" variant="outline" aria-label={'Ver solicitud: '+(o.subject||'Sin asunto')} onClick={()=>openDetail(o.id)}><Eye className="mr-1 h-4 w-4"/>Ver</Button></td></tr>)}
               </tbody></table>
             </div>
-            <div className="space-y-2 lg:hidden">{paging.rows.map(o=><Card key={o.id}><CardContent className="space-y-2 p-3"><div className="break-words font-medium">{o.subject||'Solicitud sin asunto'}</div><div className="flex flex-wrap gap-2"><Badge variant="secondary">{statusName(o.status)}</Badge><Badge variant="outline">{originName(o.source_system)}</Badge><Badge variant="outline">{matchName(o.match_status)}</Badge></div><div className="break-words text-sm">{clientName(o.commercial_client_id)} · {siteName(o.commercial_site_id)}</div><div className="text-xs text-muted-foreground">{dateLabel(o.received_at)} · {attachmentCounts.get(o.id)??0} documentos registrados</div><Button variant="outline" size="sm" onClick={()=>openDetail(o.id)}><Eye className="mr-1 h-4 w-4"/>Ver solicitud</Button></CardContent></Card>)}</div>
+            <div className="space-y-2 xl:hidden">{paging.rows.map(o=><Card key={o.id}><CardContent className="space-y-2 p-3"><div className="break-words font-medium">{o.subject||'Solicitud sin asunto'}</div><div className="flex flex-wrap gap-2"><Badge variant="secondary">{statusName(o.status)}</Badge><Badge variant="outline">{originName(o.source_system)}</Badge><Badge variant="outline">{matchName(o.match_status)}</Badge></div><div className="break-words text-sm">{clientName(o.commercial_client_id)} · {siteName(o.commercial_site_id)}</div><div className="text-xs text-muted-foreground">{dateLabel(o.received_at)} · {attachmentCounts.get(o.id)??0} documentos registrados</div><Button variant="outline" size="sm" onClick={()=>openDetail(o.id)}><Eye className="mr-1 h-4 w-4"/>Ver solicitud</Button></CardContent></Card>)}</div>
             <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span>Mostrando {paging.start}–{paging.end} de {paging.total}</span><div className="flex flex-wrap items-center gap-2"><label className="text-xs">Por página <select className="rounded border bg-background p-1" value={pageSize} onChange={e=>{setPageSize(Number(e.target.value));setPage(1);}}>{[15,30,50].map(n=><option key={n}>{n}</option>)}</select></label><Button variant="outline" size="icon" aria-label="Página anterior" disabled={paging.page<=1} onClick={()=>setPage(paging.page-1)}><ChevronLeft className="h-4 w-4"/></Button><span>{paging.page} / {paging.pageCount}</span><Button variant="outline" size="icon" aria-label="Página siguiente" disabled={paging.page>=paging.pageCount} onClick={()=>setPage(paging.page+1)}><ChevronRight className="h-4 w-4"/></Button></div></div>
           </>}
         </>}
@@ -183,7 +188,7 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
             </form>
       </DialogContent>
     </Dialog>
-    <RequestDetail open={!!focusOpportunityId} loading={loading&&!data} error={!!error&&!data} opportunity={selected} attachments={selected?attachments.filter(a=>a.opportunity_id===selected.id):[]} clientName={selected?clientName(selected.commercial_client_id):''} siteName={selected?siteName(selected.commercial_site_id):''} contactName={selected?contactName(selected.commercial_contact_id):''} onClose={closeDetail} onAnalyze={openAnalysis} onRetry={loadData} returnFocus={()=>{if(opener.current?.isConnected)opener.current.focus();else root.current?.querySelector<HTMLElement>('h1')?.focus();}}/>
+    <RequestDetail open={!!focusOpportunityId} loading={loading&&!data} error={!!error&&!data} opportunity={selected} attachments={selected?attachments.filter(a=>a.opportunity_id===selected.id):[]} clientName={selected?clientName(selected.commercial_client_id):''} siteName={selected?siteName(selected.commercial_site_id):''} contactName={selected?contactName(selected.commercial_contact_id):''} onClose={closeDetail} onAnalyze={openAnalysis} onRetry={async()=>{await loadData();}} returnFocus={()=>{if(opener.current?.isConnected&&opener.current.getClientRects().length)opener.current.focus();else root.current?.querySelector<HTMLElement>('h1')?.focus();}}/>
   </div>;
 }
 export default function OpportunitiesView({focusOpportunityId,memory}:Props){
