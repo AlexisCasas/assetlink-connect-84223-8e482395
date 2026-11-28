@@ -17,7 +17,7 @@ const emailFrom=(m:Message) => {
 const isInternal=(m:Message)=>emailFrom(m).endsWith('@romaxfm.com');
 const isSent=(m:Message)=>m.labelIds?.includes('SENT')===true||isInternal(m);
 const isExcluded=(m:Message)=>m.labelIds?.some(l=>['SPAM','TRASH','DRAFT'].includes(l))===true;
-const marketingCampaign=/\\b(black friday|cyber monday|cyber days|cupon(?:es)?|newsletter|boletin|ofertas? exclusivas?|promociones? exclusivas?|envio gratis|descuentos? hasta|compra ahora)\\b/i;
+const marketingCampaign=/\b(black friday|cyber monday|cyber days|cupon(?:es)?|newsletter|boletin|ofertas? exclusivas?|promociones? exclusivas?|envio gratis|descuentos? hasta|compra ahora)\b/i;
 const isPromotional=(m:Message)=>{
   if(m.labelIds?.includes('CATEGORY_PROMOTIONS'))return true;
   const listHeaders=!!(header(m,'List-Unsubscribe')||header(m,'List-Id')||/^(?:bulk|list)$/i.test(header(m,'Precedence')));
