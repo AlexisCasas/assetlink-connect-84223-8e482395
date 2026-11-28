@@ -172,7 +172,7 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
       const a=prepared.data;
       if(!a||!isUuid(a.attempt)||a.path!=='quarantine/'+organization+'/'+body.opportunity_id+'/'+body.attachment_id+'/'+a.attempt||
         typeof a.hash!=='string'||!/^[a-f0-9]{64}$/.test(a.hash)||!Number.isSafeInteger(a.size)||a.size<1||a.size>10485760||
-        !['application/pdf','image/jpeg','image/png','text/plain'].includes(a.mime))throw new SafeError(503,'Documento no verificable');
+        !['application/pdf','image/jpeg','image/png','text/plain','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(a.mime))throw new SafeError(503,'Documento no verificable');
       const object=await db.storage.from(QUARANTINE_BUCKET).download(a.path);
       if(object.error||!object.data||object.data.size!==a.size)throw new SafeError(409,'No se pudo verificar el objeto');
       const bytes=await object.data.arrayBuffer();

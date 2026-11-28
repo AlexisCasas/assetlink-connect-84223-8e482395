@@ -3,7 +3,7 @@ import { READ_SCOPE, importKey, seal, unseal } from './crypto.ts';
 const organization='11111111-1111-4111-8111-111111111111', origin='https://example.test', mailbox='pilot@example.test';
 type Row=Record<string,unknown>;
 function assert(value:unknown, label='Assertion failed') { if(!value) throw new Error(label); }
-function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enrichmentEnabled=false, oldThread=false, discoveryEnabled=false, quarantineEnabled=false, unscannedEnabled=false) {
+function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enrichmentEnabled=false, oldThread=false, discoveryEnabled=false, quarantineEnabled=false, unscannedEnabled=false, releaseMime='application/pdf') {
   const received=Date.now()-(oldThread?30*86400000:60000);
   let remoteToken='test-attachment',legacyLocator='test-attachment',registeredRows:Row[]=[];
   let uploads=0, binaryReads=0, quarantineDone=false, storageFailure=false, corruptObject=false, accessCommits=0; const rawDocument='%PDF-'+ 'x'.repeat(1019); const attachmentId='cccccccc-cccc-4ccc-8ccc-cccccccccccc',attemptId='dddddddd-dddd-4ddd-8ddd-dddddddddddd';
@@ -93,7 +93,7 @@ function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enri
         const hash=Array.from(new Uint8Array(buffer),b=>b.toString(16).padStart(2,'0')).join('');
         if(args.p_commit===true){assert(args.p_hash===hash&&args.p_attempt===attemptId);accessCommits++;return {data:{status:'released_unscanned'},error:null};}
         assert(args.p_attempt===null&&args.p_hash===null);
-        return {data:{attempt:attemptId,path:'quarantine/'+organization+'/'+args.p_opportunity+'/'+attachmentId+'/'+attemptId,hash,size:1024,mime:'application/pdf'},error:null};
+        return {data:{attempt:attemptId,path:'quarantine/'+organization+'/'+args.p_opportunity+'/'+attachmentId+'/'+attemptId,hash,size:1024,mime:releaseMime},error:null};
       });
     }
     if(name==='romax_claim_attachment_downloads'){
@@ -343,4 +343,18 @@ Deno.test('4F hotfix: real legacy-shaped claim uses fresh Gmail locator without 
  f.rotateToken();const b=await f.call('discover_attachments',{opportunity_id:id,confirmed:true});assert(b.code===200&&b.body.discovery.unchanged===1);
  const c=await f.call('quarantine_attachments',{opportunity_id:id,attachment_ids:[doc],confirmed:true});
  assert(c.code===200&&c.body.quarantine.results[0].status==='quarantined'&&f.binaryReads===1&&f.uploads===1);
+});
+
+Deno.test('4F.2: Office allowlist only, explicit acknowledgement and checksum before release',async()=>{
+ const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',doc='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+ for(const mime of ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel.sheet.macroenabled.12','application/zip']){
+  const f=fixture(undefined,false,false,false,false,true,true,mime);
+  const start=await f.call('start');assert((await f.call('complete',{state:start.body.state,code:'code'})).code===200);
+  assert((await f.call('quarantine_attachments',{opportunity_id:id,attachment_ids:[doc],confirmed:true})).body.quarantine.results[0].status==='quarantined');
+  const args={opportunity_id:id,attachment_id:doc,acknowledged:true};
+  assert((await f.call('download_unscanned_attachment',{...args,acknowledged:false})).code===400&&f.accessCommits===0);
+  const a=await f.call('download_unscanned_attachment',args);
+  if(mime.includes('openxmlformats')){assert(a.code===200&&a.headers.get('Content-Type')==='application/octet-stream'&&f.accessCommits===1);f.corruptObject();assert((await f.call('download_unscanned_attachment',args)).code===409&&f.accessCommits===1);}
+  else assert(a.code===503&&f.accessCommits===0);
+ }
 });

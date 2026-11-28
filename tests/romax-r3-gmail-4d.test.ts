@@ -9,10 +9,14 @@ test('4D only eligible selected external documents can be retained',()=>{
  assert.equal(selectionWithinLimit(Array.from({length:3},(_,i)=>({...base,id:String(i),size_bytes:10485760}))),false);
  assert.equal(selectionWithinLimit([base]),true);
 });
-test('4D quarantine/release remains unscanned, Office and failed documents denied',()=>{
+test('4D quarantine/release remains unscanned, Office exception allowed, failed and macro formats denied',()=>{
  const q={...base,availability_status:'quarantined',scan_status:'pending',processing_status:'downloaded'};
  assert.equal(canDownloadUnscanned(q),true);assert.equal(canDownloadUnscanned({...q,availability_status:'released_unscanned'}),true);
- assert.equal(canDownloadUnscanned({...q,mime_type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),false);
+ assert.equal(canDownloadUnscanned({...q,mime_type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),true);
+ assert.equal(canDownloadUnscanned({...q,mime_type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}),true);
+ assert.equal(canDownloadUnscanned({...q,mime_type:'application/vnd.ms-excel.sheet.macroenabled.12'}),false);
+ assert.equal(canDownloadUnscanned({...q,scan_status:'infected',mime_type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),false);
+ assert.equal(canDownloadUnscanned({...q,restriction_code:'unsafe_file',mime_type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}),false);
  assert.equal(canDownloadUnscanned({...q,availability_status:'failed'}),false);
  assert.match(documentStatus({...q,availability_status:'released_unscanned'}),/sin escaneo/);
 });
@@ -20,4 +24,9 @@ test('4D filename is forced to expected safe extension and strips path controls'
  assert.equal(documentFilename({...base,filename:'../evil\u202e.exe'}),'.._evil_.pdf');
  assert.equal(documentFilename({...base,filename:'TDR.pdf'}),'TDR.pdf');
  assert.equal(documentFilename({...base,filename:'folder\\nested/file.pdf'}),'folder_nested_file.pdf');
+});
+
+test('4F.2 Office download preserves safe extensions',()=>{
+ assert.equal(documentFilename({...base,filename:'Metrados.xlsx',mime_type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Metrados.xlsx');
+ assert.equal(documentFilename({...base,filename:'TDR.docx',mime_type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}),'TDR.docx');
 });
