@@ -3,12 +3,13 @@ import { READ_SCOPE, importKey, seal, unseal } from './crypto.ts';
 const organization='11111111-1111-4111-8111-111111111111', origin='https://example.test', mailbox='pilot@example.test';
 type Row=Record<string,unknown>;
 function assert(value:unknown, label='Assertion failed') { if(!value) throw new Error(label); }
-function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enrichmentEnabled=false, oldThread=false, discoveryEnabled=false) {
+function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enrichmentEnabled=false, oldThread=false, discoveryEnabled=false, quarantineEnabled=false) {
   const received=Date.now()-(oldThread?30*86400000:60000);
+  let uploads=0, binaryReads=0, quarantineDone=false, storageFailure=false; const attachmentId='cccccccc-cccc-4ccc-8ccc-cccccccccccc',attemptId='dddddddd-dddd-4ddd-8ddd-dddddddddddd';
   let rpcCalls=0, changed=false, discoveryWrites=0, wrongThread=false, revokeDuringRead=false, disconnectDuringRead=false; let reviewReceipt:{args:Row;result:Row}|null=null;
   let row:Row|null=null, profile=mailbox, scope=READ_SCOPE, exchangeCount=0, revokeCount=0, threadReads=0;
   const owners=new Set(['owner','owner2']);
-  const variables:Record<string,string>={ROMAX_GMAIL_ATTACHMENT_DISCOVERY_ENABLED:discoveryEnabled?'true':'false',ROMAX_GMAIL_ENRICHMENT_ENABLED:enrichmentEnabled?'true':'false',ROMAX_GMAIL_IMPORT_ENABLED:importEnabled?'true':'false',ROMAX_GMAIL_ORGANIZATION_ID:organization,ROMAX_GMAIL_EXPECTED_EMAIL:mailbox,ROMAX_GMAIL_APP_ORIGIN:origin,ROMAX_GMAIL_CLIENT_ID:'synthetic-client',ROMAX_GMAIL_CLIENT_SECRET:'synthetic-secret',ROMAX_GMAIL_ENCRYPTION_KEY:btoa('k'.repeat(32))};
+  const variables:Record<string,string>={ROMAX_GMAIL_ATTACHMENT_QUARANTINE_ENABLED:quarantineEnabled?'true':'false',ROMAX_GMAIL_ATTACHMENT_DISCOVERY_ENABLED:discoveryEnabled?'true':'false',ROMAX_GMAIL_ENRICHMENT_ENABLED:enrichmentEnabled?'true':'false',ROMAX_GMAIL_IMPORT_ENABLED:importEnabled?'true':'false',ROMAX_GMAIL_ORGANIZATION_ID:organization,ROMAX_GMAIL_EXPECTED_EMAIL:mailbox,ROMAX_GMAIL_APP_ORIGIN:origin,ROMAX_GMAIL_CLIENT_ID:'synthetic-client',ROMAX_GMAIL_CLIENT_SECRET:'synthetic-secret',ROMAX_GMAIL_ENCRYPTION_KEY:btoa('k'.repeat(32))};
   class Query {
     private filters:((record:Row)=>boolean)[]=[];
     private changes:Row|null=null;
@@ -50,6 +51,11 @@ function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enri
       return Response.json({access_token:'access',scope});
     }
     if(url==='https://gmail.googleapis.com/gmail/v1/users/me/profile')return Response.json({emailAddress:profile});
+    if(url.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/messages/')&&url.includes('/attachments/')){
+      assert(quarantineEnabled&&init?.method==='GET'&&url.includes('/msgthread1/attachments/test-attachment'));
+      binaryReads++;const raw='%PDF-'+ 'x'.repeat(1019);
+      return Response.json({size:1024,data:btoa(raw).replace(/\+/g,'-').replace(/\//g,'_')});
+    }
     if(url.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/messages/')){
       assert(init?.method==='GET'&&!url.includes('/attachments/'));const id=new URL(url).pathname.split('/').pop();
       return Response.json({id,payload:{mimeType:'text/plain',headers:[{name:'Subject',value:changed?'Solicitud modificada':'Solicitud de cotización'},{name:'From',value:'client@example.test'}],body:{data:btoa('Solicitamos cotizar el servicio')}}});
@@ -70,7 +76,21 @@ function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enri
     if(url==='https://oauth2.googleapis.com/revoke'){revokeCount++;assert(values.get('token')==='refresh-secret');return new Response('',{status:200});}
     throw new Error('Unexpected outbound request');
   };
-  const handler=createHandler({authenticate:async req=>{const id=req.headers.get('Authorization')?.replace('Bearer ','');if(!id)throw new Error('Unauthorized');return {id};},service:()=>({from:(name:string)=>new Query(name),rpc:(name:string,args:Row)=>{
+  const handler=createHandler({authenticate:async req=>{const id=req.headers.get('Authorization')?.replace('Bearer ','');if(!id)throw new Error('Unauthorized');return {id};},service:()=>({from:(name:string)=>new Query(name),storage:{from:(bucket:string)=>({upload:(path:string,blob:Blob,options:Row)=>{
+      assert(bucket==='romax-request-attachments'&&path==='quarantine/'+organization+'/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/'+attachmentId+'/'+attemptId);
+      assert(blob.size===1024&&options.upsert===false);uploads++;return Promise.resolve({error:storageFailure?{message:'synthetic'}:null});
+    }})},rpc:(name:string,args:Row)=>{
+    if(name==='romax_claim_attachment_downloads'){
+      assert(args.p_actor==='owner'&&args.p_org===organization&&args.p_connection_at===row?.connected_at);
+      assert(JSON.stringify(args.p_ids)===JSON.stringify([attachmentId]));
+      if(quarantineDone)return Promise.resolve({data:{claims:[],skipped:1},error:null});
+      return Promise.resolve({data:{claims:[{id:attachmentId,attempt:attemptId,path:'quarantine/'+organization+'/'+args.p_opportunity+'/'+attachmentId+'/'+attemptId,thread:'thread1',message:'msgthread1',locator:'test-attachment',filename:'test.pdf',mime:'application/pdf',size:1024}],skipped:0},error:null});
+    }
+    if(name==='romax_finish_attachment_download'){
+      assert(args.p_actor==='owner'&&args.p_attempt===attemptId&&args.p_attachment===attachmentId);
+      if(args.p_error===null){assert(typeof args.p_hash==='string'&&args.p_hash.length===64&&args.p_size===1024);quarantineDone=true;return Promise.resolve({data:{status:'quarantined'},error:null});}
+      assert(args.p_hash===null&&args.p_size===null);return Promise.resolve({data:{status:'failed'},error:null});
+    }
     if(name==='romax_register_gmail_attachment_metadata'){
       assert(args.p_org===organization&&args.p_actor==='owner'&&args.p_thread==='thread1'&&args.p_connection_at===row?.connected_at);
       const items=args.p_items as Row[];assert(items.length===1&&items[0].message_id==='msgthread1'&&items[0].locator==='test-attachment');
@@ -92,7 +112,7 @@ function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enri
     const response=await handler(new Request(origin+'/function',{method:'POST',headers:{Origin:requestOrigin,Authorization:user?'Bearer '+user:'','Content-Type':'application/json'},body:JSON.stringify({action,organization_id:organization,...extra})}));
     return {code:response.status,body:await response.json()};
   };
-  return {call,wrongThread:()=>{wrongThread=true;},revokeDuringRead:()=>{revokeDuringRead=true;},disconnectDuringRead:()=>{disconnectDuringRead=true;},get rpcCalls(){return rpcCalls;},change:()=>{changed=true;},get row(){return row;},get exchanges(){return exchangeCount;},get revokes(){return revokeCount;},get threadReads(){return threadReads;},setProfile:(v:string)=>{profile=v;},setScope:(v:string)=>{scope=v;},expire:()=>{if(row)row.attempt_expires_at=new Date(Date.now()-1000).toISOString();},deactivate:(v:string)=>owners.delete(v)};
+  return {call,get uploads(){return uploads;},get binaryReads(){return binaryReads;},storageFailure:()=>{storageFailure=true;},wrongThread:()=>{wrongThread=true;},revokeDuringRead:()=>{revokeDuringRead=true;},disconnectDuringRead:()=>{disconnectDuringRead=true;},get rpcCalls(){return rpcCalls;},change:()=>{changed=true;},get row(){return row;},get exchanges(){return exchangeCount;},get revokes(){return revokeCount;},get threadReads(){return threadReads;},setProfile:(v:string)=>{profile=v;},setScope:(v:string)=>{scope=v;},expire:()=>{if(row)row.attempt_expires_at=new Date(Date.now()-1000).toISOString();},deactivate:(v:string)=>owners.delete(v)};
 }
 Deno.test('rejects missing authentication, wrong origin, tenant and non-owner',async()=>{
   const f=fixture();
@@ -247,5 +267,33 @@ Deno.test('4B: remote thread mismatch, revoked owner and disconnected mailbox ne
   const start=await f.call('start');assert((await f.call('complete',{state:start.body.state,code:'code'})).code===200);
   f[mode]();const r=await f.call('discover_attachments',args);
   assert(r.code===(mode==='revokeDuringRead'?403:409)&&f.rpcCalls===0);
+ }
+});
+
+Deno.test('4C.1 quarantine disabled by default and explicit selection required',async()=>{
+ const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',doc='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+ const args={opportunity_id:id,attachment_ids:[doc],confirmed:true};
+ assert((await fixture().call('quarantine_attachments',args)).code===403);
+ const f=fixture(undefined,false,false,false,false,true);
+ assert((await f.call('quarantine_attachments',{...args,attachment_ids:[doc,doc]})).code===400);
+ assert((await f.call('quarantine_attachments',{...args,locator:'forged'})).code===400);
+ assert((await f.call('quarantine_attachments',args,'outsider')).code===403);
+ assert(f.binaryReads===0&&f.uploads===0);
+});
+Deno.test('4C.1 authorized selected binary quarantined, no release or path, replay does not download',async()=>{
+ const f=fixture(undefined,false,false,false,false,true),args={opportunity_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',attachment_ids:['cccccccc-cccc-4ccc-8ccc-cccccccccccc'],confirmed:true};
+ const start=await f.call('start');assert((await f.call('complete',{state:start.body.state,code:'code'})).code===200);
+ const q=await f.call('quarantine_attachments',args);
+ assert(q.code===200&&q.body.quarantine.results[0].status==='quarantined'&&q.body.quarantine.available===0&&q.body.quarantine.scan_required);
+ assert(!JSON.stringify(q.body).includes('test-attachment')&&!JSON.stringify(q.body).includes('dddddddd')&&!JSON.stringify(q.body).includes('quarantine/'));
+ const retry=await f.call('quarantine_attachments',args);assert(retry.code===200&&retry.body.quarantine.skipped===1&&f.binaryReads===1&&f.uploads===1);
+});
+Deno.test('4C.1 remote mismatch never downloads; storage failure never releases',async()=>{
+ const args={opportunity_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',attachment_ids:['cccccccc-cccc-4ccc-8ccc-cccccccccccc'],confirmed:true};
+ for(const mode of ['wrongThread','storageFailure'] as const){
+  const f=fixture(undefined,false,false,false,false,true);
+  const start=await f.call('start');assert((await f.call('complete',{state:start.body.state,code:'code'})).code===200);
+  f[mode]();const q=await f.call('quarantine_attachments',args);assert(q.code===200&&q.body.quarantine.results[0].status==='failed'&&q.body.quarantine.available===0);
+  assert(mode==='wrongThread'?f.binaryReads===0&&f.uploads===0:f.binaryReads===1&&f.uploads===1);
  }
 });
