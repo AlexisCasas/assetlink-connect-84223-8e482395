@@ -197,7 +197,7 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
         deadlines.push(value);observations[eventKey]=evidence(value,event.raw,event.source_message_id,event.source_received_at);
         if(event.status==='ambiguous'||!event.date)continue;
         for(const [field,value] of [['deadline_date',event.date],['deadline_time',event.time],['deadline_note',event.raw]] as const){
-          (choices[field]??=[]).push(evidence(value,event.raw.slice(0,500),event.source_message_id,event.source_received_at));
+          (choices[field]??=[]).push({...evidence(value,event.raw.slice(0,500),event.source_message_id,event.source_received_at),event_key:eventKey});
         }
       }
       const proof=await seal(key,JSON.stringify({expires:Date.now()+15*60*1000,choices,observations}),proofContext);
@@ -208,9 +208,14 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
     }
     if(body.action==='save_enrichment'){
       if(readEnv('ROMAX_GMAIL_ENRICHMENT_ENABLED')!=='true')throw new SafeError(403,'Enriquecimiento Gmail no habilitado');
-      if(!row||row.status!=='connected'||!isUuid(body.opportunity_id)||!isUuid(body.request_id)||!Number.isInteger(body.expected_revision)||body.expected_revision<0||
+      if(body.confirmed!==true||!isUuid(body.opportunity_id)||!isUuid(body.request_id)||!Number.isInteger(body.expected_revision)||body.expected_revision<0||
         typeof body.proof!=='string'||body.proof.length>180000||!body.snapshot||typeof body.snapshot!=='object'||Array.isArray(body.snapshot)||JSON.stringify(body.snapshot).length>32768)
         throw new SafeError(400,'Revisión inválida');
+      const args={p_org:organization,p_opportunity:body.opportunity_id,p_expected:body.expected_revision,p_request:body.request_id,p_snapshot:body.snapshot,p_actor:user.id};
+      const receipt=await db.rpc('romax_find_request_review_receipt',args);
+      if(receipt.error)throw new SafeError(receipt.error.code==='22023'?409:503,'No se pudo comprobar el resultado anterior');
+      if(receipt.data)return reply({review:receipt.data,recovered:true});
+      if(!row||row.status!=='connected'||row.mailbox_email!==config.mailbox)throw new SafeError(409,'Conexión no disponible');
       const proofContext=context('enrichment:'+user.id+':'+row.connected_at+':'+config.origin+':'+body.opportunity_id);
       let decoded;
       try{decoded=JSON.parse(await unseal(key,body.proof,proofContext));}catch{throw new SafeError(409,'Propuesta inválida; vuelve a leer Gmail');}
@@ -226,7 +231,7 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
       }
       const observations:Record<string,unknown>={};
       if(Array.isArray(body.snapshot.deadline_observations))for(const event of body.snapshot.deadline_observations){if(event&&typeof event.key==='string'&&/^[0-9a-f]{64}$/.test(event.key)&&decoded.observations?.[event.key])observations[event.key]=decoded.observations[event.key];}
-      const result=await db.rpc('romax_save_request_review_verified',{p_org:organization,p_opportunity:body.opportunity_id,p_expected:body.expected_revision,p_request:body.request_id,p_snapshot:body.snapshot,p_actor:user.id,p_verified:{connection_at:row.connected_at,fields,observations}});
+      const result=await db.rpc('romax_save_request_review_verified',{...args,p_verified:{connection_at:row.connected_at,fields,observations}});
       if(result.error)throw new SafeError(result.error.code==='40001'?409:422,'No se pudo guardar la revisión; verifica los datos y la versión');
       return reply({review:result.data});
     }

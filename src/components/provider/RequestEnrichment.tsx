@@ -31,7 +31,7 @@ export default function RequestEnrichment({organizationId,opportunity:o,review,c
  }catch{if(alive.current)setMessage('No se pudo releer Gmail. Puedes continuar con la revisión manual sin perder datos.');}
  finally{guard.current=false;if(alive.current)setBusy(false);}};
  const save=async()=>{if(guard.current||!confirm)return;guard.current=true;setBusy(true);setMessage('');key.current??=crypto.randomUUID();try{
-  const result=proposal?.proof?{data:await gmailConnection(organizationId,'save_enrichment',{opportunity_id:o.id,expected_revision:expected,request_id:key.current,snapshot:draft,proof:proposal.proof}),error:null}:await db.rpc('romax_save_request_review',{p_org:organizationId,p_opportunity:o.id,p_expected:expected,p_request:key.current,p_snapshot:draft});
+  const result=proposal?.proof?{data:await gmailConnection(organizationId,'save_enrichment',{confirmed:true,opportunity_id:o.id,expected_revision:expected,request_id:key.current,snapshot:draft,proof:proposal.proof}),error:null}:await db.rpc('romax_save_request_review',{p_org:organizationId,p_opportunity:o.id,p_expected:expected,p_request:key.current,p_snapshot:draft});
   if(!alive.current)return;
   if(result.error){setMessage(result.error.code==='40001'?'La solicitud cambió. Cancela la edición y actualiza antes de volver a guardar.':'No se pudo guardar. Comprueba los datos y reintenta con la misma revisión.');return;}
   setEditing(false);setConfirm(false);setProposal(null);key.current=null;setMessage('Revisión guardada.');await onSaved();

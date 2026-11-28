@@ -19,7 +19,9 @@ ALTER TABLE public.romax_request_revisions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.romax_request_revisions FROM PUBLIC,anon,authenticated,service_role;
 GRANT SELECT ON public.romax_request_revisions TO authenticated,service_role;
 CREATE POLICY romax_request_revision_read ON public.romax_request_revisions FOR SELECT TO authenticated
-USING(public.has_organization_role(organization_id,ARRAY['owner','admin','manager','quote_manager']::public.organization_member_role[]));
+USING(public.has_organization_role(organization_id,ARRAY['owner','admin','manager','quote_manager']::public.organization_member_role[])
+  AND EXISTS(SELECT 1 FROM public.organizations o WHERE o.id=romax_request_revisions.organization_id
+    AND o.organization_type='provider_company' AND o.status='active'));
 CREATE TRIGGER romax_request_revision_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON public.romax_request_revisions
 FOR EACH STATEMENT EXECUTE FUNCTION public.romax_guard_gmail_import_audit();
 
@@ -31,6 +33,8 @@ CREATE TABLE romax_sol2_private.receipts(
   FOREIGN KEY(organization_id,opportunity_id) REFERENCES public.romax_opportunities(organization_id,id) ON DELETE RESTRICT
 );
 ALTER TABLE romax_sol2_private.receipts ENABLE ROW LEVEL SECURITY;
+CREATE TRIGGER romax_sol2_receipt_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON romax_sol2_private.receipts
+FOR EACH STATEMENT EXECUTE FUNCTION public.romax_guard_gmail_import_audit();
 REVOKE ALL ON romax_sol2_private.receipts FROM PUBLIC,anon,authenticated,service_role;
 
 CREATE TABLE romax_sol2_private.review_evidence(
@@ -69,6 +73,22 @@ END; $$;
 REVOKE ALL ON FUNCTION romax_sol2_private.guard_source_and_links() FROM PUBLIC,anon,authenticated;
 CREATE TRIGGER romax_sol2_guard_source_links BEFORE UPDATE ON public.romax_opportunities
 FOR EACH ROW EXECUTE FUNCTION romax_sol2_private.guard_source_and_links();
+
+-- Independent trigger checks history even if caller cannot read it under RLS.
+-- Trigger-only, no user-callable privileged endpoint. Existing manual INSERT and status updates remain valid.
+CREATE FUNCTION romax_sol2_private.guard_reviewed_manual_origin() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  IF OLD.source_system='manual' AND
+    (OLD.subject,OLD.sender_email,OLD.received_at,OLD.snippet,OLD.created_by)
+    IS DISTINCT FROM (NEW.subject,NEW.sender_email,NEW.received_at,NEW.snippet,NEW.created_by)
+    AND EXISTS(SELECT 1 FROM public.romax_request_revisions r WHERE r.organization_id=OLD.organization_id AND r.opportunity_id=OLD.id)
+  THEN RAISE EXCEPTION 'Original reviewed manual evidence is immutable' USING ERRCODE='42501'; END IF;
+  RETURN NEW;
+END; $$;
+REVOKE ALL ON FUNCTION romax_sol2_private.guard_reviewed_manual_origin() FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER romax_sol2_guard_reviewed_manual_origin BEFORE UPDATE ON public.romax_opportunities
+FOR EACH ROW EXECUTE FUNCTION romax_sol2_private.guard_reviewed_manual_origin();
 
 -- Private privileged transaction; public wrapper remains invoker.
 -- Manual calls use auth.uid(); only the trusted service may supply a verified actor.
@@ -208,6 +228,20 @@ BEGIN
     v_proofs:=v_proofs||jsonb_build_object(v_event_key,v_proof);
     v_event_index:=v_event_index+1;
   END LOOP;
+  -- A verified deadline is one complete accepted event, not separately valid fragments.
+  IF (v_proofs ? 'deadline_date') OR (v_proofs ? 'deadline_time') OR (v_proofs ? 'deadline_note') THEN
+    v_event_key:=v_proofs->'deadline_date'->>'event_key';
+    IF v_event_key IS NULL OR NOT(v_proofs ?& ARRAY['deadline_date','deadline_time','deadline_note'])
+       OR v_proofs->'deadline_time'->>'event_key' IS DISTINCT FROM v_event_key
+       OR v_proofs->'deadline_note'->>'event_key' IS DISTINCT FROM v_event_key
+       OR v_proofs->'deadline_time'->>'message_id' IS DISTINCT FROM v_proofs->'deadline_date'->>'message_id'
+       OR v_proofs->'deadline_note'->>'message_id' IS DISTINCT FROM v_proofs->'deadline_date'->>'message_id'
+       OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(p_snapshot->'deadline_observations') e
+          WHERE e->>'key'=v_event_key AND e->>'decision'='accepted'
+            AND e->'date'=p_snapshot->'deadline_date' AND e->'time'=p_snapshot->'deadline_time'
+            AND e->'raw'=p_snapshot->'deadline_note')
+       THEN RAISE EXCEPTION 'Verified deadline must match one accepted event' USING ERRCODE='22023'; END IF;
+  END IF;
   v_snapshot:=p_snapshot||jsonb_build_object('additional_contacts',to_jsonb(v_additional));
   -- Existing/blank fields without an explicit source are manual, not inferred from Gmail.
   FOREACH v_key IN ARRAY v_keys LOOP
@@ -251,3 +285,32 @@ RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
 $$;
 REVOKE ALL ON FUNCTION public.romax_save_request_review_verified(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.romax_save_request_review_verified(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) TO service_role;
+
+-- Read-only receipt recovery, even if the proposal expired or mailbox disconnected.
+-- No proof is accepted as a write authorization by this endpoint.
+CREATE FUNCTION romax_sol2_private.find_review_receipt(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb,p_actor uuid)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE v_receipt romax_sol2_private.receipts%ROWTYPE;
+BEGIN
+  IF p_actor IS NULL OR p_org IS NULL OR p_opportunity IS NULL OR p_request IS NULL OR p_expected IS NULL OR p_expected<0
+     OR p_snapshot IS NULL OR jsonb_typeof(p_snapshot)<>'object' OR octet_length(p_snapshot::text)>32768
+    THEN RAISE EXCEPTION 'Invalid receipt lookup' USING ERRCODE='22023'; END IF;
+  PERFORM 1 FROM public.organizations WHERE id=p_org AND organization_type='provider_company' AND status='active' FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Access denied' USING ERRCODE='42501'; END IF;
+  PERFORM 1 FROM public.organization_members WHERE organization_id=p_org AND user_id=p_actor AND is_active
+    AND role IN ('owner','admin','manager','quote_manager') FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Access denied' USING ERRCODE='42501'; END IF;
+  SELECT * INTO v_receipt FROM romax_sol2_private.receipts WHERE organization_id=p_org AND opportunity_id=p_opportunity AND actor_id=p_actor AND request_id=p_request;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  IF v_receipt.expected_revision<>p_expected OR v_receipt.payload<>p_snapshot
+    THEN RAISE EXCEPTION 'Idempotency key reused' USING ERRCODE='22023'; END IF;
+  RETURN v_receipt.result;
+END; $$;
+REVOKE ALL ON FUNCTION romax_sol2_private.find_review_receipt(uuid,uuid,integer,uuid,jsonb,uuid) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION romax_sol2_private.find_review_receipt(uuid,uuid,integer,uuid,jsonb,uuid) TO service_role;
+CREATE FUNCTION public.romax_find_request_review_receipt(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb,p_actor uuid)
+RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
+  SELECT romax_sol2_private.find_review_receipt(p_org,p_opportunity,p_expected,p_request,p_snapshot,p_actor);
+$$;
+REVOKE ALL ON FUNCTION public.romax_find_request_review_receipt(uuid,uuid,integer,uuid,jsonb,uuid) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.romax_find_request_review_receipt(uuid,uuid,integer,uuid,jsonb,uuid) TO service_role;
