@@ -486,3 +486,7 @@ La primera oportunidad Gmail real fue confirmada intencional por el propietario;
 ## R3-SOL.1 — diseño funcional 28-nov-2026
 
 P01–P12 aprobadas por propietario. Se documenta [contrato R3-SOL.1](ROMAX_R3_SOL_1_FUNCTIONAL_DESIGN.md): tabla y ficha de solo lectura, tabs registrados/Gmail, filtros y métricas sustentados en datos existentes, ruta privada, manual y análisis sin regresión; no agregar campos ficticios, migraciones ni permisos. SOL1-D01–D12 y QA S01–S24 pendientes de aprobación para implementar. PR #134 documental abierto; #132/#133 sin merge, resincronización real pendiente. No código, importaciones ni despliegues solicitados.
+
+## R3-SOL.1 — aprobación de implementación
+
+SOL1-D01–D12 aprobadas; rama feature/romax-r3-sol-1, PR funcional dependiente de #134. Alcance frontend, sin migraciones ni ampliación de permisos. Candidato sujeto a CI y QA visual; resincronización real #133 y merges continúan pendientes. No autorizar publicación productiva por esta aprobación.

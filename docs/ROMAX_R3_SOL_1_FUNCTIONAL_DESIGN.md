@@ -1,5 +1,5 @@
 # R3-SOL.1 — Contrato funcional del centralizador de solicitudes ROMAX
-Fecha: 28/11/2026. Estado: DISEÑO PROPUESTO, pendiente aprobación para implementar. P01–P12 del replanning aprobadas por el propietario. PR documental #134; depende de #133 y #132. No código ni migraciones en este cambio.
+Fecha: 28/11/2026. Estado: DISEÑO APROBADO; implementación GitHub autorizada 28/11/2026. P01–P12 del replanning aprobadas por el propietario. PR documental #134; depende de #133 y #132. No código ni migraciones en este cambio.
 
 ## 1. Objetivo y fuentes
 Hacer legibles las oportunidades existentes sin duplicarlas ni crear solicitudes operativas de Facility. Reunión 27/11: centralizador tabular, limpieza visual, filtrado y asignación posterior (min 2:38, 25:05–25:46, 26:35); matriz de 27 requisitos: 25 toma exclusiva, 26 acceso privado, y cabecera/contactos para fases posteriores. Fuentes privadas no publicadas. Se cotejó OpportunitiesView.tsx, GmailConnectionPanel.tsx, entityNavigation.ts y migración 20261118061350 en head 40c8d08 de #133. La maqueta cliente no se inspeccionó directamente.
@@ -29,3 +29,7 @@ S01 listado Gmail/manual sin duplicados y estados correctos; S02 métricas exact
 
 ## 6. Gates de ejecución
 Antes de implementación: comprobar resincronización real de #133 como existente (1 oportunidad/1 auditoría), validar integración #132/#133 y solicitar autorización de merge/despliegue si corresponde. No bloquear diseño por esos gates; no ejecutar código todavía. Documentación #134 conserva su alcance. Al autorizar: PR de R3-SOL.1 separado, CI y preview con autorización según ambiente. No nuevas cuentas, no esquema ni cambios de producción. Estado de R3-SOL.1 no es implementado ni QA PASS.
+
+## Implementación candidata
+
+SOL1-D01–D12 aprobadas por propietario. PR funcional apilado sobre #134, dependiente de #133/#132; sin merge. R3-SOL.1A–1C: escaneo paginado exacto por tenant y RLS (200 por solicitud, adapta límite real y rechaza lectura incompleta/duplicada; no es snapshot transaccional), KPIs globales de lectura, filtros en memoria, ficha privada con datos existentes, diálogo manual y pestaña Gmail preservada. Se conserva la RLS existente (su política de lectura para miembros es más amplia que la UI; no se modifica). Pruebas automatizadas de helpers y contrato de fuente, CI Deno/pgTAP/concurrencia/build; los 24 casos de aceptación incluyen validaciones visuales y no se declaran todos automatizados. Sin migraciones, Edge, configuración Preview ni producción autorizadas. Resincronización real de la oportunidad pendiente; no se ejecuta por código. No persistir filtros ni datos de correo en storage del navegador.

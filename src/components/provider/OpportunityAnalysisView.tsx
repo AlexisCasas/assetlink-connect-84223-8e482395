@@ -203,7 +203,7 @@ const OpportunityAnalysisView = ({ opportunityId }: Props) => {
     <div className="space-y-6 p-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Button variant="ghost" className="mb-2 px-0" onClick={() => navigateToEntity({ view: 'opportunities' })}>
+          <Button variant="ghost" className="mb-2 px-0" onClick={() => navigateToEntity({ view: 'opportunities', opportunityId })}>
             <ArrowLeft className="mr-2 h-4 w-4" />Volver a oportunidades
           </Button>
           <div className="flex flex-wrap items-center gap-2">
