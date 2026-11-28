@@ -64,3 +64,7 @@ Trabajar por incrementos, usar MCP GitHub y Supabase/Vercel cuando autorizado, c
 
 ## 8. Evidencia
 [PR #139](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/pull/139), [CI 46176658892](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/actions/runs/46176658892), [PR #137](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/pull/137), [PR #138](https://github.com/AlexisCasas/assetlink-connect-84223-8e482395/pull/138).
+
+## Revisión final de seguridad R3-GMAIL.4A — 28/11/2026
+
+`PASS_REPOSITORY_LOCAL` en candidato GitHub/CI; PR #139 permanece Draft y no se ha ejecutado migración Cloud. Revisión independiente de ACL, RLS, tenant, audit, idempotencia y concurrencia, contraste con asesor local y consultas Cloud de sólo lectura. Sin bloqueantes demostrados en 4A; pertenencia real al hilo y verificación de actor obligatorias para 4B, binarios/escáner para 4C. Tres diagnósticos TypeScript heredados reconocidos. Evidencia: [revisión de seguridad 4A](ROMAX_R3_GMAIL_4A_SECURITY_FINAL_REVIEW_20261128.md). Próximo gate: autorizar implementación 4B en GitHub, sin Cloud/descargas/merge/producción.
