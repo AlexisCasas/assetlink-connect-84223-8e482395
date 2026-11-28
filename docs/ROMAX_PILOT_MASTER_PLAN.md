@@ -490,3 +490,9 @@ P01–P12 aprobadas por propietario. Se documenta [contrato R3-SOL.1](ROMAX_R3_S
 ## R3-SOL.1 — aprobación de implementación
 
 SOL1-D01–D12 aprobadas; rama feature/romax-r3-sol-1, PR funcional dependiente de #134. Alcance frontend, sin migraciones ni ampliación de permisos. Candidato sujeto a CI y QA visual; resincronización real #133 y merges continúan pendientes. No autorizar publicación productiva por esta aprobación.
+
+## R3-SOL.1D — aceptación funcional 28/11/2026
+
+QA visual aprobado por propietario (confirmación global, sin desglose individual). CI run 46160145444, 3/3 PASS, head abd9f89. Cloud 4 oportunidades (3 Gmail nuevas sin vincular, 1 manual en análisis vinculada), 3 auditorías concordantes, 3 mensajes y 3 hilos únicos; primera oportunidad conservada. QA v7 5 POST 200 y 5 OPTIONS 204; logs no prueban cada interacción. Cierre funcional; no merge ni producción. Siguiente: R3-SOL.2 diseño, sin escrituras Cloud.
+
+Ver [contrato de enriquecimiento](ROMAX_R3_SOL_2_ENRICHMENT_DESIGN.md), decisiones E01–E12 propuestas.
