@@ -3,8 +3,8 @@ import { randomToken, hashState, pkceChallenge, importKey, seal, unseal, READ_SC
 
 import { DAY_MS, readPreview, importPolicy } from './preview.ts';
 import { candidateDigest, issueConfirmation, openConfirmation, senderEmail } from './import.ts';
-import { discoverAttachments } from './attachments.ts';
-import { fetchQuarantineBytes, matchesClaim, QuarantineError, QUARANTINE_BUCKET, type Claim } from './quarantine.ts';
+import { discoverAttachments, registryPayload, currentDownloadLocator, type RegistryRow } from './attachments.ts';
+import { fetchQuarantineBytes, QuarantineError, QUARANTINE_BUCKET, type Claim } from './quarantine.ts';
 
 const env = (name: string) => Deno.env.get(name) ?? '';
 const table = 'romax_gmail_connections';
@@ -216,6 +216,8 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
         claims.reduce((sum,c)=>sum+c.size,0)>26214400||new Set(claims.map(c=>c.thread)).size>1)
         throw new SafeError(503,'Reserva no verificable');
       let metadata:Awaited<ReturnType<typeof discoverAttachments>>|null=null;
+      let existing:RegistryRow[]|null=null;
+      if(claims.length){const reg=await db.from('romax_opportunity_attachments').select('source_message_id,source_attachment_id,source_locator_kind,filename,mime_type,size_bytes,source_received_at,source_direction').eq('organization_id',organization).eq('opportunity_id',body.opportunity_id).eq('source_system','gmail').limit(501);if(!reg.error&&Array.isArray(reg.data)&&reg.data.length<=500)existing=reg.data as RegistryRow[];}
       if(claims.length){try{metadata=await discoverAttachments(boundedRequest,tokens.access_token,claims[0].thread,config.mailbox,signal);}catch{/* fail closed per reservation */}}
       const results:{id:string;status:string}[]=[];
       for(const claim of claims){
@@ -224,9 +226,10 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
         let uploadStarted=false;
         try{
           await stillAuthorized();
-          if(!metadata)throw new QuarantineError('remote_error');
-          if(!matchesClaim(claim,metadata.items))throw new QuarantineError('source_changed');
-          const binary=await fetchQuarantineBytes(boundedRequest,tokens.access_token,claim,signal);
+          if(!metadata||!existing)throw new QuarantineError('remote_error');
+          const locator=currentDownloadLocator(claim,metadata.items,existing,metadata.partial);
+          if(!locator)throw new QuarantineError('source_changed');
+          const binary=await fetchQuarantineBytes(boundedRequest,tokens.access_token,{...claim,locator},signal);
           await stillAuthorized();
           uploadStarted=true;
           const stored=await db.storage.from(QUARANTINE_BUCKET).upload(claim.path,new Blob([binary.bytes],{type:'application/octet-stream'}),{contentType:'application/octet-stream',upsert:false});
@@ -265,8 +268,11 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
         throw new SafeError(409,'La conexión cambió');
       signal.throwIfAborted();
       const {items,...stats}=discovery;
+      const reg=await db.from('romax_opportunity_attachments').select('source_message_id,source_attachment_id,source_locator_kind,filename,mime_type,size_bytes,source_received_at,source_direction').eq('organization_id',organization).eq('opportunity_id',body.opportunity_id).eq('source_system','gmail').limit(501);
+      if(reg.error||!Array.isArray(reg.data)||reg.data.length>500)throw new SafeError(409,'Registro documental no verificable');
+      let payload;try{payload=registryPayload(items,reg.data as RegistryRow[],stats.partial);}catch{throw new SafeError(409,'Identidad documental ambigua; no se modificaron los registros');}
       const result=await db.rpc('romax_register_gmail_attachment_metadata',{p_org:organization,p_opportunity:body.opportunity_id,
-        p_actor:user.id,p_connection_at:row.connected_at,p_thread:lookup.data.source_thread_id,p_items:items});
+        p_actor:user.id,p_connection_at:row.connected_at,p_thread:lookup.data.source_thread_id,p_items:payload});
       if(result.error)throw new SafeError(result.error.code==='42501'?403:result.error.code==='23505'?409:503,'No se pudo registrar la detección');
       const registered=result.data?.registered,unchanged=result.data?.unchanged;
       if(!Number.isInteger(registered)||!Number.isInteger(unchanged)||registered<0||unchanged<0||registered+unchanged!==items.length)
