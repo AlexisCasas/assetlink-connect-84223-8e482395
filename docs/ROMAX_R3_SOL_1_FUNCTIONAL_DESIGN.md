@@ -33,3 +33,7 @@ Antes de implementación: comprobar resincronización real de #133 como existent
 ## Implementación candidata
 
 SOL1-D01–D12 aprobadas por propietario. PR funcional apilado sobre #134, dependiente de #133/#132; sin merge. R3-SOL.1A–1C: escaneo paginado exacto por tenant y RLS (200 por solicitud, adapta límite real y rechaza lectura incompleta/duplicada; no es snapshot transaccional), KPIs globales de lectura, filtros en memoria, ficha privada con datos existentes, diálogo manual y pestaña Gmail preservada. Se conserva la RLS existente (su política de lectura para miembros es más amplia que la UI; no se modifica). Pruebas automatizadas de helpers y contrato de fuente, CI Deno/pgTAP/concurrencia/build; los 24 casos de aceptación incluyen validaciones visuales y no se declaran todos automatizados. Sin migraciones, Edge, configuración Preview ni producción autorizadas. Resincronización real de la oportunidad pendiente; no se ejecuta por código. No persistir filtros ni datos de correo en storage del navegador.
+
+## R3-SOL.1D — aceptación funcional 28/11/2026
+
+QA visual aprobado por propietario (confirmación global, sin desglose individual). CI run 46160145444, 3/3 PASS, head abd9f89. Cloud 4 oportunidades (3 Gmail nuevas sin vincular, 1 manual en análisis vinculada), 3 auditorías concordantes, 3 mensajes y 3 hilos únicos; primera oportunidad conservada. QA v7 5 POST 200 y 5 OPTIONS 204; logs no prueban cada interacción. Cierre funcional; no merge ni producción. Siguiente: R3-SOL.2 diseño, sin escrituras Cloud.
