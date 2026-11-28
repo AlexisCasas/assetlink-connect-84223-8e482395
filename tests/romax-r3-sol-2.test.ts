@@ -13,3 +13,12 @@ test('deadline revisions retain prior dates',()=>{const rev=(revision:number,dat
 
 test('observations append, dedupe by event/decision and never activate ambiguous date',()=>{const event={key:'a'.repeat(64),raw:'Fecha sin confirmar',date:null,time:null,kind:'stated',ambiguous:true};const a=recordDeadlineDecision(blank,event,'pending');assert.equal(a.deadline_observations.length,1);assert.equal(recordDeadlineDecision(a,event,'pending'),a);assert.equal(recordDeadlineDecision(a,event,'accepted'),a);const b=recordDeadlineDecision(a,event,'rejected');assert.equal(b.deadline_observations.length,2);assert.equal(b.deadline_date,null);assert.equal(blank.deadline_observations.length,0);});
 test('commercial code and legal name match exact token, site code remains client scoped',()=>{const clients=[{id:'a',business_name:'Comercial A',legal_name:'Sociedad Industrial Ejemplo',commercial_code:'CL-1234',is_active:true}];const sites=[{id:'s',commercial_client_id:'a',site_name:'Sucursal',site_code:'ST-5678',is_active:true}];assert.equal(matchSuggestions('SC CL-1234 ST-5678',null,clients,sites,[],'a').clients.length,1);assert.equal(matchSuggestions('Sociedad Industrial Ejemplo ST-5678',null,clients,sites,[],'a').sites.length,1);assert.equal(matchSuggestions('CL-12345',null,clients,sites,[],null).clients.length,0);});
+
+test('SEC10: manual correction of any deadline component removes verified provenance from the whole deadline',()=>{
+ let s=changeField(blank,'deadline_date','2026-12-02',{source:'gmail_reviewed',evidence:'synthetic'});
+ s=changeField(s,'deadline_time','17:00',{source:'gmail_reviewed',evidence:'synthetic'});
+ s=changeField(s,'deadline_note','synthetic',{source:'gmail_reviewed',evidence:'synthetic'});
+ const changed=changeField(s,'deadline_time','10:00');
+ for(const key of ['deadline_date','deadline_time','deadline_note'])assert.equal(changed.provenance[key].source,'manual');
+ assert.equal(s.provenance.deadline_date.source,'gmail_reviewed');assert.equal(changed.deadline_date,'2026-12-02');
+});

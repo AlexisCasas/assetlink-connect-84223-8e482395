@@ -17,6 +17,7 @@ on:
       - "src/components/provider/gmailImportPolicy.ts"
       - "tests/romax-gmail-import-policy.test.ts"
       - "scripts/qa/romax_gmail_import_concurrency.sh"
+      - "scripts/qa/romax_sol2_concurrency.sh"
       - "src/pages/GmailCallback.tsx"
       - "src/App.tsx"
       - ".github/workflows/romax-r3-gmail-oauth-qa.yml"
@@ -38,6 +39,7 @@ jobs:
           cmp supabase/functions/romax-gmail-connection/preview.ts supabase/functions/romax-gmail-connection-qa/preview.ts
           cmp supabase/functions/romax-gmail-connection/handler.ts supabase/functions/romax-gmail-connection-qa/handler.ts
           cmp supabase/functions/romax-gmail-connection/import.ts supabase/functions/romax-gmail-connection-qa/import.ts
+          cmp supabase/functions/romax-gmail-connection/crypto.ts supabase/functions/romax-gmail-connection-qa/crypto.ts
       - run: deno check --node-modules-dir=none supabase/functions/romax-gmail-connection/index.ts supabase/functions/romax-gmail-connection-qa/index.ts
       - run: deno test --node-modules-dir=none supabase/functions/romax-gmail-connection/crypto.test.ts supabase/functions/romax-gmail-connection/handler.test.ts supabase/functions/romax-gmail-connection/preview.test.ts supabase/functions/romax-gmail-connection/import.test.ts
   database:

@@ -226,7 +226,8 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
         if(s.source!=='gmail_reviewed')continue;
         const options=decoded.choices[field];
         if(!Array.isArray(options))continue;
-        const match=options.find(x=>JSON.stringify(x.value)===JSON.stringify(body.snapshot[field])&&x.evidence===s.evidence);
+        const match=options.find(x=>JSON.stringify(x.value)===JSON.stringify(body.snapshot[field])&&x.evidence===s.evidence&&
+          (!field.startsWith('deadline_')||body.snapshot.deadline_observations?.some((event:{key:string;decision:string;date:string;time:string|null;raw:string})=>event.key===x.event_key&&event.decision==='accepted'&&event.date===body.snapshot.deadline_date&&event.time===body.snapshot.deadline_time&&event.raw===body.snapshot.deadline_note)));
         if(match)fields[field]=match;
       }
       const observations:Record<string,unknown>={};

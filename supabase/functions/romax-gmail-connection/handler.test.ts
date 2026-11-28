@@ -1,11 +1,11 @@
 import { createHandler } from './handler.ts';
-import { READ_SCOPE } from './crypto.ts';
+import { READ_SCOPE, importKey, seal, unseal } from './crypto.ts';
 const organization='11111111-1111-4111-8111-111111111111', origin='https://example.test', mailbox='pilot@example.test';
 type Row=Record<string,unknown>;
 function assert(value:unknown, label='Assertion failed') { if(!value) throw new Error(label); }
 function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enrichmentEnabled=false, oldThread=false) {
   const received=Date.now()-(oldThread?30*86400000:60000);
-  let rpcCalls=0, changed=false;
+  let rpcCalls=0, changed=false; let reviewReceipt:{args:Row;result:Row}|null=null;
   let row:Row|null=null, profile=mailbox, scope=READ_SCOPE, exchangeCount=0, revokeCount=0, threadReads=0;
   const owners=new Set(['owner','owner2']);
   const variables:Record<string,string>={ROMAX_GMAIL_ENRICHMENT_ENABLED:enrichmentEnabled?'true':'false',ROMAX_GMAIL_IMPORT_ENABLED:importEnabled?'true':'false',ROMAX_GMAIL_ORGANIZATION_ID:organization,ROMAX_GMAIL_EXPECTED_EMAIL:mailbox,ROMAX_GMAIL_APP_ORIGIN:origin,ROMAX_GMAIL_CLIENT_ID:'synthetic-client',ROMAX_GMAIL_CLIENT_SECRET:'synthetic-secret',ROMAX_GMAIL_ENCRYPTION_KEY:btoa('k'.repeat(32))};
@@ -64,7 +64,19 @@ function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enri
     if(url==='https://oauth2.googleapis.com/revoke'){revokeCount++;assert(values.get('token')==='refresh-secret');return new Response('',{status:200});}
     throw new Error('Unexpected outbound request');
   };
-  const handler=createHandler({authenticate:async req=>{const id=req.headers.get('Authorization')?.replace('Bearer ','');if(!id)throw new Error('Unauthorized');return {id};},service:()=>({from:(name:string)=>new Query(name),rpc:(name:string,args:Row)=>{assert(name==='romax_confirm_gmail_import'&&args.p_org===organization&&args.p_actor==='owner'&&args.p_thread==='thread2'&&args.p_subject==='Solicitud de cotización');rpcCalls++;return Promise.resolve({data:{outcome:'imported',opportunity_id:'synthetic'},error:null});}}) as never,request,readEnv:name=>variables[name]??''},allowedActions);
+  const handler=createHandler({authenticate:async req=>{const id=req.headers.get('Authorization')?.replace('Bearer ','');if(!id)throw new Error('Unauthorized');return {id};},service:()=>({from:(name:string)=>new Query(name),rpc:(name:string,args:Row)=>{
+    if(name==='romax_find_request_review_receipt'){
+      if(!reviewReceipt||args.p_actor!==reviewReceipt.args.p_actor||args.p_request!==reviewReceipt.args.p_request||args.p_opportunity!==reviewReceipt.args.p_opportunity)return Promise.resolve({data:null,error:null});
+      if(args.p_expected!==reviewReceipt.args.p_expected||JSON.stringify(args.p_snapshot)!==JSON.stringify(reviewReceipt.args.p_snapshot))return Promise.resolve({data:null,error:{code:'22023'}});
+      return Promise.resolve({data:reviewReceipt.result,error:null});
+    }
+    if(name==='romax_save_request_review_verified'){
+      assert(args.p_org===organization&&args.p_actor==='owner');
+      const proof=args.p_verified as {fields:Record<string,{value:string;message_id:string}>};
+      assert(proof.fields.title?.value==='Solicitud de cotización'&&proof.fields.title?.message_id==='msgthread1');
+      rpcCalls++;reviewReceipt={args,result:{outcome:'saved',revision:1}};return Promise.resolve({data:reviewReceipt.result,error:null});
+    }
+    assert(name==='romax_confirm_gmail_import'&&args.p_org===organization&&args.p_actor==='owner'&&args.p_thread==='thread2'&&args.p_subject==='Solicitud de cotización');rpcCalls++;return Promise.resolve({data:{outcome:'imported',opportunity_id:'synthetic'},error:null});}}) as never,request,readEnv:name=>variables[name]??''},allowedActions);
   const call=async(action:string,extra:Row={},user='owner',requestOrigin=origin)=>{
     const response=await handler(new Request(origin+'/function',{method:'POST',headers:{Origin:requestOrigin,Authorization:user?'Bearer '+user:'','Content-Type':'application/json'},body:JSON.stringify({action,organization_id:organization,...extra})}));
     return {code:response.status,body:await response.json()};
@@ -172,6 +184,27 @@ Deno.test('enrichment: directed old thread, owner only, no write or technical ID
  assert(response.code===200&&response.body.enrichment.subject==='Solicitud de cotización'&&typeof response.body.enrichment.proof==='string');
  assert(f.threadReads===reads+1&&f.rpcCalls===0&&JSON.stringify(f.row)===before);
  assert(!JSON.stringify(response.body).includes('thread1')&&!JSON.stringify(response.body).includes('msgthread1'));
- assert((await f.call('save_enrichment',{opportunity_id:id,request_id:id,expected_revision:0,snapshot:{},proof:response.body.enrichment.proof},'owner2')).code===409);
+ assert((await f.call('save_enrichment',{confirmed:true,opportunity_id:id,request_id:id,expected_revision:0,snapshot:{},proof:response.body.enrichment.proof},'owner2')).code===409);
  assert((await fixture().call('enrichment_preview',{opportunity_id:id})).code===403);
+});
+
+Deno.test('SEC12: confirmed Edge save, lost-response recovery after expiry/disconnect, changed payload and actor denied',async()=>{
+ const f=fixture(undefined,false,true,true),id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',requestId='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+ const start=await f.call('start');assert((await f.call('complete',{state:start.body.state,code:'code'})).code===200);
+ const p=await f.call('enrichment_preview',{opportunity_id:id});assert(p.code===200);
+ const proof=p.body.enrichment.proof;
+ const snapshot={title:'Solicitud de cotización',provenance:{title:{source:'gmail_reviewed',evidence:'Solicitud de cotización'}}};
+ const args={confirmed:true,opportunity_id:id,request_id:requestId,expected_revision:0,snapshot,proof};
+ const ctx=organization+':enrichment:owner:'+f.row?.connected_at+':'+origin+':'+id;
+ const k=await importKey(btoa('k'.repeat(32))),decoded=JSON.parse(await unseal(k,proof,ctx));
+ const expired=await seal(k,JSON.stringify({...decoded,expires:Date.now()-1}),ctx);
+ assert((await f.call('save_enrichment',{...args,confirmed:false})).code===400);
+ assert((await f.call('save_enrichment',{...args,proof:expired})).code===409&&f.rpcCalls===0);
+ const saved=await f.call('save_enrichment',args);assert(saved.code===200&&saved.body.review.revision===1&&f.rpcCalls===1);
+ const recovered=await f.call('save_enrichment',{...args,proof:expired});assert(recovered.code===200&&recovered.body.recovered===true&&f.rpcCalls===1);
+ assert((await f.call('save_enrichment',{...args,snapshot:{...snapshot,title:'changed'}})).code===409&&f.rpcCalls===1);
+ assert((await f.call('save_enrichment',args,'owner2')).code===409&&f.rpcCalls===1);
+ assert((await f.call('disconnect')).code===200);
+ assert((await f.call('save_enrichment',{...args,proof:expired})).body.recovered===true&&f.rpcCalls===1);
+ f.deactivate('owner');assert((await f.call('save_enrichment',args)).code===403);
 });
