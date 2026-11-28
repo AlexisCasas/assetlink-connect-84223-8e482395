@@ -90,9 +90,13 @@ def _remaining(deadline):
     return seconds
 
 def run_sandbox(image, data, timeout=60):
-    # Deliberate hard gate: no arbitrary document can enter this spike.
     if data not in FIXTURES:
         raise Failure("unsupported_format")
+    return _run_container(image, data, timeout)
+
+def _run_container(image, data, timeout):
+    if not isinstance(data, bytes) or len(data)>MAX_FILE:
+        raise Failure("limit")
     if type(timeout) not in (float, int) or not 0 < timeout <= 60:
         raise Failure("worker_error")
     deadline = time.monotonic() + timeout
@@ -108,20 +112,39 @@ def run_sandbox(image, data, timeout=60):
         created = True
         proc = subprocess.Popen(["docker", "start", "-ai", name], stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        # Fixtures are < PIPE_BUF; no arbitrary documents, no unbounded producer.
-        proc.stdin.write(data)
-        proc.stdin.close()
+        # Full-duplex nonblocking IO: large synthetic XLSX inputs cannot deadlock stdout or timeout.
+        os.set_blocking(proc.stdin.fileno(), False)
+        os.set_blocking(proc.stdout.fileno(), False)
+        sent = 0
         with selectors.DefaultSelector() as sel:
             sel.register(proc.stdout, selectors.EVENT_READ)
-            while True:
-                if not sel.select(_remaining(deadline)):
+            sel.register(proc.stdin, selectors.EVENT_WRITE)
+            while sel.get_map():
+                events = sel.select(_remaining(deadline))
+                if not events:
                     raise Failure("timeout")
-                chunk = os.read(proc.stdout.fileno(), 65536)
-                if not chunk:
-                    break
-                if len(output) + len(chunk) > MAX_OUTPUT:
-                    raise Failure("limit")
-                output.extend(chunk)
+                for key, event in events:
+                    if key.fileobj is proc.stdin:
+                        try:
+                            sent += os.write(proc.stdin.fileno(), data[sent:sent+65536])
+                        except BlockingIOError:
+                            continue
+                        except BrokenPipeError:
+                            raise Failure("worker_error") from None
+                        if sent == len(data):
+                            sel.unregister(proc.stdin)
+                            proc.stdin.close()
+                    else:
+                        try:
+                            chunk = os.read(proc.stdout.fileno(), 65536)
+                        except BlockingIOError:
+                            continue
+                        if not chunk:
+                            sel.unregister(proc.stdout)
+                        else:
+                            if len(output) + len(chunk) > MAX_OUTPUT:
+                                raise Failure("limit")
+                            output.extend(chunk)
         if proc.wait(timeout=_remaining(deadline)) != 0:
             raise Failure("worker_error")
         return bytes(output)
@@ -145,6 +168,8 @@ def run_sandbox(image, data, timeout=60):
                     proc.kill()
                 proc.wait(timeout=5)
                 proc.stdout.close()
+                if not proc.stdin.closed:
+                    proc.stdin.close()
 
 def parse_result(raw):
     if not isinstance(raw, bytes) or len(raw) > MAX_OUTPUT:

@@ -49,3 +49,8 @@ Owner approved X01–X12, no pending decisions; GitHub-only migration/tests/CI. 
 ## R3-GMAIL.4E.2 — isolated execution spike
 
 4E.1 CI 46190605894 PASS (3132 pgTAP, five concurrency gates). Implemented synthetic-only broker and ephemeral Docker probe with nonroot/no network/no credentials/read-only FS/resource and output caps; tests exercise actual container isolation on GitHub CI. No live adapter, parser or real document processing. Dedicated isolated Linux runner recommended, infrastructure approval and immutable production image pending. 4E.1 operational security hardening remains required before real activation. See [sandbox design](ROMAX_R3_GMAIL_4E2_SANDBOX.md). CI pending.
+
+
+## R3-GMAIL.4E.3A — lector XLSX restringido
+
+4E.2 CI 46191040734 4/4 PASS. Implemented a stdlib-only OOXML reader inside a separate synthetic Docker image; deterministic row/cell evidence, header mapping, decimal strings, formula text/cache only, hidden rows, merge, subtotal and hierarchy flags. Strict ZIP part allowlist, size/ratio/entry caps, XML DTD/entity rejection, no external relationships/active parts, no recalc. New broker profile only accepts generated fixture digest allowlist; nonblocking bounded stdin/stdout and independent output contract checks. No live adapter, UI, DB migration or actual documents. CI includes 16 new synthetic tests (12 reader/contract + 4 Docker/broker). Unsupported layouts or missing headers do not claim complete extraction; parser deliberately conservative, not general Office compatibility, no prices in candidates. Existing 4E.1 operational recovery and hosting gates remain. See [XLSX design](ROMAX_R3_GMAIL_4E3A_XLSX.md).
