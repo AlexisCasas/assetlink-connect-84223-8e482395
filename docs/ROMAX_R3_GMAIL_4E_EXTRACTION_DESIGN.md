@@ -1,5 +1,5 @@
 # R3-GMAIL.4E — Extracción técnica documental revisable
-Estado: diseño propuesto para aprobación X01–X12. Fecha 28/11/2026. Base PR #142, head 556f643a, CI 46189296140 PASS. 4F y 4F.2 cerrados funcionalmente en QA; no merge ni producción.
+Estado: X01–X12 aprobadas por el propietario; implementación 4E.1 en repositorio. Fecha 28/11/2026. Base PR #142, head 556f643a, CI 46189296140 PASS. 4F y 4F.2 cerrados funcionalmente en QA; no merge ni producción.
 
 ## 1. Objetivo y fundamento contrastado
 Convertir documentos conservados en propuestas de alcance, partidas/metrados, cantidades, unidades, especificaciones, restricciones, exclusiones, riesgos e información faltante, con evidencia localizable. No crear cotización ni sustituir revisión humana. El piloto real cuenta con un PDF y un XLSX conservados y liberados sin escaneo. No se inspeccionó su contenido; todas las estructuras de ejemplo son sintéticas. DOCX solo comprobado sintéticamente en descarga.
@@ -39,3 +39,8 @@ OCR/CAD, IA externa y prompt injection/LLM (R4-E posterior), costos/precios y to
 
 ## 6. Criterio de cierre
 No basta CI. Aprobación de diseño X01–X12, seguridad mínima probada en entorno aislado, resultados reproducibles y trazables, revisión humana, versionado y no regresión, QA real autorizado, evidencia sin datos privados en repositorio. No promover a producción ni cerrar backlog de scanner por este incremento.
+
+
+## R3-GMAIL.4E.1 — approved contract and implementation candidate
+
+Owner approved X01–X12, no pending decisions; GitHub-only migration/tests/CI. Private extraction schema (jobs, runs, evidence_blocks, candidates, review_events, receipts), service-only write RPCs, auth.uid-scoped commercial read RPCs, tenant and owner checks, unique active document, short serialized state transactions, per-tenant/global pending/running limits (10/100 queued or running; 1/2 active leases), 120s lease and 3 attempts. Original source bound to successful private attempt, metadata/hash checked at DB boundary, actual bytes must be hashed by future broker. Results bounded/validated and immutable, explicit partial review, optimistic version and request receipts; no integration into analysis yet. Only current PDF/XLSX quarantine-backed pilot sources; clean canonical storage, Word/TXT, worker authentication/flags, sandbox, full cell/range validation and parser execution in later increments. No actual processing, Cloud, merge or prod. Candidate migration timestamp provisional (CLI not available in MCP editing session); CI pinned local Supabase. Tests and independent security review required before closure.
