@@ -1,0 +1,8 @@
+# Synthetic XLSX QA only; immutable base supplied by CI.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+WORKDIR /app
+COPY --chown=0:0 probe.py xlsx_reader.py xlsx_entry.py /app/
+USER 65532:65532
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/tmp
+ENTRYPOINT ["python","-I","-B","/app/xlsx_entry.py"]
