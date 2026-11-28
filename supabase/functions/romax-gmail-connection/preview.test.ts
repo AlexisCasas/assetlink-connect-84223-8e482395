@@ -173,7 +173,7 @@ Deno.test('Makro alias quote uses full message MIME to identify attachment and R
   const c=result.candidates[0];
   assert(c?.category==='quoted'&&c.reference==='RMX-2026-7269'&&c.sender.includes('ventas3@romaxfm.com'));
   assert(c.attachments.length===1&&c.attachments[0].name.endsWith('.pdf')&&c.import_policy==='not_importable');
-  assert(calls.some(x=>x==='/messages/alias'));
+  assert(calls.some(x=>x.endsWith('/messages/alias')));
 });
 Deno.test('Cassinelli Outlook multipart HTML table keeps proposal deadline and both attachments',async()=>{
   const incoming=msg('cass','CASS Trujillo Larco - MANTENIMIENTO DE LETRERO LUMINOSO Y EMISION DE CERTIFICADO DE ESTRUCTURA ITSE','Estimados buenas tardes, Favor su apoyo con el envío de su propuesta de acuerdo al TDR según requerimiento de Tienda.',1000,['INBOX'],'','procesos <procesos@cassinelli.com>');
