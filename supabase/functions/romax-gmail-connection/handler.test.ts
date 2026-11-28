@@ -52,7 +52,7 @@ function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false) {
     if(url==='https://gmail.googleapis.com/gmail/v1/users/me/profile')return Response.json({emailAddress:profile});
     if(url.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/messages/')){
       assert(init?.method==='GET'&&!url.includes('/attachments/'));const id=new URL(url).pathname.split('/').pop();
-      return Response.json({id,payload:{mimeType:'text/plain',body:{data:btoa('Solicitamos cotizar el servicio')}}});
+      return Response.json({id,payload:{mimeType:'text/plain',headers:[{name:'Subject',value:changed?'Solicitud modificada':'Solicitud de cotización'},{name:'From',value:'client@example.test'}],body:{data:btoa('Solicitamos cotizar el servicio')}}});
     }
     if(url.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/threads')){
       assert(init?.method==='GET');
