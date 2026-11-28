@@ -15,3 +15,7 @@ Estado: candidato GitHub, no aplicado ni desplegado. Depende de PR #132 (R3-GMAI
 - CI local desechable: paridad Edge, Deno, pgTAP completo, concurrencia mediante dos sesiones PostgreSQL, TypeScript/ESLint, test de guard visual y build. No link Cloud. Fixtures sintéticos.
 - PR apilado sobre PR #132; el workflow Gmail acepta ambas ramas base para probarlo. Reorientar a productization/mvp después de merge autorizado del #132 y ejecutar todos los checks de integración.
 - No autoriza migración Cloud, Edge QA v4, cambios de secretos/variables, merge, producción o importación real. Antes de QA: revisar advisors y CI, verificar migración canónica (CLI no disponible en el entorno de edición GitHub), autorizar aplicación y activar exclusivamente QA. Producción permanece deshabilitada.
+
+## R3-GMAIL.3.4 — homologación Cloud
+
+La migración autorizada se aplicó una sola vez mediante MCP. Cloud registró la versión 20261128145232; se renombra el archivo original 20261128141500 al identificador Cloud conservando exactamente su blob SQL. No se reejecuta DDL ni se altera el historial Cloud. CI anterior 5f1051a: 36/36 Deno, 2,919 pgTAP, concurrencia y frontend PASS. Cloud: 3 políticas restrictivas, 2 triggers, RPC invoker solo service_role; 1 oportunidad manual, cero Gmail y auditorías al preflight. QA visual no autoriza confirmación real.
