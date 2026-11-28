@@ -146,3 +146,11 @@ Deno.test('older message body never requested and full body never returned',asyn
   const r=await readPreview(mock,'synthetic',from,to);
   assert(urls.length===3&&r.candidates[0].text_source==='body'&&!JSON.stringify(r).includes('PRIVATE BODY MARKER'));
 });
+
+Deno.test('retail offer without promotions label is not an adjustment',()=>{
+  assert(classify([msg('a','Cupón Black Friday','Descuento exclusivo de 50%')])?.category==='other');
+});
+Deno.test('proposed work start and SST are not a commercial proposal',()=>{
+  const c=classify([msg('a','HMC SJL Jardines PRE ITSE','Se solicita enviar documentos SST para ingreso a tienda, fecha propuesta de inicio de trabajo es lunes 30')]);
+  assert(c?.category==='operational'&&c.import_policy==='not_importable');
+});

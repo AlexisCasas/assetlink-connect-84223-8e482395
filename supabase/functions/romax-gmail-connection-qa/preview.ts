@@ -109,7 +109,7 @@ export function parseDeadlineEvents(messages:{snippet?:string;bodyText?:string;i
       if(!cue)continue;
       const tail=nearBefore.slice(cue.index??0);
       if(/(?:fecha\s+(?:para|de)\s+visitas?|visita\s+tecnica|enviado\s+el:|(?:^|\n)\s*date:|(?:^|\n)\s*fecha:|inicio\s+de\s+trabajo)/i.test(tail))continue;
-      if(/[.!?]\s+[a-z]/i.test(tail.replace(/\b[ap]\.?\s*m\.?/gi,''))||tail.length>110)continue;
+      if(/[.!?]\s+[a-z]/i.test(tail.replace(/\b[ap]\.?\s*m\.?/gi,''))||tail.length>110||/\d{1,4}[./-]\d{1,2}\b/.test(tail))continue;
       // Ignore dates inside reply envelope headers or unrelated signature lines.
       if(/(?:^|\n)\s*(?:enviado(?:\s+el)?|date|sent|fecha)\s*:[^\n]*$/i.test(nearBefore)&&!/(?:plazo|deadline|propuesta)[^\n]*$/i.test(nearBefore))continue;
       const baseYear=new Date(Number(message.internalDate)).getUTCFullYear()||new Date().getUTCFullYear();
@@ -127,7 +127,7 @@ export function parseDeadlineEvents(messages:{snippet?:string;bodyText?:string;i
       const status:DeadlineEvent['status']=valid&&!weekdayMismatch?'confirmed':'ambiguous';
       const date=valid&&!weekdayMismatch?candidate.toISOString().slice(0,10):null;
       if(date&&time)datetime=date+'T'+time+':00-05:00';
-      let kind:DeadlineEvent['kind']=/se\s+extiende|se\s+amplia|prorroga|nuevo\s+plazo|amplia\s+plazo|extiende\s+plazo/i.test(tail)?'extension':'stated';
+      let kind:DeadlineEvent['kind']=/(?:se\s+extiende|se\s+amplia|prorroga|nuevo\s+plazo|amplia\s+plazo|extiende\s+plazo|ampliacion\s+(?:de|del)\s+plazo)[^\d]{0,110}$/i.test(nearBefore)?'extension':'stated';
       if(index<currentEnd&&date&&previousCurrent?.date&&(date!==previousCurrent.date||(time&&previousCurrent.time&&time!==previousCurrent.time)))kind='extension';
       const raw=clean(text.slice(Math.max(0,index-65),Math.min(text.length,index+full.length+35)),180);
       const event:DeadlineEvent={raw,date,time,datetime,timezone:'America/Lima',status,kind,weekday:matchedWeekday};
@@ -151,8 +151,10 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const subject=header(m,'Subject'),snippet=clean(m.snippet,500),sender=header(m,'From');
   const text=norm(subject+' '+primaryText(m,!!forwardedSender(m)));
   const context=sourceMessages.map(x=>header(x,'Subject')+' '+primaryText(x,!!forwardedSender(x))).join(' ');
-  const explicitRequest=quote.test(text)&&requestQuote.test(text);
-  const bodyLimited=sourceMessages.some(x=>x.bodyLimited===true);
+  const commercialText=text.replace(/\bfecha\s+propuesta\s+(?:de|para)\b/g,'fecha prevista para');
+  const explicitRequest=quote.test(commercialText)&&requestQuote.test(commercialText);
+  const retailPromotion=/\b(black friday|cyber monday|cyber days|cupon|oferta exclusiva|promocion exclusiva|envio gratis|compra ahora)\b/.test(norm(subject+' '+snippet))&&!explicitRequest;
+  const bodyLimited=(sourceMessages.length?sourceMessages:quoteReplies).some(x=>x.bodyLimited===true);
   const refs=references(context);
   const latestSourceAt=Number(m.internalDate);
   const sentEvidence=quoteReplies.some(x=>Number(x.internalDate)>latestSourceAt);
@@ -161,6 +163,7 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const deadlineEvents=parseDeadlineEvents(deadlineMessages);
   let category:Category='other',reason='No se detectó una solicitud comercial explícita.';
   if(!sourceMessages.length){category='quoted';reason='Cotización enviada desde un alias interno de ROMAX; no es una nueva solicitud.';}
+  else if(retailPromotion){category='other';reason='Promoción comercial ajena a una solicitud de ROMAX.';}
   else if(support.test(text+' '+norm(context))){category='other';reason='Comunicación de soporte o notificaciones de una plataforma; no es una solicitud comercial.';}
   else if(refs.length>1){category='review';reason='Hay varias referencias de solicitud en la conversación.';}
   else if(adjust.test(text)&&!explicitRequest){category='adjustment';reason='Se detectó una petición de ajuste comercial.';}
@@ -174,7 +177,7 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const allAttachments=Array.from(new Map(attachmentMessages.flatMap(attachments).map(x=>[x.name+'\0'+x.mime,x])).values()).slice(0,50);
   const currentDeadline=[...deadlineEvents].reverse().find(e=>e.kind==='extension')??deadlineEvents[deadlineEvents.length-1]??null;
   const reference=refs.length===1?refs[0]:rmxReference(context+' '+subject+' '+snippet+' '+allAttachments.map(x=>x.name).join(' ')+' '+quoteReplies.map(x=>clean(x.snippet,500)+' '+attachments(x).map(y=>y.name).join(' ')).join(' '));
-  const candidate:Candidate={thread_id:thread.id,message_id:m.id!,subject:subject||'Sin asunto',sender:forwardedSender(m)??sender,received_at:new Date(Number(m.internalDate)).toISOString(),snippet,category,reason,reference,deadline_hint:currentDeadline?.raw??null,deadline_events:deadlineEvents,message_count:messages.length,attachments:allAttachments,text_source:sourceMessages.some(x=>!!x.bodyText)?'body':'snippet',body_limited:bodyLimited,import_policy:'review_required'};
+  const candidate:Candidate={thread_id:thread.id,message_id:m.id!,subject:subject||'Sin asunto',sender:forwardedSender(m)??sender,received_at:new Date(Number(m.internalDate)).toISOString(),snippet,category,reason,reference,deadline_hint:currentDeadline?.raw??null,deadline_events:deadlineEvents,message_count:messages.length,attachments:allAttachments,text_source:(sourceMessages.length?sourceMessages:quoteReplies).some(x=>!!x.bodyText)?'body':'snippet',body_limited:bodyLimited,import_policy:'review_required'};
   candidate.import_policy=importPolicy(candidate);return candidate;
 }
 export async function readPreview(request:typeof fetch,token:string,from:number,to:number,pageToken?:string) {
