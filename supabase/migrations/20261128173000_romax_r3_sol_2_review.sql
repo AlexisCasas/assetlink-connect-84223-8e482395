@@ -2,7 +2,7 @@
 -- No backfill; existing records and import audit untouched.
 CREATE SCHEMA romax_sol2_private;
 REVOKE ALL ON SCHEMA romax_sol2_private FROM PUBLIC, anon, authenticated;
-GRANT USAGE ON SCHEMA romax_sol2_private TO authenticated;
+GRANT USAGE ON SCHEMA romax_sol2_private TO authenticated,service_role;
 ALTER TABLE public.romax_opportunities ADD CONSTRAINT romax_sol2_opportunity_tenant_unique UNIQUE(organization_id,id);
 
 CREATE TABLE public.romax_request_revisions (
@@ -33,6 +33,17 @@ CREATE TABLE romax_sol2_private.receipts(
 ALTER TABLE romax_sol2_private.receipts ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON romax_sol2_private.receipts FROM PUBLIC,anon,authenticated,service_role;
 
+CREATE TABLE romax_sol2_private.review_evidence(
+  organization_id uuid NOT NULL, opportunity_id uuid NOT NULL, revision integer NOT NULL,
+  evidence jsonb NOT NULL CHECK(jsonb_typeof(evidence)='object' AND octet_length(evidence::text)<=32768),
+  PRIMARY KEY(organization_id,opportunity_id,revision),
+  FOREIGN KEY(organization_id,opportunity_id,revision) REFERENCES public.romax_request_revisions(organization_id,opportunity_id,revision) ON DELETE RESTRICT
+);
+ALTER TABLE romax_sol2_private.review_evidence ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON romax_sol2_private.review_evidence FROM PUBLIC,anon,authenticated,service_role;
+CREATE TRIGGER romax_sol2_evidence_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON romax_sol2_private.review_evidence
+FOR EACH STATEMENT EXECUTE FUNCTION public.romax_guard_gmail_import_audit();
+
 CREATE VIEW public.romax_request_current WITH(security_invoker=true) AS
 SELECT DISTINCT ON (organization_id,opportunity_id) organization_id,opportunity_id,revision,actor_id,reviewed_at,snapshot
 FROM public.romax_request_revisions ORDER BY organization_id,opportunity_id,revision DESC;
@@ -61,21 +72,29 @@ FOR EACH ROW EXECUTE FUNCTION romax_sol2_private.guard_source_and_links();
 
 -- Private privileged transaction; public wrapper remains invoker.
 -- All authorization comes from auth.uid(), not caller-provided actor or JWT metadata.
-CREATE FUNCTION romax_sol2_private.save_review(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb)
+CREATE FUNCTION romax_sol2_private.save_review_core(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb,p_actor uuid,p_verified jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE
-  v_actor uuid:=auth.uid(); v_op public.romax_opportunities%ROWTYPE;
+  v_actor uuid:=p_actor; v_op public.romax_opportunities%ROWTYPE;
   v_old public.romax_request_revisions%ROWTYPE; v_receipt romax_sol2_private.receipts%ROWTYPE;
-  v_current integer; v_snapshot jsonb; v_result jsonb; v_client uuid; v_site uuid; v_contact uuid;
+  v_current integer; v_snapshot jsonb; v_old_proofs jsonb:='{}'; v_proofs jsonb:='{}'; v_proof jsonb; v_result jsonb; v_client uuid; v_site uuid; v_contact uuid;
   v_additional uuid[]; v_id uuid; v_key text; v_value jsonb; v_deadline date; v_time time;
   v_keys text[]:=ARRAY['title','summary','scope','restrictions','reference','reference_kind','specialty','deadline_date','deadline_time','deadline_note','client_id','site_id','contact_id','additional_contacts','provenance'];
 BEGIN
   IF v_actor IS NULL OR p_org IS NULL OR p_opportunity IS NULL OR p_request IS NULL OR p_expected IS NULL OR p_expected<0 THEN
     RAISE EXCEPTION 'Invalid review' USING ERRCODE='22023';
   END IF;
+  IF p_verified IS NOT NULL THEN
+    IF jsonb_typeof(p_verified)<>'object' OR jsonb_typeof(p_verified->'fields')<>'object' OR octet_length(p_verified::text)>32768 THEN
+      RAISE EXCEPTION 'Invalid server evidence' USING ERRCODE='22023';
+    END IF;
+    PERFORM 1 FROM public.romax_gmail_connections WHERE organization_id=p_org AND status='connected'
+      AND connected_at=(p_verified->>'connection_at')::timestamptz FOR SHARE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Connection changed' USING ERRCODE='42501'; END IF;
+  END IF;
   PERFORM 1 FROM public.organizations WHERE id=p_org AND organization_type='provider_company' AND status='active' FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Access denied' USING ERRCODE='42501'; END IF;
-  PERFORM 1 FROM public.organization_members WHERE organization_id=p_org AND user_id=v_actor AND is_active AND role IN ('owner','admin','manager','quote_manager') FOR SHARE;
+  PERFORM 1 FROM public.organization_members WHERE organization_id=p_org AND user_id=v_actor AND is_active AND role IN ('owner','admin','manager','quote_manager') AND (p_verified IS NULL OR role='owner') FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Access denied' USING ERRCODE='42501'; END IF;
   SELECT * INTO v_op FROM public.romax_opportunities WHERE organization_id=p_org AND id=p_opportunity FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Access denied' USING ERRCODE='42501'; END IF;
@@ -127,15 +146,70 @@ BEGIN
       AND (commercial_site_id IS NULL OR commercial_site_id=v_site) FOR SHARE;
     IF NOT FOUND THEN RAISE EXCEPTION 'Invalid contact' USING ERRCODE='22023'; END IF;
   END LOOP;
-  -- Provenance is explicitly reviewer-attested, never a claim of server-verified Gmail evidence.
+  SELECT evidence INTO v_old_proofs FROM romax_sol2_private.review_evidence WHERE organization_id=p_org AND opportunity_id=p_opportunity AND revision=v_current;
+  v_old_proofs:=coalesce(v_old_proofs,'{}'::jsonb);
+  -- Gmail claims must match either previous immutable evidence or the trusted server proposal.
   IF jsonb_typeof(p_snapshot->'provenance')<>'object' THEN RAISE EXCEPTION 'Invalid provenance' USING ERRCODE='22023'; END IF;
   FOR v_key,v_value IN SELECT key,value FROM jsonb_each(p_snapshot->'provenance') LOOP
     IF NOT(v_key=ANY(v_keys)) OR v_key='provenance' OR jsonb_typeof(v_value)<>'object'
        OR EXISTS(SELECT 1 FROM jsonb_object_keys(v_value) k WHERE k NOT IN ('source','evidence'))
        OR coalesce(v_value->>'source','') NOT IN ('manual','gmail_reviewed','master_reviewed')
+       OR (v_value ? 'evidence' AND jsonb_typeof(v_value->'evidence')<>'string')
        OR length(coalesce(v_value->>'evidence',''))>500
        OR (v_value->>'source'='gmail_reviewed' AND v_op.source_system<>'gmail')
        THEN RAISE EXCEPTION 'Invalid field provenance' USING ERRCODE='22023'; END IF;
+    IF v_value->>'source'='gmail_reviewed' THEN
+      IF v_old.snapshot->v_key=p_snapshot->v_key AND v_old.snapshot->'provenance'->v_key=v_value AND v_old_proofs ? v_key THEN
+        v_proof:=v_old_proofs->v_key;
+      ELSE
+        v_proof:=p_verified->'fields'->v_key;
+        IF v_proof IS NULL OR v_proof->'value' IS DISTINCT FROM p_snapshot->v_key
+           OR v_proof->>'evidence' IS DISTINCT FROM v_value->>'evidence'
+           OR coalesce(v_proof->>'message_id','') !~ '^[A-Za-z0-9_-]{1,128}
+  v_snapshot:=p_snapshot||jsonb_build_object('additional_contacts',to_jsonb(v_additional));
+  -- Existing/blank fields without an explicit source are manual, not inferred from Gmail.
+  FOREACH v_key IN ARRAY v_keys LOOP
+    IF v_key<>'provenance' AND jsonb_typeof(v_snapshot->v_key)<>'null' AND NOT(v_snapshot->'provenance' ? v_key) THEN
+      v_snapshot:=jsonb_set(v_snapshot,ARRAY['provenance',v_key],jsonb_build_object('source','manual'),true);
+    END IF;
+  END LOOP;
+  IF v_old.snapshot=v_snapshot AND (v_op.commercial_client_id,v_op.commercial_site_id,v_op.commercial_contact_id)
+      IS NOT DISTINCT FROM (v_client,v_site,v_contact) THEN
+    v_result:=jsonb_build_object('outcome','unchanged','revision',v_current);
+  ELSE
+    UPDATE public.romax_opportunities SET commercial_client_id=v_client,commercial_site_id=v_site,commercial_contact_id=v_contact,
+      match_status=CASE WHEN v_client IS NULL THEN 'unmatched' ELSE 'confirmed' END
+    WHERE organization_id=p_org AND id=p_opportunity;
+    INSERT INTO public.romax_request_revisions(organization_id,opportunity_id,revision,actor_id,snapshot)
+      VALUES(p_org,p_opportunity,v_current+1,v_actor,v_snapshot);
+    IF v_proofs<>'{}'::jsonb THEN INSERT INTO romax_sol2_private.review_evidence VALUES(p_org,p_opportunity,v_current+1,v_proofs); END IF;
+    v_result:=jsonb_build_object('outcome','saved','revision',v_current+1);
+  END IF;
+  INSERT INTO romax_sol2_private.receipts VALUES(p_org,p_opportunity,v_actor,p_request,p_expected,p_snapshot,v_result);
+  RETURN v_result;
+END; $$;
+REVOKE ALL ON FUNCTION romax_sol2_private.save_review_core(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION romax_sol2_private.save_review_core(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) TO service_role;
+CREATE FUNCTION romax_sol2_private.save_review(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb)
+RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path='' AS $
+  SELECT romax_sol2_private.save_review_core(p_org,p_opportunity,p_expected,p_request,p_snapshot,auth.uid(),NULL);
+$;
+REVOKE ALL ON FUNCTION romax_sol2_private.save_review(uuid,uuid,integer,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION romax_sol2_private.save_review(uuid,uuid,integer,uuid,jsonb) TO authenticated;
+CREATE FUNCTION public.romax_save_request_review(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb)
+RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
+  SELECT romax_sol2_private.save_review(p_org,p_opportunity,p_expected,p_request,p_snapshot);
+$$;
+REVOKE ALL ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) TO authenticated;
+
+           OR coalesce(v_proof->>'parser','')<>'romax-r3-gmail-2.2'
+           OR v_proof->>'received_at' IS NULL THEN
+          RAISE EXCEPTION 'Gmail source requires verified proposal' USING ERRCODE='42501';
+        END IF;
+      END IF;
+      v_proofs:=v_proofs||jsonb_build_object(v_key,v_proof);
+    END IF;
   END LOOP;
   v_snapshot:=p_snapshot||jsonb_build_object('additional_contacts',to_jsonb(v_additional));
   IF v_old.snapshot=v_snapshot AND (v_op.commercial_client_id,v_op.commercial_site_id,v_op.commercial_contact_id)
@@ -160,3 +234,10 @@ RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
 $$;
 REVOKE ALL ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) TO authenticated;
+
+CREATE FUNCTION public.romax_save_request_review_verified(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb,p_actor uuid,p_verified jsonb)
+RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
+  SELECT romax_sol2_private.save_review_core(p_org,p_opportunity,p_expected,p_request,p_snapshot,p_actor,p_verified);
+$$;
+REVOKE ALL ON FUNCTION public.romax_save_request_review_verified(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.romax_save_request_review_verified(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) TO service_role;
