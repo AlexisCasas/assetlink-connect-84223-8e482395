@@ -521,3 +521,8 @@ La ruta crítica aprobada es el replanning del 28/11 y el contrato de adjuntos A
 ### Checkpoint R3-GMAIL.4A — seguridad (28/11/2026)
 
 Revisión independiente del candidato GitHub/local `PASS_REPOSITORY_LOCAL`, sin bloqueantes SQL/ACL demostrados; CI run 46176658892 aprobado. PR #139 se conserva Draft y sin merge; 4A no aplicada en Cloud. Condiciones obligatorias para 4B: validar identidad del actor y pertenencia Gmail de cada mensaje/parte al hilo autorizado, sin descarga de binarios; 4C conserva validación binaria/escaneo/almacenamiento. Véase [informe de seguridad 4A](ROMAX_R3_GMAIL_4A_SECURITY_FINAL_REVIEW_20261128.md). Próximo hito con autorización independiente: R3-GMAIL.4B. No autorizar Cloud ni producción por este checkpoint.
+
+
+## R3-GMAIL.4B — detección dirigida
+
+Autorizado desarrollo GitHub-only sobre 4A con security review PASS_REPOSITORY_LOCAL. Edge descubre metadatos del hilo de oportunidad y registra vía RPC 4A, sin bajar binarios ni exponer IDs; CI pendiente. No Cloud, Gmail real, merge o producción. 4C requiere scanner y contrato de almacenamiento.
