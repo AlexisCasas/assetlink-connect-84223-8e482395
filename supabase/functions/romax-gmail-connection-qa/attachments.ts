@@ -3,6 +3,7 @@ export type AttachmentMetadata = {
   message_id:string; locator:string; locator_kind:'attachment_id'|'mime_part';
   filename:string; mime_type:string; size_bytes:number|null; received_at:string;
   direction:'incoming'|'outgoing'|'unknown';
+  part_id?:string;
 };
 type Header={name?:string;value?:string};
 type Part={partId?:string; filename?:string;mimeType?:string;headers?:Header[];
@@ -12,6 +13,9 @@ const ROOT='https://gmail.googleapis.com/gmail/v1/users/me/threads/';
 const MAX_BYTES=2*1024*1024, MAX_MESSAGES=80, MAX_FILES=50, MAX_DEPTH=6, MAX_NODES=2000;
 const validId=(x:unknown):x is string=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(x);
 const header=(p:Part,name:string)=>{const h=Array.isArray(p.headers)?p.headers.find(h=>h&&typeof h.name==='string'&&h.name.toLowerCase()===name):undefined;return typeof h?.value==='string'?h.value:'';};
+// Registry keys are not Gmail download tokens. Root is distinct from part 0.
+export const stablePartKey=(part:string|undefined)=>part==='root'?'r4f_part_v1_root':typeof part==='string'&&part.length<=128&&/^\d+(?:\.\d+)*$/.test(part)?'r4f_part_v1_'+part.replaceAll('.','_'):null;
+export const isStablePartKey=(key:string)=>/^r4f_part_v1_(?:root|\d+(?:_\d+)*)$/.test(key);
 const unsafeName=/[\p{Cc}\p{Cf}\p{Cs}\/\\]/u;
 function fields(depth:number):string {
   return 'partId,filename,mimeType,headers(name,value),body(size,attachmentId),parts('+
@@ -78,12 +82,16 @@ export async function discoverAttachments(request:typeof fetch,token:string,thre
           const pid=p.partId;
           const kind=typeof aid==='string'&&aid.length>0&&aid.length<=2048&&/^[A-Za-z0-9_-]+$/.test(aid)?'attachment_id':'mime_part';
           const locator=kind==='attachment_id'?aid!:aid!==undefined?'':typeof pid==='string'&&pid.length<=128&&/^\d+(?:\.\d+)*$/.test(pid)?pid:depth===0&&pid===''&&!p.parts?.length?'0':'';
+          const part=typeof pid==='string'&&pid.length<=128&&/^\d+(?:\.\d+)*$/.test(pid)?pid:depth===0&&pid===''&&!p.parts?.length?'root':undefined;
           const size=p.body?.size;
-          if(!locator||!(size===undefined||size===null||Number.isSafeInteger(size)&&size>=0&&size<=9999999999999)){unsafeSkipped++;reasons.add('invalid_locator_or_size');}
+          if(!locator||(kind==='attachment_id'&&!stablePartKey(part))||!(size===undefined||size===null||Number.isSafeInteger(size)&&size>=0&&size<=9999999999999)){unsafeSkipped++;reasons.add('invalid_locator_or_size');}
           else{
             const item:AttachmentMetadata={message_id:m.id!,locator,locator_kind:kind,filename:name,mime_type:mime,size_bytes:size??null,
-              received_at:new Date(Number(m.internalDate)).toISOString(),direction};
-            const identity=JSON.stringify([item.message_id,kind,locator]),payload=JSON.stringify(item);
+              received_at:new Date(Number(m.internalDate)).toISOString(),direction,part_id:part};
+            const identity=JSON.stringify([item.message_id,kind,part??locator]),payload=JSON.stringify(item);
+            const tokenKey=JSON.stringify([item.message_id,'token',locator]);
+            if(seen.has(tokenKey)&&seen.get(tokenKey)!==identity)throw new Error('Conflicting attachment token');
+            seen.set(tokenKey,identity);
             if(seen.has(identity)){if(seen.get(identity)!==payload)throw new Error('Conflicting MIME identity');}
             else if(items.length>=MAX_FILES){reasons.add('attachment_limit');}
             else{seen.set(identity,payload);items.push(item);}
@@ -99,4 +107,44 @@ export async function discoverAttachments(request:typeof fetch,token:string,thre
   }
   return {items,scanned_messages:Math.min(eligible.length,MAX_MESSAGES),excluded_messages:excludedMessages,
     skipped_inline:inlineSkipped,skipped_unsafe:unsafeSkipped,partial:reasons.size>0,reasons:[...reasons].sort()};
+}
+
+// Preserve legacy registry rows; new external attachments use stable part identity.
+// Raw remote tokens live only in the current server request.
+export type RegistryRow={source_message_id:string;source_attachment_id:string;source_locator_kind:string;filename:string;mime_type:string;size_bytes:number|null;source_received_at:string;source_direction:string};
+const tuple=(x:AttachmentMetadata,r:RegistryRow)=>x.message_id===r.source_message_id&&x.filename===r.filename&&x.mime_type===r.mime_type&&x.size_bytes===r.size_bytes&&
+  Date.parse(x.received_at)===Date.parse(r.source_received_at)&&x.direction===r.source_direction&&x.locator_kind===r.source_locator_kind;
+export function registryPayload(items:AttachmentMetadata[],existing:RegistryRow[],partial:boolean){
+  const output:AttachmentMetadata[]=[]; const used=new Set<string>();
+  for(const x of items){
+    const {part_id,...base}=x;
+    if(x.locator_kind!=='attachment_id'){output.push(base);continue;}
+    const stable=stablePartKey(part_id);if(!stable)throw new Error('Missing stable part');
+    const same=existing.filter(r=>r.source_message_id===x.message_id&&r.source_locator_kind==='attachment_id');
+    const keyed=same.filter(r=>r.source_attachment_id===stable);
+    const legacy=same.filter(r=>!isStablePartKey(r.source_attachment_id)&&tuple(x,r));
+    let locator=stable;
+    if(keyed.length){
+      if(keyed.length!==1||!tuple(x,keyed[0])||legacy.length)throw new Error('Registry identity conflict');
+    }else if(legacy.length){
+      if(partial||legacy.length!==1||items.filter(y=>tuple(y,legacy[0])).length!==1)throw new Error('Ambiguous legacy identity');
+      locator=legacy[0].source_attachment_id;
+    }
+    const key=JSON.stringify([x.message_id,locator]);if(used.has(key))throw new Error('Registry identity conflict');
+    used.add(key);output.push({...base,locator});
+  }
+  return output;
+}
+export function currentDownloadLocator(c:{message:string;locator:string;filename:string;mime:string;size:number},items:AttachmentMetadata[],existing:RegistryRow[],partial:boolean){
+  const rows=existing.filter(r=>r.source_message_id===c.message&&r.source_attachment_id===c.locator&&r.source_locator_kind==='attachment_id'&&r.filename===c.filename&&r.mime_type===c.mime&&r.size_bytes===c.size);
+  if(rows.length!==1)return null;
+  const row=rows[0];
+  const matches=items.filter(x=>tuple(x,row));
+  if(isStablePartKey(c.locator)){
+    const exact=matches.filter(x=>stablePartKey(x.part_id)===c.locator);
+    return exact.length===1?exact[0].locator:null;
+  }
+  // Historical raw token: require unique metadata in both registry and complete current scan.
+  if(partial||matches.length!==1||existing.filter(r=>tuple(matches[0],r)).length!==1)return null;
+  return matches[0].locator;
 }

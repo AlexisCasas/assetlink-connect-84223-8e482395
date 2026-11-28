@@ -14,12 +14,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import GmailConnectionPanel from './GmailConnectionPanel';
 import RequestDetail from './RequestDetail';
+import RequestDocuments from './RequestDocuments';
 import RequestEnrichment from './RequestEnrichment';
 import {deadlineStatus,specialties,type Review} from './romaxEnrichment';
 import { collectPages, canViewRequests, createListMemory, dateLabel, emptyFilters, filterRows, isOpportunityId, linkedLabel, metrics, paginate, statusLabels, classificationLabels, matchLabels, type Opportunity, type Client, type Site, type Contact, type Attachment, type Filters, type ListMemory } from './romaxRequestList';
 
 const emptyForm={subject:'',sender_email:'',received_at:'',snippet:'',classification:'quote_request',commercial_client_id:'',commercial_site_id:'',commercial_contact_id:''};
-type Dataset={reviews:Review[]|null;opportunities:Opportunity[];clients:Client[];sites:Site[];contacts:Contact[];attachments:Attachment[]};
+type Dataset={documentsReady:boolean;reviews:Review[]|null;opportunities:Opportunity[];clients:Client[];sites:Site[];contacts:Contact[];attachments:Attachment[]};
 type Props={focusOpportunityId?:string;memory?:ListMemory};
 // ROMAX tables are not yet in the generated client types; preserve the existing adapter.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,17 +67,19 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
         if(ordered)query=query.order('received_at',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false});
         return query.order('id',{ascending:true}).range(from,to).abortSignal(signal);
       },signal);
-      const [opportunities,clients,sites,contacts,attachments]=await Promise.all([
+      const [opportunities,clients,sites,contacts,legacyAttachments]=await Promise.all([
         read<Opportunity>('romax_opportunities',fieldList,true),
         read<Client>('commercial_clients','id,business_name,legal_name,commercial_code,is_active'),
         read<Site>('commercial_client_sites','id,commercial_client_id,site_name,site_code,city,is_active'),
         read<Contact>('commercial_client_contacts','id,commercial_client_id,commercial_site_id,full_name,email,is_active'),
         read<Attachment>('romax_opportunity_attachments','id,opportunity_id,filename,mime_type,size_bytes,processing_status,created_at'),
       ]);
+      let attachments=legacyAttachments,documentsReady=false;
+      try{attachments=await read<Attachment>('romax_attachment_metadata','id,opportunity_id,filename,mime_type,size_bytes,processing_status,created_at,source_system,source_direction,source_received_at,availability_status,scan_status,restriction_code,source_locator_kind');documentsReady=true;}catch{/* pre-migration Preview retains read-only legacy list */}
       let reviews:Review[]|null=null;
       try{reviews=await collectPages<Review & {id:string}>((from,to)=>db.from('romax_request_current').select('id:opportunity_id,organization_id,opportunity_id,revision,reviewed_at,snapshot',{count:'exact'}).eq('organization_id',organizationId).order('opportunity_id').range(from,to).abortSignal(signal),signal);}catch{/* pre-migration Preview: preserve base inbox, explicitly disable enrichment */}
       if(signal.aborted)return;
-      setData({opportunities,clients,sites,contacts,attachments,reviews});
+      setData({opportunities,clients,sites,contacts,attachments,reviews,documentsReady});
       return true;
     }catch{
       if(!signal.aborted){setError('No se pudo cargar la lista completa. Actualiza para volver a intentarlo.');setData(null);}
@@ -198,7 +201,7 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
             </form>
       </DialogContent>
     </Dialog>
-    <RequestDetail enrichment={selected&&data?.reviews!==null&&data?<RequestEnrichment key={selected.id} organizationId={organizationId} opportunity={selected} review={reviews.get(selected.id)} clients={clients} sites={sites} contacts={contacts} gmailAllowed={gmailAllowed} onSaved={async()=>{await loadData();}}/>:undefined} open={!!focusOpportunityId} loading={loading&&!data} error={!!error&&!data} opportunity={selected} attachments={selected?attachments.filter(a=>a.opportunity_id===selected.id):[]} clientName={selected?clientName(selected.commercial_client_id):''} siteName={selected?siteName(selected.commercial_site_id):''} contactName={selected?contactName(selected.commercial_contact_id):''} onClose={closeDetail} onAnalyze={openAnalysis} onRetry={async()=>{await loadData();}} returnFocus={()=>{if(opener.current?.isConnected&&opener.current.getClientRects().length)opener.current.focus();else root.current?.querySelector<HTMLElement>('h1')?.focus();}}/>
+    <RequestDetail documents={selected&&data?.documentsReady?<RequestDocuments key={selected.id} organizationId={organizationId} opportunity={selected} attachments={attachments.filter(a=>a.opportunity_id===selected.id)} gmailAllowed={gmailAllowed} onChanged={async()=>{await loadData();}}/>:undefined} enrichment={selected&&data?.reviews!==null&&data?<RequestEnrichment key={selected.id} organizationId={organizationId} opportunity={selected} review={reviews.get(selected.id)} clients={clients} sites={sites} contacts={contacts} gmailAllowed={gmailAllowed} onSaved={async()=>{await loadData();}}/>:undefined} open={!!focusOpportunityId} loading={loading&&!data} error={!!error&&!data} opportunity={selected} attachments={selected?attachments.filter(a=>a.opportunity_id===selected.id):[]} clientName={selected?clientName(selected.commercial_client_id):''} siteName={selected?siteName(selected.commercial_site_id):''} contactName={selected?contactName(selected.commercial_contact_id):''} onClose={closeDetail} onAnalyze={openAnalysis} onRetry={async()=>{await loadData();}} returnFocus={()=>{if(opener.current?.isConnected&&opener.current.getClientRects().length)opener.current.focus();else root.current?.querySelector<HTMLElement>('h1')?.focus();}}/>
   </div>;
 }
 export default function OpportunitiesView({focusOpportunityId,memory}:Props){

@@ -1,4 +1,4 @@
-import { discoverAttachments } from './attachments.ts';
+import { discoverAttachments, registryPayload, currentDownloadLocator, type RegistryRow } from './attachments.ts';
 function assert(x:unknown,label='Assertion failed'){if(!x)throw new Error(label);}
 const date='1760000000000',thread='thread-1',mailbox='pilot@example.test';
 const file=(partId='0',filename='TDR.pdf',attachmentId='attachment-1',size=1024)=>({partId,filename,mimeType:'application/pdf',body:{attachmentId,size}});
@@ -55,4 +55,28 @@ Deno.test('4B oversized body, invalid thread and HTTP failure reject without reg
 Deno.test('4B archived message without labels and unknown sender',async()=>{
  const m=msg('m1',[file()],[],'not-an-email');const {labelIds:_,...archived}=m;
  const r=await discover([archived]);assert(r.items.length===1&&r.items[0].direction==='unknown');
+});
+
+Deno.test('4F hotfix: stable part keys survive token rotation and distinguish identical filenames/size',async()=>{
+ const a=await discover([msg('m1',[file('0','TDR.pdf','token-a'),file('1','TDR.pdf','token-b')])]);
+ const b=await discover([msg('m1',[file('0','TDR.pdf','rotated-a'),file('1','TDR.pdf','rotated-b')])]);
+ const rows=registryPayload(a.items,[],false);
+ assert(rows.length===2&&rows[0].locator==='r4f_part_v1_0'&&rows[1].locator==='r4f_part_v1_1'&&!('part_id' in rows[0]));
+ const existing:RegistryRow[]=rows.map(x=>({source_message_id:x.message_id,source_attachment_id:x.locator,source_locator_kind:x.locator_kind,filename:x.filename,mime_type:x.mime_type,size_bytes:x.size_bytes,source_received_at:x.received_at,source_direction:x.direction}));
+ assert(JSON.stringify(rows)===JSON.stringify(registryPayload(b.items,existing,false)));
+ const claim={message:'m1',locator:rows[1].locator,filename:'TDR.pdf',mime:'application/pdf',size:1024};
+ assert(currentDownloadLocator(claim,b.items,existing,false)==='rotated-b');
+ assert(currentDownloadLocator({...claim,message:'foreign'},b.items,existing,false)===null);
+});
+Deno.test('4F hotfix: legacy unique metadata preserves original registry key and resolves current token; ambiguity fails closed',async()=>{
+ const b=await discover([msg('m1',[file('0','TDR.pdf','fresh')])]);
+ const x=b.items[0];const legacy:RegistryRow={source_message_id:x.message_id,source_attachment_id:'old-token',source_locator_kind:x.locator_kind,filename:x.filename,mime_type:x.mime_type,size_bytes:x.size_bytes,source_received_at:x.received_at,source_direction:x.direction};
+ const c={message:x.message_id,locator:legacy.source_attachment_id,filename:x.filename,mime:x.mime_type,size:1024};
+ assert(registryPayload(b.items,[legacy],false)[0].locator==='old-token');
+ assert(currentDownloadLocator(c,b.items,[legacy],false)==='fresh');
+ assert(currentDownloadLocator(c,b.items,[legacy],true)===null);
+ const amb=await discover([msg('m1',[file('0','TDR.pdf','fresh'),file('1','TDR.pdf','other')])]);
+ assert(currentDownloadLocator(c,amb.items,[legacy],false)===null);
+ await rejects(async()=>registryPayload(amb.items,[legacy],false));
+ assert(currentDownloadLocator(c,b.items,[legacy,{...legacy,source_attachment_id:'another-old'}],false)===null);
 });
