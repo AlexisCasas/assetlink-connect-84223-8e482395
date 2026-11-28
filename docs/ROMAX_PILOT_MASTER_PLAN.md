@@ -500,3 +500,9 @@ Ver [contrato de enriquecimiento](ROMAX_R3_SOL_2_ENRICHMENT_DESIGN.md), decision
 ## R3-SOL.2 — implementación candidata
 
 E01–E12 aprobadas; rama feature/romax-r3-sol-2, SQL solo GitHub, formulario de revisión, lectura Gmail dirigida y filtros de plazo. CI y cierre de brechas de trazabilidad pendientes; no Cloud, merge o producción.
+
+## R3-SOL.2 — Cierre funcional (28/11/2026)
+
+QA real confirmado por propietario y cotejado en Cloud: cinco oportunidades (cuatro Gmail con hilos/mensajes únicos y cuatro auditorías concordantes), una ficha enriquecida con versiones 1–3, cinco recibos (tres saved y dos unchanged), proyección vigente igual a v3; cuatro solicitudes anteriores con huella intacta. Resumen y plazo de fecha sin hora verificados: cinco entradas de evidencia privada, componentes del mismo evento, parser/fecha/mensaje conservados. Indicadores esperados al cierre: 1 por vencer, 4 sin plazo confirmado, 0 vencidas. QA persistencia 11/11 PASS; CI y security gate aprobados. Migración Cloud canónica 20261128164558; Edge QA v8, Vercel Preview. No merge ni producción; el cierre funcional no equivale a liberación general. Siguiente R3-GMAIL.4 / R3-SOL.4, diseño de adjuntos privados bajo demanda.
+
+Ver [R3-GMAIL.4 — contrato de adjuntos](ROMAX_R3_GMAIL_4_ATTACHMENTS_DESIGN.md), decisiones A01–A12 propuestas.
