@@ -152,9 +152,9 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
       const current=await getRow(db,organization);
       if(current?.status!=='connected'||current.connected_at!==row.connected_at)throw new SafeError(409,'La conexión cambió');
       if(page.candidates.length){
-        const existing=await db.from('romax_opportunities').select('source_thread_id,status').eq('organization_id',organization).eq('source_system','gmail').in('source_thread_id',page.candidates.map(x=>x.thread_id));
+        const existing=await db.from('romax_opportunities').select('id,source_thread_id,status').eq('organization_id',organization).eq('source_system','gmail').in('source_thread_id',page.candidates.map(x=>x.thread_id));
         if(existing.error)throw new SafeError(503,'No se pudo comprobar duplicados');
-        for(const candidate of page.candidates){candidate.existing_status=existing.data?.find(x=>x.source_thread_id===candidate.thread_id)?.status??null;candidate.import_policy=importPolicy(candidate);}
+        for(const candidate of page.candidates){const linked=existing.data?.find(x=>x.source_thread_id===candidate.thread_id);candidate.existing_status=linked?.status??null;candidate.existing_opportunity_id=linked?.id??null;candidate.import_policy=importPolicy(candidate);}
       }
       const candidates=await Promise.all(page.candidates.map(async candidate=>({ ...candidate, confirmation_token:importEnabled&&candidate.import_policy==='new_candidate'?await issueConfirmation(key,confirmationContext,candidate,from):null })));
       const next_cursor=page.next?await seal(key,JSON.stringify({to,next:page.next}),cursorContext):null;

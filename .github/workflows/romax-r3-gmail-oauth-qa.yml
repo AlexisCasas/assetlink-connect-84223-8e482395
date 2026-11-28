@@ -1,11 +1,14 @@
 name: ROMAX R3-GMAIL.1 OAuth QA
 on:
   pull_request:
-    branches: ["productization/mvp"]
+    branches: ["productization/mvp", "feature/romax-r3-gmail-2-1"]
     paths:
       - "supabase/**"
       - "src/components/provider/GmailConnectionPanel.tsx"
       - "src/components/provider/OpportunitiesView.tsx"
+      - "src/components/provider/gmailImportPolicy.ts"
+      - "tests/romax-gmail-import-policy.test.ts"
+      - "scripts/qa/romax_gmail_import_concurrency.sh"
       - "src/pages/GmailCallback.tsx"
       - "src/App.tsx"
       - ".github/workflows/romax-r3-gmail-oauth-qa.yml"
@@ -26,8 +29,9 @@ jobs:
         run: |
           cmp supabase/functions/romax-gmail-connection/preview.ts supabase/functions/romax-gmail-connection-qa/preview.ts
           cmp supabase/functions/romax-gmail-connection/handler.ts supabase/functions/romax-gmail-connection-qa/handler.ts
+          cmp supabase/functions/romax-gmail-connection/import.ts supabase/functions/romax-gmail-connection-qa/import.ts
       - run: deno check --node-modules-dir=none supabase/functions/romax-gmail-connection/index.ts supabase/functions/romax-gmail-connection-qa/index.ts
-      - run: deno test --node-modules-dir=none supabase/functions/romax-gmail-connection/crypto.test.ts supabase/functions/romax-gmail-connection/handler.test.ts supabase/functions/romax-gmail-connection/preview.test.ts
+      - run: deno test --node-modules-dir=none supabase/functions/romax-gmail-connection/crypto.test.ts supabase/functions/romax-gmail-connection/handler.test.ts supabase/functions/romax-gmail-connection/preview.test.ts supabase/functions/romax-gmail-connection/import.test.ts
   database:
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -47,6 +51,8 @@ jobs:
           supabase --version
       - run: supabase start
       - run: supabase test db
+      - name: Gmail import concurrent transaction QA (local only)
+        run: bash scripts/qa/romax_gmail_import_concurrency.sh
       - if: always()
         run: supabase stop --no-backup
   frontend:
@@ -78,4 +84,5 @@ jobs:
           expected.forEach((prefix,i)=>assert.ok(diagnostics[i].startsWith(prefix),diagnostics[i]));
           JS
       - run: npx eslint src/components/provider/GmailConnectionPanel.tsx src/pages/GmailCallback.tsx
+      - run: node --experimental-strip-types --test tests/romax-gmail-import-policy.test.ts
       - run: npm run build

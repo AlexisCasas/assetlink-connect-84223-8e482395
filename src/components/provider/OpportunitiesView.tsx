@@ -208,7 +208,7 @@ const OpportunitiesView = () => {
         </Button>
       </header>
 
-      {currentMembership?.role === 'owner' && organizationId === 'a76fb740-78cf-4ed5-97dd-1e1e24fcab68' && <GmailConnectionPanel key={organizationId} organizationId={organizationId} />}
+      {currentMembership?.role === 'owner' && organizationId === 'a76fb740-78cf-4ed5-97dd-1e1e24fcab68' && <GmailConnectionPanel key={organizationId} organizationId={organizationId} onImported={loadData} />}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Nuevas</p><p className="text-2xl font-semibold">{opportunities.filter((row) => row.status === 'new').length}</p></CardContent></Card>
