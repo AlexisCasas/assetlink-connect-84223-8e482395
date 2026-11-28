@@ -1,7 +1,7 @@
 
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(31);
+SELECT plan(47);
 INSERT INTO auth.users(id,email) VALUES ('e4c10000-0000-4000-8000-000000000002','quarantine-owner@qa.invalid'),('e4c10000-0000-4000-8000-000000000003','quarantine-manager@qa.invalid');
 INSERT INTO public.organizations(id,name,organization_type,status) VALUES ('e4c10000-0000-4000-8000-000000000001','Synthetic quarantine','provider_company','active');
 INSERT INTO public.organization_members(organization_id,user_id,role,is_active) VALUES ('e4c10000-0000-4000-8000-000000000001','e4c10000-0000-4000-8000-000000000002','owner',true),('e4c10000-0000-4000-8000-000000000001','e4c10000-0000-4000-8000-000000000003','manager',true);
@@ -60,5 +60,28 @@ SELECT is((SELECT count(*) FROM storage.objects WHERE bucket_id='romax-request-a
 SELECT throws_ok($q$INSERT INTO storage.objects(bucket_id,name) VALUES ('romax-request-attachments','forged')$q$,'42501',NULL,'owner cannot write bucket');
 RESET ROLE;
 SELECT is((SELECT count(*) FROM romax_docs_private.attachment_events WHERE organization_id='e4c10000-0000-4000-8000-000000000001' AND attachment_id='e4c10000-0000-4000-8000-000000000010' AND next_state='quarantined'),1::bigint,'successful replay does not duplicate audit');
+
+-- 4C.3 explicit pilot exception; preserve the 4C.1 tests above.
+SELECT ok(NOT has_function_privilege('authenticated','public.romax_unscanned_document_access(uuid,uuid,uuid,uuid,boolean,boolean,uuid,text)','EXECUTE'),'unscanned access service-only');
+SELECT ok(NOT has_function_privilege('anon','public.romax_unscanned_document_access(uuid,uuid,uuid,uuid,boolean,boolean,uuid,text)','EXECUTE'),'anonymous access denied');
+SET LOCAL ROLE service_role;
+SELECT throws_ok($q$SELECT public.romax_unscanned_document_access('e4c10000-0000-4000-8000-000000000001','e4c10000-0000-4000-8000-000000000004','e4c10000-0000-4000-8000-000000000002','e4c10000-0000-4000-8000-000000000010',false,false,NULL,NULL)$q$,'22023',NULL,'explicit risk acknowledgement required');
+SELECT throws_ok($q$SELECT public.romax_unscanned_document_access('e4c10000-0000-4000-8000-000000000001','e4c10000-0000-4000-8000-000000000004','e4c10000-0000-4000-8000-000000000003','e4c10000-0000-4000-8000-000000000010',true,false,NULL,NULL)$q$,'42501',NULL,'manager cannot use pilot exception');
+SELECT throws_ok($q$SELECT public.romax_unscanned_document_access('e4c10000-0000-4000-8000-000000000001','e4c10000-0000-4000-8000-000000000005','e4c10000-0000-4000-8000-000000000002','e4c10000-0000-4000-8000-000000000010',true,false,NULL,NULL)$q$,'42501',NULL,'other opportunity cannot access');
+SELECT throws_ok($q$SELECT public.romax_unscanned_document_access('e4c10000-0000-4000-8000-000000000001','e4c10000-0000-4000-8000-000000000004','e4c10000-0000-4000-8000-000000000002','e4c10000-0000-4000-8000-000000000011',true,false,NULL,NULL)$q$,'22023',NULL,'failed document not eligible');
+SELECT is((public.romax_unscanned_document_access('e4c10000-0000-4000-8000-000000000001','e4c10000-0000-4000-8000-000000000004','e4c10000-0000-4000-8000-000000000002','e4c10000-0000-4000-8000-000000000010',true,false,NULL,NULL))->>'hash','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','prepare binds successful object hash');
+SELECT is((SELECT availability_status FROM public.romax_opportunity_attachments WHERE id='e4c10000-0000-4000-8000-000000000010'),'quarantined','prepare does not release');
+SELECT throws_ok($q$SELECT public.romax_unscanned_document_access('e4c10000-0000-4000-8000-000000000001','e4c10000-0000-4000-8000-000000000004','e4c10000-0000-4000-8000-000000000002','e4c10000-0000-4000-8000-000000000010',true,true,(SELECT (v->'claims'->0->>'attempt')::uuid FROM qa_claims WHERE name='first'),'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')$q$,'40001',NULL,'mismatched hash cannot release');
+SELECT is((public.romax_unscanned_document_access('e4c10000-0000-4000-8000-000000000001','e4c10000-0000-4000-8000-000000000004','e4c10000-0000-4000-8000-000000000002','e4c10000-0000-4000-8000-000000000010',true,true,(SELECT (v->'claims'->0->>'attempt')::uuid FROM qa_claims WHERE name='first'),'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'))->>'status','released_unscanned','explicit release distinct from available');
+SELECT is((SELECT scan_status FROM public.romax_opportunity_attachments WHERE id='e4c10000-0000-4000-8000-000000000010'),'pending','scan still pending');
+SELECT is((SELECT storage_path FROM public.romax_opportunity_attachments WHERE id='e4c10000-0000-4000-8000-000000000010'),NULL::text,'canonical path remains private');
+SELECT is((public.romax_unscanned_document_access('e4c10000-0000-4000-8000-000000000001','e4c10000-0000-4000-8000-000000000004','e4c10000-0000-4000-8000-000000000002','e4c10000-0000-4000-8000-000000000010',true,true,(SELECT (v->'claims'->0->>'attempt')::uuid FROM qa_claims WHERE name='first'),'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'))->>'status','released_unscanned','repeat authorized download');
+RESET ROLE;
+SELECT is((SELECT count(*) FROM romax_docs_private.attachment_events WHERE attachment_id='e4c10000-0000-4000-8000-000000000010' AND operation='accessed_unscanned'),2::bigint,'every access has audit event');
+SELECT is((SELECT count(*) FROM romax_docs_private.attachment_events WHERE attachment_id='e4c10000-0000-4000-8000-000000000010' AND operation='state_changed' AND next_state='released_unscanned'),1::bigint,'release transition recorded only once');
+UPDATE public.organizations SET status='suspended' WHERE id='e4c10000-0000-4000-8000-000000000001';
+SET LOCAL ROLE service_role;
+SELECT throws_ok($q$SELECT public.romax_unscanned_document_access('e4c10000-0000-4000-8000-000000000001','e4c10000-0000-4000-8000-000000000004','e4c10000-0000-4000-8000-000000000002','e4c10000-0000-4000-8000-000000000010',true,false,NULL,NULL)$q$,'42501',NULL,'suspended owner denied despite previous release');
+RESET ROLE;
 SELECT * FROM finish();
 ROLLBACK;
