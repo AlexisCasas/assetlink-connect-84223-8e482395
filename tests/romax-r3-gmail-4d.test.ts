@@ -19,4 +19,5 @@ test('4D quarantine/release remains unscanned, Office and failed documents denie
 test('4D filename is forced to expected safe extension and strips path controls',()=>{
  assert.equal(documentFilename({...base,filename:'../evil\u202e.exe'}),'.._evil_.pdf');
  assert.equal(documentFilename({...base,filename:'TDR.pdf'}),'TDR.pdf');
+ assert.equal(documentFilename({...base,filename:'folder\\nested/file.pdf'}),'folder_nested_file.pdf');
 });
