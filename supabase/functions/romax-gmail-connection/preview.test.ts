@@ -1,4 +1,4 @@
-import { classifyThread, parseDeadlineEvents, readPreview, DAY_MS } from './preview.ts';
+import { classifyThread, parseDeadlineEvents, readPreview, extractMessageText, importPolicy, DAY_MS } from './preview.ts';
 function assert(v:unknown,msg='assertion failed'){if(!v)throw Error(msg);}
 const to=Date.parse('2026-11-27T20:00:00Z'),from=to-7*DAY_MS;
 const msg=(id:string,subject:string,snippet:string,offset=1000,labels=['INBOX'],file='',sender='Cliente <cliente@example.test>')=>({id,internalDate:String(from+offset),labelIds:labels,snippet,payload:{headers:[{name:'Subject',value:subject},{name:'From',value:sender}],parts:file?[{filename:file,mimeType:file.endsWith('.xlsx')?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'application/pdf'}]:[]}});
@@ -56,12 +56,13 @@ Deno.test('read-only API, fixed query and page token, no attachment download',as
   const mock:typeof fetch=async(input,init)=>{
     const url=new URL(String(input));calls.push(url);assert(init?.method==='GET');assert(url.hostname==='gmail.googleapis.com');
     if(url.pathname.endsWith('/threads'))return Response.json({threads:[{id:'one'},{id:'one'}],nextPageToken:'next',resultSizeEstimate:4});
+    if(url.pathname.endsWith('/messages/m')){assert(url.searchParams.get('fields')?.includes('body(size,data,attachmentId)'));return Response.json({id:'m',payload:{mimeType:'text/plain',body:{data:btoa('Solicitamos cotizar el servicio')}}});}
     assert(url.pathname.endsWith('/threads/one')&&url.searchParams.get('format')==='full');
     assert(!url.searchParams.get('fields')?.includes('body'));
     return Response.json({id:'one',messages:[msg('m','Solicitud de cotización','Solicitamos cotizar')]});
   };
   const r=await readPreview(mock,'synthetic',from,to,'previous');
-  assert(calls.length===2&&r.scanned===1&&r.next==='next'&&r.candidates.length===1);
+  assert(calls.length===3&&r.scanned===1&&r.next==='next'&&r.candidates.length===1);
   assert(calls[0].searchParams.get('pageToken')==='previous'&&calls[0].searchParams.get('q')?.includes('after:'+Math.floor(from/1000)));
 });
 Deno.test('failed page does not return a silently incomplete result',async()=>{
@@ -94,4 +95,54 @@ Deno.test('quoted client history inside an internal quote is not mistaken for a 
   const alias=msg('alias','COTIZACION ROMAX - CASSINELLI','Se adjunta la cotización solicitada. De: Cliente <cliente@cassinelli.com>',1000,['INBOX'],'RMX-2026-7269.pdf','Ventas 3 ROMAX <ventas3@romaxfm.com>');
   const c=classify([alias]);
   assert(c?.category==='quoted'&&c.reference==='RMX-2026-7269');
+});
+
+const withBody=(m:ReturnType<typeof msg>,bodyText:string)=>({...m,bodyText});
+const utf8b64=(s:string)=>btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+Deno.test('audited UTP Chiclayo: identical snippets and changed deadline without extension words',()=>{
+  const snippet='Estimado proveedor, lo invitamos a participar en el proceso de cotización';
+  const a=withBody(msg('a','SC-0000154401-2026 UTP Chiclayo',snippet,1000),snippet+'\nFECHA PARA VISITAS TÉCNICAS: 24/11/2026 (4:00 pm)\nFECHA LÍMITE PARA ENVÍO DE PROPUESTAS: 27/11/2026');
+  const b=withBody(msg('b','SC-0000154401-2026 UTP Chiclayo',snippet,2000),snippet+'\nFECHA LÍMITE PARA ENVÍO DE PROPUESTAS: 30/11/2026');
+  const c=classifyThread({id:'test',messages:[a,b]},from,to);
+  assert(c?.category==='follow_up'&&c.import_policy==='review_required'&&c.deadline_events.length===2&&c.deadline_events[1].date==='2026-11-30'&&c.deadline_events[1].kind==='extension');
+});
+Deno.test('audited UTP Lima Sur: body preserves historical date and excludes visits and envelope',()=>{
+  const m=withBody(msg('a','SC-0000153027-2026 UTP Lima Sur','Se extiende plazo hasta el sábado 28.11 a las 12pm'), 'Se extiende plazo para entrega de propuesta hasta el día de\nmañana Sábado 28.11 a las 12pm.\nSaludos.\nDe: Cliente\nEnviado el: viernes 06/11/2026\nFecha para la visita técnica: Sábado 07.11 – 10am a 11am o Lunes 09.11 – 10am\nDeadline para envío de propuestas Martes 10/11 – 12 pm.');
+  const c=classifyThread({id:'test',messages:[m]},from,to);
+  assert(c?.category==='follow_up'&&c.deadline_events.length===2&&c.deadline_events.some(e=>e.date==='2026-11-10'&&e.time==='12:00')&&c.deadline_events.some(e=>e.date==='2026-11-28'&&e.kind==='extension'));
+});
+Deno.test('audited Cass Trujillo: proposal deadline after excerpt and access instructions',()=>{
+  const m=withBody(msg('a','CASS Trujillo Larco - mantenimiento','Favor su apoyo con el envío de su propuesta'), 'Favor su apoyo con el envío de su propuesta de acuerdo al TDR. Confirmar visita a tienda enviando el SCTR.\nFecha de visita: Viernes 27/11 10am a 4pm\nFecha de envío de propuesta: 2026-12-01');
+  const c=classifyThread({id:'test',messages:[m]},from,to);
+  assert(c?.category==='quote_request'&&c.deadline_events.length===1&&c.deadline_events[0].date==='2026-12-01');
+});
+Deno.test('audited FEN: invitation phrasing and deadline in body',()=>{
+  const m=withBody(msg('a','UTP contratos marco FEN','Los invitamos a participar en el proceso de cotización'), 'Los invitamos a participar en el proceso de cotización para técnicos de mantenimiento.\nAgradeceremos el envío de su propuesta hasta el día de mañana 27/11 hasta las 12:00 pm.');
+  const c=classifyThread({id:'test',messages:[m]},from,to);
+  assert(c?.category==='quote_request'&&c.deadline_events[0].date==='2026-11-27'&&c.deadline_events[0].time==='12:00');
+});
+Deno.test('promotion excluded, orphan follow-up cannot be a new import candidate',()=>{
+  assert(classify([msg('promo','Cupón Black Friday','Descuento exclusivo de 50%',1000,['CATEGORY_PROMOTIONS'])])===null);
+  const c=classify([msg('a','HMC Chiclayo','Amable recordatorio: favor enviar propuestas')]);
+  assert(c?.category==='follow_up'&&c.import_policy==='review_required'&&importPolicy({...c,existing_status:'in_analysis'})==='link_existing');
+});
+Deno.test('MIME text only, plain preferred, attachment and HTML script ignored',()=>{
+  const p={mimeType:'multipart/mixed',parts:[{mimeType:'multipart/alternative',parts:[{mimeType:'text/plain',body:{data:utf8b64('Propuesta válida')}},{mimeType:'text/html',body:{data:utf8b64('<p>otra</p>')}}]},{mimeType:'text/plain',filename:'secret.txt',body:{data:utf8b64('ATTACHMENT SECRET')}},{mimeType:'image/png',body:{data:'invalid'}}]};
+  const decoded=extractMessageText(p);
+  assert(decoded.text==='Propuesta válida'&&!decoded.limited);
+  const html=extractMessageText({mimeType:'text/html',body:{data:utf8b64('<p>Fecha de envío de propuesta: 2026-12-01</p><script>ignored()</script>')}});
+  assert(html.text.includes('2026-12-01')&&!html.text.includes('ignored'));
+  assert(extractMessageText({mimeType:'text/plain',body:{attachmentId:'separate'}}).limited);
+});
+Deno.test('older message body never requested and full body never returned',async()=>{
+  const urls:string[]=[];
+  const mock:typeof fetch=async(input)=>{
+    const url=new URL(String(input));urls.push(url.pathname);
+    if(url.pathname.endsWith('/threads'))return Response.json({threads:[{id:'one'}]});
+    if(url.pathname.endsWith('/threads/one'))return Response.json({id:'one',messages:[msg('old','Earlier','Old',-1),msg('new','Solicitud','Favor cotizar')]});
+    assert(url.pathname.endsWith('/messages/new')&&!url.pathname.includes('attachments'));
+    return Response.json({id:'new',payload:{mimeType:'text/plain',body:{data:utf8b64('Favor cotizar\nPRIVATE BODY MARKER')}}});
+  };
+  const r=await readPreview(mock,'synthetic',from,to);
+  assert(urls.length===3&&r.candidates[0].text_source==='body'&&!JSON.stringify(r).includes('PRIVATE BODY MARKER'));
 });

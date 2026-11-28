@@ -1,7 +1,7 @@
 import { createServiceClient, getAuthenticatedUser, isUuid } from '../_shared/adminAuth.ts';
 import { randomToken, hashState, pkceChallenge, importKey, seal, unseal, READ_SCOPE, exactScope } from './crypto.ts';
 
-import { DAY_MS, readPreview } from './preview.ts';
+import { DAY_MS, readPreview, importPolicy } from './preview.ts';
 
 const env = (name: string) => Deno.env.get(name) ?? '';
 const table = 'romax_gmail_connections';
@@ -151,7 +151,7 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
       if(page.candidates.length){
         const existing=await db.from('romax_opportunities').select('source_thread_id,status').eq('organization_id',organization).eq('source_system','gmail').in('source_thread_id',page.candidates.map(x=>x.thread_id));
         if(existing.error)throw new SafeError(503,'No se pudo comprobar duplicados');
-        for(const candidate of page.candidates)candidate.existing_status=existing.data?.find(x=>x.source_thread_id===candidate.thread_id)?.status??null;
+        for(const candidate of page.candidates){candidate.existing_status=existing.data?.find(x=>x.source_thread_id===candidate.thread_id)?.status??null;candidate.import_policy=importPolicy(candidate);}
       }
       const next_cursor=page.next?await seal(key,JSON.stringify({to,next:page.next}),cursorContext):null;
       return reply({status:'connected',window_start:new Date(from).toISOString(),window_end:new Date(to).toISOString(),candidates:page.candidates,scanned:page.scanned,estimate:page.estimate,next_cursor});

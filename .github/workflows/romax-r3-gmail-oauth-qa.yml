@@ -22,6 +22,10 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.4.5
+      - name: Verify QA and production source parity
+        run: |
+          cmp supabase/functions/romax-gmail-connection/preview.ts supabase/functions/romax-gmail-connection-qa/preview.ts
+          cmp supabase/functions/romax-gmail-connection/handler.ts supabase/functions/romax-gmail-connection-qa/handler.ts
       - run: deno check --node-modules-dir=none supabase/functions/romax-gmail-connection/index.ts supabase/functions/romax-gmail-connection-qa/index.ts
       - run: deno test --node-modules-dir=none supabase/functions/romax-gmail-connection/crypto.test.ts supabase/functions/romax-gmail-connection/handler.test.ts supabase/functions/romax-gmail-connection/preview.test.ts
   database:

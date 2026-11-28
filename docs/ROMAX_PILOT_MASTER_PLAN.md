@@ -462,3 +462,7 @@ Se crea `romax-gmail-connection-qa` con allowlist `status/preview` y CORS restri
 
 ## QA aislado R3-GMAIL.2.1 — 27-nov-2026
 Autorizado y desplegado `romax-gmail-connection-qa` v1 ACTIVE (`verify_jwt=true`), con allowlist `status/preview`. Vercel Preview de `feature/romax-r3-gmail-2-1` tiene override branch-scoped `VITE_ROMAX_GMAIL_FUNCTION_NAME`; bundle verificado. CI commit 8cbfca1 10/10 PASS, 22 pruebas Deno. Producción Edge v2 y Vercel `9117364a` sin cambios. Falta login manual del propietario en preview y primera sincronización real. No merge, no importación ni SQL.
+
+
+## R3-GMAIL.2.2 — interpretación de conversaciones
+Implementación en PR #132: lectura temporal de texto MIME en ventana de siete días, comparación de plazos, reconocimiento de propuestas, exclusión de promociones y política explícita de revisión/vinculación. Véase `docs/ROMAX_R3_GMAIL_2_2_CONVERSATION_INTERPRETATION.md`. CI pendiente; no merge, importación ni cambios Cloud.
