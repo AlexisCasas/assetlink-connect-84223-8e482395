@@ -1,7 +1,7 @@
 import { createServiceClient, getAuthenticatedUser, isUuid } from '../_shared/adminAuth.ts';
 import { randomToken, hashState, pkceChallenge, importKey, seal, unseal, READ_SCOPE, exactScope } from './crypto.ts';
 
-import { DAY_MS, readPreview } from './preview.ts';
+import { DAY_MS, readPreview, importPolicy } from './preview.ts';
 
 const env = (name: string) => Deno.env.get(name) ?? '';
 const table = 'romax_gmail_connections';
@@ -54,7 +54,7 @@ async function verifyMailbox(config: Config, accessToken: string, request: typeo
   if (typeof data.emailAddress !== 'string' || data.emailAddress.trim().toLowerCase() !== config.mailbox) throw new SafeError(403,'Selecciona exclusivamente el buzón comercial autorizado');
 }
 type Dependencies = { authenticate: (req: Request) => Promise<{id:string}>; service: () => Db; request: typeof fetch; readEnv: typeof env };
-export function createHandler(deps: Dependencies = { authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv:env }) {
+export function createHandler(deps: Dependencies = { authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv:env }, allowedActions?: ReadonlySet<string>) {
   const { request, readEnv } = deps;
   return async (req: Request): Promise<Response> => {
   const configuredOrigin = readEnv('ROMAX_GMAIL_APP_ORIGIN');
@@ -68,6 +68,7 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
     const config = configuration(readEnv);
     const body = await req.json();
     if (!body || body.organization_id !== config.organization) throw new SafeError(403,'Acceso restringido');
+    if (allowedActions && (typeof body.action !== 'string' || !allowedActions.has(body.action))) throw new SafeError(403,'Acción no habilitada en este entorno');
     const db = deps.service();
     await assertOwner(db,config.organization,user.id);
     const organization = config.organization;
@@ -150,7 +151,7 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
       if(page.candidates.length){
         const existing=await db.from('romax_opportunities').select('source_thread_id,status').eq('organization_id',organization).eq('source_system','gmail').in('source_thread_id',page.candidates.map(x=>x.thread_id));
         if(existing.error)throw new SafeError(503,'No se pudo comprobar duplicados');
-        for(const candidate of page.candidates)candidate.existing_status=existing.data?.find(x=>x.source_thread_id===candidate.thread_id)?.status??null;
+        for(const candidate of page.candidates){candidate.existing_status=existing.data?.find(x=>x.source_thread_id===candidate.thread_id)?.status??null;candidate.import_policy=importPolicy(candidate);}
       }
       const next_cursor=page.next?await seal(key,JSON.stringify({to,next:page.next}),cursorContext):null;
       return reply({status:'connected',window_start:new Date(from).toISOString(),window_end:new Date(to).toISOString(),candidates:page.candidates,scanned:page.scanned,estimate:page.estimate,next_cursor});
@@ -195,4 +196,13 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
     return reply({error:'No se pudo completar la operación de Gmail'},503);
   }
   };
+}
+
+
+// Isolated Preview-only entrypoint. This origin is the stable Vercel branch alias;
+// no OAuth lifecycle or write actions are exposed from this function.
+export const QA_APP_ORIGIN = 'https://one-facility-git-feature-romax-r3-29c35c-alexiscasasrs-projects.vercel.app';
+export function createQaHandler() {
+  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? QA_APP_ORIGIN : env(name);
+  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview']));
 }

@@ -35,7 +35,7 @@
 | R1-D | Histórico de cotizaciones ROMAX 2026 | **R1-D1 PASS:** 25 PDFs importados, 20 clientes vinculados y 5 pendientes; **R1-D2 pendiente** de validación económica | Confirmar importes neto/IGV/bruto, revisar 5 contratantes y reutilización de partidas históricas |
 | R1-E | Pantalla de consulta comercial/histórico | **En desarrollo PR:** ruta #quote-history, filtros cliente/sede/servicio/correlativo/fechas, 15 por página y detalle PDF | QA CI y revisión visual de 15 escenarios; merge/deploy solo tras autorización |
 | R2 | Catálogo independiente de costos de materiales y mano de obra | Pendiente | Fecha de vigencia, unidad, moneda, proveedor y procedencia en cada costo |
-| R3 | Captura Gmail cotizaciones | Pendiente | OAuth, deduplicación, filtro de correos relevantes, oportunidad a nombre de ROMAX |
+| R3 | Captura Gmail cotizaciones | R3-GMAIL.2.2.1 PASS; R3-GMAIL.3 autorizado en GitHub | OAuth, deduplicación, filtro de correos relevantes, oportunidad a nombre de ROMAX |
 | R4 | Cotizador asistido IA | Pendiente | Borrador con referencias verificables, números deterministas y revisión humana |
 | R5 | Visita técnica estructurada | Pendiente | Horas, especialidad, cantidades, material, fotos y observaciones vinculadas al presupuesto |
 | R6 | Gobernanza y plantilla oficial | Pendiente | Políticas ROMAX, aprobaciones internas, exportación/emisión y trazabilidad |
@@ -444,3 +444,37 @@ Nota de observabilidad: los 4 POST 200 y 3 OPTIONS 204 observados en la ventana 
 
 ## Auditoría inicial R3-GMAIL.2 — 27-nov-2026
 Primera página revisada en solo lectura: 12 conversaciones; 6 hilos comerciales (5 solicitudes + 1 actualización), 4 cotizadas/operativas, 2 falsos positivos. Se identificaron errores de clasificación en reenvíos, alias internos y ampliaciones de plazo. No se importaron correos. NO GO importación hasta corregir clasificador, validar fechas America/Lima y revisar páginas siguientes. Ver [auditoría anonimizada](ROMAX_R3_GMAIL_2_FIRST_PAGE_AUDIT.md).
+
+
+## R3-GMAIL.2.1 — correctivo en desarrollo
+PR independiente para reenvíos, alias @romaxfm.com y ampliaciones de plazo con historial y validación de día de semana en America/Lima. Casos Cassinelli Piura, Makro ventas3, UTP Lima Sur, UTP Chiclayo y UTP Piura. Sin escrituras ni despliegue; pendiente CI.
+
+
+R3-GMAIL.2.1 incluye exclusión de soporte Suplayer, reconocimiento de solicitudes que dicen propuesta sin “cotización” literal y separación de coordinación SST/ingreso como operación. Pendiente CI final.
+
+
+R3-GMAIL.2.1: parser de plazos ampliado a fechas ISO yyyy-mm-dd, además de dd/mm y dd.mm; mantiene validación de día de semana y zona America/Lima. El PR sigue Draft hasta que la última ejecución de CI confirme el head definitivo.
+
+
+## R3-GMAIL.2.1 — QA aislado autorizado
+Se crea `romax-gmail-connection-qa` con allowlist `status/preview` y CORS restringido al alias Vercel Preview de `feature/romax-r3-gmail-2-1`. Vercel Preview de esa rama invoca QA mediante `VITE_ROMAX_GMAIL_FUNCTION_NAME`; producción mantiene la función productiva por defecto. Sin merge, cambios en producción, SQL, importación o modificaciones Gmail. Validar login de propietario y correos auditados antes de autorizar R3-GMAIL.3.
+
+
+## QA aislado R3-GMAIL.2.1 — 27-nov-2026
+Autorizado y desplegado `romax-gmail-connection-qa` v1 ACTIVE (`verify_jwt=true`), con allowlist `status/preview`. Vercel Preview de `feature/romax-r3-gmail-2-1` tiene override branch-scoped `VITE_ROMAX_GMAIL_FUNCTION_NAME`; bundle verificado. CI commit 8cbfca1 10/10 PASS, 22 pruebas Deno. Producción Edge v2 y Vercel `9117364a` sin cambios. Falta login manual del propietario en preview y primera sincronización real. No merge, no importación ni SQL.
+
+
+## R3-GMAIL.2.2 — interpretación de conversaciones
+Implementación en PR #132: lectura temporal de texto MIME en ventana de siete días, comparación de plazos, reconocimiento de propuestas, exclusión de promociones y política explícita de revisión/vinculación. Véase `docs/ROMAX_R3_GMAIL_2_2_CONVERSATION_INTERPRETATION.md`. CI pendiente; no merge, importación ni cambios Cloud.
+
+
+## R3-GMAIL.2.2.1 — correctivo QA
+Corregir detección de cotizaciones de alias ROMAX usando payload MIME completo, extracción de fechas de tablas HTML Outlook y exclusión de promociones con señales de lista + contenido. Incluye regresiones Makro, Cassinelli Trujillo y Samsung. Requiere CI completo y despliegue únicamente de `romax-gmail-connection-qa`; no merge ni cambios en producción.
+
+## Cierre R3-GMAIL.2.2.1 — 28-nov-2026
+
+QA real v3 confirmado por el propietario: Q01–Q08 PASS. CI del código probado 3c66e85: 10/10 checks y 34/34 pruebas Deno PASS. Logs QA v3 HTTP 200/204 corroboran ejecución, no contenido. Al cierre: 0 oportunidades Gmail, 0 adjuntos importados. PR #132 abierto Draft, sin merge. Edge productiva v2 intacta.
+
+## R3-GMAIL.3 — autorización
+
+D01–D12 aprobadas. PR independiente: 3.1 transacción, auditoría, ACL e idempotencia; 3.2 confirmación owner; 3.3 pruebas aisladas. Cloud, QA v4, merge y producción no autorizados. No importar correos reales sin confirmación expresa en la interfaz.

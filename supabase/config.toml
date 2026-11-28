@@ -56,3 +56,6 @@ content_path = "./supabase/templates/magic_link.html"
 # Auth is verified against Supabase Auth by the function on every request.
 [functions.romax-gmail-connection]
 verify_jwt = false
+
+[functions.romax-gmail-connection-qa]
+verify_jwt = true

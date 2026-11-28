@@ -1,0 +1,41 @@
+# R3-GMAIL.2.1 — Correctivos de clasificación
+27-nov-2026. PR correctivo sobre R3-GMAIL.2. No desplegar ni importar oportunidades.
+## Cambios
+- Identidad interna ROMAX se determina por dominio @romaxfm.com, no solo por Gmail SENT; cubre ventas, ventas2, ventas3, operaciones y alias futuros del mismo dominio.
+- Reenvíos: si el hilo contiene el mensaje externo original, se usa ese mensaje como fuente y se agrega una sola conversación. Si solo llega el reenvío interno, se extrae el remitente externo de la cabecera forwarded del snippet.
+- Cotizaciones de alias internos con evidencia de envío y PDF se reconocen como quoted, no como solicitudes nuevas.
+- Ampliaciones de plazo: patrones “se extiende plazo”, “se amplía”, “prórroga” y equivalentes.
+- Historial de plazos conserva fecha original y extensión; parser explícito dd/mm, dd.mm, dd/mm/yyyy, weekday y hora AM/PM; salida en America/Lima (-05:00). Día de semana contradictorio → ambiguous, sin fecha normalizada.
+- UI muestra el historial de fechas y señala los casos ambiguos.
+## Casos de regresión
+Cassinelli Piura (original + forward), Makro (ventas3 alias), UTP Lima Sur (28/11 12:00 extension from 10/11 12:00), UTP Chiclayo (27/11 -> 30/11), UTP Piura (viernes 26/11 conflict), quoted/internal mail.
+## Límites
+No leer body.data ni descargar adjuntos. No escribir Gmail, oportunidades, labels ni tablas. Sin migración ni secretos. No merge ni deploy hasta CI y QA.
+
+
+Ajustes QA adicionales: excluir el hilo de soporte/notificaciones Suplayer como no comercial; reconocer solicitudes que dicen propuesta sin exigir “propuesta económica”; tratar solicitudes de documentos SST/ingreso como coordinación operativa cuando no contienen una petición de cotización. El parser reconoce días con acento (sábado/miércoles) y horas precedidas por guion.
+
+
+Fechas soportadas: dd/mm, dd.mm, dd/mm/yyyy y yyyy-mm-dd. La fecha se normaliza solo si es válida y el día de semana coincide cuando el correo lo indica. Las horas AM/PM se normalizan a America/Lima (UTC-05:00). Los mensajes de soporte Suplayer se excluyen y las solicitudes con “propuesta” se reconocen aunque no repitan la palabra “cotización”.
+
+El plazo indicado en una solicitud inicial no se clasifica como seguimiento: solo se marca seguimiento cuando hay lenguaje de ampliación, prórroga, recordatorio, nueva fecha o reprogramación.
+
+
+## Aislamiento QA en Supabase y Vercel Preview
+- Function independiente `romax-gmail-connection-qa`, con allowlist estricta `status` y `preview`; `start`, `complete`, `verify` y `disconnect` responden 403.
+- Reutiliza autenticación Supabase y verifica propietario activo ROMAX. No incluye endpoint de importación.
+- CORS restringido al alias exacto de Vercel Preview de la rama `feature/romax-r3-gmail-2-1`; sin secretos nuevos. Lee el refresh token cifrado existente solo en memoria para pedir un access token y consultar Gmail read-only.
+- Vercel usa `VITE_ROMAX_GMAIL_FUNCTION_NAME=romax-gmail-connection-qa` solo para Preview y solo para esta rama. Producción no recibe esta variable y conserva el nombre productivo por defecto.
+- No merge, no deploy de función productiva, no cambio de alias productivo, no SQL ni persistencia de resultados.
+
+
+## Despliegue QA aislado — 27-nov-2026
+- `romax-gmail-connection-qa` desplegada en Supabase OneFacility, v1 ACTIVE, `verify_jwt=true`.
+- QA allowlist: `status` y `preview` únicamente; las acciones `start`, `complete`, `verify`, `disconnect` se rechazan con 403. El origen CORS está fijado al alias Preview de esta rama.
+- Vercel env `VITE_ROMAX_GMAIL_FUNCTION_NAME=romax-gmail-connection-qa` creado solo para target Preview y branch `feature/romax-r3-gmail-2-1`; producción no recibe la variable y conserva el fallback `romax-gmail-connection`.
+- Preview deployment `dpl_BvA48BQqJMJqduv7LUYnZuheoGt1` READY en commit `8cbfca1`; el bundle contiene el nombre QA.
+- CI del commit `8cbfca1`: 10/10 check-runs success; Edge Deno 22/22 PASS; frontend y suites SQL aisladas PASS.
+- Producción intacta: función productiva `romax-gmail-connection` v2 ACTIVE, Vercel producción sigue en `9117364a`. Sin migraciones, secretos nuevos, escrituras, importaciones o cambios Gmail.
+- Pendiente QA manual del propietario: iniciar sesión en Preview y ejecutar sincronización con los hilos auditados. No fusionar hasta revisar el resultado.
+
+La interfaz Vercel Preview en modo QA oculta Conectar, Verificar y Desconectar; solo muestra Actualizar estado y Sincronizar Gmail, coincidiendo con la allowlist de la función QA.
