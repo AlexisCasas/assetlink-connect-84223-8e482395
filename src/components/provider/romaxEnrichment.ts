@@ -11,6 +11,7 @@ export function initialSnapshot(o:Opportunity,review?:Review):Snapshot {
 export function changeField<K extends keyof Snapshot>(s:Snapshot,key:K,value:Snapshot[K],source:Provenance={source:'manual'}):Snapshot {
  const next={...s,[key]:value,provenance:{...s.provenance,[key]:source}};
  if(key==='client_id'&&s.client_id!==value){next.site_id=null;next.contact_id=null;next.additional_contacts=[];for(const k of ['site_id','contact_id','additional_contacts'])next.provenance[k]={source:'manual'};}
+ if(key==='contact_id'&&typeof value==='string'&&next.additional_contacts.includes(value)){next.additional_contacts=next.additional_contacts.filter(id=>id!==value);next.provenance.additional_contacts={source:'manual'};}
  if(key==='site_id'&&s.site_id!==value){next.contact_id=null;next.additional_contacts=[];for(const k of ['contact_id','additional_contacts'])next.provenance[k]={source:'manual'};}
  if(key==='deadline_date'&&!value){next.deadline_time=null;next.provenance.deadline_time={source:'manual'};}
  if(key==='reference'&&!value){next.reference_kind=null;next.provenance.reference_kind={source:'manual'};}

@@ -1,12 +1,15 @@
 name: ROMAX R3-GMAIL.1 OAuth QA
 on:
   pull_request:
-    branches: ["productization/mvp", "feature/romax-r3-gmail-2-1", "feature/romax-r3-gmail-3", "docs/romax-functional-replanning-20261128"]
+    branches: ["productization/mvp", "feature/romax-r3-gmail-2-1", "feature/romax-r3-gmail-3", "docs/romax-functional-replanning-20261128", "docs/romax-r3-sol-2-design"]
     paths:
       - "supabase/**"
       - "src/components/provider/GmailConnectionPanel.tsx"
       - "src/components/provider/OpportunitiesView.tsx"
       - "src/components/provider/RequestDetail.tsx"
+      - "src/components/provider/RequestEnrichment.tsx"
+      - "src/components/provider/romaxEnrichment.ts"
+      - "tests/romax-r3-sol-2.test.ts"
       - "src/components/provider/romaxRequestList.ts"
       - "src/components/provider/OpportunityAnalysisView.tsx"
       - "src/pages/Dashboard.tsx"
@@ -88,6 +91,6 @@ jobs:
           assert.equal(diagnostics.length,expected.length);
           expected.forEach((prefix,i)=>assert.ok(diagnostics[i].startsWith(prefix),diagnostics[i]));
           JS
-      - run: npx eslint src/components/provider/GmailConnectionPanel.tsx src/pages/GmailCallback.tsx src/components/provider/OpportunitiesView.tsx src/components/provider/RequestDetail.tsx src/components/provider/romaxRequestList.ts
-      - run: node --experimental-strip-types --test tests/romax-gmail-import-policy.test.ts tests/romax-r3-sol-1.test.ts
+      - run: npx eslint src/components/provider/GmailConnectionPanel.tsx src/pages/GmailCallback.tsx src/components/provider/OpportunitiesView.tsx src/components/provider/RequestDetail.tsx src/components/provider/romaxRequestList.ts src/components/provider/RequestEnrichment.tsx src/components/provider/romaxEnrichment.ts
+      - run: node --experimental-strip-types --test tests/romax-gmail-import-policy.test.ts tests/romax-r3-sol-1.test.ts tests/romax-r3-sol-2.test.ts
       - run: npm run build

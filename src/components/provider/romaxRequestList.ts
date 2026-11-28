@@ -21,7 +21,7 @@ export type Contact={id:string;commercial_client_id:string;commercial_site_id:st
 export type Attachment={id:string;opportunity_id:string;filename:string;mime_type:string|null;size_bytes:number|null;processing_status:string;created_at:string};
 export type Filters={search:string;status:string;client:string;source:string;match:string;classification:string;from:string;to:string};
 export const emptyFilters:Filters={search:'',status:'all',client:'all',source:'all',match:'all',classification:'all',from:'',to:''};
-export type ListMemory={filters:Filters;page:number;pageSize:number;scroll:number};
+export type ListMemory={filters:Filters;page:number;pageSize:number;scroll:number;enrichmentFilters?:{specialty:string;deadline:string;reference:string}};
 export function createListMemory():ListMemory{return {filters:{...emptyFilters},page:1,pageSize:15,scroll:0};}
 export const isOpportunityId=(v:string|undefined):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 export const canViewRequests=(type:string|undefined,active:boolean,org:string,memberOrg:string|undefined,role:string|undefined)=>!!org&&type==='provider_company'&&active&&org===memberOrg&&['owner','admin','manager','quote_manager'].includes(role??'');
