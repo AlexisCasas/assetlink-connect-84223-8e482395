@@ -3,6 +3,7 @@ import { randomToken, hashState, pkceChallenge, importKey, seal, unseal, READ_SC
 
 import { DAY_MS, readPreview, importPolicy } from './preview.ts';
 import { candidateDigest, issueConfirmation, openConfirmation, senderEmail } from './import.ts';
+import { discoverAttachments } from './attachments.ts';
 
 const env = (name: string) => Deno.env.get(name) ?? '';
 const table = 'romax_gmail_connections';
@@ -160,6 +161,38 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
       const next_cursor=page.next?await seal(key,JSON.stringify({to,next:page.next}),cursorContext):null;
       return reply({status:'connected',window_start:new Date(from).toISOString(),window_end:new Date(to).toISOString(),candidates,scanned:page.scanned,estimate:page.estimate,next_cursor});
     }
+    if (body.action === 'discover_attachments') {
+      if(readEnv('ROMAX_GMAIL_ATTACHMENT_DISCOVERY_ENABLED')!=='true')throw new SafeError(403,'Detección de adjuntos no habilitada');
+      if(Object.keys(body).some(k=>!['action','organization_id','opportunity_id','confirmed'].includes(k))||
+         body.confirmed!==true||!isUuid(body.opportunity_id))throw new SafeError(400,'Confirma la detección de la solicitud');
+      if(!row||row.status!=='connected'||row.mailbox_email!==config.mailbox||!row.connected_at)throw new SafeError(409,'Conexión no disponible');
+      const lookup=await db.from('romax_opportunities').select('id,source_thread_id,source_system')
+        .eq('organization_id',organization).eq('id',body.opportunity_id).eq('source_system','gmail').maybeSingle();
+      if(lookup.error||!lookup.data?.source_thread_id)throw new SafeError(404,'Solicitud no disponible o sin acceso');
+      const signal=AbortSignal.timeout(30000);
+      const boundedRequest:typeof fetch=(input,init)=>request(input,{...init,signal:init?.signal?AbortSignal.any([signal,init.signal]):signal});
+      const refresh=await unseal(key,row.refresh_ciphertext,context('refresh'));
+      const tokens=await googleToken(config,{grant_type:'refresh_token',refresh_token:refresh},boundedRequest);
+      if(tokens.scope!==undefined&&!exactScope(tokens.scope))throw new SafeError(409,'Permiso de Google inesperado');
+      await verifyMailbox(config,tokens.access_token,boundedRequest);
+      let discovery;
+      try{discovery=await discoverAttachments(boundedRequest,tokens.access_token,lookup.data.source_thread_id,config.mailbox,signal);}
+      catch{throw new SafeError(409,'No se pudo verificar los metadatos del hilo; vuelve a intentarlo');}
+      await assertOwner(db,organization,user.id);
+      const current=await getRow(db,organization);
+      if(!current||current.status!=='connected'||current.connected_at!==row.connected_at||current.mailbox_email!==config.mailbox)
+        throw new SafeError(409,'La conexión cambió');
+      signal.throwIfAborted();
+      const {items,...stats}=discovery;
+      const result=await db.rpc('romax_register_gmail_attachment_metadata',{p_org:organization,p_opportunity:body.opportunity_id,
+        p_actor:user.id,p_connection_at:row.connected_at,p_thread:lookup.data.source_thread_id,p_items:items});
+      if(result.error)throw new SafeError(result.error.code==='42501'?403:result.error.code==='23505'?409:503,'No se pudo registrar la detección');
+      const registered=result.data?.registered,unchanged=result.data?.unchanged;
+      if(!Number.isInteger(registered)||!Number.isInteger(unchanged)||registered<0||unchanged<0||registered+unchanged!==items.length)
+        throw new SafeError(503,'Resultado de detección no verificable');
+      // No source IDs, filenames, raw errors, credentials or binary contents in response.
+      return reply({discovery:{...stats,detected:items.length,registered,unchanged}});
+    }
     if (body.action === 'enrichment_preview') {
       if(readEnv('ROMAX_GMAIL_ENRICHMENT_ENABLED')!=='true')throw new SafeError(403,'Enriquecimiento Gmail no habilitado');
       if(!isUuid(body.opportunity_id)||!row||row.status!=='connected'||row.mailbox_email!==config.mailbox)
@@ -309,6 +342,6 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
 // OAuth lifecycle is blocked; confirmation is disabled unless its separate QA flag is enabled.
 export const QA_APP_ORIGIN = 'https://one-facility-git-feature-romax-r3-29c35c-alexiscasasrs-projects.vercel.app';
 export function createQaHandler() {
-  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? (env('ROMAX_GMAIL_QA_APP_ORIGIN')||QA_APP_ORIGIN) : name==='ROMAX_GMAIL_IMPORT_ENABLED' ? env('ROMAX_GMAIL_QA_IMPORT_ENABLED') : name==='ROMAX_GMAIL_ENRICHMENT_ENABLED' ? env('ROMAX_GMAIL_QA_ENRICHMENT_ENABLED') : env(name);
-  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview','confirm_import','enrichment_preview','save_enrichment']));
+  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? (env('ROMAX_GMAIL_QA_APP_ORIGIN')||QA_APP_ORIGIN) : name==='ROMAX_GMAIL_IMPORT_ENABLED' ? env('ROMAX_GMAIL_QA_IMPORT_ENABLED') : name==='ROMAX_GMAIL_ENRICHMENT_ENABLED' ? env('ROMAX_GMAIL_QA_ENRICHMENT_ENABLED') : name==='ROMAX_GMAIL_ATTACHMENT_DISCOVERY_ENABLED' ? env('ROMAX_GMAIL_QA_ATTACHMENT_DISCOVERY_ENABLED') : env(name);
+  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview','confirm_import','enrichment_preview','save_enrichment','discover_attachments']));
 }
