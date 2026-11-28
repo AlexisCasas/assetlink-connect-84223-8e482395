@@ -1,12 +1,15 @@
 name: ROMAX R3-GMAIL.1 OAuth QA
 on:
   pull_request:
-    branches: ["productization/mvp", "feature/romax-r3-gmail-2-1", "feature/romax-r3-gmail-3", "docs/romax-functional-replanning-20261128"]
+    branches: ["productization/mvp", "feature/romax-r3-gmail-2-1", "feature/romax-r3-gmail-3", "docs/romax-functional-replanning-20261128", "docs/romax-r3-sol-2-design"]
     paths:
       - "supabase/**"
       - "src/components/provider/GmailConnectionPanel.tsx"
       - "src/components/provider/OpportunitiesView.tsx"
       - "src/components/provider/RequestDetail.tsx"
+      - "src/components/provider/RequestEnrichment.tsx"
+      - "src/components/provider/romaxEnrichment.ts"
+      - "tests/romax-r3-sol-2.test.ts"
       - "src/components/provider/romaxRequestList.ts"
       - "src/components/provider/OpportunityAnalysisView.tsx"
       - "src/pages/Dashboard.tsx"
@@ -14,6 +17,7 @@ on:
       - "src/components/provider/gmailImportPolicy.ts"
       - "tests/romax-gmail-import-policy.test.ts"
       - "scripts/qa/romax_gmail_import_concurrency.sh"
+      - "scripts/qa/romax_sol2_concurrency.sh"
       - "src/pages/GmailCallback.tsx"
       - "src/App.tsx"
       - ".github/workflows/romax-r3-gmail-oauth-qa.yml"
@@ -35,6 +39,7 @@ jobs:
           cmp supabase/functions/romax-gmail-connection/preview.ts supabase/functions/romax-gmail-connection-qa/preview.ts
           cmp supabase/functions/romax-gmail-connection/handler.ts supabase/functions/romax-gmail-connection-qa/handler.ts
           cmp supabase/functions/romax-gmail-connection/import.ts supabase/functions/romax-gmail-connection-qa/import.ts
+          cmp supabase/functions/romax-gmail-connection/crypto.ts supabase/functions/romax-gmail-connection-qa/crypto.ts
       - run: deno check --node-modules-dir=none supabase/functions/romax-gmail-connection/index.ts supabase/functions/romax-gmail-connection-qa/index.ts
       - run: deno test --node-modules-dir=none supabase/functions/romax-gmail-connection/crypto.test.ts supabase/functions/romax-gmail-connection/handler.test.ts supabase/functions/romax-gmail-connection/preview.test.ts supabase/functions/romax-gmail-connection/import.test.ts
   database:
@@ -58,6 +63,18 @@ jobs:
       - run: supabase test db
       - name: Gmail import concurrent transaction QA (local only)
         run: bash scripts/qa/romax_gmail_import_concurrency.sh
+      - name: SOL2 concurrent review QA (local only)
+        run: bash scripts/qa/romax_sol2_concurrency.sh
+      - name: Install CLI with security advisors
+        uses: supabase/setup-cli@v1
+        with:
+          version: "2.81.3"
+      - name: Security advisors on disposable local stack
+        run: |
+          set -euo pipefail
+          test ! -f supabase/.temp/project-ref
+          supabase db advisors --help
+          supabase db advisors --local --type security --level info --fail-on none
       - if: always()
         run: supabase stop --no-backup
   frontend:
@@ -88,6 +105,6 @@ jobs:
           assert.equal(diagnostics.length,expected.length);
           expected.forEach((prefix,i)=>assert.ok(diagnostics[i].startsWith(prefix),diagnostics[i]));
           JS
-      - run: npx eslint src/components/provider/GmailConnectionPanel.tsx src/pages/GmailCallback.tsx src/components/provider/OpportunitiesView.tsx src/components/provider/RequestDetail.tsx src/components/provider/romaxRequestList.ts
-      - run: node --experimental-strip-types --test tests/romax-gmail-import-policy.test.ts tests/romax-r3-sol-1.test.ts
+      - run: npx eslint src/components/provider/GmailConnectionPanel.tsx src/pages/GmailCallback.tsx src/components/provider/OpportunitiesView.tsx src/components/provider/RequestDetail.tsx src/components/provider/romaxRequestList.ts src/components/provider/RequestEnrichment.tsx src/components/provider/romaxEnrichment.ts
+      - run: node --experimental-strip-types --test tests/romax-gmail-import-policy.test.ts tests/romax-r3-sol-1.test.ts tests/romax-r3-sol-2.test.ts
       - run: npm run build

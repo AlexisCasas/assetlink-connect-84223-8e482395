@@ -160,6 +160,82 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
       const next_cursor=page.next?await seal(key,JSON.stringify({to,next:page.next}),cursorContext):null;
       return reply({status:'connected',window_start:new Date(from).toISOString(),window_end:new Date(to).toISOString(),candidates,scanned:page.scanned,estimate:page.estimate,next_cursor});
     }
+    if (body.action === 'enrichment_preview') {
+      if(readEnv('ROMAX_GMAIL_ENRICHMENT_ENABLED')!=='true')throw new SafeError(403,'Enriquecimiento Gmail no habilitado');
+      if(!isUuid(body.opportunity_id)||!row||row.status!=='connected'||row.mailbox_email!==config.mailbox)
+        throw new SafeError(409,'Solicitud o conexión no disponible');
+      const lookup=await db.from('romax_opportunities').select('id,source_thread_id,source_system,received_at')
+        .eq('organization_id',organization).eq('id',body.opportunity_id).eq('source_system','gmail').maybeSingle();
+      if(lookup.error||!lookup.data?.source_thread_id)throw new SafeError(404,'Solicitud no disponible o sin acceso');
+      const refresh=await unseal(key,row.refresh_ciphertext,context('refresh'));
+      const tokens=await googleToken(config,{grant_type:'refresh_token',refresh_token:refresh},request);
+      if(tokens.scope!==undefined&&!exactScope(tokens.scope))throw new SafeError(409,'Permiso de Google inesperado');
+      await verifyMailbox(config,tokens.access_token,request);
+      let candidate;
+      try{
+        // Existing opportunity, not a new seven-day candidate. Never accept browser thread ids.
+        const page=await readPreview(request,tokens.access_token,0,Date.now(),undefined,lookup.data.source_thread_id,true);
+        candidate=page.candidates[0];
+      }catch{throw new SafeError(409,'No se pudo leer el hilo completo dentro de los límites. Conserva la revisión manual');}
+      if(!candidate||candidate.body_limited)throw new SafeError(409,'Hilo no disponible para revisión completa');
+      await assertOwner(db,organization,user.id);
+      const current=await getRow(db,organization);
+      if(!current||current.status!=='connected'||current.connected_at!==row.connected_at||current.mailbox_email!==config.mailbox)
+        throw new SafeError(409,'La conexión cambió');
+      // No IDs, body, tokens or attachments in browser response. Parsed dates are suggestions, not approved values.
+      const proofContext=context('enrichment:'+user.id+':'+row.connected_at+':'+config.origin+':'+body.opportunity_id);
+      const evidence=(value:unknown,excerpt:string,message_id:string,received_at:string)=>({value,evidence:excerpt,message_id,received_at,parser:'romax-r3-gmail-2.2'});
+      const choices:Record<string,unknown[]>={title:[evidence(candidate.subject.slice(0,300),candidate.subject.slice(0,300),candidate.message_id,candidate.received_at)],summary:[evidence(candidate.snippet,candidate.snippet.slice(0,500),candidate.message_id,candidate.received_at)]};
+      if(candidate.reference&&candidate.reference_source){choices.reference=[evidence(candidate.reference,candidate.reference,candidate.reference_source.message_id,candidate.reference_source.received_at)];}
+      const observations:Record<string,unknown>={};
+      const deadlines=[];
+      if(candidate.deadline_events.length>30)throw new SafeError(409,'Demasiados eventos de plazo; revisa manualmente el hilo');
+      for(const event of candidate.deadline_events){
+        if(!event.source_message_id||!event.source_received_at)continue;
+        const eventKey=await hashState(JSON.stringify([event.source_message_id,event.raw,event.date,event.time,event.kind]));
+        const value={key:eventKey,raw:event.raw,date:event.date,time:event.time,kind:event.kind,ambiguous:event.status==='ambiguous'};
+        deadlines.push(value);observations[eventKey]=evidence(value,event.raw,event.source_message_id,event.source_received_at);
+        if(event.status==='ambiguous'||!event.date)continue;
+        for(const [field,value] of [['deadline_date',event.date],['deadline_time',event.time],['deadline_note',event.raw]] as const){
+          (choices[field]??=[]).push({...evidence(value,event.raw.slice(0,500),event.source_message_id,event.source_received_at),event_key:eventKey});
+        }
+      }
+      const proof=await seal(key,JSON.stringify({expires:Date.now()+15*60*1000,choices,observations}),proofContext);
+      return reply({enrichment:{subject:candidate.subject,sender:senderEmail(candidate.sender),excerpt:candidate.snippet,
+        reference:candidate.reference,reference_kind:candidate.reference&&/^RMX[- ]/i.test(candidate.reference)?'internal_quote':candidate.reference_source?'client_request':'unknown',reference_verified:!!candidate.reference_source,
+        deadlines,
+        source_received_at:candidate.received_at,text_source:candidate.text_source,parser:'romax-r3-gmail-2.2',category:candidate.category,proof}});
+    }
+    if(body.action==='save_enrichment'){
+      if(readEnv('ROMAX_GMAIL_ENRICHMENT_ENABLED')!=='true')throw new SafeError(403,'Enriquecimiento Gmail no habilitado');
+      if(body.confirmed!==true||!isUuid(body.opportunity_id)||!isUuid(body.request_id)||!Number.isInteger(body.expected_revision)||body.expected_revision<0||
+        typeof body.proof!=='string'||body.proof.length>180000||!body.snapshot||typeof body.snapshot!=='object'||Array.isArray(body.snapshot)||JSON.stringify(body.snapshot).length>32768)
+        throw new SafeError(400,'Revisión inválida');
+      const args={p_org:organization,p_opportunity:body.opportunity_id,p_expected:body.expected_revision,p_request:body.request_id,p_snapshot:body.snapshot,p_actor:user.id};
+      const receipt=await db.rpc('romax_find_request_review_receipt',args);
+      if(receipt.error)throw new SafeError(receipt.error.code==='22023'?409:503,'No se pudo comprobar el resultado anterior');
+      if(receipt.data)return reply({review:receipt.data,recovered:true});
+      if(!row||row.status!=='connected'||row.mailbox_email!==config.mailbox)throw new SafeError(409,'Conexión no disponible');
+      const proofContext=context('enrichment:'+user.id+':'+row.connected_at+':'+config.origin+':'+body.opportunity_id);
+      let decoded;
+      try{decoded=JSON.parse(await unseal(key,body.proof,proofContext));}catch{throw new SafeError(409,'Propuesta inválida; vuelve a leer Gmail');}
+      if(!Number.isFinite(decoded.expires)||decoded.expires<=Date.now()||!decoded.choices)throw new SafeError(409,'Propuesta vencida; vuelve a leer Gmail');
+      const fields:Record<string,unknown>={};
+      for(const [field,source] of Object.entries(body.snapshot.provenance??{})){
+        const s=source as {source?:string;evidence?:string};
+        if(s.source!=='gmail_reviewed')continue;
+        const options=decoded.choices[field];
+        if(!Array.isArray(options))continue;
+        const match=options.find(x=>JSON.stringify(x.value)===JSON.stringify(body.snapshot[field])&&x.evidence===s.evidence&&
+          (!field.startsWith('deadline_')||body.snapshot.deadline_observations?.some((event:{key:string;decision:string;date:string;time:string|null;raw:string})=>event.key===x.event_key&&event.decision==='accepted'&&event.date===body.snapshot.deadline_date&&event.time===body.snapshot.deadline_time&&event.raw===body.snapshot.deadline_note)));
+        if(match)fields[field]=match;
+      }
+      const observations:Record<string,unknown>={};
+      if(Array.isArray(body.snapshot.deadline_observations))for(const event of body.snapshot.deadline_observations){if(event&&typeof event.key==='string'&&/^[0-9a-f]{64}$/.test(event.key)&&decoded.observations?.[event.key])observations[event.key]=decoded.observations[event.key];}
+      const result=await db.rpc('romax_save_request_review_verified',{...args,p_verified:{connection_at:row.connected_at,fields,observations}});
+      if(result.error)throw new SafeError(result.error.code==='40001'?409:422,'No se pudo guardar la revisión; verifica los datos y la versión');
+      return reply({review:result.data});
+    }
     if (body.action === 'confirm_import') {
       if(!importEnabled)throw new SafeError(403,'Importación no habilitada');
       if(body.confirmed!==true||!row||row.status!=='connected'||row.mailbox_email!==config.mailbox)throw new SafeError(409,'Confirma la importación con una conexión activa');
@@ -233,6 +309,6 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
 // OAuth lifecycle is blocked; confirmation is disabled unless its separate QA flag is enabled.
 export const QA_APP_ORIGIN = 'https://one-facility-git-feature-romax-r3-29c35c-alexiscasasrs-projects.vercel.app';
 export function createQaHandler() {
-  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? (env('ROMAX_GMAIL_QA_APP_ORIGIN')||QA_APP_ORIGIN) : name==='ROMAX_GMAIL_IMPORT_ENABLED' ? env('ROMAX_GMAIL_QA_IMPORT_ENABLED') : env(name);
-  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview','confirm_import']));
+  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? (env('ROMAX_GMAIL_QA_APP_ORIGIN')||QA_APP_ORIGIN) : name==='ROMAX_GMAIL_IMPORT_ENABLED' ? env('ROMAX_GMAIL_QA_IMPORT_ENABLED') : name==='ROMAX_GMAIL_ENRICHMENT_ENABLED' ? env('ROMAX_GMAIL_QA_ENRICHMENT_ENABLED') : env(name);
+  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview','confirm_import','enrichment_preview','save_enrichment']));
 }

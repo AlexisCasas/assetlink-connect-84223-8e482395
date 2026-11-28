@@ -496,3 +496,7 @@ SOL1-D01–D12 aprobadas; rama feature/romax-r3-sol-1, PR funcional dependiente 
 QA visual aprobado por propietario (confirmación global, sin desglose individual). CI run 46160145444, 3/3 PASS, head abd9f89. Cloud 4 oportunidades (3 Gmail nuevas sin vincular, 1 manual en análisis vinculada), 3 auditorías concordantes, 3 mensajes y 3 hilos únicos; primera oportunidad conservada. QA v7 5 POST 200 y 5 OPTIONS 204; logs no prueban cada interacción. Cierre funcional; no merge ni producción. Siguiente: R3-SOL.2 diseño, sin escrituras Cloud.
 
 Ver [contrato de enriquecimiento](ROMAX_R3_SOL_2_ENRICHMENT_DESIGN.md), decisiones E01–E12 propuestas.
+
+## R3-SOL.2 — implementación candidata
+
+E01–E12 aprobadas; rama feature/romax-r3-sol-2, SQL solo GitHub, formulario de revisión, lectura Gmail dirigida y filtros de plazo. CI y cierre de brechas de trazabilidad pendientes; no Cloud, merge o producción.

@@ -1,10 +1,10 @@
 export const DAY_MS = 86400000;
 export const PAGE_SIZE = 12;
 export type Category = 'quote_request' | 'follow_up' | 'adjustment' | 'quoted' | 'operational' | 'other' | 'review';
-export type DeadlineEvent = { raw:string; date:string|null; time:string|null; datetime:string|null; timezone:'America/Lima'; status:'confirmed'|'ambiguous'; kind:'extension'|'stated'; weekday:string|null };
+export type DeadlineEvent = { raw:string; date:string|null; time:string|null; datetime:string|null; timezone:'America/Lima'; status:'confirmed'|'ambiguous'; kind:'extension'|'stated'; weekday:string|null; source_message_id?:string; source_received_at?:string };
 type Part = { filename?: string; mimeType?: string; parts?: Part[]; headers?: {name:string;value:string}[]; body?: {data?:string;size?:number;attachmentId?:string} };
 type Message = { id?: string; internalDate?: string; labelIds?: string[]; snippet?: string; bodyText?: string; bodyLimited?: boolean; payload?: Part & { headers?: {name:string;value:string}[] } };
-export type Candidate = { thread_id:string; message_id:string; subject:string; sender:string; received_at:string; snippet:string; category:Category; reason:string; reference:string|null; deadline_hint:string|null; deadline_events:DeadlineEvent[]; message_count:number; attachments:{name:string;mime:string;supported:boolean}[]; existing_status?:string|null; existing_opportunity_id?:string|null; text_source:'body'|'snippet'; body_limited:boolean; import_policy:'new_candidate'|'link_existing'|'review_required'|'not_importable' };
+export type Candidate = { thread_id:string; message_id:string; subject:string; sender:string; received_at:string; snippet:string; category:Category; reason:string; reference:string|null; deadline_hint:string|null; deadline_events:DeadlineEvent[]; message_count:number; attachments:{name:string;mime:string;supported:boolean}[]; reference_source?:{message_id:string;received_at:string}; existing_status?:string|null; existing_opportunity_id?:string|null; text_source:'body'|'snippet'; body_limited:boolean; import_policy:'new_candidate'|'link_existing'|'review_required'|'not_importable' };
 const clean = (s:unknown,max:number) => typeof s==='string' ? s.replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,max).trim() : '';
 const norm = (s:string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const header = (m:Message,name:string) => clean(m.payload?.headers?.find(h=>h.name.toLowerCase()===name.toLowerCase())?.value,500);
@@ -97,7 +97,7 @@ const weekdayIndex:Record<string,number>={domingo:0,lunes:1,martes:2,miercoles:3
 const datePattern=/(?<![\d-])\b(?:(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s+)?(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?\b/gi;
 const isoDatePattern=/\b(\d{4})-(\d{2})-(\d{2})\b/g;
 const deadlineCue=/(?:plazo|deadline|fecha\s+limite|(?:envio|entrega|presentacion)\s+de\s+(?:su\s+)?propuestas?|(?:enviar|presentar)\s+(?:su\s+)?propuestas?|se\s+extiende|se\s+amplia|prorroga)/gi;
-export function parseDeadlineEvents(messages:{snippet?:string;bodyText?:string;internalDate?:string}[]):DeadlineEvent[] {
+export function parseDeadlineEvents(messages:{id?:string;snippet?:string;bodyText?:string;internalDate?:string}[],includeEvidence=false):DeadlineEvent[] {
   const found:DeadlineEvent[]=[];let previousCurrent:DeadlineEvent|null=null;
   for(const message of messages){
     const text=messageText(message).slice(0,BODY_CHARS),currentEnd=primaryText(message).length;
@@ -137,14 +137,15 @@ export function parseDeadlineEvents(messages:{snippet?:string;bodyText?:string;i
       if(index<currentEnd&&date&&previousCurrent?.date&&(date!==previousCurrent.date||(time&&previousCurrent.time&&time!==previousCurrent.time)))kind='extension';
       const raw=clean(text.slice(Math.max(0,index-65),Math.min(text.length,index+full.length+35)),180);
       const event:DeadlineEvent={raw,date,time,datetime,timezone:'America/Lima',status,kind,weekday:matchedWeekday};
-      if(!found.some(x=>x.date===event.date&&x.time===event.time&&x.kind===event.kind))found.push(event);
+      if(includeEvidence&&validId(message.id)&&Number.isFinite(Number(message.internalDate))){event.source_message_id=message.id;event.source_received_at=new Date(Number(message.internalDate)).toISOString();}
+      if(!found.some(x=>x.date===event.date&&x.time===event.time&&x.kind===event.kind&&(!includeEvidence||(x.source_message_id===event.source_message_id&&x.raw===event.raw))))found.push(event);
       if(index<currentEnd&&event.status==='confirmed')currentEvent=event;
     }
     if(currentEvent)previousCurrent=currentEvent;
   }
   return found;
 }
-export function classifyThread(thread:{id?:string;messages?:Message[]},from:number,to:number):Candidate|null {
+export function classifyThread(thread:{id?:string;messages?:Message[]},from:number,to:number,includeEvidence=false):Candidate|null {
   if(!validId(thread.id))return null;
   const messages=(thread.messages??[]).filter(m=>validId(m.id)&&!isExcluded(m)&&Number(m.internalDate)>=from&&Number(m.internalDate)<=to).sort((a,b)=>Number(a.internalDate)-Number(b.internalDate));
   const external=messages.filter(m=>!isSent(m)&&!isPromotional(m));
@@ -166,7 +167,7 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const sentEvidence=quoteReplies.some(x=>Number(x.internalDate)>latestSourceAt);
   const unresolvedInternalReply=internal.some(x=>Number(x.internalDate)>latestSourceAt&&!forwardedSender(x));
   const deadlineMessages=sourceMessages.length?sourceMessages:quoteReplies;
-  const deadlineEvents=parseDeadlineEvents(deadlineMessages);
+  const deadlineEvents=parseDeadlineEvents(deadlineMessages,includeEvidence);
   let category:Category='other',reason='No se detectó una solicitud comercial explícita.';
   if(!sourceMessages.length){category='quoted';reason='Cotización enviada desde un alias interno de ROMAX; no es una nueva solicitud.';}
   else if(retailPromotion){category='other';reason='Promoción comercial ajena a una solicitud de ROMAX.';}
@@ -184,9 +185,10 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const currentDeadline=[...deadlineEvents].reverse().find(e=>e.kind==='extension')??deadlineEvents[deadlineEvents.length-1]??null;
   const reference=refs.length===1?refs[0]:rmxReference(context+' '+subject+' '+snippet+' '+allAttachments.map(x=>x.name).join(' ')+' '+quoteReplies.map(x=>clean(x.snippet,500)+' '+attachments(x).map(y=>y.name).join(' ')).join(' '));
   const candidate:Candidate={thread_id:thread.id,message_id:m.id!,subject:subject||'Sin asunto',sender:forwardedSender(m)??sender,received_at:new Date(Number(m.internalDate)).toISOString(),snippet,category,reason,reference,deadline_hint:currentDeadline?.raw??null,deadline_events:deadlineEvents,message_count:messages.length,attachments:allAttachments,text_source:(sourceMessages.length?sourceMessages:quoteReplies).some(x=>!!x.bodyText)?'body':'snippet',body_limited:bodyLimited,import_policy:'review_required'};
+  if(includeEvidence&&reference&&refs.length===1){const refSource=sourceMessages.find(x=>references(header(x,'Subject')+' '+primaryText(x,!!forwardedSender(x))).includes(reference));if(refSource&&validId(refSource.id))candidate.reference_source={message_id:refSource.id,received_at:new Date(Number(refSource.internalDate)).toISOString()};}
   candidate.import_policy=importPolicy(candidate);return candidate;
 }
-export async function readPreview(request:typeof fetch,token:string,from:number,to:number,pageToken?:string,onlyThread?:string) {
+export async function readPreview(request:typeof fetch,token:string,from:number,to:number,pageToken?:string,onlyThread?:string,strictThread=false) {
   const started=Date.now();
   const root='https://gmail.googleapis.com/gmail/v1/users/me/threads';
   const get=async(url:URL)=>{
@@ -218,6 +220,7 @@ export async function readPreview(request:typeof fetch,token:string,from:number,
       url.search=new URLSearchParams({format:'full',fields:'id,messages(id,internalDate,labelIds,snippet,payload(headers(name,value),filename,mimeType,parts(filename,mimeType,parts(filename,mimeType,parts(filename,mimeType)))) )'.replace(/\s/g,'')}).toString();
       const thread=await get(url);
       if(thread.id!==id)throw new Error('Thread identity mismatch');
+      if(strictThread&&(!Array.isArray(thread.messages)||thread.messages.length>80))throw new Error('Thread metadata limit');
       const messages:Message[]=(thread.messages??[]).filter((m:Message)=>validId(m.id)&&!isExcluded(m)&&Number(m.internalDate)>=from&&Number(m.internalDate)<=to);
       const readable=messages.filter(m=>!isPromotional(m)).sort((a,b)=>Number(b.internalDate)-Number(a.internalDate));
       const partFields=(depth:number):string=>'filename,mimeType,headers(name,value),body(size,data,attachmentId)'+(depth>0?',parts('+partFields(depth-1)+')':'');
@@ -236,7 +239,8 @@ export async function readPreview(request:typeof fetch,token:string,from:number,
           throw error;
         }
       }
-      return classifyThread({id,messages},from,to);
+      if(strictThread&&readable.some(m=>m.bodyLimited===true))throw new Error('Thread body limit');
+      return classifyThread({id,messages},from,to,strictThread);
     }));
     candidates.push(...batch.filter((x):x is Candidate=>x!==null));
   }
