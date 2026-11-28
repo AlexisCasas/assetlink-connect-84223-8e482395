@@ -21,3 +21,26 @@ CI en GitHub Actions, revisión de resultados y QA real posterior en la función
 - Cassinelli Outlook: convertir cierres de celdas/filas/tablas HTML en separadores de texto para no perder plazos ISO ubicados en tablas; mantener adjuntos XLSX/PDF como metadatos, sin descargarlos.
 - Samsung/marketing: excluir `CATEGORY_PROMOTIONS` y reforzar con `List-Unsubscribe`/`List-Id`/`Precedence` combinado con señales promocionales. La consulta Gmail también excluye `-category:promotions`; no se ocultan mensajes solo por tener List-Unsubscribe.
 - Añadidas pruebas de integración con respuestas Gmail API sintéticas que reproducen las estructuras MIME auditadas. Sin cuerpos reales, IDs reales, persistencia, importación ni modificaciones de Gmail.
+
+## R3-GMAIL.2.2.1 — aceptación manual real y cierre (28/11/2026)
+
+**QA manual confirmado por el propietario: PASS en Vercel Preview v3.** Se repitió la sincronización real y quedaron aprobados los ocho casos Q01–Q08:
+
+| Caso | Resultado final | Observación |
+| --- | --- | --- |
+| Q01 Cassinelli Piura | PASS | Clasificación validada |
+| Q02 Makro Motobombas | PASS | Reconocimiento de alias ROMAX y adjunto MIME; referencia RMX-2026-7269 |
+| Q03 UTP Lima Sur | PASS | Clasificación y seguimiento validados |
+| Q04 UTP Chiclayo | PASS | Clasificación y actualización de plazo validadas |
+| Q05 Cassinelli Trujillo | PASS | HTML multipart de Outlook y plazo 01/12 reconocidos |
+| Q06 FEN | PASS | Clasificación validada |
+| Q07 HMC Chiclayo | PASS | Clasificación validada |
+| Q08 Samsung Black Friday | PASS | Excluido como promoción |
+
+Preview utilizado: https://one-facility-git-feature-romax-r3-29c35c-alexiscasasrs-projects.vercel.app
+
+**Corroboración técnica:** los registros de Supabase muestran invocaciones de la función QA v3 con respuestas HTTP 200 y preflight CORS 204 durante la sesión. No se registran cuerpos de correo ni datos de los casos en logs; por ello, el detalle Q01–Q08 se conserva como aceptación manual expresa del propietario, no como inferencia desde logs.
+
+**Línea base al cierre:** Edge QA v3 ACTIVE con JWT obligatorio; Edge productiva v2 ACTIVE. La tabla de oportunidades conserva una oportunidad manual preexistente y **0 oportunidades con source_system=gmail**; no se importaron correos ni adjuntos. No se ejecutó migración, merge ni despliegue productivo.
+
+**Estado:** R3-GMAIL.2.2.1 cerrado. PR #132 permanece Draft y abierto, pendiente de su revisión/merge autorizados. Siguiente incremento: R3-GMAIL.3, con importación exclusivamente tras confirmación expresa del propietario.
