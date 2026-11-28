@@ -139,14 +139,19 @@ HEADERS={
  "spec":{"especificacion","especificaciones","detalle tecnico","observaciones tecnicas"},
 }
 def headers(cells):
-    h={}
+    h={}; duplicates=set()
     for col,c in cells.items():
         if c["formula"] is not None: continue
         key=next((k for k,v in HEADERS.items() if normalize(c["value"]) in v),None)
         if key:
-            if key in h: return None
-            h[key]=col
-    return h if "description" in h and ("quantity" in h or "unit" in h) else None
+            if key in h: duplicates.add(key)
+            else: h[key]=col
+    # Do not confuse literal service descriptions/units with a repeated header.
+    # Quantity header or 3+ distinct header fields is required.
+    if "description" not in h or not ("quantity" in h or ("unit" in h and len(h)>=3)):
+        return None,False
+    if duplicates: return None,True
+    return h,False
 
 def extract(data):
     try:
@@ -259,10 +264,12 @@ def extract(data):
                 loc={"sheet":name,"sheet_index":ix,"cells":next(iter(cells.values()))["ref"]+":"+list(cells.values())[-1]["ref"]}
                 if len(cells)==1: loc["cells"]=next(iter(cells.values()))["ref"]
                 # JSON string is literal evidence, not executable spreadsheet/HTML.
-                excerpt=json.dumps([{"cell":x["ref"],"raw":x["value"],**({"formula":x["formula"],"cached":x["value"] or None} if x["formula"] is not None else {})} for x in cells.values()],ensure_ascii=False,separators=(",",":"))
+                excerpt=json.dumps([{"cell":x["ref"],"raw":x["value"],"type":x["type"],**({"number_format_id":x["format"]} if x["format"] else {}),**({"formula":x["formula"],"cached":x["value"] or None} if x["formula"] is not None else {})} for x in cells.values()],ensure_ascii=False,separators=(",",":"))
                 ordinal=add(loc,excerpt)
                 if ordinal is None: continue
-                new=headers(cells)
+                new,ambiguous_header=headers(cells)
+                if ambiguous_header:
+                    head=None;partial=True;continue
                 if new is not None:
                     head=new;found_header=True;continue
                 if not head: continue

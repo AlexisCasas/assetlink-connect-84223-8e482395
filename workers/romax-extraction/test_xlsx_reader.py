@@ -63,6 +63,20 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(r["status"],"partial")
         self.assertEqual(r["candidates"],[])
 
+    def test_header_ambiguity_stops_old_mapping(self):
+        rows=[head(),row(2,cell("B2","First"),cell("C2","und"),cell("D2","2","n")),
+              row(3,cell("B3","Descripción"),cell("C3","Cantidad"),cell("D3","Metrado")),
+              row(4,cell("B4","Ambiguous"),cell("C4","20","n"),cell("D4","30","n"))]
+        r=extract(workbook([("M",sheet(rows),"visible")]))
+        self.assertEqual(r["status"],"partial")
+        self.assertEqual(len(r["candidates"]),1)
+        self.assertEqual(len(r["evidence"]),4)
+
+    def test_literal_service_not_confused_with_header(self):
+        r=extract(workbook([("M",sheet([head(),row(2,cell("B2","Servicio"),cell("C2","und"),cell("D2","3","n"))]),"visible")]))
+        self.assertEqual(r["status"],"succeeded")
+        self.assertEqual(r["candidates"][0]["proposal"]["quantity"],"3")
+
     def test_blank_quantity_not_invented(self):
         r=extract(workbook([("M",sheet([head(),row(2,cell("B2","Work"),cell("C2","und"))]),"visible")]))
         self.assertIsNone(r["candidates"][0]["proposal"]["quantity"])
@@ -139,8 +153,9 @@ class DockerReaderTests(unittest.TestCase):
         cls.image=os.environ["ROMAX_QA_XLSX_IMAGE_ID"]
 
     def test_real_container_and_broker(self):
-        data=workbook(compression=zipfile.ZIP_STORED)
-        self.assertGreater(len(data),4096)
+        # Large, incompressible-to-pipe test payload, entirely synthetic.
+        data=workbook(mutate=lambda p:p.update({"docProps/core.xml":"<core>"+"x"*70000+"</core>"}),compression=zipfile.ZIP_STORED)
+        self.assertGreater(len(data),65536)
         scope,claim,control,storage=synthetic(data)
         r=XlsxQABroker(control,storage,self.image,[claim["source"]["hash"]]).execute(scope,enabled=True)
         self.assertEqual(r,extract(data))
