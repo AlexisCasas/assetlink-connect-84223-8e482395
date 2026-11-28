@@ -466,3 +466,7 @@ Autorizado y desplegado `romax-gmail-connection-qa` v1 ACTIVE (`verify_jwt=true`
 
 ## R3-GMAIL.2.2 — interpretación de conversaciones
 Implementación en PR #132: lectura temporal de texto MIME en ventana de siete días, comparación de plazos, reconocimiento de propuestas, exclusión de promociones y política explícita de revisión/vinculación. Véase `docs/ROMAX_R3_GMAIL_2_2_CONVERSATION_INTERPRETATION.md`. CI pendiente; no merge, importación ni cambios Cloud.
+
+
+## R3-GMAIL.2.2.1 — correctivo QA
+Corregir detección de cotizaciones de alias ROMAX usando payload MIME completo, extracción de fechas de tablas HTML Outlook y exclusión de promociones con señales de lista + contenido. Incluye regresiones Makro, Cassinelli Trujillo y Samsung. Requiere CI completo y despliegue únicamente de `romax-gmail-connection-qa`; no merge ni cambios en producción.

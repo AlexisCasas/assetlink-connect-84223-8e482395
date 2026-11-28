@@ -63,7 +63,7 @@ Deno.test('read-only API, fixed query and page token, no attachment download',as
   };
   const r=await readPreview(mock,'synthetic',from,to,'previous');
   assert(calls.length===3&&r.scanned===1&&r.next==='next'&&r.candidates.length===1);
-  assert(calls[0].searchParams.get('pageToken')==='previous'&&calls[0].searchParams.get('q')?.includes('after:'+Math.floor(from/1000)));
+  assert(calls[0].searchParams.get('pageToken')==='previous'&&calls[0].searchParams.get('q')?.includes('after:'+Math.floor(from/1000))&&calls[0].searchParams.get('q')?.includes('-category:promotions'));
 });
 Deno.test('failed page does not return a silently incomplete result',async()=>{
   const mock:typeof fetch=async(input)=>String(input).includes('/threads?')?Response.json({threads:[{id:'one'}]}):new Response('',{status:403});
@@ -153,4 +153,51 @@ Deno.test('retail offer without promotions label is not an adjustment',()=>{
 Deno.test('proposed work start and SST are not a commercial proposal',()=>{
   const c=classify([msg('a','HMC SJL Jardines PRE ITSE','Se solicita enviar documentos SST para ingreso a tienda, fecha propuesta de inicio de trabajo es lunes 30')]);
   assert(c?.category==='operational'&&c.import_policy==='not_importable');
+});
+
+
+Deno.test('Makro alias quote uses full message MIME to identify attachment and RMX reference',async()=>{
+  const alias=msg('alias','COTIZACIÓN ROMAX - MAKRO VARIAS SEDES - SUMINISTRO DE MOTOBOMBAS PORTÁTILES 5.5 HP','Buen día, estimados, Se adjunta la cotización solicitada. RMX-2026-7269 MK VARIOS - SUMINISTRO DE MOTOBOMBAS PORTÁTILES 5.5 HP Quedo atenta a sus comentarios.',1000,['INBOX'],'','Ventas 3 ROMAX FM <ventas3@romaxfm.com>');
+  const calls:string[]=[];
+  const mock:typeof fetch=async(input)=>{
+    const url=new URL(String(input));calls.push(url.pathname);
+    if(url.pathname.endsWith('/threads'))return Response.json({threads:[{id:'makro'}]});
+    if(url.pathname.endsWith('/threads/makro'))return Response.json({id:'makro',messages:[alias]});
+    assert(url.pathname.endsWith('/messages/alias'));
+    return Response.json({id:'alias',payload:{mimeType:'multipart/mixed',headers:alias.payload.headers,parts:[
+      {mimeType:'text/plain',body:{data:utf8b64('Buen día, estimados,\n\nSe adjunta la cotización solicitada.\n\nRMX-2026-7269 MK VARIOS - SUMINISTRO DE MOTOBOMBAS PORTÁTILES 5.5 HP\n\nQuedo atenta a sus comentarios.')}},
+      {filename:'RMX-2026-7269 MK VARIOS - SUMINISTRO DE MOTOBOMBAS PORTÁTILES 5.5 HP.pdf',mimeType:'application/pdf',body:{attachmentId:'pdf'}}
+    ]}});
+  };
+  const result=await readPreview(mock,'synthetic',from,to);
+  const c=result.candidates[0];
+  assert(c?.category==='quoted'&&c.reference==='RMX-2026-7269'&&c.sender.includes('ventas3@romaxfm.com'));
+  assert(c.attachments.length===1&&c.attachments[0].name.endsWith('.pdf')&&c.import_policy==='not_importable');
+  assert(calls.some(x=>x==='/messages/alias'));
+});
+Deno.test('Cassinelli Outlook multipart HTML table keeps proposal deadline and both attachments',async()=>{
+  const incoming=msg('cass','CASS Trujillo Larco - MANTENIMIENTO DE LETRERO LUMINOSO Y EMISION DE CERTIFICADO DE ESTRUCTURA ITSE','Estimados buenas tardes, Favor su apoyo con el envío de su propuesta de acuerdo al TDR según requerimiento de Tienda.',1000,['INBOX'],'','procesos <procesos@cassinelli.com>');
+  const html='<html><body><div>Estimados buenas tardes,</div><div>Favor su apoyo con el envío de su propuesta de acuerdo al TDR según requerimiento de Tienda. Confirmar visita a tienda enviando el SCTR.</div><table><tr><td>Fecha de visita:</td><td>Viernes 27/11 10am a 4pm</td></tr><tr><td>Fecha de envío de propuesta:</td><td>2026-12-01</td></tr></table></body></html>';
+  const mock:typeof fetch=async(input)=>{
+    const url=new URL(String(input));
+    if(url.pathname.endsWith('/threads'))return Response.json({threads:[{id:'cass'}]});
+    if(url.pathname.endsWith('/threads/cass'))return Response.json({id:'cass',messages:[incoming]});
+    assert(url.pathname.endsWith('/messages/cass'));
+    return Response.json({id:'cass',payload:{mimeType:'multipart/mixed',headers:incoming.payload.headers,parts:[
+      {mimeType:'multipart/alternative',parts:[{mimeType:'text/html',body:{data:utf8b64(html)}}]},
+      {filename:'TDR-2026-295_ILUMINACION_INTERIOR.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',body:{attachmentId:'xlsx'}},
+      {filename:'TDR_CASS_TRUJILLO_LARCO_MANTENIMIENTO_ESTRUCTURA.pdf',mimeType:'application/pdf',body:{attachmentId:'pdf'}}
+    ]}});
+  };
+  const result=await readPreview(mock,'synthetic',from,to);
+  const c=result.candidates[0];
+  assert(c?.category==='quote_request'&&c.deadline_events.some(e=>e.date==='2026-12-01'&&e.status==='confirmed'));
+  assert(c.attachments.length===2&&c.attachments.some(x=>x.name.endsWith('.xlsx'))&&c.attachments.some(x=>x.name.endsWith('.pdf')));
+});
+Deno.test('Samsung Black Friday with List-Unsubscribe is excluded even without Gmail promotion label',()=>{
+  const promo=msg('samsung','🖤 Hoy es Black Friday. Lo mejor está en secreto','Genera tu código y accede a nuestras mejores ofertas.',1000,['INBOX'],'','Samsung <samsunglatam@pe.email.samsung.com>');
+  promo.payload.headers.push({name:'List-Unsubscribe',value:'<https://example.test/unsubscribe>, <mailto:unsubscribe@example.test>'});
+  assert(classify([promo])===null);
+  const gmailCategory=msg('samsung2','Black Friday Samsung','Ofertas exclusivas',1000,['INBOX','CATEGORY_PROMOTIONS']);
+  assert(classify([gmailCategory])===null);
 });

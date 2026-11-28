@@ -17,6 +17,12 @@ const emailFrom=(m:Message) => {
 const isInternal=(m:Message)=>emailFrom(m).endsWith('@romaxfm.com');
 const isSent=(m:Message)=>m.labelIds?.includes('SENT')===true||isInternal(m);
 const isExcluded=(m:Message)=>m.labelIds?.some(l=>['SPAM','TRASH','DRAFT'].includes(l))===true;
+const marketingCampaign=/\\b(black friday|cyber monday|cyber days|cupon(?:es)?|newsletter|boletin|ofertas? exclusivas?|promociones? exclusivas?|envio gratis|descuentos? hasta|compra ahora)\\b/i;
+const isPromotional=(m:Message)=>{
+  if(m.labelIds?.includes('CATEGORY_PROMOTIONS'))return true;
+  const listHeaders=!!(header(m,'List-Unsubscribe')||header(m,'List-Id')||/^(?:bulk|list)$/i.test(header(m,'Precedence')));
+  return listHeaders&&marketingCampaign.test(norm(header(m,'Subject')+' '+clean(m.snippet,1200)+' '+messageText(m)));
+};
 
 const BODY_CHARS=48000, MAX_BODY_MESSAGES=12, MAX_JSON_BYTES=2*1024*1024;
 const decodeEntities=(s:string)=>s.replace(/&(?:nbsp|amp|lt|gt|quot|apos|#39|#160|#x[0-9a-f]+|#\d+);/gi,token=>{
@@ -25,7 +31,7 @@ const decodeEntities=(s:string)=>s.replace(/&(?:nbsp|amp|lt|gt|quot|apos|#39|#16
   const n=key.startsWith('&#x')?parseInt(key.slice(3,-1),16):Number(key.slice(2,-1));
   return Number.isInteger(n)&&n>0&&n<=0x10ffff&&!(n>=0xd800&&n<=0xdfff)?String.fromCodePoint(n):' ';
 });
-function htmlText(s:string){return decodeEntities(s.replace(/<!--[\s\S]*?-->/g,' ').replace(/<(script|style|head|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,' ').replace(/<br\b[^>]*>|<\/(?:p|div|li|tr|h[1-6]|blockquote)>/gi,'\n').replace(/<[^>]*>/g,' '));}
+function htmlText(s:string){return decodeEntities(s.replace(/<!--[\s\S]*?-->/g,' ').replace(/<(script|style|head|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,' ').replace(/<br\b[^>]*>|<\/(?:p|div|li|tr|td|th|table|h[1-6]|blockquote)>|<hr\b[^>]*>/gi,'\n').replace(/<[^>]*>/g,' '));}
 export function extractMessageText(payload:Part|undefined):{text:string;limited:boolean}{
   const plain:string[]=[],html:string[]=[];let limited=false,nodes=0,used=0;
   function walk(p:Part|undefined,depth:number){
@@ -141,11 +147,11 @@ export function parseDeadlineEvents(messages:{snippet?:string;bodyText?:string;i
 export function classifyThread(thread:{id?:string;messages?:Message[]},from:number,to:number):Candidate|null {
   if(!validId(thread.id))return null;
   const messages=(thread.messages??[]).filter(m=>validId(m.id)&&!isExcluded(m)&&Number(m.internalDate)>=from&&Number(m.internalDate)<=to).sort((a,b)=>Number(a.internalDate)-Number(b.internalDate));
-  const external=messages.filter(m=>!isSent(m)&&!m.labelIds?.includes('CATEGORY_PROMOTIONS'));
+  const external=messages.filter(m=>!isSent(m)&&!isPromotional(m));
   const forwarded=messages.filter(m=>isInternal(m)&&!!forwardedSender(m));
   const sourceMessages=external.length?external:forwarded;
   const internal=messages.filter(isSent);
-  const quoteReplies=internal.filter(m=>sentQuote.test(norm(clean(m.snippet,500)))&&attachments(m).length>0);
+  const quoteReplies=internal.filter(m=>sentQuote.test(norm(clean(messageText(m),12000)))&&attachments(m).length>0);
   if(!sourceMessages.length&&!quoteReplies.length)return null;
   const m=sourceMessages.length?sourceMessages[sourceMessages.length-1]:quoteReplies[quoteReplies.length-1];
   const subject=header(m,'Subject'),snippet=clean(m.snippet,500),sender=header(m,'From');
@@ -199,7 +205,7 @@ export async function readPreview(request:typeof fetch,token:string,from:number,
     return JSON.parse(new TextDecoder().decode(bytes));
   };
   const list=new URL(root);
-  list.search=new URLSearchParams({q:'after:'+Math.floor(from/1000)+' before:'+Math.ceil(to/1000)+' -in:spam -in:trash -in:drafts',maxResults:String(PAGE_SIZE),includeSpamTrash:'false',fields:'threads(id),nextPageToken,resultSizeEstimate'}).toString();
+  list.search=new URLSearchParams({q:'after:'+Math.floor(from/1000)+' before:'+Math.ceil(to/1000)+' -in:spam -in:trash -in:drafts -category:promotions',maxResults:String(PAGE_SIZE),includeSpamTrash:'false',fields:'threads(id),nextPageToken,resultSizeEstimate'}).toString();
   if(pageToken)list.searchParams.set('pageToken',pageToken);
   const result=await get(list);
   const ids=[...new Set<string>((result.threads??[]).map((x:{id?:string})=>x.id).filter(validId))].slice(0,PAGE_SIZE);
@@ -212,7 +218,7 @@ export async function readPreview(request:typeof fetch,token:string,from:number,
       const thread=await get(url);
       if(thread.id!==id)throw new Error('Thread identity mismatch');
       const messages:Message[]=(thread.messages??[]).filter((m:Message)=>validId(m.id)&&!isExcluded(m)&&Number(m.internalDate)>=from&&Number(m.internalDate)<=to);
-      const readable=messages.filter(m=>!m.labelIds?.includes('CATEGORY_PROMOTIONS')).sort((a,b)=>Number(b.internalDate)-Number(a.internalDate));
+      const readable=messages.filter(m=>!isPromotional(m)).sort((a,b)=>Number(b.internalDate)-Number(a.internalDate));
       const partFields=(depth:number):string=>'filename,mimeType,headers(name,value),body(size,data,attachmentId)'+(depth>0?',parts('+partFields(depth-1)+')':'');
       for(const m of readable.slice(MAX_BODY_MESSAGES))m.bodyLimited=true;
       // One text-body GET at a time per thread; at most three concurrent threads.
@@ -223,7 +229,7 @@ export async function readPreview(request:typeof fetch,token:string,from:number,
           const data=await get(messageUrl);
           if(data.id!==m.id)throw new Error('Message identity mismatch');
           const extracted=extractMessageText(data.payload);
-          m.bodyText=extracted.text;m.bodyLimited=extracted.limited;
+          m.payload=data.payload;m.bodyText=extracted.text;m.bodyLimited=extracted.limited;
         }catch(error){
           if(error instanceof Error&&error.message==='Gmail response limit'){m.bodyLimited=true;continue;}
           throw error;

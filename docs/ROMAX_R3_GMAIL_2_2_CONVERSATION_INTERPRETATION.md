@@ -14,3 +14,10 @@ Cassinelli Piura original/reenvío, Makro alias, UTP Lima Sur (10/11 y 28/11 a 1
 
 ## Gates
 CI en GitHub Actions, revisión de resultados y QA real posterior en la función QA. Sin migraciones, secretos nuevos, modificación de Gmail, importación, merge ni actualización de Supabase Cloud (incluida QA) o Vercel producción en este incremento. Preview automático de la rama puede actualizarse por GitHub; la función QA sigue en v1 hasta autorización y despliegue posterior.
+
+
+## R3-GMAIL.2.2.1 — correcciones derivadas del QA real
+- Makro: conservar en memoria el payload MIME completo devuelto por `messages.get` para reconocer adjuntos anidados de cotizaciones enviadas por alias ROMAX aunque Gmail no marque SENT; usar cuerpo + referencia RMX + adjunto para la categoría `quoted`.
+- Cassinelli Outlook: convertir cierres de celdas/filas/tablas HTML en separadores de texto para no perder plazos ISO ubicados en tablas; mantener adjuntos XLSX/PDF como metadatos, sin descargarlos.
+- Samsung/marketing: excluir `CATEGORY_PROMOTIONS` y reforzar con `List-Unsubscribe`/`List-Id`/`Precedence` combinado con señales promocionales. La consulta Gmail también excluye `-category:promotions`; no se ocultan mensajes solo por tener List-Unsubscribe.
+- Añadidas pruebas de integración con respuestas Gmail API sintéticas que reproducen las estructuras MIME auditadas. Sin cuerpos reales, IDs reales, persistencia, importación ni modificaciones de Gmail.
