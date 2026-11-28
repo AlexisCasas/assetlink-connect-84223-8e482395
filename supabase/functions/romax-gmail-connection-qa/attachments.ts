@@ -11,7 +11,7 @@ type Message={id?:string;threadId?:string;internalDate?:string;labelIds?:string[
 const ROOT='https://gmail.googleapis.com/gmail/v1/users/me/threads/';
 const MAX_BYTES=2*1024*1024, MAX_MESSAGES=80, MAX_FILES=50, MAX_DEPTH=6, MAX_NODES=2000;
 const validId=(x:unknown):x is string=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(x);
-const header=(p:Part,name:string)=>p.headers?.find(h=>typeof h.name==='string'&&h.name.toLowerCase()===name)?.value??'';
+const header=(p:Part,name:string)=>{const h=Array.isArray(p.headers)?p.headers.find(h=>h&&typeof h.name==='string'&&h.name.toLowerCase()===name):undefined;return typeof h?.value==='string'?h.value:'';};
 const unsafeName=/[\p{Cc}\p{Cf}\p{Cs}\/\\]/u;
 function fields(depth:number):string {
   return 'partId,filename,mimeType,headers(name,value),body(size,attachmentId),parts('+
@@ -43,11 +43,11 @@ export async function discoverAttachments(request:typeof fetch,token:string,thre
   for(const m of data.messages){
     if(!m||m.threadId!==thread||!validId(m.id)||ids.has(m.id))throw new Error('Message identity mismatch');
     ids.add(m.id);
-    if(!Array.isArray(m.labelIds)||typeof m.internalDate!=='string'||!/^\d{1,15}$/.test(m.internalDate)||
+    if((m.labelIds!==undefined&&(!Array.isArray(m.labelIds)||m.labelIds.some(l=>typeof l!=='string')))||typeof m.internalDate!=='string'||!/^\d{1,15}$/.test(m.internalDate)||
       !Number.isSafeInteger(Number(m.internalDate))||Number(m.internalDate)<=0||!Number.isFinite(new Date(Number(m.internalDate)).getTime()))
       throw new Error('Invalid message metadata');
   }
-  const eligible=data.messages.filter(m=>!m.labelIds!.some(l=>['SPAM','TRASH','DRAFT'].includes(l)));
+  const eligible=data.messages.filter(m=>!(m.labelIds??[]).some(l=>['SPAM','TRASH','DRAFT'].includes(l)));
   eligible.sort((a,b)=>Number(b.internalDate)-Number(a.internalDate)||a.id!.localeCompare(b.id!));
   const items:AttachmentMetadata[]=[];const seen=new Map<string,string>();
   const reasons=new Set<string>();let inlineSkipped=0,unsafeSkipped=0,excludedMessages=data.messages.length-eligible.length,nodes=0;
@@ -57,14 +57,13 @@ export async function discoverAttachments(request:typeof fetch,token:string,thre
     if(!m.payload){reasons.add('missing_payload');continue;}
     const from=header(m.payload,'from').trim().toLowerCase();
     const address=from.match(/<([^<>]+)>$/)?.[1]??from;
-    const direction:AttachmentMetadata['direction']=m.labelIds!.includes('SENT')||
+    const direction:AttachmentMetadata['direction']=(m.labelIds??[]).includes('SENT')||
       /^[^\s@]+@romaxfm\.com$/.test(address)||address===mailbox.toLowerCase()?'outgoing':
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)?'incoming':'unknown';
     const walk=(p:Part,depth:number)=>{
       if(!p||typeof p!=='object'){reasons.add('invalid_part');return;}
       if(++nodes>MAX_NODES){reasons.add('part_limit');return;}
       if(depth>MAX_DEPTH){reasons.add('depth_limit');return;}
-      if(items.length>=MAX_FILES){reasons.add('attachment_limit');return;}
       const disposition=header(p,'content-disposition').trim().toLowerCase();
       const explicitlyAttached=/^attachment(?:\s*;|$)/.test(disposition);
       const inline=/^inline(?:\s*;|$)/.test(disposition)||(!explicitlyAttached&&!!header(p,'content-id'));
@@ -86,6 +85,7 @@ export async function discoverAttachments(request:typeof fetch,token:string,thre
               received_at:new Date(Number(m.internalDate)).toISOString(),direction};
             const identity=JSON.stringify([item.message_id,kind,locator]),payload=JSON.stringify(item);
             if(seen.has(identity)){if(seen.get(identity)!==payload)throw new Error('Conflicting MIME identity');}
+            else if(items.length>=MAX_FILES){reasons.add('attachment_limit');}
             else{seen.set(identity,payload);items.push(item);}
           }
         }

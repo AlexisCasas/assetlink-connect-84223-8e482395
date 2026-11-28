@@ -3,12 +3,12 @@ import { READ_SCOPE, importKey, seal, unseal } from './crypto.ts';
 const organization='11111111-1111-4111-8111-111111111111', origin='https://example.test', mailbox='pilot@example.test';
 type Row=Record<string,unknown>;
 function assert(value:unknown, label='Assertion failed') { if(!value) throw new Error(label); }
-function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enrichmentEnabled=false, oldThread=false) {
+function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enrichmentEnabled=false, oldThread=false, discoveryEnabled=false) {
   const received=Date.now()-(oldThread?30*86400000:60000);
-  let rpcCalls=0, changed=false; let reviewReceipt:{args:Row;result:Row}|null=null;
+  let rpcCalls=0, changed=false, discoveryWrites=0, wrongThread=false, revokeDuringRead=false, disconnectDuringRead=false; let reviewReceipt:{args:Row;result:Row}|null=null;
   let row:Row|null=null, profile=mailbox, scope=READ_SCOPE, exchangeCount=0, revokeCount=0, threadReads=0;
   const owners=new Set(['owner','owner2']);
-  const variables:Record<string,string>={ROMAX_GMAIL_ENRICHMENT_ENABLED:enrichmentEnabled?'true':'false',ROMAX_GMAIL_IMPORT_ENABLED:importEnabled?'true':'false',ROMAX_GMAIL_ORGANIZATION_ID:organization,ROMAX_GMAIL_EXPECTED_EMAIL:mailbox,ROMAX_GMAIL_APP_ORIGIN:origin,ROMAX_GMAIL_CLIENT_ID:'synthetic-client',ROMAX_GMAIL_CLIENT_SECRET:'synthetic-secret',ROMAX_GMAIL_ENCRYPTION_KEY:btoa('k'.repeat(32))};
+  const variables:Record<string,string>={ROMAX_GMAIL_ATTACHMENT_DISCOVERY_ENABLED:discoveryEnabled?'true':'false',ROMAX_GMAIL_ENRICHMENT_ENABLED:enrichmentEnabled?'true':'false',ROMAX_GMAIL_IMPORT_ENABLED:importEnabled?'true':'false',ROMAX_GMAIL_ORGANIZATION_ID:organization,ROMAX_GMAIL_EXPECTED_EMAIL:mailbox,ROMAX_GMAIL_APP_ORIGIN:origin,ROMAX_GMAIL_CLIENT_ID:'synthetic-client',ROMAX_GMAIL_CLIENT_SECRET:'synthetic-secret',ROMAX_GMAIL_ENCRYPTION_KEY:btoa('k'.repeat(32))};
   class Query {
     private filters:((record:Row)=>boolean)[]=[];
     private changes:Row|null=null;
@@ -59,12 +59,23 @@ function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enri
       const u=new URL(url);threadReads++;
       if(u.pathname.endsWith('/threads'))return Response.json(u.searchParams.has('pageToken')?{threads:[{id:'thread2'}]}:{threads:[{id:'thread1'}],nextPageToken:'opaque-page'});
       const id=u.pathname.split('/').pop();
+      if(u.searchParams.get('fields')?.includes('partId')){
+        assert(!u.searchParams.get('fields')?.includes('data')&&id==='thread1');
+        if(revokeDuringRead)owners.delete('owner');
+        if(disconnectDuringRead&&row)row.status='disconnected';
+        return Response.json({id,messages:[{id:'msgthread1',threadId:wrongThread?'another':id,internalDate:String(received),labelIds:['INBOX'],payload:{headers:[{name:'From',value:'client@example.test'}],mimeType:'multipart/mixed',parts:[{partId:'0',filename:'test.pdf',mimeType:'application/pdf',body:{size:1024,attachmentId:'test-attachment'}}]}}]});
+      }
       return Response.json({id,messages:[{id:'msg'+id,internalDate:String(received),labelIds:['INBOX'],snippet:'Solicitamos cotizar',payload:{headers:[{name:'Subject',value:changed?'Solicitud modificada':'Solicitud de cotización'},{name:'From',value:'client@example.test'}]}}]});
     }
     if(url==='https://oauth2.googleapis.com/revoke'){revokeCount++;assert(values.get('token')==='refresh-secret');return new Response('',{status:200});}
     throw new Error('Unexpected outbound request');
   };
   const handler=createHandler({authenticate:async req=>{const id=req.headers.get('Authorization')?.replace('Bearer ','');if(!id)throw new Error('Unauthorized');return {id};},service:()=>({from:(name:string)=>new Query(name),rpc:(name:string,args:Row)=>{
+    if(name==='romax_register_gmail_attachment_metadata'){
+      assert(args.p_org===organization&&args.p_actor==='owner'&&args.p_thread==='thread1'&&args.p_connection_at===row?.connected_at);
+      const items=args.p_items as Row[];assert(items.length===1&&items[0].message_id==='msgthread1'&&items[0].locator==='test-attachment');
+      rpcCalls++;const registered=discoveryWrites++===0?1:0;return Promise.resolve({data:{registered,unchanged:1-registered},error:null});
+    }
     if(name==='romax_find_request_review_receipt'){
       if(!reviewReceipt||args.p_actor!==reviewReceipt.args.p_actor||args.p_request!==reviewReceipt.args.p_request||args.p_opportunity!==reviewReceipt.args.p_opportunity)return Promise.resolve({data:null,error:null});
       if(args.p_expected!==reviewReceipt.args.p_expected||JSON.stringify(args.p_snapshot)!==JSON.stringify(reviewReceipt.args.p_snapshot))return Promise.resolve({data:null,error:{code:'22023'}});
@@ -81,7 +92,7 @@ function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enri
     const response=await handler(new Request(origin+'/function',{method:'POST',headers:{Origin:requestOrigin,Authorization:user?'Bearer '+user:'','Content-Type':'application/json'},body:JSON.stringify({action,organization_id:organization,...extra})}));
     return {code:response.status,body:await response.json()};
   };
-  return {call,get rpcCalls(){return rpcCalls;},change:()=>{changed=true;},get row(){return row;},get exchanges(){return exchangeCount;},get revokes(){return revokeCount;},get threadReads(){return threadReads;},setProfile:(v:string)=>{profile=v;},setScope:(v:string)=>{scope=v;},expire:()=>{if(row)row.attempt_expires_at=new Date(Date.now()-1000).toISOString();},deactivate:(v:string)=>owners.delete(v)};
+  return {call,wrongThread:()=>{wrongThread=true;},revokeDuringRead:()=>{revokeDuringRead=true;},disconnectDuringRead:()=>{disconnectDuringRead=true;},get rpcCalls(){return rpcCalls;},change:()=>{changed=true;},get row(){return row;},get exchanges(){return exchangeCount;},get revokes(){return revokeCount;},get threadReads(){return threadReads;},setProfile:(v:string)=>{profile=v;},setScope:(v:string)=>{scope=v;},expire:()=>{if(row)row.attempt_expires_at=new Date(Date.now()-1000).toISOString();},deactivate:(v:string)=>owners.delete(v)};
 }
 Deno.test('rejects missing authentication, wrong origin, tenant and non-owner',async()=>{
   const f=fixture();
@@ -207,4 +218,34 @@ Deno.test('SEC12: confirmed Edge save, lost-response recovery after expiry/disco
  assert((await f.call('disconnect')).code===200);
  assert((await f.call('save_enrichment',{...args,proof:expired})).body.recovered===true&&f.rpcCalls===1);
  f.deactivate('owner');assert((await f.call('save_enrichment',args)).code===403);
+});
+
+Deno.test('4B: explicit discovery disabled by default, denied actors and browser supplied IDs never read Gmail',async()=>{
+ const off=fixture(),id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',args={opportunity_id:id,confirmed:true};
+ assert((await off.call('discover_attachments',args)).code===403&&off.threadReads===0);
+ const f=fixture(undefined,false,false,true,true);
+ assert((await f.call('discover_attachments',args,'outsider')).code===403);
+ assert((await f.call('discover_attachments',{...args,thread_id:'evil'})).code===400);
+ assert((await f.call('discover_attachments',{...args,confirmed:false})).code===400);
+ assert((await f.call('discover_attachments',args)).code===409&&f.threadReads===0);
+ const start=await f.call('start');assert((await f.call('complete',{state:start.body.state,code:'code'})).code===200);
+ assert((await f.call('discover_attachments',{...args,opportunity_id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'})).code===404);
+ assert(f.threadReads===0&&f.rpcCalls===0);
+});
+Deno.test('4B: old stored thread only, metadata RPC and idempotent rescan, no raw IDs returned',async()=>{
+ const f=fixture(undefined,false,false,true,true),args={opportunity_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',confirmed:true};
+ const start=await f.call('start');assert((await f.call('complete',{state:start.body.state,code:'code'})).code===200);
+ const a=await f.call('discover_attachments',args);assert(a.code===200&&a.body.discovery.registered===1&&a.body.discovery.detected===1);
+ const b=await f.call('discover_attachments',args);assert(b.code===200&&b.body.discovery.unchanged===1&&f.rpcCalls===2);
+ assert(!JSON.stringify(a.body).includes('test-attachment')&&!JSON.stringify(a.body).includes('msgthread1')&&!JSON.stringify(a.body).includes('test.pdf'));
+ assert(f.threadReads===2);
+});
+Deno.test('4B: remote thread mismatch, revoked owner and disconnected mailbox never register',async()=>{
+ const args={opportunity_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',confirmed:true};
+ for(const mode of ['wrongThread','revokeDuringRead','disconnectDuringRead'] as const){
+  const f=fixture(undefined,false,false,false,true);
+  const start=await f.call('start');assert((await f.call('complete',{state:start.body.state,code:'code'})).code===200);
+  f[mode]();const r=await f.call('discover_attachments',args);
+  assert(r.code===(mode==='revokeDuringRead'?403:409)&&f.rpcCalls===0);
+ }
 });
