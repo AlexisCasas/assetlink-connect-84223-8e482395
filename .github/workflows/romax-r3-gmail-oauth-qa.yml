@@ -65,6 +65,16 @@ jobs:
         run: bash scripts/qa/romax_gmail_import_concurrency.sh
       - name: SOL2 concurrent review QA (local only)
         run: bash scripts/qa/romax_sol2_concurrency.sh
+      - name: Install CLI with security advisors
+        uses: supabase/setup-cli@v1
+        with:
+          version: "2.81.3"
+      - name: Security advisors on disposable local stack
+        run: |
+          set -euo pipefail
+          test ! -f supabase/.temp/project-ref
+          supabase db advisors --help
+          supabase db advisors --local --type security --level info --fail-on none
       - if: always()
         run: supabase stop --no-backup
   frontend:
