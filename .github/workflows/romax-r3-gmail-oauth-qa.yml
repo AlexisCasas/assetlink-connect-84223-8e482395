@@ -1,9 +1,10 @@
 name: ROMAX R3-GMAIL.1 OAuth QA
 on:
   pull_request:
-    branches: ["productization/mvp", "feature/romax-r3-gmail-2-1", "feature/romax-r3-gmail-3", "docs/romax-functional-replanning-20261128", "docs/romax-r3-sol-2-design", "docs/romax-r3-gmail-4-design", "feature/romax-r3-gmail-4a", "feature/romax-r3-gmail-4b", "feature/romax-r3-gmail-4c1", "feature/romax-r3-gmail-4c3-4d", "docs/romax-r3-gmail-4e-design"]
+    branches: ["productization/mvp", "feature/romax-r3-gmail-2-1", "feature/romax-r3-gmail-3", "docs/romax-functional-replanning-20261128", "docs/romax-r3-sol-2-design", "docs/romax-r3-gmail-4-design", "feature/romax-r3-gmail-4a", "feature/romax-r3-gmail-4b", "feature/romax-r3-gmail-4c1", "feature/romax-r3-gmail-4c3-4d", "docs/romax-r3-gmail-4e-design", "feature/romax-r3-gmail-4e1"]
     paths:
       - "supabase/**"
+      - "workers/romax-extraction/**"
       - "src/components/provider/GmailConnectionPanel.tsx"
       - "src/components/provider/OpportunitiesView.tsx"
       - "src/components/provider/RequestDetail.tsx"
@@ -122,3 +123,28 @@ jobs:
       - run: npx eslint src/components/provider/GmailConnectionPanel.tsx src/pages/GmailCallback.tsx src/components/provider/OpportunitiesView.tsx src/components/provider/RequestDetail.tsx src/components/provider/romaxRequestList.ts src/components/provider/RequestEnrichment.tsx src/components/provider/romaxEnrichment.ts src/components/provider/RequestDocuments.tsx src/components/provider/romaxDocuments.ts
       - run: node --experimental-strip-types --test tests/romax-gmail-import-policy.test.ts tests/romax-r3-sol-1.test.ts tests/romax-r3-sol-2.test.ts tests/romax-r3-gmail-4d.test.ts
       - run: npm run build
+
+  extraction-sandbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build synthetic worker from immutable base for this run
+        run: |
+          set -euo pipefail
+          docker pull python:3.12-slim-bookworm
+          base=$(docker image inspect python:3.12-slim-bookworm --format '{{index .RepoDigests 0}}')
+          [[ "$base" =~ ^(python|docker.io/library/python)@sha256:[a-f0-9]{64}$ ]]
+          echo "Resolved QA base: $base"
+          docker build --network=none --build-arg BASE_IMAGE="$base" --iidfile /tmp/romax-worker-iid workers/romax-extraction
+      - name: Synthetic broker and actual container isolation tests
+        working-directory: workers/romax-extraction
+        run: |
+          set -euo pipefail
+          export ROMAX_QA_IMAGE_ID=$(cat /tmp/romax-worker-iid)
+          export ROMAX_QA_SENTINEL_SECRET=synthetic-not-for-worker
+          python3 -m unittest -v test_broker.py
+          test -z "$(docker ps -aq --filter name=romax-qa-)"
+          echo ROMAX_GMAIL4E2_SANDBOX=PASS
