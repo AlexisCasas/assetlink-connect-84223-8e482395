@@ -4,6 +4,7 @@ import { randomToken, hashState, pkceChallenge, importKey, seal, unseal, READ_SC
 import { DAY_MS, readPreview, importPolicy } from './preview.ts';
 import { candidateDigest, issueConfirmation, openConfirmation, senderEmail } from './import.ts';
 import { discoverAttachments } from './attachments.ts';
+import { fetchQuarantineBytes, matchesClaim, QuarantineError, QUARANTINE_BUCKET, type Claim } from './quarantine.ts';
 
 const env = (name: string) => Deno.env.get(name) ?? '';
 const table = 'romax_gmail_connections';
@@ -160,6 +161,64 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
       const candidates=await Promise.all(page.candidates.map(async candidate=>({ ...candidate, confirmation_token:importEnabled&&candidate.import_policy==='new_candidate'?await issueConfirmation(key,confirmationContext,candidate,from):null })));
       const next_cursor=page.next?await seal(key,JSON.stringify({to,next:page.next}),cursorContext):null;
       return reply({status:'connected',window_start:new Date(from).toISOString(),window_end:new Date(to).toISOString(),candidates,scanned:page.scanned,estimate:page.estimate,next_cursor});
+    }
+    if (body.action === 'quarantine_attachments') {
+      if(readEnv('ROMAX_GMAIL_ATTACHMENT_QUARANTINE_ENABLED')!=='true')throw new SafeError(403,'Descarga a cuarentena no habilitada');
+      if(Object.keys(body).some(k=>!['action','organization_id','opportunity_id','attachment_ids','confirmed'].includes(k))||
+         body.confirmed!==true||!isUuid(body.opportunity_id)||!Array.isArray(body.attachment_ids)||
+         body.attachment_ids.length<1||body.attachment_ids.length>5||!body.attachment_ids.every(isUuid)||
+         new Set(body.attachment_ids).size!==body.attachment_ids.length)throw new SafeError(400,'Selección de documentos inválida');
+      if(!row||row.status!=='connected'||row.mailbox_email!==config.mailbox||!row.connected_at)throw new SafeError(409,'Conexión no disponible');
+      const signal=AbortSignal.timeout(90000);
+      const boundedRequest:typeof fetch=(input,init)=>request(input,{...init,signal:init?.signal?AbortSignal.any([signal,init.signal]):signal});
+      const refresh=await unseal(key,row.refresh_ciphertext,context('refresh'));
+      const tokens=await googleToken(config,{grant_type:'refresh_token',refresh_token:refresh},boundedRequest);
+      if(tokens.scope!==undefined&&!exactScope(tokens.scope))throw new SafeError(409,'Permiso de Google inesperado');
+      await verifyMailbox(config,tokens.access_token,boundedRequest);
+      const stillAuthorized=async()=>{
+        signal.throwIfAborted();await assertOwner(db,organization,user.id);
+        const current=await getRow(db,organization);
+        if(!current||current.status!=='connected'||current.connected_at!==row.connected_at||current.mailbox_email!==config.mailbox)
+          throw new SafeError(409,'La conexión cambió');
+      };
+      await stillAuthorized();
+      const args={p_org:organization,p_opportunity:body.opportunity_id,p_actor:user.id,p_connection_at:row.connected_at};
+      const reserved=await db.rpc('romax_claim_attachment_downloads',{...args,p_ids:body.attachment_ids});
+      if(reserved.error)throw new SafeError(reserved.error.code==='42501'?403:reserved.error.code==='22023'?400:reserved.error.code==='40001'?409:503,'No se pudo reservar la selección');
+      const claims=reserved.data?.claims as Claim[]|undefined,skipped=reserved.data?.skipped;
+      if(!Array.isArray(claims)||!Number.isInteger(skipped)||skipped<0||claims.length+skipped!==body.attachment_ids.length||
+        claims.some(c=>!isUuid(c.id)||!isUuid(c.attempt)||!body.attachment_ids.includes(c.id)||
+          c.path!=='quarantine/'+organization+'/'+body.opportunity_id+'/'+c.id+'/'+c.attempt)||
+        new Set(claims.map(c=>c.id)).size!==claims.length||
+        claims.some(c=>!Number.isSafeInteger(c.size)||c.size<1||c.size>10485760)||
+        claims.reduce((sum,c)=>sum+c.size,0)>26214400||new Set(claims.map(c=>c.thread)).size>1)
+        throw new SafeError(503,'Reserva no verificable');
+      let metadata:Awaited<ReturnType<typeof discoverAttachments>>|null=null;
+      if(claims.length){try{metadata=await discoverAttachments(boundedRequest,tokens.access_token,claims[0].thread,config.mailbox,signal);}catch{/* fail closed per reservation */}}
+      const results:{id:string;status:string}[]=[];
+      for(const claim of claims){
+        const finishArgs={...args,p_attachment:claim.id,p_attempt:claim.attempt};
+        let outcome:'quarantined'|'failed'|'uncertain'='uncertain',hash:string|null=null,error:string|null=null;
+        let uploadStarted=false;
+        try{
+          await stillAuthorized();
+          if(!metadata)throw new QuarantineError('remote_error');
+          if(!matchesClaim(claim,metadata.items))throw new QuarantineError('source_changed');
+          const binary=await fetchQuarantineBytes(boundedRequest,tokens.access_token,claim,signal);
+          await stillAuthorized();
+          uploadStarted=true;
+          const stored=await db.storage.from(QUARANTINE_BUCKET).upload(claim.path,new Blob([binary.bytes],{type:'application/octet-stream'}),{contentType:'application/octet-stream',upsert:false});
+          if(stored.error){error='storage_uncertain';}
+          else{hash=binary.hash;}
+        }catch(e){error=uploadStarted?'storage_uncertain':e instanceof QuarantineError?e.code:'remote_error';}
+        try{
+          // A lost response can leave a private orphan. Never overwrite or delete it here.
+          const final=await db.rpc('romax_finish_attachment_download',{...finishArgs,p_hash:hash,p_size:hash?claim.size:null,p_error:error});
+          if(!final.error&&final.data?.status===(hash?'quarantined':'failed'))outcome=final.data.status;
+        }catch{/* reservation expires; reconciliation is a separate controlled operation */}
+        results.push({id:claim.id,status:outcome});
+      }
+      return reply({quarantine:{results,skipped,available:0,scan_required:true}});
     }
     if (body.action === 'discover_attachments') {
       if(readEnv('ROMAX_GMAIL_ATTACHMENT_DISCOVERY_ENABLED')!=='true')throw new SafeError(403,'Detección de adjuntos no habilitada');
@@ -342,6 +401,6 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
 // OAuth lifecycle is blocked; confirmation is disabled unless its separate QA flag is enabled.
 export const QA_APP_ORIGIN = 'https://one-facility-git-feature-romax-r3-29c35c-alexiscasasrs-projects.vercel.app';
 export function createQaHandler() {
-  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? (env('ROMAX_GMAIL_QA_APP_ORIGIN')||QA_APP_ORIGIN) : name==='ROMAX_GMAIL_IMPORT_ENABLED' ? env('ROMAX_GMAIL_QA_IMPORT_ENABLED') : name==='ROMAX_GMAIL_ENRICHMENT_ENABLED' ? env('ROMAX_GMAIL_QA_ENRICHMENT_ENABLED') : name==='ROMAX_GMAIL_ATTACHMENT_DISCOVERY_ENABLED' ? env('ROMAX_GMAIL_QA_ATTACHMENT_DISCOVERY_ENABLED') : env(name);
-  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview','confirm_import','enrichment_preview','save_enrichment','discover_attachments']));
+  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? (env('ROMAX_GMAIL_QA_APP_ORIGIN')||QA_APP_ORIGIN) : name==='ROMAX_GMAIL_IMPORT_ENABLED' ? env('ROMAX_GMAIL_QA_IMPORT_ENABLED') : name==='ROMAX_GMAIL_ENRICHMENT_ENABLED' ? env('ROMAX_GMAIL_QA_ENRICHMENT_ENABLED') : name==='ROMAX_GMAIL_ATTACHMENT_DISCOVERY_ENABLED' ? env('ROMAX_GMAIL_QA_ATTACHMENT_DISCOVERY_ENABLED') : name==='ROMAX_GMAIL_ATTACHMENT_QUARANTINE_ENABLED' ? env('ROMAX_GMAIL_QA_ATTACHMENT_QUARANTINE_ENABLED') : env(name);
+  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview','confirm_import','enrichment_preview','save_enrichment','discover_attachments','quarantine_attachments']));
 }
