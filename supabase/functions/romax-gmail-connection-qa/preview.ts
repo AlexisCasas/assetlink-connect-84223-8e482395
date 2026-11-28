@@ -138,7 +138,7 @@ export function parseDeadlineEvents(messages:{id?:string;snippet?:string;bodyTex
       const raw=clean(text.slice(Math.max(0,index-65),Math.min(text.length,index+full.length+35)),180);
       const event:DeadlineEvent={raw,date,time,datetime,timezone:'America/Lima',status,kind,weekday:matchedWeekday};
       if(includeEvidence&&validId(message.id)&&Number.isFinite(Number(message.internalDate))){event.source_message_id=message.id;event.source_received_at=new Date(Number(message.internalDate)).toISOString();}
-      if(!found.some(x=>x.date===event.date&&x.time===event.time&&x.kind===event.kind))found.push(event);
+      if(!found.some(x=>x.date===event.date&&x.time===event.time&&x.kind===event.kind&&(!includeEvidence||(x.source_message_id===event.source_message_id&&x.raw===event.raw))))found.push(event);
       if(index<currentEnd&&event.status==='confirmed')currentEvent=event;
     }
     if(currentEvent)previousCurrent=currentEvent;
