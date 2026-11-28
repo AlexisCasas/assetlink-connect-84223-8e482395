@@ -162,6 +162,28 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
       const next_cursor=page.next?await seal(key,JSON.stringify({to,next:page.next}),cursorContext):null;
       return reply({status:'connected',window_start:new Date(from).toISOString(),window_end:new Date(to).toISOString(),candidates,scanned:page.scanned,estimate:page.estimate,next_cursor});
     }
+    if (body.action === 'download_unscanned_attachment') {
+      if(readEnv('ROMAX_GMAIL_ATTACHMENT_UNSCANNED_ENABLED')!=='true')throw new SafeError(403,'Acceso a documentos sin escaneo no habilitado');
+      if(Object.keys(body).some(k=>!['action','organization_id','opportunity_id','attachment_id','acknowledged'].includes(k))||
+        body.acknowledged!==true||!isUuid(body.opportunity_id)||!isUuid(body.attachment_id))throw new SafeError(400,'Confirma el riesgo de descargar un archivo sin escaneo');
+      const args={p_org:organization,p_opportunity:body.opportunity_id,p_actor:user.id,p_attachment:body.attachment_id,p_ack:true};
+      const prepared=await db.rpc('romax_unscanned_document_access',{...args,p_commit:false,p_attempt:null,p_hash:null});
+      if(prepared.error)throw new SafeError(prepared.error.code==='42501'?403:409,'Documento no disponible');
+      const a=prepared.data;
+      if(!a||!isUuid(a.attempt)||a.path!=='quarantine/'+organization+'/'+body.opportunity_id+'/'+body.attachment_id+'/'+a.attempt||
+        typeof a.hash!=='string'||!/^[a-f0-9]{64}$/.test(a.hash)||!Number.isSafeInteger(a.size)||a.size<1||a.size>10485760||
+        !['application/pdf','image/jpeg','image/png','text/plain'].includes(a.mime))throw new SafeError(503,'Documento no verificable');
+      const object=await db.storage.from(QUARANTINE_BUCKET).download(a.path);
+      if(object.error||!object.data||object.data.size!==a.size)throw new SafeError(409,'No se pudo verificar el objeto');
+      const bytes=await object.data.arrayBuffer();
+      const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+      if(hash!==a.hash)throw new SafeError(409,'La integridad del documento no coincide');
+      await assertOwner(db,organization,user.id);
+      const final=await db.rpc('romax_unscanned_document_access',{...args,p_commit:true,p_attempt:a.attempt,p_hash:hash});
+      if(final.error||final.data?.status!=='released_unscanned')throw new SafeError(409,'No se pudo autorizar el acceso');
+      // No signed URL, object path, inline rendering or clean claim; bytes only after audited authorization.
+      return new Response(bytes,{status:200,headers:{...headers,'Content-Type':'application/octet-stream','Content-Disposition':'attachment; filename="document"','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
+    }
     if (body.action === 'quarantine_attachments') {
       if(readEnv('ROMAX_GMAIL_ATTACHMENT_QUARANTINE_ENABLED')!=='true')throw new SafeError(403,'Descarga a cuarentena no habilitada');
       if(Object.keys(body).some(k=>!['action','organization_id','opportunity_id','attachment_ids','confirmed'].includes(k))||
@@ -401,6 +423,6 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
 // OAuth lifecycle is blocked; confirmation is disabled unless its separate QA flag is enabled.
 export const QA_APP_ORIGIN = 'https://one-facility-git-feature-romax-r3-29c35c-alexiscasasrs-projects.vercel.app';
 export function createQaHandler() {
-  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? (env('ROMAX_GMAIL_QA_APP_ORIGIN')||QA_APP_ORIGIN) : name==='ROMAX_GMAIL_IMPORT_ENABLED' ? env('ROMAX_GMAIL_QA_IMPORT_ENABLED') : name==='ROMAX_GMAIL_ENRICHMENT_ENABLED' ? env('ROMAX_GMAIL_QA_ENRICHMENT_ENABLED') : name==='ROMAX_GMAIL_ATTACHMENT_DISCOVERY_ENABLED' ? env('ROMAX_GMAIL_QA_ATTACHMENT_DISCOVERY_ENABLED') : name==='ROMAX_GMAIL_ATTACHMENT_QUARANTINE_ENABLED' ? env('ROMAX_GMAIL_QA_ATTACHMENT_QUARANTINE_ENABLED') : env(name);
-  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview','confirm_import','enrichment_preview','save_enrichment','discover_attachments','quarantine_attachments']));
+  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? (env('ROMAX_GMAIL_QA_APP_ORIGIN')||QA_APP_ORIGIN) : name==='ROMAX_GMAIL_IMPORT_ENABLED' ? env('ROMAX_GMAIL_QA_IMPORT_ENABLED') : name==='ROMAX_GMAIL_ENRICHMENT_ENABLED' ? env('ROMAX_GMAIL_QA_ENRICHMENT_ENABLED') : name==='ROMAX_GMAIL_ATTACHMENT_DISCOVERY_ENABLED' ? env('ROMAX_GMAIL_QA_ATTACHMENT_DISCOVERY_ENABLED') : name==='ROMAX_GMAIL_ATTACHMENT_QUARANTINE_ENABLED' ? env('ROMAX_GMAIL_QA_ATTACHMENT_QUARANTINE_ENABLED') : name==='ROMAX_GMAIL_ATTACHMENT_UNSCANNED_ENABLED' ? env('ROMAX_GMAIL_QA_ATTACHMENT_UNSCANNED_ENABLED') : env(name);
+  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview','confirm_import','enrichment_preview','save_enrichment','discover_attachments','quarantine_attachments','download_unscanned_attachment']));
 }

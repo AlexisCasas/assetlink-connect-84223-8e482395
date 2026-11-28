@@ -13,11 +13,16 @@ type DeadlineEvent = { raw:string; date:string|null; time:string|null; datetime:
 type Candidate = { thread_id:string; subject:string; sender:string; received_at:string; snippet:string; category:string; reason:string; reference:string|null; deadline_hint:string|null; deadline_events?:DeadlineEvent[]; message_count:number; attachments:{name:string;mime:string;supported:boolean}[]; existing_status?:string|null; existing_opportunity_id?:string|null; confirmation_token?:string|null; text_source?:'body'|'snippet'; body_limited?:boolean; import_policy?:'new_candidate'|'link_existing'|'review_required'|'not_importable' };
 type Preview = { window_start:string; window_end:string; candidates:Candidate[]; scanned:number; estimate:number|null; next_cursor:string|null };
 const labels:Record<string,string>={quote_request:'Nueva solicitud candidata',follow_up:'Actualización / seguimiento',adjustment:'Reajuste',quoted:'Posiblemente cotizada',operational:'Operativa',other:'Otros',review:'Requiere revisión'};
-type Result = { enrichment?: Proposal; status?: string; mailbox?: string; authorization_url?: string; state?: string; verified?: boolean; error?: string; outcome?: 'imported'|'already_exists'; opportunity_id?:string; opportunity_status?:string } & Partial<Preview>;
+type Result = { discovery?:{detected:number;registered:number;unchanged:number;partial:boolean}; quarantine?:{results:{id:string;status:string}[];skipped:number}; enrichment?: Proposal; status?: string; mailbox?: string; authorization_url?: string; state?: string; verified?: boolean; error?: string; outcome?: 'imported'|'already_exists'; opportunity_id?:string; opportunity_status?:string } & Partial<Preview>;
 export async function gmailConnection(organizationId: string, action: string, extra: Record<string,unknown> = {}): Promise<Result> {
   const { data, error } = await supabase.functions.invoke(GMAIL_FUNCTION_NAME, { body: { ...extra, organization_id:organizationId, action } });
   if (error || !data || data.error) throw new Error('No se pudo completar la operación. Comprueba la configuración o vuelve a conectar.');
   return data as Result;
+}
+export async function downloadUnscannedDocument(organizationId:string,opportunityId:string,attachmentId:string):Promise<Blob>{
+  const {data,error}=await supabase.functions.invoke<Blob>(GMAIL_FUNCTION_NAME,{body:{action:'download_unscanned_attachment',organization_id:organizationId,opportunity_id:opportunityId,attachment_id:attachmentId,acknowledged:true}});
+  if(error||!(data instanceof Blob)||data.size<1||data.size>10485760)throw new Error('Documento no disponible');
+  return data;
 }
 export default function GmailConnectionPanel({ organizationId,onImported,onOpenOpportunity }: { organizationId: string; onImported:()=>Promise<void>; onOpenOpportunity:(id:string)=>void }) {
   const [status,setStatus] = useState('loading');
