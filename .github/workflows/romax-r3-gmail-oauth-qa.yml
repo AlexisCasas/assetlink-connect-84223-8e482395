@@ -61,6 +61,8 @@ jobs:
       - run: supabase test db
       - name: Gmail import concurrent transaction QA (local only)
         run: bash scripts/qa/romax_gmail_import_concurrency.sh
+      - name: SOL2 concurrent review QA (local only)
+        run: bash scripts/qa/romax_sol2_concurrency.sh
       - if: always()
         run: supabase stop --no-backup
   frontend:
