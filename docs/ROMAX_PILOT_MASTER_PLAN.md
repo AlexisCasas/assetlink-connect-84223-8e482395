@@ -482,3 +482,7 @@ D01–D12 aprobadas. PR independiente: 3.1 transacción, auditoría, ACL e idemp
 ## Replanning funcional — 28-nov-2026
 
 La primera oportunidad Gmail real fue confirmada intencional por el propietario; QA visual 8/8 y CI #133 40c8d08 PASS. Cloud homologado 20261128145232; falta resincronización real sin duplicado y merge autorizado. Se revisó matriz de 27 requisitos y reunión 27/11; el siguiente incremento propuesto es R3-SOL.1 (bandeja/ficha estructuradas de solicitudes), seguido por enriquecimiento revisable, adjuntos y asignación exclusiva. Reutilizar R1, R2 y R4-A; R2-E2 continúa en paralelo antes del motor económico R4-C. La ruta crítica anterior es histórica donde contradiga el nuevo plan. Ver [replanning funcional](ROMAX_FUNCTIONAL_REPLANNING_20261128.md). Solo documentación; ninguna implementación ni publicación de fuentes privadas.
+
+## R3-SOL.1 — diseño funcional 28-nov-2026
+
+P01–P12 aprobadas por propietario. Se documenta [contrato R3-SOL.1](ROMAX_R3_SOL_1_FUNCTIONAL_DESIGN.md): tabla y ficha de solo lectura, tabs registrados/Gmail, filtros y métricas sustentados en datos existentes, ruta privada, manual y análisis sin regresión; no agregar campos ficticios, migraciones ni permisos. SOL1-D01–D12 y QA S01–S24 pendientes de aprobación para implementar. PR #134 documental abierto; #132/#133 sin merge, resincronización real pendiente. No código, importaciones ni despliegues solicitados.

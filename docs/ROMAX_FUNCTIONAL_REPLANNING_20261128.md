@@ -1,6 +1,6 @@
 # ROMAX — Replanning funcional 28/11/2026
 
-Estado: PROPUESTA PARA APROBACIÓN. Documento de arquitectura funcional sin implementación. Fuentes: reunión del 27/11 y matriz de 27 requisitos del 19/11, conservadas fuera de este repositorio público. El estado del prototipo del cliente no certifica el estado de One Facility. La maqueta no fue inspeccionada directamente; no se adjuntan correos, archivos, precios o datos comerciales privados.
+Estado: REPLANNING APROBADO (P01–P12, 28/11/2026). Documento de arquitectura funcional sin implementación. Fuentes: reunión del 27/11 y matriz de 27 requisitos del 19/11, conservadas fuera de este repositorio público. El estado del prototipo del cliente no certifica el estado de One Facility. La maqueta no fue inspeccionada directamente; no se adjuntan correos, archivos, precios o datos comerciales privados.
 
 ## Línea base
 PR #132 QA Q01–Q08 PASS. PR #133 CI final 40c8d08 PASS (36 Deno; 2919 pgTAP; concurrencia); QA visual 8/8. Migración Cloud canónica 20261128145232 homologada, primera oportunidad Gmail y auditoría confirmadas por propietario. Resincronización real como existente pendiente. Ambos PR sin merge; producción sin nuevo despliegue. Mantener confirmación individual, deduplicación, RLS y auditoría. R1 directorio/histórico y R2 catálogo reutilizables; R4-A análisis versionado sin precios ya disponible. R2-E2 elegibilidad comercial pendiente.
@@ -44,3 +44,7 @@ P01 reutilizar oportunidad; P02 tabla/ficha inicialmente read-only; P03 proceden
 
 ## Gates
 No implementar código, migraciones, usuarios, costos, imports, merges o despliegues en este replanning. Cada incremento requiere contrato, PR, CI/regresión, QA y autorización Cloud/producción cuando corresponda. Próximo entregable: aprobar diseño funcional R3-SOL.1, y comprobar resincronización real de la primera oportunidad. La matriz privada completa incluye referencias a filas y minutos, criterios y fórmulas del cliente; no publicarla en GitHub.
+
+## Aprobación y siguiente diseño
+
+P01–P12 aprobadas sin pendientes de revisión de la decisión marco. El contrato detallado SOL1-D01–D12 se propone en [R3-SOL.1](ROMAX_R3_SOL_1_FUNCTIONAL_DESIGN.md), pendiente autorización de implementación. Los parámetros específicos de fases posteriores aún deberán definirse en sus contratos. No código.
