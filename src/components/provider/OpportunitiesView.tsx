@@ -14,10 +14,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import GmailConnectionPanel from './GmailConnectionPanel';
 import RequestDetail from './RequestDetail';
+import RequestEnrichment from './RequestEnrichment';
+import {deadlineStatus,specialties,type Review} from './romaxEnrichment';
 import { collectPages, canViewRequests, createListMemory, dateLabel, emptyFilters, filterRows, isOpportunityId, linkedLabel, metrics, paginate, statusLabels, classificationLabels, matchLabels, type Opportunity, type Client, type Site, type Contact, type Attachment, type Filters, type ListMemory } from './romaxRequestList';
 
 const emptyForm={subject:'',sender_email:'',received_at:'',snippet:'',classification:'quote_request',commercial_client_id:'',commercial_site_id:'',commercial_contact_id:''};
-type Dataset={opportunities:Opportunity[];clients:Client[];sites:Site[];contacts:Contact[];attachments:Attachment[]};
+type Dataset={reviews:Review[]|null;opportunities:Opportunity[];clients:Client[];sites:Site[];contacts:Contact[];attachments:Attachment[]};
 type Props={focusOpportunityId?:string;memory?:ListMemory};
 // ROMAX tables are not yet in the generated client types; preserve the existing adapter.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,6 +47,7 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
   const [manualOpen,setManualOpen]=useState(false);
   const [saving,setSaving]=useState(false);
   const [notice,setNotice]=useState('');
+  const [specialtyFilter,setSpecialtyFilter]=useState('all'),[deadlineFilter,setDeadlineFilter]=useState('all'),[referenceFilter,setReferenceFilter]=useState('');
   const root=useRef<HTMLDivElement>(null);
   const opener=useRef<HTMLElement|null>(null);
   const abortRef=useRef<AbortController|null>(null);
@@ -69,8 +72,10 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
         read<Contact>('commercial_client_contacts','id,commercial_client_id,commercial_site_id,full_name,email,is_active'),
         read<Attachment>('romax_opportunity_attachments','id,opportunity_id,filename,mime_type,size_bytes,processing_status,created_at'),
       ]);
+      let reviews:Review[]|null=null;
+      try{reviews=await collectPages<Review & {id:string}>((from,to)=>db.from('romax_request_current').select('id:opportunity_id,organization_id,opportunity_id,revision,reviewed_at,snapshot',{count:'exact'}).eq('organization_id',organizationId).order('opportunity_id').range(from,to).abortSignal(signal),signal);}catch{/* pre-migration Preview: preserve base inbox, explicitly disable enrichment */}
       if(signal.aborted)return;
-      setData({opportunities,clients,sites,contacts,attachments});
+      setData({opportunities,clients,sites,contacts,attachments,reviews});
       return true;
     }catch{
       if(!signal.aborted){setError('No se pudo cargar la lista completa. Actualiza para volver a intentarlo.');setData(null);}
@@ -91,7 +96,9 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
   const clientName=(id:string|null)=>linkedLabel(id,clients,x=>x.id,x=>x.business_name+(x.is_active?'':' (inactivo)'));
   const siteName=(id:string|null)=>linkedLabel(id,sites,x=>x.id,x=>x.site_name+(x.is_active?'':' (inactiva)'));
   const contactName=(id:string|null)=>linkedLabel(id,contacts,x=>x.id,x=>x.full_name+(x.is_active?'':' (inactivo)'));
-  const filtered=useMemo(()=>filterRows(opportunities,filters,clients,sites),[opportunities,filters,clients,sites]);
+  const reviews=useMemo(()=>new Map((data?.reviews??[]).map(r=>[r.opportunity_id,r])),[data]);
+  const alerts=useMemo(()=>opportunities.map(o=>deadlineStatus(o,reviews.get(o.id)?.snapshot)),[opportunities,reviews]);
+  const filtered=useMemo(()=>filterRows(opportunities,filters,clients,sites).filter(o=>{const s=reviews.get(o.id)?.snapshot;return (specialtyFilter==='all'||(s?.specialty??'none')===specialtyFilter)&&(deadlineFilter==='all'||deadlineStatus(o,s)===deadlineFilter)&&(!referenceFilter||!!s?.reference?.toLowerCase().includes(referenceFilter.toLowerCase()));}),[opportunities,filters,clients,sites,reviews,specialtyFilter,deadlineFilter,referenceFilter]);
   const counts=useMemo(()=>metrics(opportunities),[opportunities]);
   const paging=paginate(filtered,page,pageSize);
   useEffect(()=>{if(data&&!loading&&page!==paging.page)setPage(paging.page);},[data,loading,page,paging.page]);
@@ -126,7 +133,7 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
     finally{savingRef.current=false;if(mounted.current)setSaving(false);}
   };
   const selected=isOpportunityId(focusOpportunityId)?opportunities.find(o=>o.id===focusOpportunityId):undefined;
-  const activeFilters=Object.entries(filters).some(([k,v])=>['search','from','to'].includes(k)?!!v:v!=='all');
+  const activeFilters=specialtyFilter!=='all'||deadlineFilter!=='all'||!!referenceFilter||Object.entries(filters).some(([k,v])=>['search','from','to'].includes(k)?!!v:v!=='all');
   const badDates=!!filters.from&&!!filters.to&&filters.from>filters.to;
   const filtersList:[string,string][]=[['all','Todos'],...Object.entries(statusLabels)];
   const kpis:[keyof typeof counts,string][]=[['new','Nuevas'],['reviewing','En revisión'],['ready_for_analysis','Listas para análisis'],['in_analysis','En análisis'],['quoted','Cotizadas'],['unmatched','Sin vincular']];
@@ -145,6 +152,7 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
             {kpis.map(([k,title])=><button type="button" key={k} aria-pressed={k==='unmatched'?filters.match===k:filters.status===k} onClick={()=>updateFilter(k==='unmatched'?'match':'status',(k==='unmatched'?filters.match:filters.status)===k?'all':k)} className="min-w-0 rounded-lg border bg-card p-3 text-left hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring aria-pressed:border-primary"><span className="block text-xs text-muted-foreground">{title}</span><span className="block text-2xl font-semibold">{counts[k]}</span></button>)}
           </div>
+          {data.reviews!==null?<div className="grid grid-cols-3 gap-2">{([['near','Por vencer'],['overdue','Vencidas'],['none','Sin plazo confirmado']] as const).map(([key,label])=><button type="button" aria-pressed={deadlineFilter===key} key={key} className="rounded border p-2 text-left text-sm" onClick={()=>{setDeadlineFilter(deadlineFilter===key?'all':key);setPage(1);}}>{label}<strong className="block text-lg">{alerts.filter(x=>x===key).length}</strong></button>)}</div>:<p role="status" className="text-sm text-muted-foreground">Enriquecimiento no disponible en este ambiente. La bandeja original sigue operativa.</p>}
           <p className="text-xs text-muted-foreground">Indicadores de todas las solicitudes autorizadas{error?' (última lectura disponible)':''}. Sin vincular es independiente del estado.</p>
           <div className="space-y-3 rounded-lg border p-3">
             <label className="block space-y-1 text-xs text-muted-foreground">Buscar solicitud<div className="relative"><Search className="absolute left-3 top-3 h-4 w-4"/><Input value={filters.search} onChange={e=>updateFilter('search',e.target.value)} className="pl-9" placeholder="Asunto, extracto, remitente, cliente o sede"/></div></label>
@@ -156,14 +164,15 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
               <FilterSelect label="Clasificación" value={filters.classification} onChange={v=>updateFilter('classification',v)} options={ [['all','Todas'],...Object.entries(classificationLabels)] }/>
               <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">Recibida desde (Lima)<Input className="min-w-0" type="date" value={filters.from} onChange={e=>updateFilter('from',e.target.value)}/></label>
               <label className="grid min-w-0 gap-1 text-xs text-muted-foreground">Recibida hasta (Lima)<Input className="min-w-0" type="date" value={filters.to} onChange={e=>updateFilter('to',e.target.value)}/></label>
-              <div className="flex items-end"><Button variant="outline" disabled={!activeFilters} onClick={()=>{setFilters({...emptyFilters});setPage(1);}}>Limpiar filtros</Button></div>
+              {data.reviews!==null&&<><FilterSelect label="Especialidad" value={specialtyFilter} onChange={v=>{setSpecialtyFilter(v);setPage(1);}} options={ [['all','Todas'],['none','Por determinar'],...Object.entries(specialties)] }/><FilterSelect label="Plazo" value={deadlineFilter} onChange={v=>{setDeadlineFilter(v);setPage(1);}} options={ [['all','Todos'],['near','Por vencer'],['overdue','Vencidas'],['none','Sin plazo confirmado'],['later','Vigentes'],['closed','Cerradas']] }/><label className="grid gap-1 text-xs">Referencia externa<Input value={referenceFilter} onChange={e=>{setReferenceFilter(e.target.value);setPage(1);}}/></label></>}
+              <div className="flex items-end"><Button variant="outline" disabled={!activeFilters} onClick={()=>{setFilters({...emptyFilters});setSpecialtyFilter('all');setDeadlineFilter('all');setReferenceFilter('');setPage(1);}}>Limpiar filtros</Button></div>
             </div>
             {badDates&&<p role="alert" className="text-sm text-destructive">El inicio del rango no puede ser posterior al final.</p>}
           </div>
           {paging.total===0?<Card><CardContent className="p-6 text-center"><p className="font-medium">{opportunities.length?'No hay solicitudes con estos filtros.':'Todavía no hay solicitudes registradas.'}</p><p className="mt-1 text-sm text-muted-foreground">{opportunities.length?'Ajusta los filtros para ampliar la búsqueda.':'Registra una solicitud manual o revisa la bandeja Gmail si tienes autorización.'}</p></CardContent></Card>:<>
             <div className="hidden overflow-x-auto rounded-lg border xl:block">
               <table className="w-full table-fixed text-left text-sm"><thead className="border-b bg-muted/50 text-xs text-muted-foreground"><tr>{[['Recepción', 'w-[12%]'],['Solicitud','w-[24%]'],['Cliente / sede','w-[18%]'],['Origen','w-[8%]'],['Estado','w-[12%]'],['Vinculación','w-[11%]'],['Docs.','w-[5%]'],['Acción','w-[10%]']].map(([name,width])=><th key={name} scope="col" className={'p-2 font-medium '+width}>{name}</th>)}</tr></thead><tbody>
-                {paging.rows.map(o=><tr key={o.id} className="border-b align-top last:border-b-0 hover:bg-muted/30"><td className="break-words p-2 text-xs">{dateLabel(o.received_at)}</td><td className="break-words p-2 font-medium">{o.subject||'Solicitud sin asunto'}</td><td className="break-words p-2">{clientName(o.commercial_client_id)}<div className="text-xs text-muted-foreground">{siteName(o.commercial_site_id)}</div></td><td className="p-2">{originName(o.source_system)}</td><td className="break-words p-2">{statusName(o.status)}</td><td className="break-words p-2 text-xs">{matchName(o.match_status)}</td><td className="p-2" title="Documentos registrados, no adjuntos detectados en Gmail">{attachmentCounts.get(o.id)??0}</td><td className="p-2"><Button size="sm" variant="outline" aria-label={'Ver solicitud: '+(o.subject||'Sin asunto')} onClick={()=>openDetail(o.id)}><Eye className="mr-1 h-4 w-4"/>Ver</Button></td></tr>)}
+                {paging.rows.map(o=><tr key={o.id} className="border-b align-top last:border-b-0 hover:bg-muted/30"><td className="break-words p-2 text-xs">{dateLabel(o.received_at)}</td><td className="break-words p-2 font-medium">{reviews.get(o.id)?.snapshot.title||o.subject||'Solicitud sin asunto'}{reviews.get(o.id)&&<div className="text-xs font-normal text-muted-foreground">{specialties[reviews.get(o.id)?.snapshot.specialty??'']??'Por determinar'} · {reviews.get(o.id)?.snapshot.deadline_date??'Sin plazo'}</div>}</td><td className="break-words p-2">{clientName(o.commercial_client_id)}<div className="text-xs text-muted-foreground">{siteName(o.commercial_site_id)}</div></td><td className="p-2">{originName(o.source_system)}</td><td className="break-words p-2">{statusName(o.status)}</td><td className="break-words p-2 text-xs">{matchName(o.match_status)}</td><td className="p-2" title="Documentos registrados, no adjuntos detectados en Gmail">{attachmentCounts.get(o.id)??0}</td><td className="p-2"><Button size="sm" variant="outline" aria-label={'Ver solicitud: '+(o.subject||'Sin asunto')} onClick={()=>openDetail(o.id)}><Eye className="mr-1 h-4 w-4"/>Ver</Button></td></tr>)}
               </tbody></table>
             </div>
             <div className="space-y-2 xl:hidden">{paging.rows.map(o=><Card key={o.id}><CardContent className="space-y-2 p-3"><div className="break-words font-medium">{o.subject||'Solicitud sin asunto'}</div><div className="flex flex-wrap gap-2"><Badge variant="secondary">{statusName(o.status)}</Badge><Badge variant="outline">{originName(o.source_system)}</Badge><Badge variant="outline">{matchName(o.match_status)}</Badge></div><div className="break-words text-sm">{clientName(o.commercial_client_id)} · {siteName(o.commercial_site_id)}</div><div className="text-xs text-muted-foreground">{dateLabel(o.received_at)} · {attachmentCounts.get(o.id)??0} documentos registrados</div><Button variant="outline" size="sm" onClick={()=>openDetail(o.id)}><Eye className="mr-1 h-4 w-4"/>Ver solicitud</Button></CardContent></Card>)}</div>
@@ -188,7 +197,7 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
             </form>
       </DialogContent>
     </Dialog>
-    <RequestDetail open={!!focusOpportunityId} loading={loading&&!data} error={!!error&&!data} opportunity={selected} attachments={selected?attachments.filter(a=>a.opportunity_id===selected.id):[]} clientName={selected?clientName(selected.commercial_client_id):''} siteName={selected?siteName(selected.commercial_site_id):''} contactName={selected?contactName(selected.commercial_contact_id):''} onClose={closeDetail} onAnalyze={openAnalysis} onRetry={async()=>{await loadData();}} returnFocus={()=>{if(opener.current?.isConnected&&opener.current.getClientRects().length)opener.current.focus();else root.current?.querySelector<HTMLElement>('h1')?.focus();}}/>
+    <RequestDetail enrichment={selected&&data?.reviews!==null&&data?<RequestEnrichment key={selected.id} organizationId={organizationId} opportunity={selected} review={reviews.get(selected.id)} clients={clients} sites={sites} contacts={contacts} gmailAllowed={gmailAllowed} onSaved={async()=>{await loadData();}}/>:undefined} open={!!focusOpportunityId} loading={loading&&!data} error={!!error&&!data} opportunity={selected} attachments={selected?attachments.filter(a=>a.opportunity_id===selected.id):[]} clientName={selected?clientName(selected.commercial_client_id):''} siteName={selected?siteName(selected.commercial_site_id):''} contactName={selected?contactName(selected.commercial_contact_id):''} onClose={closeDetail} onAnalyze={openAnalysis} onRetry={async()=>{await loadData();}} returnFocus={()=>{if(opener.current?.isConnected&&opener.current.getClientRects().length)opener.current.focus();else root.current?.querySelector<HTMLElement>('h1')?.focus();}}/>
   </div>;
 }
 export default function OpportunitiesView({focusOpportunityId,memory}:Props){
