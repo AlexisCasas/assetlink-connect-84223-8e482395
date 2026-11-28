@@ -1,6 +1,6 @@
 # R3-GMAIL.4 / R3-SOL.4 — Adjuntos privados bajo demanda
 
-Estado: diseño propuesto, no implementación. Depende de R3-SOL.2 (PR #137, QA funcional PASS; sin merge ni producción). P04 del replanning aprobado. El cliente necesita que TDR, especificaciones y documentos recibidos acompañen la solicitud antes del análisis/cotización; no publicamos correos ni documentos reales.
+Estado: A01–A12 aprobadas; R3-GMAIL.4A autorizada en GitHub únicamente. Depende de R3-SOL.2 (PR #137, QA funcional PASS; sin merge ni producción). P04 del replanning aprobado. El cliente necesita que TDR, especificaciones y documentos recibidos acompañen la solicitud antes del análisis/cotización; no publicamos correos ni documentos reales.
 
 ## Línea base contrastada
 - Existe public.romax_opportunity_attachments con opportunity_id, organization_id, source_system, source_message_id, source_attachment_id, filename, mime_type, size_bytes, storage_path, checksum_sha256, processing_status, error_message y timestamps. Estados existentes detected/queued/downloaded/processed/unsupported/failed. Cloud: cero filas para ROMAX al cierre SOL.2.
@@ -31,3 +31,14 @@ D26–D30: extracción controlada, evidencia por ubicación, fallo sin pérdida 
 
 ## Fuera del alcance inicial
 OCR, CAD, descompresión genérica, links Drive/SharePoint, IA externa, edición/borrado de originales, envío de documentos, asignación responsable y motor de cotización. Confirmar necesidades y límites de documentos reales antes de implementar 4C/4E.
+
+
+## Implementación candidata R3-GMAIL.4A
+
+Se amplía la tabla existente sin tocar migraciones históricas; FK compuesta tenant/oportunidad, metadatos con permisos por columna y vista security_invoker compatible con la lista SOL.1; conserva INSERT manual acotado. La identidad única existente tenant/mensaje/adjunto es más estricta que tenant/oportunidad/mensaje/adjunto: un archivo no puede reasignarse a otra solicitud. Identidad MIME inline usa namespace part:. RPC de registro service-only verifica owner activo, conexión exacta, solicitud Gmail y thread registrado; 4B debe verificar pertenencia real de cada mensaje/parte al hilo en Gmail, todavía no implementado. Lotes atómicos <=50, relectura exacta sin duplicar registro ni auditoría, formatos/tamaño evaluados solo como metadatos no como validación binaria. Estados de disponibilidad, escaneo y revisión separados; available requiere scanner clean, ruta canónica, SHA-256 y tamaño permitido. Sin writer de lifecycle hasta 4C; no bucket, descargas, URLs, parser, escaneo o extracción. Auditoría privada append-only y guardas de identidad/borrado; no DML directo de service_role, fixture de índice legado usa postgres solo en CI. Se preserva creación manual con actor auditado y sólo campos seguros. No se altera ni rellena información histórica. 50 pruebas pgTAP propuestas, carrera real de dos sesiones y CI integral. CLI no instalado en runtime MCP; filename provisional, reconciliar al autorizar Cloud. No migración Cloud, reales, merge o producción.
+
+## Checkpoint vigente — 28/11/2026 (prevalece sobre estados históricos)
+
+R3-GMAIL.4A CI integral PASS en commit de código d5a7612e675972c6cec6214a40175bfabcc0dc28, run 46176658892: 41 archivos / 3018 pgTAP (50 nuevos), 38 Deno, 21 frontend, TypeScript sin nuevos diagnósticos, ESLint y Vite; concurrencia importación, revisión y documentos PASS. Asesores locales ejecutados, 0 ERROR, 11 WARN y 9 INFO; la nueva observación sobre tabla de auditoría privada sin políticas es intencional (denegación directa). Revisar alcance y ACL del candidato antes de cierre formal 4A. No hay migración Cloud 4A ni descarga real. PR #139 Draft.
+
+La ruta crítica aprobada es el replanning del 28/11 y el contrato de adjuntos A01–A12, no la secuencia histórica del 27/11. Estado y siguientes gates en [memoria de continuidad](ROMAX_CONTINUITY_20261128.md).

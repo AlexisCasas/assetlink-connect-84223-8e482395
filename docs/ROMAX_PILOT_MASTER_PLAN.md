@@ -506,3 +506,18 @@ E01–E12 aprobadas; rama feature/romax-r3-sol-2, SQL solo GitHub, formulario de
 QA real confirmado por propietario y cotejado en Cloud: cinco oportunidades (cuatro Gmail con hilos/mensajes únicos y cuatro auditorías concordantes), una ficha enriquecida con versiones 1–3, cinco recibos (tres saved y dos unchanged), proyección vigente igual a v3; cuatro solicitudes anteriores con huella intacta. Resumen y plazo de fecha sin hora verificados: cinco entradas de evidencia privada, componentes del mismo evento, parser/fecha/mensaje conservados. Indicadores esperados al cierre: 1 por vencer, 4 sin plazo confirmado, 0 vencidas. QA persistencia 11/11 PASS; CI y security gate aprobados. Migración Cloud canónica 20261128164558; Edge QA v8, Vercel Preview. No merge ni producción; el cierre funcional no equivale a liberación general. Siguiente R3-GMAIL.4 / R3-SOL.4, diseño de adjuntos privados bajo demanda.
 
 Ver [R3-GMAIL.4 — contrato de adjuntos](ROMAX_R3_GMAIL_4_ATTACHMENTS_DESIGN.md), decisiones A01–A12 propuestas.
+
+## R3-GMAIL.4A — fundamento documental
+
+A01–A12 aprobadas; implementación candidata GitHub-only. Tabla existente ampliada, ACL de metadatos y registro service-only, auditoría y estados separados, prueba concurrente y CI. Cloud y descarga permanecen sin cambios; R3-GMAIL.4B espera cierre 4A.
+
+## Checkpoint vigente — 28/11/2026 (prevalece sobre estados históricos)
+
+R3-GMAIL.4A CI integral PASS en commit de código d5a7612e675972c6cec6214a40175bfabcc0dc28, run 46176658892: 41 archivos / 3018 pgTAP (50 nuevos), 38 Deno, 21 frontend, TypeScript sin nuevos diagnósticos, ESLint y Vite; concurrencia importación, revisión y documentos PASS. Asesores locales ejecutados, 0 ERROR, 11 WARN y 9 INFO; la nueva observación sobre tabla de auditoría privada sin políticas es intencional (denegación directa). Revisar alcance y ACL del candidato antes de cierre formal 4A. No hay migración Cloud 4A ni descarga real. PR #139 Draft.
+
+La ruta crítica aprobada es el replanning del 28/11 y el contrato de adjuntos A01–A12, no la secuencia histórica del 27/11. Estado y siguientes gates en [memoria de continuidad](ROMAX_CONTINUITY_20261128.md).
+
+
+### Checkpoint R3-GMAIL.4A — seguridad (28/11/2026)
+
+Revisión independiente del candidato GitHub/local `PASS_REPOSITORY_LOCAL`, sin bloqueantes SQL/ACL demostrados; CI run 46176658892 aprobado. PR #139 se conserva Draft y sin merge; 4A no aplicada en Cloud. Condiciones obligatorias para 4B: validar identidad del actor y pertenencia Gmail de cada mensaje/parte al hilo autorizado, sin descarga de binarios; 4C conserva validación binaria/escaneo/almacenamiento. Véase [informe de seguridad 4A](ROMAX_R3_GMAIL_4A_SECURITY_FINAL_REVIEW_20261128.md). Próximo hito con autorización independiente: R3-GMAIL.4B. No autorizar Cloud ni producción por este checkpoint.

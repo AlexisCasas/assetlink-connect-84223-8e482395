@@ -48,3 +48,9 @@ No implementar código, migraciones, usuarios, costos, imports, merges o desplie
 ## Aprobación y siguiente diseño
 
 P01–P12 aprobadas sin pendientes de revisión de la decisión marco. El contrato detallado SOL1-D01–D12 se propone en [R3-SOL.1](ROMAX_R3_SOL_1_FUNCTIONAL_DESIGN.md), pendiente autorización de implementación. Los parámetros específicos de fases posteriores aún deberán definirse en sus contratos. No código.
+
+## Checkpoint vigente — 28/11/2026 (prevalece sobre estados históricos)
+
+R3-GMAIL.4A CI integral PASS en commit de código d5a7612e675972c6cec6214a40175bfabcc0dc28, run 46176658892: 41 archivos / 3018 pgTAP (50 nuevos), 38 Deno, 21 frontend, TypeScript sin nuevos diagnósticos, ESLint y Vite; concurrencia importación, revisión y documentos PASS. Asesores locales ejecutados, 0 ERROR, 11 WARN y 9 INFO; la nueva observación sobre tabla de auditoría privada sin políticas es intencional (denegación directa). Revisar alcance y ACL del candidato antes de cierre formal 4A. No hay migración Cloud 4A ni descarga real. PR #139 Draft.
+
+La ruta crítica aprobada es el replanning del 28/11 y el contrato de adjuntos A01–A12, no la secuencia histórica del 27/11. Estado y siguientes gates en [memoria de continuidad](ROMAX_CONTINUITY_20261128.md).
