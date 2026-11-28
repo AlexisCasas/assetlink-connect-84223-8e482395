@@ -2,6 +2,7 @@ import { createServiceClient, getAuthenticatedUser, isUuid } from '../_shared/ad
 import { randomToken, hashState, pkceChallenge, importKey, seal, unseal, READ_SCOPE, exactScope } from './crypto.ts';
 
 import { DAY_MS, readPreview, importPolicy } from './preview.ts';
+import { candidateDigest, issueConfirmation, openConfirmation, senderEmail } from './import.ts';
 
 const env = (name: string) => Deno.env.get(name) ?? '';
 const table = 'romax_gmail_connections';
@@ -77,6 +78,8 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
     const now = () => new Date().toISOString();
     const key = await importKey(config.key);
     const context = (purpose:string) => organization + ':' + purpose;
+    const importEnabled=readEnv('ROMAX_GMAIL_IMPORT_ENABLED')==='true';
+    const confirmationContext=context('import:'+user.id+':'+row?.connected_at+':'+config.origin);
     if (body.action === 'status') return reply({
       status: expired ? 'disconnected' : row?.status ?? 'disconnected',
       mailbox: row?.status === 'connected' ? row.mailbox_email : null,
@@ -153,8 +156,35 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
         if(existing.error)throw new SafeError(503,'No se pudo comprobar duplicados');
         for(const candidate of page.candidates){candidate.existing_status=existing.data?.find(x=>x.source_thread_id===candidate.thread_id)?.status??null;candidate.import_policy=importPolicy(candidate);}
       }
+      const candidates=await Promise.all(page.candidates.map(async candidate=>({ ...candidate, confirmation_token:importEnabled&&candidate.import_policy==='new_candidate'?await issueConfirmation(key,confirmationContext,candidate,from):null })));
       const next_cursor=page.next?await seal(key,JSON.stringify({to,next:page.next}),cursorContext):null;
-      return reply({status:'connected',window_start:new Date(from).toISOString(),window_end:new Date(to).toISOString(),candidates:page.candidates,scanned:page.scanned,estimate:page.estimate,next_cursor});
+      return reply({status:'connected',window_start:new Date(from).toISOString(),window_end:new Date(to).toISOString(),candidates,scanned:page.scanned,estimate:page.estimate,next_cursor});
+    }
+    if (body.action === 'confirm_import') {
+      if(!importEnabled)throw new SafeError(403,'Importación no habilitada');
+      if(body.confirmed!==true||!row||row.status!=='connected'||row.mailbox_email!==config.mailbox)throw new SafeError(409,'Confirma la importación con una conexión activa');
+      let confirmation;
+      try{confirmation=await openConfirmation(key,confirmationContext,body.confirmation_token);}
+      catch{throw new SafeError(409,'La confirmación expiró o cambió; sincroniza nuevamente');}
+      const refresh=await unseal(key,row.refresh_ciphertext,context('refresh'));
+      const tokens=await googleToken(config,{grant_type:'refresh_token',refresh_token:refresh},request);
+      if(tokens.scope!==undefined&&!exactScope(tokens.scope))throw new SafeError(409,'Permiso de Google inesperado');
+      await verifyMailbox(config,tokens.access_token,request);
+      const page=await readPreview(request,tokens.access_token,confirmation.from,Date.now(),undefined,confirmation.thread);
+      const candidate=page.candidates[0];
+      if(!candidate||candidate.message_id!==confirmation.message||importPolicy(candidate)!=='new_candidate'||await candidateDigest(candidate)!==confirmation.digest)
+        throw new SafeError(409,'La conversación cambió o requiere revisión; sincroniza nuevamente');
+      await assertOwner(db,organization,user.id);
+      const result=await db.rpc('romax_confirm_gmail_import',{
+        p_org:organization,p_actor:user.id,p_connected_at:row.connected_at,
+        p_confirmation_hash:await hashState(confirmation.nonce),p_digest:confirmation.digest,
+        p_expires_at:new Date(confirmation.expires).toISOString(),
+        p_thread:candidate.thread_id,p_message:candidate.message_id,p_subject:candidate.subject,
+        p_sender:senderEmail(candidate.sender),p_received_at:candidate.received_at,
+        p_snippet:candidate.snippet.slice(0,500),p_reason:candidate.reason
+      });
+      if(result.error||!result.data)throw new SafeError(409,'No se pudo confirmar la importación; sincroniza para comprobar su estado');
+      return reply(result.data);
     }
     if (body.action === 'verify') {
       if (!row || row.status !== 'connected' || row.mailbox_email !== config.mailbox) throw new SafeError(409,'No hay una conexión activa');
@@ -200,9 +230,9 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
 
 
 // Isolated Preview-only entrypoint. This origin is the stable Vercel branch alias;
-// no OAuth lifecycle or write actions are exposed from this function.
+// OAuth lifecycle is blocked; confirmation is disabled unless its separate QA flag is enabled.
 export const QA_APP_ORIGIN = 'https://one-facility-git-feature-romax-r3-29c35c-alexiscasasrs-projects.vercel.app';
 export function createQaHandler() {
-  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? QA_APP_ORIGIN : env(name);
-  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview']));
+  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? (env('ROMAX_GMAIL_QA_APP_ORIGIN')||QA_APP_ORIGIN) : name==='ROMAX_GMAIL_IMPORT_ENABLED' ? env('ROMAX_GMAIL_QA_IMPORT_ENABLED') : env(name);
+  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview','confirm_import']));
 }
