@@ -1,7 +1,7 @@
 name: ROMAX R3-GMAIL.1 OAuth QA
 on:
   pull_request:
-    branches: ["productization/mvp", "feature/romax-r3-gmail-2-1", "feature/romax-r3-gmail-3", "docs/romax-functional-replanning-20261128", "docs/romax-r3-sol-2-design", "docs/romax-r3-gmail-4-design", "feature/romax-r3-gmail-4a", "feature/romax-r3-gmail-4b", "feature/romax-r3-gmail-4c1"]
+    branches: ["productization/mvp", "feature/romax-r3-gmail-2-1", "feature/romax-r3-gmail-3", "docs/romax-functional-replanning-20261128", "docs/romax-r3-sol-2-design", "docs/romax-r3-gmail-4-design", "feature/romax-r3-gmail-4a", "feature/romax-r3-gmail-4b", "feature/romax-r3-gmail-4c1", "feature/romax-r3-gmail-4c3-4d", "docs/romax-r3-gmail-4e-design"]
     paths:
       - "supabase/**"
       - "src/components/provider/GmailConnectionPanel.tsx"
@@ -23,6 +23,7 @@ on:
       - "scripts/qa/romax_sol2_concurrency.sh"
       - "scripts/qa/romax_gmail4a_concurrency.sh"
       - "scripts/qa/romax_gmail4c1_concurrency.sh"
+      - "scripts/qa/romax_gmail4e1_concurrency.sh"
       - "src/pages/GmailCallback.tsx"
       - "src/App.tsx"
       - ".github/workflows/romax-r3-gmail-oauth-qa.yml"
@@ -76,6 +77,8 @@ jobs:
         run: bash scripts/qa/romax_gmail4a_concurrency.sh
       - name: Quarantine reservation concurrency (local only)
         run: bash scripts/qa/romax_gmail4c1_concurrency.sh
+      - name: Extraction queue concurrency (local only)
+        run: bash scripts/qa/romax_gmail4e1_concurrency.sh
       - name: Install CLI with security advisors
         uses: supabase/setup-cli@v1
         with:
