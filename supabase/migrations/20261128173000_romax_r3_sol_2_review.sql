@@ -112,7 +112,7 @@ BEGIN
   FOREACH v_key IN ARRAY ARRAY['title','summary','scope','restrictions','reference','reference_kind','specialty','deadline_date','deadline_time','deadline_note','client_id','site_id','contact_id'] LOOP
     v_value:=p_snapshot->v_key;
     IF jsonb_typeof(v_value) NOT IN ('string','null') OR length(coalesce(p_snapshot->>v_key,''))>
-      CASE v_key WHEN 'scope' THEN 8000 WHEN 'summary' THEN 2000 WHEN 'restrictions' THEN 4000 WHEN 'deadline_note' THEN 500 ELSE 300 END
+      (CASE v_key WHEN 'scope' THEN 8000 WHEN 'summary' THEN 2000 WHEN 'restrictions' THEN 4000 WHEN 'deadline_note' THEN 500 ELSE 300 END)
       THEN RAISE EXCEPTION 'Invalid field: %',v_key USING ERRCODE='22023'; END IF;
   END LOOP;
   IF (p_snapshot->>'reference_kind') IS NOT NULL AND (p_snapshot->>'reference_kind') NOT IN ('client_request','unknown') THEN RAISE EXCEPTION 'Invalid reference type' USING ERRCODE='22023'; END IF;

@@ -14,7 +14,7 @@ type Candidate = { thread_id:string; subject:string; sender:string; received_at:
 type Preview = { window_start:string; window_end:string; candidates:Candidate[]; scanned:number; estimate:number|null; next_cursor:string|null };
 const labels:Record<string,string>={quote_request:'Nueva solicitud candidata',follow_up:'Actualización / seguimiento',adjustment:'Reajuste',quoted:'Posiblemente cotizada',operational:'Operativa',other:'Otros',review:'Requiere revisión'};
 type Result = { enrichment?: Proposal; status?: string; mailbox?: string; authorization_url?: string; state?: string; verified?: boolean; error?: string; outcome?: 'imported'|'already_exists'; opportunity_id?:string; opportunity_status?:string } & Partial<Preview>;
-export async function gmailConnection(organizationId: string, action: string, extra: Record<string,string|boolean> = {}): Promise<Result> {
+export async function gmailConnection(organizationId: string, action: string, extra: Record<string,unknown> = {}): Promise<Result> {
   const { data, error } = await supabase.functions.invoke(GMAIL_FUNCTION_NAME, { body: { ...extra, organization_id:organizationId, action } });
   if (error || !data || data.error) throw new Error('No se pudo completar la operación. Comprueba la configuración o vuelve a conectar.');
   return data as Result;

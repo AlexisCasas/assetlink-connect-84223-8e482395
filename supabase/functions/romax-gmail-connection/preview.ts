@@ -1,7 +1,7 @@
 export const DAY_MS = 86400000;
 export const PAGE_SIZE = 12;
 export type Category = 'quote_request' | 'follow_up' | 'adjustment' | 'quoted' | 'operational' | 'other' | 'review';
-export type DeadlineEvent = { raw:string; date:string|null; time:string|null; datetime:string|null; timezone:'America/Lima'; status:'confirmed'|'ambiguous'; kind:'extension'|'stated'; weekday:string|null };
+export type DeadlineEvent = { raw:string; date:string|null; time:string|null; datetime:string|null; timezone:'America/Lima'; status:'confirmed'|'ambiguous'; kind:'extension'|'stated'; weekday:string|null; source_message_id?:string; source_received_at?:string };
 type Part = { filename?: string; mimeType?: string; parts?: Part[]; headers?: {name:string;value:string}[]; body?: {data?:string;size?:number;attachmentId?:string} };
 type Message = { id?: string; internalDate?: string; labelIds?: string[]; snippet?: string; bodyText?: string; bodyLimited?: boolean; payload?: Part & { headers?: {name:string;value:string}[] } };
 export type Candidate = { thread_id:string; message_id:string; subject:string; sender:string; received_at:string; snippet:string; category:Category; reason:string; reference:string|null; deadline_hint:string|null; deadline_events:DeadlineEvent[]; message_count:number; attachments:{name:string;mime:string;supported:boolean}[]; existing_status?:string|null; existing_opportunity_id?:string|null; text_source:'body'|'snippet'; body_limited:boolean; import_policy:'new_candidate'|'link_existing'|'review_required'|'not_importable' };
@@ -97,7 +97,7 @@ const weekdayIndex:Record<string,number>={domingo:0,lunes:1,martes:2,miercoles:3
 const datePattern=/(?<![\d-])\b(?:(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s+)?(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?\b/gi;
 const isoDatePattern=/\b(\d{4})-(\d{2})-(\d{2})\b/g;
 const deadlineCue=/(?:plazo|deadline|fecha\s+limite|(?:envio|entrega|presentacion)\s+de\s+(?:su\s+)?propuestas?|(?:enviar|presentar)\s+(?:su\s+)?propuestas?|se\s+extiende|se\s+amplia|prorroga)/gi;
-export function parseDeadlineEvents(messages:{snippet?:string;bodyText?:string;internalDate?:string}[]):DeadlineEvent[] {
+export function parseDeadlineEvents(messages:{id?:string;snippet?:string;bodyText?:string;internalDate?:string}[],includeEvidence=false):DeadlineEvent[] {
   const found:DeadlineEvent[]=[];let previousCurrent:DeadlineEvent|null=null;
   for(const message of messages){
     const text=messageText(message).slice(0,BODY_CHARS),currentEnd=primaryText(message).length;
@@ -137,6 +137,7 @@ export function parseDeadlineEvents(messages:{snippet?:string;bodyText?:string;i
       if(index<currentEnd&&date&&previousCurrent?.date&&(date!==previousCurrent.date||(time&&previousCurrent.time&&time!==previousCurrent.time)))kind='extension';
       const raw=clean(text.slice(Math.max(0,index-65),Math.min(text.length,index+full.length+35)),180);
       const event:DeadlineEvent={raw,date,time,datetime,timezone:'America/Lima',status,kind,weekday:matchedWeekday};
+      if(includeEvidence&&validId(message.id)&&Number.isFinite(Number(message.internalDate))){event.source_message_id=message.id;event.source_received_at=new Date(Number(message.internalDate)).toISOString();}
       if(!found.some(x=>x.date===event.date&&x.time===event.time&&x.kind===event.kind))found.push(event);
       if(index<currentEnd&&event.status==='confirmed')currentEvent=event;
     }
@@ -144,7 +145,7 @@ export function parseDeadlineEvents(messages:{snippet?:string;bodyText?:string;i
   }
   return found;
 }
-export function classifyThread(thread:{id?:string;messages?:Message[]},from:number,to:number):Candidate|null {
+export function classifyThread(thread:{id?:string;messages?:Message[]},from:number,to:number,includeEvidence=false):Candidate|null {
   if(!validId(thread.id))return null;
   const messages=(thread.messages??[]).filter(m=>validId(m.id)&&!isExcluded(m)&&Number(m.internalDate)>=from&&Number(m.internalDate)<=to).sort((a,b)=>Number(a.internalDate)-Number(b.internalDate));
   const external=messages.filter(m=>!isSent(m)&&!isPromotional(m));
@@ -166,7 +167,7 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const sentEvidence=quoteReplies.some(x=>Number(x.internalDate)>latestSourceAt);
   const unresolvedInternalReply=internal.some(x=>Number(x.internalDate)>latestSourceAt&&!forwardedSender(x));
   const deadlineMessages=sourceMessages.length?sourceMessages:quoteReplies;
-  const deadlineEvents=parseDeadlineEvents(deadlineMessages);
+  const deadlineEvents=parseDeadlineEvents(deadlineMessages,includeEvidence);
   let category:Category='other',reason='No se detectó una solicitud comercial explícita.';
   if(!sourceMessages.length){category='quoted';reason='Cotización enviada desde un alias interno de ROMAX; no es una nueva solicitud.';}
   else if(retailPromotion){category='other';reason='Promoción comercial ajena a una solicitud de ROMAX.';}
@@ -238,7 +239,7 @@ export async function readPreview(request:typeof fetch,token:string,from:number,
         }
       }
       if(strictThread&&readable.some(m=>m.bodyLimited===true))throw new Error('Thread body limit');
-      return classifyThread({id,messages},from,to);
+      return classifyThread({id,messages},from,to,strictThread);
     }));
     candidates.push(...batch.filter((x):x is Candidate=>x!==null));
   }

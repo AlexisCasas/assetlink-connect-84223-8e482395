@@ -169,8 +169,9 @@ Deno.test('enrichment: directed old thread, owner only, no write or technical ID
  assert((await f.call('enrichment_preview',{opportunity_id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'})).code===404);
  assert(f.threadReads===reads);
  const response=await f.call('enrichment_preview',{opportunity_id:id,thread_id:'attacker'});
- assert(response.code===200&&response.body.enrichment.subject==='Solicitud de cotización');
+ assert(response.code===200&&response.body.enrichment.subject==='Solicitud de cotización'&&typeof response.body.enrichment.proof==='string');
  assert(f.threadReads===reads+1&&f.rpcCalls===0&&JSON.stringify(f.row)===before);
  assert(!JSON.stringify(response.body).includes('thread1')&&!JSON.stringify(response.body).includes('msgthread1'));
+ assert((await f.call('save_enrichment',{opportunity_id:id,request_id:id,expected_revision:0,snapshot:{},proof:response.body.enrichment.proof},'owner2')).code===409);
  assert((await fixture().call('enrichment_preview',{opportunity_id:id})).code===403);
 });
