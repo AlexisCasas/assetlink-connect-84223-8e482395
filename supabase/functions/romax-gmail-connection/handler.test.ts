@@ -3,12 +3,12 @@ import { READ_SCOPE } from './crypto.ts';
 const organization='11111111-1111-4111-8111-111111111111', origin='https://example.test', mailbox='pilot@example.test';
 type Row=Record<string,unknown>;
 function assert(value:unknown, label='Assertion failed') { if(!value) throw new Error(label); }
-function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false) {
-  const received=Date.now()-60000;
+function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false, enrichmentEnabled=false, oldThread=false) {
+  const received=Date.now()-(oldThread?30*86400000:60000);
   let rpcCalls=0, changed=false;
   let row:Row|null=null, profile=mailbox, scope=READ_SCOPE, exchangeCount=0, revokeCount=0, threadReads=0;
   const owners=new Set(['owner','owner2']);
-  const variables:Record<string,string>={ROMAX_GMAIL_IMPORT_ENABLED:importEnabled?'true':'false',ROMAX_GMAIL_ORGANIZATION_ID:organization,ROMAX_GMAIL_EXPECTED_EMAIL:mailbox,ROMAX_GMAIL_APP_ORIGIN:origin,ROMAX_GMAIL_CLIENT_ID:'synthetic-client',ROMAX_GMAIL_CLIENT_SECRET:'synthetic-secret',ROMAX_GMAIL_ENCRYPTION_KEY:btoa('k'.repeat(32))};
+  const variables:Record<string,string>={ROMAX_GMAIL_ENRICHMENT_ENABLED:enrichmentEnabled?'true':'false',ROMAX_GMAIL_IMPORT_ENABLED:importEnabled?'true':'false',ROMAX_GMAIL_ORGANIZATION_ID:organization,ROMAX_GMAIL_EXPECTED_EMAIL:mailbox,ROMAX_GMAIL_APP_ORIGIN:origin,ROMAX_GMAIL_CLIENT_ID:'synthetic-client',ROMAX_GMAIL_CLIENT_SECRET:'synthetic-secret',ROMAX_GMAIL_ENCRYPTION_KEY:btoa('k'.repeat(32))};
   class Query {
     private filters:((record:Row)=>boolean)[]=[];
     private changes:Row|null=null;
@@ -28,8 +28,8 @@ function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false) {
       }
       if(this.name==='romax_opportunities'){
         assert(!this.changes,'Preview must not write opportunities');
-        const data=[{organization_id:organization,source_system:'gmail',source_thread_id:'thread1',status:'in_analysis'},{organization_id:'another',source_system:'gmail',source_thread_id:'thread2',status:'quoted'}].filter(r=>this.filters.every(f=>f(r)));
-        return {data,error:null};
+        const data=[{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',organization_id:organization,source_system:'gmail',source_thread_id:'thread1',status:'in_analysis'},{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',organization_id:'another',source_system:'gmail',source_thread_id:'thread2',status:'quoted'}].filter(r=>this.filters.every(f=>f(r)));
+        return {data:single?(data[0]??null):data,error:null};
       }
       if(!row || !this.filters.every(f=>f(row!)))return {data:single?null:[],error:null};
       if(this.changes)row={...row,...this.changes};
@@ -157,4 +157,20 @@ Deno.test('import gate, encrypted confirmation, server reread and owner binding'
   assert((await f.call('confirm_import',{confirmed:true,confirmation_token:token})).code===409&&f.rpcCalls===1);
   f.deactivate('owner');
   assert((await f.call('confirm_import',{confirmed:true,confirmation_token:token})).code===403);
+});
+
+Deno.test('enrichment: directed old thread, owner only, no write or technical IDs',async()=>{
+ const f=fixture(undefined,false,true,true);
+ const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ assert((await f.call('enrichment_preview',{opportunity_id:id})).code===409);
+ const start=await f.call('start');assert((await f.call('complete',{state:start.body.state,code:'code'})).code===200);
+ const before=JSON.stringify(f.row),reads=f.threadReads;
+ assert((await f.call('enrichment_preview',{opportunity_id:id},'outsider')).code===403);
+ assert((await f.call('enrichment_preview',{opportunity_id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'})).code===404);
+ assert(f.threadReads===reads);
+ const response=await f.call('enrichment_preview',{opportunity_id:id,thread_id:'attacker'});
+ assert(response.code===200&&response.body.enrichment.subject==='Solicitud de cotización');
+ assert(f.threadReads===reads+1&&f.rpcCalls===0&&JSON.stringify(f.row)===before);
+ assert(!JSON.stringify(response.body).includes('thread1')&&!JSON.stringify(response.body).includes('msgthread1'));
+ assert((await fixture().call('enrichment_preview',{opportunity_id:id})).code===403);
 });

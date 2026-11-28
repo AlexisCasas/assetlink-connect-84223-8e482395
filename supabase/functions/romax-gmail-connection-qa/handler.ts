@@ -160,6 +160,34 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
       const next_cursor=page.next?await seal(key,JSON.stringify({to,next:page.next}),cursorContext):null;
       return reply({status:'connected',window_start:new Date(from).toISOString(),window_end:new Date(to).toISOString(),candidates,scanned:page.scanned,estimate:page.estimate,next_cursor});
     }
+    if (body.action === 'enrichment_preview') {
+      if(readEnv('ROMAX_GMAIL_ENRICHMENT_ENABLED')!=='true')throw new SafeError(403,'Enriquecimiento Gmail no habilitado');
+      if(!isUuid(body.opportunity_id)||!row||row.status!=='connected'||row.mailbox_email!==config.mailbox)
+        throw new SafeError(409,'Solicitud o conexión no disponible');
+      const lookup=await db.from('romax_opportunities').select('id,source_thread_id,source_system,received_at')
+        .eq('organization_id',organization).eq('id',body.opportunity_id).eq('source_system','gmail').maybeSingle();
+      if(lookup.error||!lookup.data?.source_thread_id)throw new SafeError(404,'Solicitud no disponible o sin acceso');
+      const refresh=await unseal(key,row.refresh_ciphertext,context('refresh'));
+      const tokens=await googleToken(config,{grant_type:'refresh_token',refresh_token:refresh},request);
+      if(tokens.scope!==undefined&&!exactScope(tokens.scope))throw new SafeError(409,'Permiso de Google inesperado');
+      await verifyMailbox(config,tokens.access_token,request);
+      let candidate;
+      try{
+        // Existing opportunity, not a new seven-day candidate. Never accept browser thread ids.
+        const page=await readPreview(request,tokens.access_token,0,Date.now(),undefined,lookup.data.source_thread_id,true);
+        candidate=page.candidates[0];
+      }catch{throw new SafeError(409,'No se pudo leer el hilo completo dentro de los límites. Conserva la revisión manual');}
+      if(!candidate||candidate.body_limited)throw new SafeError(409,'Hilo no disponible para revisión completa');
+      await assertOwner(db,organization,user.id);
+      const current=await getRow(db,organization);
+      if(!current||current.status!=='connected'||current.connected_at!==row.connected_at||current.mailbox_email!==config.mailbox)
+        throw new SafeError(409,'La conexión cambió');
+      // No IDs, body, tokens or attachments in browser response. Parsed dates are suggestions, not approved values.
+      return reply({enrichment:{subject:candidate.subject,sender:senderEmail(candidate.sender),excerpt:candidate.snippet,
+        reference:candidate.reference,reference_kind:candidate.reference&&/^RMX[- ]/i.test(candidate.reference)?'internal_quote':'unknown',
+        deadlines:candidate.deadline_events.map(d=>({raw:d.raw,date:d.date,time:d.time,kind:d.kind,ambiguous:d.status==='ambiguous'})),
+        source_received_at:candidate.received_at,text_source:candidate.text_source,parser:'romax-r3-gmail-2.2',category:candidate.category}});
+    }
     if (body.action === 'confirm_import') {
       if(!importEnabled)throw new SafeError(403,'Importación no habilitada');
       if(body.confirmed!==true||!row||row.status!=='connected'||row.mailbox_email!==config.mailbox)throw new SafeError(409,'Confirma la importación con una conexión activa');
@@ -233,6 +261,6 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
 // OAuth lifecycle is blocked; confirmation is disabled unless its separate QA flag is enabled.
 export const QA_APP_ORIGIN = 'https://one-facility-git-feature-romax-r3-29c35c-alexiscasasrs-projects.vercel.app';
 export function createQaHandler() {
-  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? (env('ROMAX_GMAIL_QA_APP_ORIGIN')||QA_APP_ORIGIN) : name==='ROMAX_GMAIL_IMPORT_ENABLED' ? env('ROMAX_GMAIL_QA_IMPORT_ENABLED') : env(name);
-  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview','confirm_import']));
+  const readEnv = (name: string) => name === 'ROMAX_GMAIL_APP_ORIGIN' ? (env('ROMAX_GMAIL_QA_APP_ORIGIN')||QA_APP_ORIGIN) : name==='ROMAX_GMAIL_IMPORT_ENABLED' ? env('ROMAX_GMAIL_QA_IMPORT_ENABLED') : name==='ROMAX_GMAIL_ENRICHMENT_ENABLED' ? env('ROMAX_GMAIL_QA_ENRICHMENT_ENABLED') : env(name);
+  return createHandler({ authenticate:getAuthenticatedUser, service:createServiceClient, request:fetch, readEnv }, new Set(['status','preview','confirm_import','enrichment_preview']));
 }

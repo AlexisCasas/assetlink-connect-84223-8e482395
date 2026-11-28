@@ -186,7 +186,7 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const candidate:Candidate={thread_id:thread.id,message_id:m.id!,subject:subject||'Sin asunto',sender:forwardedSender(m)??sender,received_at:new Date(Number(m.internalDate)).toISOString(),snippet,category,reason,reference,deadline_hint:currentDeadline?.raw??null,deadline_events:deadlineEvents,message_count:messages.length,attachments:allAttachments,text_source:(sourceMessages.length?sourceMessages:quoteReplies).some(x=>!!x.bodyText)?'body':'snippet',body_limited:bodyLimited,import_policy:'review_required'};
   candidate.import_policy=importPolicy(candidate);return candidate;
 }
-export async function readPreview(request:typeof fetch,token:string,from:number,to:number,pageToken?:string,onlyThread?:string) {
+export async function readPreview(request:typeof fetch,token:string,from:number,to:number,pageToken?:string,onlyThread?:string,strictThread=false) {
   const started=Date.now();
   const root='https://gmail.googleapis.com/gmail/v1/users/me/threads';
   const get=async(url:URL)=>{
@@ -218,6 +218,7 @@ export async function readPreview(request:typeof fetch,token:string,from:number,
       url.search=new URLSearchParams({format:'full',fields:'id,messages(id,internalDate,labelIds,snippet,payload(headers(name,value),filename,mimeType,parts(filename,mimeType,parts(filename,mimeType,parts(filename,mimeType)))) )'.replace(/\s/g,'')}).toString();
       const thread=await get(url);
       if(thread.id!==id)throw new Error('Thread identity mismatch');
+      if(strictThread&&(!Array.isArray(thread.messages)||thread.messages.length>80))throw new Error('Thread metadata limit');
       const messages:Message[]=(thread.messages??[]).filter((m:Message)=>validId(m.id)&&!isExcluded(m)&&Number(m.internalDate)>=from&&Number(m.internalDate)<=to);
       const readable=messages.filter(m=>!isPromotional(m)).sort((a,b)=>Number(b.internalDate)-Number(a.internalDate));
       const partFields=(depth:number):string=>'filename,mimeType,headers(name,value),body(size,data,attachmentId)'+(depth>0?',parts('+partFields(depth-1)+')':'');
@@ -236,6 +237,7 @@ export async function readPreview(request:typeof fetch,token:string,from:number,
           throw error;
         }
       }
+      if(strictThread&&readable.some(m=>m.bodyLimited===true))throw new Error('Thread body limit');
       return classifyThread({id,messages},from,to);
     }));
     candidates.push(...batch.filter((x):x is Candidate=>x!==null));
