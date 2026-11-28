@@ -3,10 +3,12 @@ import { READ_SCOPE } from './crypto.ts';
 const organization='11111111-1111-4111-8111-111111111111', origin='https://example.test', mailbox='pilot@example.test';
 type Row=Record<string,unknown>;
 function assert(value:unknown, label='Assertion failed') { if(!value) throw new Error(label); }
-function fixture(allowedActions?: ReadonlySet<string>) {
+function fixture(allowedActions?: ReadonlySet<string>, importEnabled=false) {
+  const received=Date.now()-60000;
+  let rpcCalls=0, changed=false;
   let row:Row|null=null, profile=mailbox, scope=READ_SCOPE, exchangeCount=0, revokeCount=0, threadReads=0;
   const owners=new Set(['owner','owner2']);
-  const variables:Record<string,string>={ROMAX_GMAIL_ORGANIZATION_ID:organization,ROMAX_GMAIL_EXPECTED_EMAIL:mailbox,ROMAX_GMAIL_APP_ORIGIN:origin,ROMAX_GMAIL_CLIENT_ID:'synthetic-client',ROMAX_GMAIL_CLIENT_SECRET:'synthetic-secret',ROMAX_GMAIL_ENCRYPTION_KEY:btoa('k'.repeat(32))};
+  const variables:Record<string,string>={ROMAX_GMAIL_IMPORT_ENABLED:importEnabled?'true':'false',ROMAX_GMAIL_ORGANIZATION_ID:organization,ROMAX_GMAIL_EXPECTED_EMAIL:mailbox,ROMAX_GMAIL_APP_ORIGIN:origin,ROMAX_GMAIL_CLIENT_ID:'synthetic-client',ROMAX_GMAIL_CLIENT_SECRET:'synthetic-secret',ROMAX_GMAIL_ENCRYPTION_KEY:btoa('k'.repeat(32))};
   class Query {
     private filters:((record:Row)=>boolean)[]=[];
     private changes:Row|null=null;
@@ -50,24 +52,24 @@ function fixture(allowedActions?: ReadonlySet<string>) {
     if(url==='https://gmail.googleapis.com/gmail/v1/users/me/profile')return Response.json({emailAddress:profile});
     if(url.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/messages/')){
       assert(init?.method==='GET'&&!url.includes('/attachments/'));const id=new URL(url).pathname.split('/').pop();
-      return Response.json({id,payload:{mimeType:'text/plain',body:{data:btoa('Solicitamos cotizar el servicio')}}});
+      return Response.json({id,payload:{mimeType:'text/plain',headers:[{name:'Subject',value:changed?'Solicitud modificada':'Solicitud de cotización'},{name:'From',value:'client@example.test'}],body:{data:btoa('Solicitamos cotizar el servicio')}}});
     }
     if(url.startsWith('https://gmail.googleapis.com/gmail/v1/users/me/threads')){
       assert(init?.method==='GET');
       const u=new URL(url);threadReads++;
       if(u.pathname.endsWith('/threads'))return Response.json(u.searchParams.has('pageToken')?{threads:[{id:'thread2'}]}:{threads:[{id:'thread1'}],nextPageToken:'opaque-page'});
       const id=u.pathname.split('/').pop();
-      return Response.json({id,messages:[{id:'msg'+id,internalDate:String(Date.now()-60000),labelIds:['INBOX'],snippet:'Solicitamos cotizar',payload:{headers:[{name:'Subject',value:'Solicitud de cotización'},{name:'From',value:'client@example.test'}]}}]});
+      return Response.json({id,messages:[{id:'msg'+id,internalDate:String(received),labelIds:['INBOX'],snippet:'Solicitamos cotizar',payload:{headers:[{name:'Subject',value:changed?'Solicitud modificada':'Solicitud de cotización'},{name:'From',value:'client@example.test'}]}}]});
     }
     if(url==='https://oauth2.googleapis.com/revoke'){revokeCount++;assert(values.get('token')==='refresh-secret');return new Response('',{status:200});}
     throw new Error('Unexpected outbound request');
   };
-  const handler=createHandler({authenticate:async req=>{const id=req.headers.get('Authorization')?.replace('Bearer ','');if(!id)throw new Error('Unauthorized');return {id};},service:()=>({from:(name:string)=>new Query(name)}) as never,request,readEnv:name=>variables[name]??''},allowedActions);
+  const handler=createHandler({authenticate:async req=>{const id=req.headers.get('Authorization')?.replace('Bearer ','');if(!id)throw new Error('Unauthorized');return {id};},service:()=>({from:(name:string)=>new Query(name),rpc:(name:string,args:Row)=>{assert(name==='romax_confirm_gmail_import'&&args.p_org===organization&&args.p_actor==='owner'&&args.p_thread==='thread2'&&args.p_subject==='Solicitud de cotización');rpcCalls++;return Promise.resolve({data:{outcome:'imported',opportunity_id:'synthetic'},error:null});}}) as never,request,readEnv:name=>variables[name]??''},allowedActions);
   const call=async(action:string,extra:Row={},user='owner',requestOrigin=origin)=>{
     const response=await handler(new Request(origin+'/function',{method:'POST',headers:{Origin:requestOrigin,Authorization:user?'Bearer '+user:'','Content-Type':'application/json'},body:JSON.stringify({action,organization_id:organization,...extra})}));
     return {code:response.status,body:await response.json()};
   };
-  return {call,get row(){return row;},get exchanges(){return exchangeCount;},get revokes(){return revokeCount;},get threadReads(){return threadReads;},setProfile:(v:string)=>{profile=v;},setScope:(v:string)=>{scope=v;},expire:()=>{if(row)row.attempt_expires_at=new Date(Date.now()-1000).toISOString();},deactivate:(v:string)=>owners.delete(v)};
+  return {call,get rpcCalls(){return rpcCalls;},change:()=>{changed=true;},get row(){return row;},get exchanges(){return exchangeCount;},get revokes(){return revokeCount;},get threadReads(){return threadReads;},setProfile:(v:string)=>{profile=v;},setScope:(v:string)=>{scope=v;},expire:()=>{if(row)row.attempt_expires_at=new Date(Date.now()-1000).toISOString();},deactivate:(v:string)=>owners.delete(v)};
 }
 Deno.test('rejects missing authentication, wrong origin, tenant and non-owner',async()=>{
   const f=fixture();
@@ -135,4 +137,24 @@ Deno.test('QA handler permits only status and preview; all OAuth lifecycle actio
   assert((await f.call('preview')).code===409 && f.threadReads===0);
   for (const action of ['start','complete','verify','disconnect']) assert((await f.call(action,{state:'a'.repeat(43),code:'code'})).code===403, action+' must be denied');
   assert(f.row===null && f.exchanges===0 && f.revokes===0 && f.threadReads===0,'QA actions must not write or contact Google');
+});
+
+Deno.test('import gate, encrypted confirmation, server reread and owner binding',async()=>{
+  const off=fixture();
+  assert((await off.call('confirm_import',{confirmed:true,confirmation_token:'forged'})).code===403);
+  const f=fixture(undefined,true);
+  const start=await f.call('start');assert((await f.call('complete',{state:start.body.state,code:'code'})).code===200);
+  const p=await f.call('preview');assert(p.body.candidates[0].confirmation_token===null);
+  const next=await f.call('preview',{cursor:p.body.next_cursor});const token=next.body.candidates[0].confirmation_token;
+  assert(typeof token==='string'&&token.startsWith('v1.')&&!token.includes('thread2'));
+  assert((await f.call('confirm_import',{confirmed:false,confirmation_token:token})).code===409);
+  assert((await f.call('confirm_import',{confirmed:true,confirmation_token:token},'owner2')).code===409);
+  assert((await f.call('confirm_import',{confirmed:true,confirmation_token:'forged'})).code===409);
+  assert(f.rpcCalls===0);
+  const result=await f.call('confirm_import',{confirmed:true,confirmation_token:token,subject:'untrusted'});
+  assert(result.code===200&&result.body.outcome==='imported'&&f.rpcCalls===1);
+  f.change();
+  assert((await f.call('confirm_import',{confirmed:true,confirmation_token:token})).code===409&&f.rpcCalls===1);
+  f.deactivate('owner');
+  assert((await f.call('confirm_import',{confirmed:true,confirmation_token:token})).code===403);
 });

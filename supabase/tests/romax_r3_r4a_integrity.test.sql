@@ -2,7 +2,7 @@
 -- Every synthetic record and role claim is discarded by ROLLBACK.
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
-SELECT plan(32);
+SELECT plan(35);
 CREATE FUNCTION pg_temp.romax_as_user(p_id uuid) RETURNS void
 LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claim.sub',coalesce(p_id::text,''),true);
@@ -86,12 +86,33 @@ SELECT throws_ok($save$
 $save$, '23514', NULL, 'bad item rolls back the entire save');
 SELECT is((SELECT count(*) FROM public.romax_opportunity_analyses),2::bigint,'failed save left no partial version');
 
+-- Gmail provenance is service-only from R3-GMAIL.3; verify the browser denial
+-- before running the existing per-message deduplication regression.
+SELECT throws_ok($forged$
+ INSERT INTO public.romax_opportunity_attachments(
+  organization_id,opportunity_id,source_system,source_message_id,source_attachment_id,filename
+ ) VALUES (
+  'c6200000-0000-0000-0000-0000000000a1','c6300000-0000-0000-0000-000000000001',
+  'gmail','msg-forged','attachment-forged','forged.pdf'
+ )
+$forged$,'42501',NULL,'authenticated owner cannot insert Gmail attachment provenance');
+SELECT lives_ok($manual$
+ INSERT INTO public.romax_opportunity_attachments(organization_id,opportunity_id,source_system,filename)
+ VALUES ('c6200000-0000-0000-0000-0000000000a1','c6300000-0000-0000-0000-000000000001','manual','manual.pdf')
+$manual$,'authenticated owner retains manual attachment workflow');
+SELECT throws_ok($convert$
+ UPDATE public.romax_opportunity_attachments
+ SET source_system='gmail',source_message_id='msg-forged',source_attachment_id='attachment-forged'
+ WHERE opportunity_id='c6300000-0000-0000-0000-000000000001' AND source_system='manual'
+$convert$,'42501',NULL,'authenticated owner cannot convert a manual attachment to Gmail');
+RESET ROLE;
+SET LOCAL ROLE service_role;
 INSERT INTO public.romax_opportunity_attachments(
  organization_id, opportunity_id, source_system, source_message_id, source_attachment_id, filename
 ) VALUES
  ('c6200000-0000-0000-0000-0000000000a1','c6300000-0000-0000-0000-000000000001','gmail','msg-a','attachment-1','one.pdf'),
  ('c6200000-0000-0000-0000-0000000000a1','c6300000-0000-0000-0000-000000000001','gmail','msg-b','attachment-1','two.pdf');
-SELECT is((SELECT count(*) FROM public.romax_opportunity_attachments),2::bigint,'Gmail attachment ID is scoped to message');
+SELECT is((SELECT count(*) FROM public.romax_opportunity_attachments WHERE source_system='gmail' AND organization_id='c6200000-0000-0000-0000-0000000000a1'),2::bigint,'Gmail attachment ID is scoped to message');
 SELECT throws_ok($dupe$
  INSERT INTO public.romax_opportunity_attachments(
   organization_id,opportunity_id,source_system,source_message_id,source_attachment_id,filename
@@ -100,6 +121,9 @@ SELECT throws_ok($dupe$
   'gmail','msg-a','attachment-1','duplicate.pdf'
  )
 $dupe$,'23505',NULL,'same message and attachment cannot duplicate');
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.romax_as_user('c6100000-0000-0000-0000-000000000001');
 
 -- The BEFORE INSERT tenant-link guard rejects first (P0001) before CHECK.
 SELECT throws_ok($invalid$

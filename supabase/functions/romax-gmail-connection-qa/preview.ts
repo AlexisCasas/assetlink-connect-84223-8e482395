@@ -4,7 +4,7 @@ export type Category = 'quote_request' | 'follow_up' | 'adjustment' | 'quoted' |
 export type DeadlineEvent = { raw:string; date:string|null; time:string|null; datetime:string|null; timezone:'America/Lima'; status:'confirmed'|'ambiguous'; kind:'extension'|'stated'; weekday:string|null };
 type Part = { filename?: string; mimeType?: string; parts?: Part[]; headers?: {name:string;value:string}[]; body?: {data?:string;size?:number;attachmentId?:string} };
 type Message = { id?: string; internalDate?: string; labelIds?: string[]; snippet?: string; bodyText?: string; bodyLimited?: boolean; payload?: Part & { headers?: {name:string;value:string}[] } };
-export type Candidate = { thread_id:string; message_id:string; subject:string; sender:string; received_at:string; snippet:string; category:Category; reason:string; reference:string|null; deadline_hint:string|null; deadline_events:DeadlineEvent[]; message_count:number; attachments:{name:string;mime:string;supported:boolean}[]; existing_status?:string|null; text_source:'body'|'snippet'; body_limited:boolean; import_policy:'new_candidate'|'link_existing'|'review_required'|'not_importable' };
+export type Candidate = { thread_id:string; message_id:string; subject:string; sender:string; received_at:string; snippet:string; category:Category; reason:string; reference:string|null; deadline_hint:string|null; deadline_events:DeadlineEvent[]; message_count:number; attachments:{name:string;mime:string;supported:boolean}[]; existing_status?:string|null; existing_opportunity_id?:string|null; text_source:'body'|'snippet'; body_limited:boolean; import_policy:'new_candidate'|'link_existing'|'review_required'|'not_importable' };
 const clean = (s:unknown,max:number) => typeof s==='string' ? s.replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,max).trim() : '';
 const norm = (s:string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const header = (m:Message,name:string) => clean(m.payload?.headers?.find(h=>h.name.toLowerCase()===name.toLowerCase())?.value,500);
@@ -186,7 +186,7 @@ export function classifyThread(thread:{id?:string;messages?:Message[]},from:numb
   const candidate:Candidate={thread_id:thread.id,message_id:m.id!,subject:subject||'Sin asunto',sender:forwardedSender(m)??sender,received_at:new Date(Number(m.internalDate)).toISOString(),snippet,category,reason,reference,deadline_hint:currentDeadline?.raw??null,deadline_events:deadlineEvents,message_count:messages.length,attachments:allAttachments,text_source:(sourceMessages.length?sourceMessages:quoteReplies).some(x=>!!x.bodyText)?'body':'snippet',body_limited:bodyLimited,import_policy:'review_required'};
   candidate.import_policy=importPolicy(candidate);return candidate;
 }
-export async function readPreview(request:typeof fetch,token:string,from:number,to:number,pageToken?:string) {
+export async function readPreview(request:typeof fetch,token:string,from:number,to:number,pageToken?:string,onlyThread?:string) {
   const started=Date.now();
   const root='https://gmail.googleapis.com/gmail/v1/users/me/threads';
   const get=async(url:URL)=>{
@@ -207,8 +207,9 @@ export async function readPreview(request:typeof fetch,token:string,from:number,
   const list=new URL(root);
   list.search=new URLSearchParams({q:'after:'+Math.floor(from/1000)+' before:'+Math.ceil(to/1000)+' -in:spam -in:trash -in:drafts -category:promotions',maxResults:String(PAGE_SIZE),includeSpamTrash:'false',fields:'threads(id),nextPageToken,resultSizeEstimate'}).toString();
   if(pageToken)list.searchParams.set('pageToken',pageToken);
-  const result=await get(list);
-  const ids=[...new Set<string>((result.threads??[]).map((x:{id?:string})=>x.id).filter(validId))].slice(0,PAGE_SIZE);
+  if(onlyThread!==undefined&&!validId(onlyThread))throw new Error('Invalid thread');
+  const result=onlyThread?{}:await get(list);
+  const ids=onlyThread?[onlyThread]:[...new Set<string>((result.threads??[]).map((x:{id?:string})=>x.id).filter(validId))].slice(0,PAGE_SIZE);
   const candidates:Candidate[]=[];
   for(let i=0;i<ids.length;i+=3){
     const batch=await Promise.all(ids.slice(i,i+3).map(async id=>{
