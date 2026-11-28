@@ -1,7 +1,7 @@
 name: ROMAX R3-GMAIL.1 OAuth QA
 on:
   pull_request:
-    branches: ["productization/mvp", "feature/romax-r3-gmail-2-1", "feature/romax-r3-gmail-3", "docs/romax-functional-replanning-20261128", "docs/romax-r3-sol-2-design", "docs/romax-r3-gmail-4-design", "feature/romax-r3-gmail-4a"]
+    branches: ["productization/mvp", "feature/romax-r3-gmail-2-1", "feature/romax-r3-gmail-3", "docs/romax-functional-replanning-20261128", "docs/romax-r3-sol-2-design", "docs/romax-r3-gmail-4-design", "feature/romax-r3-gmail-4a", "feature/romax-r3-gmail-4b"]
     paths:
       - "supabase/**"
       - "src/components/provider/GmailConnectionPanel.tsx"
@@ -19,6 +19,7 @@ on:
       - "scripts/qa/romax_gmail_import_concurrency.sh"
       - "scripts/qa/romax_sol2_concurrency.sh"
       - "scripts/qa/romax_gmail4a_concurrency.sh"
+      - "scripts/qa/romax_gmail4c1_concurrency.sh"
       - "src/pages/GmailCallback.tsx"
       - "src/App.tsx"
       - ".github/workflows/romax-r3-gmail-oauth-qa.yml"
@@ -42,8 +43,9 @@ jobs:
           cmp supabase/functions/romax-gmail-connection/import.ts supabase/functions/romax-gmail-connection-qa/import.ts
           cmp supabase/functions/romax-gmail-connection/crypto.ts supabase/functions/romax-gmail-connection-qa/crypto.ts
           cmp supabase/functions/romax-gmail-connection/attachments.ts supabase/functions/romax-gmail-connection-qa/attachments.ts
+          cmp supabase/functions/romax-gmail-connection/quarantine.ts supabase/functions/romax-gmail-connection-qa/quarantine.ts
       - run: deno check --node-modules-dir=none supabase/functions/romax-gmail-connection/index.ts supabase/functions/romax-gmail-connection-qa/index.ts
-      - run: deno test --node-modules-dir=none supabase/functions/romax-gmail-connection/crypto.test.ts supabase/functions/romax-gmail-connection/handler.test.ts supabase/functions/romax-gmail-connection/preview.test.ts supabase/functions/romax-gmail-connection/import.test.ts supabase/functions/romax-gmail-connection/attachments.test.ts
+      - run: deno test --node-modules-dir=none supabase/functions/romax-gmail-connection/crypto.test.ts supabase/functions/romax-gmail-connection/handler.test.ts supabase/functions/romax-gmail-connection/preview.test.ts supabase/functions/romax-gmail-connection/import.test.ts supabase/functions/romax-gmail-connection/attachments.test.ts supabase/functions/romax-gmail-connection/quarantine.test.ts
   database:
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -69,6 +71,8 @@ jobs:
         run: bash scripts/qa/romax_sol2_concurrency.sh
       - name: Gmail attachment metadata concurrent discovery (local only)
         run: bash scripts/qa/romax_gmail4a_concurrency.sh
+      - name: Quarantine reservation concurrency (local only)
+        run: bash scripts/qa/romax_gmail4c1_concurrency.sh
       - name: Install CLI with security advisors
         uses: supabase/setup-cli@v1
         with:

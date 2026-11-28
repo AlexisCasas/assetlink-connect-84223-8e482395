@@ -526,3 +526,8 @@ Revisión independiente del candidato GitHub/local `PASS_REPOSITORY_LOCAL`, sin 
 ## R3-GMAIL.4B — detección dirigida
 
 Autorizado desarrollo GitHub-only sobre 4A con security review PASS_REPOSITORY_LOCAL. Edge descubre metadatos del hilo de oportunidad y registra vía RPC 4A, sin bajar binarios ni exponer IDs; CI pendiente. No Cloud, Gmail real, merge o producción. 4C requiere scanner y contrato de almacenamiento.
+
+
+## R3-GMAIL.4C — descarga segura (28/11)
+
+4B CI integral PASS; se inicia 4C.1 transporte a cuarentena, reservas y bucket privado, sin liberación ni descarga real. 4C.2 scanner autoalojado propuesto, validación profunda y reconciliación; 4C.3 acceso seguro tras veredicto. Migración candidata sólo GitHub, CI aislado. Sin cambios Cloud, merge o producción.
