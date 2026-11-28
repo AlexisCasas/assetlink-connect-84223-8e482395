@@ -15,8 +15,8 @@ export type Opportunity = {
   match_status:string;subject:string|null;sender_email:string|null;received_at:string|null;snippet:string|null;
   source_system:string;created_at:string;updated_at:string;
 };
-export type Client={id:string;business_name:string;is_active:boolean};
-export type Site={id:string;commercial_client_id:string;site_name:string;is_active:boolean};
+export type Client={id:string;business_name:string;legal_name?:string|null;commercial_code?:string|null;is_active:boolean};
+export type Site={id:string;commercial_client_id:string;site_name:string;site_code?:string|null;city?:string|null;is_active:boolean};
 export type Contact={id:string;commercial_client_id:string;commercial_site_id:string|null;full_name:string;email:string|null;is_active:boolean};
 export type Attachment={id:string;opportunity_id:string;filename:string;mime_type:string|null;size_bytes:number|null;processing_status:string;created_at:string};
 export type Filters={search:string;status:string;client:string;source:string;match:string;classification:string;from:string;to:string};

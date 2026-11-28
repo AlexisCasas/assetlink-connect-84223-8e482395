@@ -77,9 +77,9 @@ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE
   v_actor uuid:=p_actor; v_op public.romax_opportunities%ROWTYPE;
   v_old public.romax_request_revisions%ROWTYPE; v_receipt romax_sol2_private.receipts%ROWTYPE;
-  v_current integer; v_snapshot jsonb; v_old_proofs jsonb:='{}'; v_proofs jsonb:='{}'; v_proof jsonb; v_result jsonb; v_client uuid; v_site uuid; v_contact uuid;
+  v_current integer; v_snapshot jsonb; v_old_proofs jsonb:='{}'; v_proofs jsonb:='{}'; v_proof jsonb; v_event jsonb; v_event_key text; v_event_index integer:=0; v_previous_events jsonb; v_seen text[]:='{}'; v_result jsonb; v_client uuid; v_site uuid; v_contact uuid;
   v_additional uuid[]; v_id uuid; v_key text; v_value jsonb; v_deadline date; v_time time;
-  v_keys text[]:=ARRAY['title','summary','scope','restrictions','reference','reference_kind','specialty','deadline_date','deadline_time','deadline_note','client_id','site_id','contact_id','additional_contacts','provenance'];
+  v_keys text[]:=ARRAY['title','summary','scope','restrictions','reference','reference_kind','specialty','deadline_date','deadline_time','deadline_note','client_id','site_id','contact_id','additional_contacts','deadline_observations','provenance'];
 BEGIN
   IF v_actor IS NULL OR p_org IS NULL OR p_opportunity IS NULL OR p_request IS NULL OR p_expected IS NULL OR p_expected<0 THEN
     RAISE EXCEPTION 'Invalid review' USING ERRCODE='22023';
@@ -166,6 +166,190 @@ BEGIN
         IF v_proof IS NULL OR v_proof->'value' IS DISTINCT FROM p_snapshot->v_key
            OR v_proof->>'evidence' IS DISTINCT FROM v_value->>'evidence'
            OR coalesce(v_proof->>'message_id','') !~ '^[A-Za-z0-9_-]{1,128}
+  -- Immutable event decisions. A later review appends a decision; it cannot erase prior evidence.
+  v_previous_events:=coalesce(v_old.snapshot->'deadline_observations','[]'::jsonb);
+  IF jsonb_typeof(p_snapshot->'deadline_observations')<>'array' OR jsonb_array_length(p_snapshot->'deadline_observations')>100
+     OR jsonb_array_length(p_snapshot->'deadline_observations')<jsonb_array_length(v_previous_events) THEN
+    RAISE EXCEPTION 'Invalid deadline observations' USING ERRCODE='22023';
+  END IF;
+  FOR v_event IN SELECT value FROM jsonb_array_elements(p_snapshot->'deadline_observations') LOOP
+    IF jsonb_typeof(v_event)<>'object' OR NOT(v_event ?& ARRAY['key','raw','date','time','kind','ambiguous','decision'])
+       OR EXISTS(SELECT 1 FROM jsonb_object_keys(v_event) k WHERE k NOT IN ('key','raw','date','time','kind','ambiguous','decision'))
+       OR coalesce(v_event->>'key','') !~ '^[0-9a-f]{64}
+  -- Existing/blank fields without an explicit source are manual, not inferred from Gmail.
+  FOREACH v_key IN ARRAY v_keys LOOP
+    IF v_key<>'provenance' AND jsonb_typeof(v_snapshot->v_key)<>'null' AND NOT(v_snapshot->'provenance' ? v_key) THEN
+      v_snapshot:=jsonb_set(v_snapshot,ARRAY['provenance',v_key],jsonb_build_object('source','manual'),true);
+    END IF;
+  END LOOP;
+  IF v_old.snapshot=v_snapshot AND (v_op.commercial_client_id,v_op.commercial_site_id,v_op.commercial_contact_id)
+      IS NOT DISTINCT FROM (v_client,v_site,v_contact) THEN
+    v_result:=jsonb_build_object('outcome','unchanged','revision',v_current);
+  ELSE
+    UPDATE public.romax_opportunities SET commercial_client_id=v_client,commercial_site_id=v_site,commercial_contact_id=v_contact,
+      match_status=CASE WHEN v_client IS NULL THEN 'unmatched' ELSE 'confirmed' END
+    WHERE organization_id=p_org AND id=p_opportunity;
+    INSERT INTO public.romax_request_revisions(organization_id,opportunity_id,revision,actor_id,snapshot)
+      VALUES(p_org,p_opportunity,v_current+1,v_actor,v_snapshot);
+    IF v_proofs<>'{}'::jsonb THEN INSERT INTO romax_sol2_private.review_evidence VALUES(p_org,p_opportunity,v_current+1,v_proofs); END IF;
+    v_result:=jsonb_build_object('outcome','saved','revision',v_current+1);
+  END IF;
+  INSERT INTO romax_sol2_private.receipts VALUES(p_org,p_opportunity,v_actor,p_request,p_expected,p_snapshot,v_result);
+  RETURN v_result;
+END; $$;
+REVOKE ALL ON FUNCTION romax_sol2_private.save_review_core(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION romax_sol2_private.save_review_core(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) TO service_role;
+CREATE FUNCTION romax_sol2_private.save_review(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb)
+RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path='' AS $
+  SELECT romax_sol2_private.save_review_core(p_org,p_opportunity,p_expected,p_request,p_snapshot,auth.uid(),NULL);
+$;
+REVOKE ALL ON FUNCTION romax_sol2_private.save_review(uuid,uuid,integer,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION romax_sol2_private.save_review(uuid,uuid,integer,uuid,jsonb) TO authenticated;
+CREATE FUNCTION public.romax_save_request_review(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb)
+RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
+  SELECT romax_sol2_private.save_review(p_org,p_opportunity,p_expected,p_request,p_snapshot);
+$$;
+REVOKE ALL ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) TO authenticated;
+
+           OR coalesce(v_proof->>'parser','')<>'romax-r3-gmail-2.2'
+           OR v_proof->>'received_at' IS NULL THEN
+          RAISE EXCEPTION 'Gmail source requires verified proposal' USING ERRCODE='42501';
+        END IF;
+      END IF;
+      v_proofs:=v_proofs||jsonb_build_object(v_key,v_proof);
+    END IF;
+  END LOOP;
+  v_snapshot:=p_snapshot||jsonb_build_object('additional_contacts',to_jsonb(v_additional));
+  IF v_old.snapshot=v_snapshot AND (v_op.commercial_client_id,v_op.commercial_site_id,v_op.commercial_contact_id)
+      IS NOT DISTINCT FROM (v_client,v_site,v_contact) THEN
+    v_result:=jsonb_build_object('outcome','unchanged','revision',v_current);
+  ELSE
+    UPDATE public.romax_opportunities SET commercial_client_id=v_client,commercial_site_id=v_site,commercial_contact_id=v_contact,
+      match_status=CASE WHEN v_client IS NULL THEN 'unmatched' ELSE 'confirmed' END
+    WHERE organization_id=p_org AND id=p_opportunity;
+    INSERT INTO public.romax_request_revisions(organization_id,opportunity_id,revision,actor_id,snapshot)
+      VALUES(p_org,p_opportunity,v_current+1,v_actor,v_snapshot);
+    v_result:=jsonb_build_object('outcome','saved','revision',v_current+1);
+  END IF;
+  INSERT INTO romax_sol2_private.receipts VALUES(p_org,p_opportunity,v_actor,p_request,p_expected,p_snapshot,v_result);
+  RETURN v_result;
+END; $$;
+REVOKE ALL ON FUNCTION romax_sol2_private.save_review(uuid,uuid,integer,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION romax_sol2_private.save_review(uuid,uuid,integer,uuid,jsonb) TO authenticated;
+CREATE FUNCTION public.romax_save_request_review(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb)
+RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
+  SELECT romax_sol2_private.save_review(p_org,p_opportunity,p_expected,p_request,p_snapshot);
+$$;
+REVOKE ALL ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) TO authenticated;
+
+CREATE FUNCTION public.romax_save_request_review_verified(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb,p_actor uuid,p_verified jsonb)
+RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
+  SELECT romax_sol2_private.save_review_core(p_org,p_opportunity,p_expected,p_request,p_snapshot,p_actor,p_verified);
+$$;
+REVOKE ALL ON FUNCTION public.romax_save_request_review_verified(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.romax_save_request_review_verified(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) TO service_role;
+
+       OR coalesce(v_event->>'decision','') NOT IN ('pending','accepted','rejected')
+       OR coalesce(v_event->>'kind','') NOT IN ('stated','extension')
+       OR jsonb_typeof(v_event->'ambiguous')<>'boolean'
+       OR (v_event->>'decision'='accepted' AND (v_event->>'ambiguous'='true' OR v_event->>'date' IS NULL))
+       OR coalesce(v_event->>'raw','')='' OR length(v_event->>'raw')>180 THEN
+      RAISE EXCEPTION 'Invalid deadline observation' USING ERRCODE='22023';
+    END IF;
+    v_event_key:='observation:'||(v_event->>'key');
+    IF (v_event_key||':'||(v_event->>'decision'))=ANY(v_seen) THEN RAISE EXCEPTION 'Duplicate deadline decision' USING ERRCODE='22023'; END IF;
+    v_seen:=array_append(v_seen,v_event_key||':'||(v_event->>'decision'));
+    IF v_event_index<jsonb_array_length(v_previous_events) THEN
+      IF v_previous_events->v_event_index IS DISTINCT FROM v_event THEN RAISE EXCEPTION 'Deadline history is immutable' USING ERRCODE='42501'; END IF;
+      v_proof:=v_old_proofs->v_event_key;
+    ELSE
+      v_proof:=p_verified->'observations'->(v_event->>'key');
+      IF v_proof IS NULL OR v_proof->'value' IS DISTINCT FROM (v_event-'decision')
+        OR coalesce(v_proof->>'message_id','') !~ '^[A-Za-z0-9_-]{1,128}
+  -- Existing/blank fields without an explicit source are manual, not inferred from Gmail.
+  FOREACH v_key IN ARRAY v_keys LOOP
+    IF v_key<>'provenance' AND jsonb_typeof(v_snapshot->v_key)<>'null' AND NOT(v_snapshot->'provenance' ? v_key) THEN
+      v_snapshot:=jsonb_set(v_snapshot,ARRAY['provenance',v_key],jsonb_build_object('source','manual'),true);
+    END IF;
+  END LOOP;
+  IF v_old.snapshot=v_snapshot AND (v_op.commercial_client_id,v_op.commercial_site_id,v_op.commercial_contact_id)
+      IS NOT DISTINCT FROM (v_client,v_site,v_contact) THEN
+    v_result:=jsonb_build_object('outcome','unchanged','revision',v_current);
+  ELSE
+    UPDATE public.romax_opportunities SET commercial_client_id=v_client,commercial_site_id=v_site,commercial_contact_id=v_contact,
+      match_status=CASE WHEN v_client IS NULL THEN 'unmatched' ELSE 'confirmed' END
+    WHERE organization_id=p_org AND id=p_opportunity;
+    INSERT INTO public.romax_request_revisions(organization_id,opportunity_id,revision,actor_id,snapshot)
+      VALUES(p_org,p_opportunity,v_current+1,v_actor,v_snapshot);
+    IF v_proofs<>'{}'::jsonb THEN INSERT INTO romax_sol2_private.review_evidence VALUES(p_org,p_opportunity,v_current+1,v_proofs); END IF;
+    v_result:=jsonb_build_object('outcome','saved','revision',v_current+1);
+  END IF;
+  INSERT INTO romax_sol2_private.receipts VALUES(p_org,p_opportunity,v_actor,p_request,p_expected,p_snapshot,v_result);
+  RETURN v_result;
+END; $$;
+REVOKE ALL ON FUNCTION romax_sol2_private.save_review_core(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION romax_sol2_private.save_review_core(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) TO service_role;
+CREATE FUNCTION romax_sol2_private.save_review(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb)
+RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path='' AS $
+  SELECT romax_sol2_private.save_review_core(p_org,p_opportunity,p_expected,p_request,p_snapshot,auth.uid(),NULL);
+$;
+REVOKE ALL ON FUNCTION romax_sol2_private.save_review(uuid,uuid,integer,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION romax_sol2_private.save_review(uuid,uuid,integer,uuid,jsonb) TO authenticated;
+CREATE FUNCTION public.romax_save_request_review(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb)
+RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
+  SELECT romax_sol2_private.save_review(p_org,p_opportunity,p_expected,p_request,p_snapshot);
+$$;
+REVOKE ALL ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) TO authenticated;
+
+           OR coalesce(v_proof->>'parser','')<>'romax-r3-gmail-2.2'
+           OR v_proof->>'received_at' IS NULL THEN
+          RAISE EXCEPTION 'Gmail source requires verified proposal' USING ERRCODE='42501';
+        END IF;
+      END IF;
+      v_proofs:=v_proofs||jsonb_build_object(v_key,v_proof);
+    END IF;
+  END LOOP;
+  v_snapshot:=p_snapshot||jsonb_build_object('additional_contacts',to_jsonb(v_additional));
+  IF v_old.snapshot=v_snapshot AND (v_op.commercial_client_id,v_op.commercial_site_id,v_op.commercial_contact_id)
+      IS NOT DISTINCT FROM (v_client,v_site,v_contact) THEN
+    v_result:=jsonb_build_object('outcome','unchanged','revision',v_current);
+  ELSE
+    UPDATE public.romax_opportunities SET commercial_client_id=v_client,commercial_site_id=v_site,commercial_contact_id=v_contact,
+      match_status=CASE WHEN v_client IS NULL THEN 'unmatched' ELSE 'confirmed' END
+    WHERE organization_id=p_org AND id=p_opportunity;
+    INSERT INTO public.romax_request_revisions(organization_id,opportunity_id,revision,actor_id,snapshot)
+      VALUES(p_org,p_opportunity,v_current+1,v_actor,v_snapshot);
+    v_result:=jsonb_build_object('outcome','saved','revision',v_current+1);
+  END IF;
+  INSERT INTO romax_sol2_private.receipts VALUES(p_org,p_opportunity,v_actor,p_request,p_expected,p_snapshot,v_result);
+  RETURN v_result;
+END; $$;
+REVOKE ALL ON FUNCTION romax_sol2_private.save_review(uuid,uuid,integer,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION romax_sol2_private.save_review(uuid,uuid,integer,uuid,jsonb) TO authenticated;
+CREATE FUNCTION public.romax_save_request_review(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb)
+RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
+  SELECT romax_sol2_private.save_review(p_org,p_opportunity,p_expected,p_request,p_snapshot);
+$$;
+REVOKE ALL ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.romax_save_request_review(uuid,uuid,integer,uuid,jsonb) TO authenticated;
+
+CREATE FUNCTION public.romax_save_request_review_verified(p_org uuid,p_opportunity uuid,p_expected integer,p_request uuid,p_snapshot jsonb,p_actor uuid,p_verified jsonb)
+RETURNS jsonb LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
+  SELECT romax_sol2_private.save_review_core(p_org,p_opportunity,p_expected,p_request,p_snapshot,p_actor,p_verified);
+$$;
+REVOKE ALL ON FUNCTION public.romax_save_request_review_verified(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.romax_save_request_review_verified(uuid,uuid,integer,uuid,jsonb,uuid,jsonb) TO service_role;
+
+        OR coalesce(v_proof->>'parser','')<>'romax-r3-gmail-2.2'
+        OR v_proof->>'received_at' IS NULL THEN RAISE EXCEPTION 'Deadline event requires verified proposal' USING ERRCODE='42501'; END IF;
+    END IF;
+    IF v_proof IS NULL THEN RAISE EXCEPTION 'Missing deadline event evidence' USING ERRCODE='42501'; END IF;
+    v_proofs:=v_proofs||jsonb_build_object(v_event_key,v_proof);
+    v_event_index:=v_event_index+1;
+  END LOOP;
   v_snapshot:=p_snapshot||jsonb_build_object('additional_contacts',to_jsonb(v_additional));
   -- Existing/blank fields without an explicit source are manual, not inferred from Gmail.
   FOREACH v_key IN ARRAY v_keys LOOP

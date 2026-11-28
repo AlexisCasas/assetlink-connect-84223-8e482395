@@ -68,8 +68,8 @@ function ScopedView({focusOpportunityId,memory,organizationId,gmailAllowed}:{foc
       },signal);
       const [opportunities,clients,sites,contacts,attachments]=await Promise.all([
         read<Opportunity>('romax_opportunities',fieldList,true),
-        read<Client>('commercial_clients','id,business_name,is_active'),
-        read<Site>('commercial_client_sites','id,commercial_client_id,site_name,is_active'),
+        read<Client>('commercial_clients','id,business_name,legal_name,commercial_code,is_active'),
+        read<Site>('commercial_client_sites','id,commercial_client_id,site_name,site_code,city,is_active'),
         read<Contact>('commercial_client_contacts','id,commercial_client_id,commercial_site_id,full_name,email,is_active'),
         read<Attachment>('romax_opportunity_attachments','id,opportunity_id,filename,mime_type,size_bytes,processing_status,created_at'),
       ]);

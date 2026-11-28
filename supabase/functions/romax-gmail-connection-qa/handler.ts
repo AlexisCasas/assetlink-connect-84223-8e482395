@@ -186,17 +186,24 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
       const proofContext=context('enrichment:'+user.id+':'+row.connected_at+':'+config.origin+':'+body.opportunity_id);
       const evidence=(value:unknown,excerpt:string,message_id:string,received_at:string)=>({value,evidence:excerpt,message_id,received_at,parser:'romax-r3-gmail-2.2'});
       const choices:Record<string,unknown[]>={title:[evidence(candidate.subject.slice(0,300),candidate.subject.slice(0,300),candidate.message_id,candidate.received_at)],summary:[evidence(candidate.snippet,candidate.snippet.slice(0,500),candidate.message_id,candidate.received_at)]};
-      // Reference may come from a different message/attachment; do not claim an exact source without evidence.
+      if(candidate.reference&&candidate.reference_source){choices.reference=[evidence(candidate.reference,candidate.reference,candidate.reference_source.message_id,candidate.reference_source.received_at)];}
+      const observations:Record<string,unknown>={};
+      const deadlines=[];
+      if(candidate.deadline_events.length>30)throw new SafeError(409,'Demasiados eventos de plazo; revisa manualmente el hilo');
       for(const event of candidate.deadline_events){
-        if(event.status==='ambiguous'||!event.date||!event.source_message_id||!event.source_received_at)continue;
+        if(!event.source_message_id||!event.source_received_at)continue;
+        const eventKey=await hashState(JSON.stringify([event.source_message_id,event.raw,event.date,event.time,event.kind]));
+        const value={key:eventKey,raw:event.raw,date:event.date,time:event.time,kind:event.kind,ambiguous:event.status==='ambiguous'};
+        deadlines.push(value);observations[eventKey]=evidence(value,event.raw,event.source_message_id,event.source_received_at);
+        if(event.status==='ambiguous'||!event.date)continue;
         for(const [field,value] of [['deadline_date',event.date],['deadline_time',event.time],['deadline_note',event.raw]] as const){
           (choices[field]??=[]).push(evidence(value,event.raw.slice(0,500),event.source_message_id,event.source_received_at));
         }
       }
-      const proof=await seal(key,JSON.stringify({expires:Date.now()+15*60*1000,choices}),proofContext);
+      const proof=await seal(key,JSON.stringify({expires:Date.now()+15*60*1000,choices,observations}),proofContext);
       return reply({enrichment:{subject:candidate.subject,sender:senderEmail(candidate.sender),excerpt:candidate.snippet,
-        reference:candidate.reference,reference_kind:candidate.reference&&/^RMX[- ]/i.test(candidate.reference)?'internal_quote':'unknown',
-        deadlines:candidate.deadline_events.map(d=>({raw:d.raw,date:d.date,time:d.time,kind:d.kind,ambiguous:d.status==='ambiguous'})),
+        reference:candidate.reference,reference_kind:candidate.reference&&/^RMX[- ]/i.test(candidate.reference)?'internal_quote':candidate.reference_source?'client_request':'unknown',reference_verified:!!candidate.reference_source,
+        deadlines,
         source_received_at:candidate.received_at,text_source:candidate.text_source,parser:'romax-r3-gmail-2.2',category:candidate.category,proof}});
     }
     if(body.action==='save_enrichment'){
@@ -217,7 +224,9 @@ export function createHandler(deps: Dependencies = { authenticate:getAuthenticat
         const match=options.find(x=>JSON.stringify(x.value)===JSON.stringify(body.snapshot[field])&&x.evidence===s.evidence);
         if(match)fields[field]=match;
       }
-      const result=await db.rpc('romax_save_request_review_verified',{p_org:organization,p_opportunity:body.opportunity_id,p_expected:body.expected_revision,p_request:body.request_id,p_snapshot:body.snapshot,p_actor:user.id,p_verified:{connection_at:row.connected_at,fields}});
+      const observations:Record<string,unknown>={};
+      if(Array.isArray(body.snapshot.deadline_observations))for(const event of body.snapshot.deadline_observations){if(event&&typeof event.key==='string'&&/^[0-9a-f]{64}$/.test(event.key)&&decoded.observations?.[event.key])observations[event.key]=decoded.observations[event.key];}
+      const result=await db.rpc('romax_save_request_review_verified',{p_org:organization,p_opportunity:body.opportunity_id,p_expected:body.expected_revision,p_request:body.request_id,p_snapshot:body.snapshot,p_actor:user.id,p_verified:{connection_at:row.connected_at,fields,observations}});
       if(result.error)throw new SafeError(result.error.code==='40001'?409:422,'No se pudo guardar la revisión; verifica los datos y la versión');
       return reply({review:result.data});
     }
